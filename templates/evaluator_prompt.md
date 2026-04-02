@@ -30,11 +30,11 @@ If `{test_available}` is `true`:
 2. Run `{test_cmd}` and capture full output including pass/fail counts.
 3. Record all failures verbatim — do not summarise or omit error messages.
 
-If any test fails unexpectedly, use a debugging skill if available (e.g. systematic-debugging) to diagnose the root cause before reporting.
+If any test fails unexpectedly, invoke a debugging skill if available (e.g. `Skill("superpowers:systematic-debugging")`) to diagnose the root cause before reporting.
 
 ### Step 2 — Code Review (always required)
 
-If a code review skill is available (e.g. requesting-code-review, code-review), use it. Evaluate every changed file against these five criteria. **Be strict — "별 것 아니다"라고 넘어가지 마세요.**
+Invoke a code review skill if available (e.g. `Skill("superpowers:requesting-code-review")`). Evaluate every changed file against these five criteria. **Be strict — "별 것 아니다"라고 넘어가지 마세요.**
 
 | # | Criterion | What to check |
 |---|-----------|---------------|
@@ -44,7 +44,7 @@ If a code review skill is available (e.g. requesting-code-review, code-review), 
 | 4 | **일관성** | Code style, naming, and patterns match the existing codebase |
 | 5 | **불필요한 변경 없음** | No unrelated refactors, no commented-out code, no debug prints left in |
 
-Before declaring any criterion PASS, run verification commands and confirm output rather than assuming correctness. Use a verification skill if available (e.g. verification-before-completion).
+Before declaring any criterion PASS, run verification commands and confirm output rather than assuming correctness. Invoke a verification skill if available (e.g. `Skill("superpowers:verification-before-completion")`).
 
 ### Step 3 — Write `.harness/qa_report.md`
 

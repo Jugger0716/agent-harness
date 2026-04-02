@@ -40,7 +40,7 @@ If test_cmd is NOT available:
 
 5. **Stay within scope.** Do not modify files outside the declared scope. Do not exceed {max_files} files total.
 
-6. **After implementation, write `.harness/changes.md`** with the following format:
+6. **After implementation, write `changes.md`** to the docs path specified in state.json (`docs/harness/<slug>/changes.md`) with the following format:
 
    ```
    ## Round {round_num} Changes
