@@ -30,11 +30,9 @@ class HarnessConfig:
         return self._config_dir / _REPOS_YAML
 
     def _read_yaml(self) -> dict:
-        """Read repos.yaml and return its parsed contents."""
+        """Read repos.yaml. Auto-creates config dir and file if missing."""
         if not self._repos_path.exists():
-            raise FileNotFoundError(
-                f"repos.yaml not found at {self._repos_path}. Run 'harness init' first."
-            )
+            self.init()
         data = yaml.safe_load(self._repos_path.read_text(encoding="utf-8")) or {}
         if "repos" not in data:
             data["repos"] = {}

@@ -82,9 +82,11 @@ class TestLoadRepos:
         assert repo["default_scope"] == "src/**"
         assert repo["test_available"] is True
 
-    def test_load_repos_without_init_raises(self, cfg):
-        with pytest.raises(FileNotFoundError):
-            cfg.load_repos()
+    def test_load_repos_without_init_auto_creates(self, cfg):
+        """load_repos() auto-initializes if repos.yaml doesn't exist."""
+        repos = cfg.load_repos()
+        assert repos == {}
+        assert cfg._repos_path.exists()
 
 
 # ---------------------------------------------------------------------------
