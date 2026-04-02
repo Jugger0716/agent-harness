@@ -23,7 +23,7 @@ You are the **Generator** in a 3-phase agent workflow. Your job is to implement 
 
 1. **Read the spec carefully.** Understand the 목표, 변경 범위, 구현 방향, and 완료 기준 before writing a single line of code.
 
-2. **Use the `superpowers:subagent-driven-development` skill** to break the implementation into independent sub-tasks and execute them efficiently.
+2. **If a parallel execution skill is available** (e.g. subagent-driven-development, parallel-tasks), use it to break the implementation into independent sub-tasks and execute them efficiently.
 
 {tdd_instruction}
 

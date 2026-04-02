@@ -7,21 +7,18 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from renderer import render_template, get_template_path
 
-_TDD_SKILL = "superpowers:test-driven-development"
-_SUBAGENT_SKILL = "superpowers:subagent-driven-development"
-
 _SKILL_WITH_TDD = (
-    f"- `{_TDD_SKILL}` — write tests before (or alongside) implementation code\n"
-    f"- `{_SUBAGENT_SKILL}` — break the work into independent sub-tasks"
+    "- If a TDD skill is available (e.g. test-driven-development), write tests before or alongside implementation\n"
+    "- If a parallel execution skill is available (e.g. subagent-driven-development), break work into independent sub-tasks"
 )
 
 _SKILL_WITHOUT_TDD = (
-    f"- `{_SUBAGENT_SKILL}` — break the work into independent sub-tasks"
+    "- If a parallel execution skill is available (e.g. subagent-driven-development), break work into independent sub-tasks"
 )
 
 _TDD_INSTRUCTION = (
-    f"3. **Use the `{_TDD_SKILL}` skill** — write or update tests before (or alongside) "
-    f"implementation code so that correctness is verifiable."
+    "3. **Write tests first** — if a TDD skill is available (e.g. test-driven-development), "
+    "use it. Write or update tests before (or alongside) implementation code so that correctness is verifiable."
 )
 
 

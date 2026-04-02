@@ -115,17 +115,28 @@ def cmd_run(args):
         repo_path = Path(repo_cfg["path"])
         repo_name = args.repo
     else:
-        # --repo-path provided
-        repo_path = Path(args.repo_path)
-        lang = args.lang or ""
-        if not lang:
-            print("[run] Error: --lang is required when using --repo-path", file=sys.stderr)
-            sys.exit(1)
+        # --repo-path or current directory
+        repo_path = Path(args.repo_path) if args.repo_path else Path.cwd()
+
+        # Auto-detect repo config
+        detected = config.auto_detect_repo(str(repo_path))
+        if args.lang:
+            detected["lang"] = args.lang
+
+        print(f"[run] Auto-detected: lang={detected['lang']}, test={detected['test_cmd'] or 'none'}, build={detected['build_cmd'] or 'none'}")
+
         repo_cfg = config.build_adhoc_config(
             repo_path=str(repo_path),
-            lang=lang,
-            cli_overrides={"scope": args.scope},
+            lang=detected["lang"],
+            cli_overrides={
+                "scope": args.scope,
+                "test_cmd": detected["test_cmd"],
+                "build_cmd": detected["build_cmd"],
+            },
         )
+        # Use auto-detected default_scope if not overridden
+        if not args.scope and detected.get("default_scope"):
+            repo_cfg["default_scope"] = detected["default_scope"]
         repo_name = repo_path.name
 
     # 2. Validate repo_path exists
@@ -380,11 +391,11 @@ def main():
 
     # run
     run_parser = subparsers.add_parser("run", help="Start a new task")
-    run_group = run_parser.add_mutually_exclusive_group(required=True)
+    run_group = run_parser.add_mutually_exclusive_group(required=False)
     run_group.add_argument("--repo", help="Registered repository name")
-    run_group.add_argument("--repo-path", help="Direct path to repository")
+    run_group.add_argument("--repo-path", help="Direct path to repository (default: current directory)")
     run_parser.add_argument("--task", required=True, help="Task description")
-    run_parser.add_argument("--lang", default=None, help="Language (required with --repo-path)")
+    run_parser.add_argument("--lang", default=None, help="Language override (auto-detected if omitted)")
     run_parser.add_argument("--scope", default=None, help="File scope pattern")
     run_parser.add_argument("--max-rounds", type=int, default=3, help="Max build/QA rounds (default: 3)")
     run_parser.add_argument("--max-files", type=int, default=20, help="Max files to modify (default: 20)")

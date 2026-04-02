@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -194,6 +195,101 @@ class HarnessConfig:
         base["test_available"] = self._derive_test_available(base)
 
         return base
+
+    @staticmethod
+    def auto_detect_repo(repo_path: str | Path) -> dict[str, Any]:
+        """Auto-detect language, test/build commands from repo contents.
+
+        Scans for common build files and file extensions to infer configuration.
+        Returns a config dict suitable for use as adhoc config.
+        """
+        rp = Path(repo_path)
+
+        # Detect language from build files and extensions
+        lang = None
+        test_cmd = None
+        build_cmd = None
+        default_scope = None
+
+        # Java/Kotlin (Gradle)
+        if (rp / "build.gradle").exists() or (rp / "build.gradle.kts").exists():
+            lang = "java"
+            gradlew = "gradlew.bat" if sys.platform == "win32" else "./gradlew"
+            if (rp / "gradlew").exists() or (rp / "gradlew.bat").exists():
+                test_cmd = f"{gradlew} test"
+                build_cmd = f"{gradlew} build"
+            default_scope = "src/**"
+
+        # Java (Maven)
+        elif (rp / "pom.xml").exists():
+            lang = "java"
+            test_cmd = "mvn test"
+            build_cmd = "mvn compile"
+            default_scope = "src/**"
+
+        # Python
+        elif (rp / "pyproject.toml").exists() or (rp / "setup.py").exists() or (rp / "requirements.txt").exists():
+            lang = "python"
+            if (rp / "pytest.ini").exists() or (rp / "pyproject.toml").exists() or (rp / "tests").is_dir():
+                test_cmd = "pytest"
+            default_scope = "**/*.py"
+
+        # TypeScript/JavaScript
+        elif (rp / "package.json").exists():
+            lang = "typescript" if (rp / "tsconfig.json").exists() else "javascript"
+            test_cmd = "npm test"
+            build_cmd = "npm run build"
+            default_scope = "src/**"
+
+        # C# (.NET)
+        elif list(rp.glob("*.csproj")) or list(rp.glob("*.sln")):
+            lang = "csharp"
+            test_cmd = "dotnet test"
+            build_cmd = "dotnet build"
+            default_scope = "**/*.cs"
+
+        # Go
+        elif (rp / "go.mod").exists():
+            lang = "go"
+            test_cmd = "go test ./..."
+            build_cmd = "go build ./..."
+            default_scope = "**/*.go"
+
+        # Rust
+        elif (rp / "Cargo.toml").exists():
+            lang = "rust"
+            test_cmd = "cargo test"
+            build_cmd = "cargo build"
+            default_scope = "src/**"
+
+        # Fallback: scan file extensions
+        if lang is None:
+            ext_counts: dict[str, int] = {}
+            for f in rp.rglob("*"):
+                if f.is_file() and not any(p.startswith(".") for p in f.parts):
+                    ext_counts[f.suffix] = ext_counts.get(f.suffix, 0) + 1
+            ext_map = {
+                ".py": "python", ".java": "java", ".kt": "java",
+                ".cs": "csharp", ".ts": "typescript", ".js": "javascript",
+                ".go": "go", ".rs": "rust", ".rb": "ruby",
+            }
+            if ext_counts:
+                top_ext = max(
+                    (e for e in ext_counts if e in ext_map),
+                    key=lambda e: ext_counts[e],
+                    default=None,
+                )
+                if top_ext:
+                    lang = ext_map[top_ext]
+
+        return {
+            "path": str(rp),
+            "lang": lang or "unknown",
+            "test_cmd": test_cmd,
+            "build_cmd": build_cmd,
+            "test_available": test_cmd is not None,
+            "default_scope": default_scope,
+        }
 
     def build_adhoc_config(
         self,
