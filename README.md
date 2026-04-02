@@ -12,6 +12,7 @@ Separates planning, implementation, and review into distinct phases with file-ba
 
 ```
 /agent-harness:harness  -> [Phase 1] Planner: analyze task, write spec.md
+                        -> Confirmation Gate: user approves spec before proceeding
                         -> [Phase 2] Generator: implement code, write changes.md
                         -> [Phase 3] Evaluator: test + review, write qa_report.md
                         -> PASS -> Done / FAIL -> Back to Phase 2 (max N rounds)
@@ -42,53 +43,80 @@ The harness detects language, test, and build commands from your project files:
 
 | Detected File | Language | Test Command | Build Command |
 |--------------|----------|-------------|---------------|
-| `build.gradle` / `build.gradle.kts` | Java/Kotlin | `gradlew test` | `gradlew build` |
+| `build.gradle` / `build.gradle.kts` | Java/Kotlin | `./gradlew test` | `./gradlew build` |
 | `pom.xml` | Java | `mvn test` | `mvn compile` |
-| `pyproject.toml` | Python | `pytest` | - |
-| `package.json` + `tsconfig.json` | TypeScript | `npm test` | `npm run build` |
-| `package.json` (no TS) | JavaScript | `npm test` | `npm run build` |
-| `*.csproj` / `*.sln` | C# | `dotnet test` | `dotnet build` |
+| `pyproject.toml` / `setup.py` | Python | `pytest` | - |
+| `package.json` | TypeScript/JavaScript | `npm test` | `npm run build` |
+| `*.csproj` | C# | `dotnet test` | `dotnet build` |
 | `go.mod` | Go | `go test ./...` | `go build ./...` |
 | `Cargo.toml` | Rust | `cargo test` | `cargo build` |
 
 ## How it works
 
 1. You invoke the harness skill with a task description
-2. **Phase 1 -- Planner**: Claude explores the codebase, analyzes the task, and writes `spec.md` with a detailed implementation plan
-3. **Phase 2 -- Generator**: Claude implements the code following the spec, and writes `changes.md` documenting what was done
-4. **Phase 3 -- Evaluator**: Claude runs tests and performs code review, writes `qa_report.md` with a PASS/FAIL verdict
-5. If FAIL, the workflow loops back to the Generator phase (up to N rounds)
+2. **Setup**: Auto-detects language/test/build, creates `.harness/state.json` and `docs/harness/<task-slug>/`, creates a `harness/*` git branch
+3. **Phase 1 -- Planner**: Claude explores the codebase, analyzes the task, and writes `spec.md`
+4. **Confirmation Gate**: Claude shows the spec and waits for explicit user approval before proceeding. Ambiguous responses are re-confirmed.
+5. **Phase 2 -- Generator**: Claude implements the code following the spec, and writes `changes.md`
+6. **Phase 3 -- Evaluator**: Claude runs tests and performs code review, writes `qa_report.md` with a PASS/FAIL verdict
+7. If FAIL, the user is asked whether to retry (up to max rounds)
+8. On completion, the user is asked whether to commit the artifacts
 
-State is tracked in `.harness/state.json`. The harness creates a `harness/*` git branch automatically.
+### File Structure
+
+```
+.harness/
+  state.json                    # Working state (temporary, cleaned up after completion)
+
+docs/harness/<task-slug>/
+  spec.md                       # Planner output
+  changes.md                    # Generator output
+  qa_report.md                  # Evaluator output
+```
+
+### Confirmation Gates
+
+The Generator phase consumes significant tokens and is hard to undo. The harness enforces **explicit user confirmation** before proceeding:
+
+- **Spec approval**: Only clear affirmatives ("go", "proceed", "approve", etc.) are accepted. Ambiguous responses trigger re-confirmation.
+- **QA retry**: When the Evaluator reports FAIL, the harness asks the user before starting another round.
 
 ### Evaluator Modes
 
 - **Test + Code Review**: When test commands are detected, runs tests first then reviews code
 - **Code Review Only**: When no tests are available, performs thorough code review against 5 criteria
 
-### Plugin Compatibility
+### Options
 
-Prompt templates reference skills generically (e.g. "use a brainstorming skill if available") rather than requiring specific plugins. Works with superpowers, g-stack, or any plugin that provides similar skills.
-
-### Guardrails
+You can pass options in conversation when invoking the harness:
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `--scope` | auto-detected | Restrict file modifications to a glob pattern |
-| `--max-rounds` | 3 | Maximum Generator/Evaluator retry cycles |
-| `--max-files` | 20 | Maximum number of files that can be modified |
-| `--dry-run` | false | Run Planner only, no code changes |
+| scope | auto-detected | Restrict file modifications to a pattern |
+| max rounds | 3 | Maximum Generator/Evaluator retry cycles |
+| max files | 20 | Maximum number of files that can be modified |
 
-### Per-repo override file
+Example: `/agent-harness:harness fix auth bug --scope "src/auth/**" --max-rounds 5`
 
-Create `.harness.yaml` in any repo root for persistent overrides:
+### Plugin Compatibility
 
-```yaml
-test_cmd: "./gradlew test --tests com.example.auth.*"
-default_scope: "src/main/java/com/example/auth/**"
-evaluator:
-  review_focus: ["security", "performance"]
-```
+The harness discovers skills by **capability keyword** (e.g. "brainstorming", "tdd", "code-review"), not by plugin name. It works with any installed plugin that provides matching skills:
+
+| Phase | Searches for | Example matches |
+|-------|-------------|-----------------|
+| Planner | "brainstorming", "ideation" | superpowers:brainstorming, any brainstorming skill |
+| Planner | "writing-plans", "plan" | superpowers:writing-plans, any planning skill |
+| Generator | "test-driven-development", "tdd" | superpowers:test-driven-development |
+| Generator | "subagent-driven-development", "parallel-tasks" | superpowers:subagent-driven-development |
+| Evaluator | "systematic-debugging", "debugging" | superpowers:systematic-debugging |
+| Evaluator | "requesting-code-review", "code-review" | superpowers:requesting-code-review |
+| Evaluator | "verification-before-completion", "verification" | superpowers:verification-before-completion |
+
+If no matching skill is found, the harness proceeds without it. No specific plugin is required.
+
+### Language Matching
+
+The harness detects the language of the user's task description and communicates all progress updates, spec sections, QA criteria, and reports in the same language.
 
 ## License
 
