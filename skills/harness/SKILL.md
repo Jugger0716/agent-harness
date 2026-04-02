@@ -77,7 +77,8 @@ When the user provides a task (via $ARGUMENTS or in conversation), execute this 
 2. Interpret it with the current context (task, repo_path, lang, scope). Do NOT write a rendered file — process inline.
 3. Follow the planner instructions:
    - Explore the codebase (CLAUDE.md, relevant files)
-   - Use brainstorming/planning skills if available
+   - **Invoke brainstorming skill** if available: `Skill("superpowers:brainstorming")` or equivalent from any installed plugin
+   - **Invoke planning skill** if available: `Skill("superpowers:writing-plans")` or equivalent
    - Write `spec.md` to `docs/harness/<slug>/spec.md`
 4. Update `.harness/state.json`: set phase to `"plan_ready"` (spec written, awaiting confirmation).
 
@@ -106,9 +107,12 @@ If user requests modifications, update spec.md and re-confirm. If user says "중
    - `spec_content`: read from `docs/harness/<slug>/spec.md`
    - `qa_feedback`: read from `docs/harness/<slug>/qa_report.md` if round > 1, else "(First round — no QA feedback)"
    - `round_num`, `scope`, `max_files`: from state.json
-   - `skill_instructions` / `tdd_instruction`: include TDD instructions if test_cmd is not null
-4. Follow the generator instructions — implement code changes.
-5. Write `docs/harness/<slug>/changes.md` listing all modified/created files.
+   - If test_cmd is available, include TDD instructions; otherwise skip
+4. **Invoke implementation skills** if available:
+   - TDD: `Skill("superpowers:test-driven-development")` (if test_cmd available)
+   - Parallel execution: `Skill("superpowers:subagent-driven-development")` or `Skill("superpowers:dispatching-parallel-agents")`
+5. Follow the generator instructions — implement code changes.
+6. Write `docs/harness/<slug>/changes.md` listing all modified/created files.
 
 ### Step 5: Evaluator Phase
 
@@ -118,7 +122,11 @@ If user requests modifications, update spec.md and re-confirm. If user says "중
    - `spec_content`, `changes_content`: from docs/harness/<slug>/
    - `test_available`, `build_cmd`, `test_cmd`: from state.json
    - `round_num`, `scope`: from state.json
-4. Follow the evaluator instructions:
+4. **Invoke evaluation skills** if available:
+   - Debugging: `Skill("superpowers:systematic-debugging")` (if tests fail)
+   - Code review: `Skill("superpowers:requesting-code-review")`
+   - Verification: `Skill("superpowers:verification-before-completion")`
+5. Follow the evaluator instructions:
    - Run tests if available
    - Code review against 5 criteria
    - Write `docs/harness/<slug>/qa_report.md` with PASS/FAIL verdict
