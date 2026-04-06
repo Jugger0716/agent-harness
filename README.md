@@ -1,6 +1,6 @@
 # Agent Harness
 
-**Zero-setup, zero-dependency** 3-Phase (Planner -> Generator -> Evaluator) development workflow for Claude Code with **multi-agent personas**.
+**Zero-setup, zero-dependency** 3-Phase (Planner -> Generator -> Evaluator) development workflow for Claude Code with **selectable single-agent or multi-agent persona mode**.
 
 No dependencies required. No Python, no pip, no build steps -- just install the plugin and go.
 
@@ -11,13 +11,18 @@ Inspired by Anthropic's [Harness Design for Long-Running Application Development
 Separates planning, implementation, and review into distinct phases with file-based handoffs. Each phase uses **specialized sub-agents with expert personas** that collaborate through structured debate and review patterns, eliminating single-agent blind spots.
 
 ```
-/agent-harness:harness  -> [Phase 1] Planner: 3 specialists propose independently
-                           -> Cross-critique: each reviews others' proposals
-                           -> Synthesis: orchestrator merges into spec.md
+/agent-harness:harness  -> [Setup] Auto-detect + mode selection (single / multi)
+                        -> [Phase 1] Planner
+                           single: 1 agent explores + writes spec.md
+                           multi:  3 specialists propose independently
+                                   -> Cross-critique: each reviews others
+                                   -> Synthesis: merge into spec.md
                         -> Confirmation Gate: user approves spec
-                        -> [Phase 2] Generator: Lead Developer creates plan
-                           -> Advisory Panel: 2 advisors review plan in parallel
-                           -> Implementation: Lead Developer codes with feedback
+                        -> [Phase 2] Generator
+                           single: 1 agent implements code
+                           multi:  Lead Developer creates plan
+                                   -> 2 advisors review plan in parallel
+                                   -> Lead Developer codes with feedback
                         -> [Phase 3] Evaluator (isolated subagent): test + review
                         -> PASS -> Done / FAIL -> Back to Phase 2 (max N rounds)
 ```
@@ -36,7 +41,9 @@ claude plugin install agent-harness@agent-harness-marketplace
 Once installed, use in any Claude Code session:
 
 ```
-/agent-harness:harness fix login timeout bug
+/agent-harness:harness fix login timeout bug                    # asks for mode
+/agent-harness:harness fix login timeout bug --mode single      # fast, token-saving
+/agent-harness:harness fix login timeout bug --mode multi       # deep multi-agent analysis
 ```
 
 That's it. No initialization, no repo registration, no configuration files needed. The harness auto-detects your project language, test commands, and build commands from project files.
@@ -106,12 +113,14 @@ Runs as an isolated sub-agent with research-backed bias reduction:
 
 ### Token Cost vs. Quality Trade-off
 
-The multi-agent approach uses approximately **1.7-2x more tokens** per run compared to a single-agent approach. However, the higher first-pass success rate often **reduces total cost** by avoiding expensive retry rounds:
+Choose the mode that fits your task:
 
-| Scenario | Single Agent | Multi-Agent |
-|----------|-------------|-------------|
-| 1 round (PASS) | 100% baseline | ~175% |
-| 2 rounds (FAIL → PASS) | ~200% | ~175% (first-pass PASS) |
+| Mode | Best for | Token cost |
+|------|----------|------------|
+| **single** | Small bug fixes, simple features, quick iterations | Baseline |
+| **multi** | Complex features, architectural changes, high-stakes code | ~1.7x baseline |
+
+The multi-agent approach uses more tokens per run, but the higher first-pass success rate often reduces total cost by avoiding expensive retry rounds.
 
 ### Session Recovery
 
@@ -157,11 +166,12 @@ You can pass options in conversation when invoking the harness:
 
 | Option | Default | Description |
 |--------|---------|-------------|
+| mode | (ask user) | `single` for fast/token-saving, `multi` for deep multi-agent analysis |
 | scope | auto-detected | Restrict file modifications to a pattern |
 | max rounds | 3 | Maximum Generator/Evaluator retry cycles |
 | max files | 20 | Maximum number of files that can be modified |
 
-Example: `/agent-harness:harness fix auth bug --scope "src/auth/**" --max-rounds 5`
+Example: `/agent-harness:harness fix auth bug --mode single --scope "src/auth/**" --max-rounds 5`
 
 ### Plugin Compatibility
 
