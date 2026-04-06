@@ -54,5 +54,6 @@ Write your critique to: `{output_path}`
 ## Constraints
 
 - Do NOT write implementation code.
+- Do NOT explore or read the codebase. You already analyzed it during your proposal phase. Base your critique entirely on the proposals provided and your prior expertise.
 - Be specific — reference concrete points from the proposals, not vague generalities.
 - Disagree when warranted. Agreement without evidence is not useful.
