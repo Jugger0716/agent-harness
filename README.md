@@ -1,6 +1,6 @@
 # Agent Harness
 
-**Zero-setup, zero-dependency** 3-Phase (Planner -> Generator -> Evaluator) development workflow for Claude Code.
+**Zero-setup, zero-dependency** 3-Phase (Planner -> Generator -> Evaluator) development workflow for Claude Code with **multi-agent personas**.
 
 No dependencies required. No Python, no pip, no build steps -- just install the plugin and go.
 
@@ -8,13 +8,17 @@ Inspired by Anthropic's [Harness Design for Long-Running Application Development
 
 ## What it does
 
-Separates planning, implementation, and review into distinct phases with file-based handoffs. The Evaluator runs as an **isolated subagent** with research-backed bias reduction techniques to prevent the "self-evaluation bias" where a single agent rates its own work too favorably.
+Separates planning, implementation, and review into distinct phases with file-based handoffs. Each phase uses **specialized sub-agents with expert personas** that collaborate through structured debate and review patterns, eliminating single-agent blind spots.
 
 ```
-/agent-harness:harness  -> [Phase 1] Planner: analyze task, write spec.md
-                        -> Confirmation Gate: user approves spec before proceeding
-                        -> [Phase 2] Generator: implement code, write changes.md
-                        -> [Phase 3] Evaluator (isolated subagent): test + review, write qa_report.md
+/agent-harness:harness  -> [Phase 1] Planner: 3 specialists propose independently
+                           -> Cross-critique: each reviews others' proposals
+                           -> Synthesis: orchestrator merges into spec.md
+                        -> Confirmation Gate: user approves spec
+                        -> [Phase 2] Generator: Lead Developer creates plan
+                           -> Advisory Panel: 2 advisors review plan in parallel
+                           -> Implementation: Lead Developer codes with feedback
+                        -> [Phase 3] Evaluator (isolated subagent): test + review
                         -> PASS -> Done / FAIL -> Back to Phase 2 (max N rounds)
 ```
 
@@ -55,16 +59,38 @@ The harness detects language, test, and build commands from your project files:
 
 1. You invoke the harness skill with a task description
 2. **Setup**: Auto-detects language/test/build, detects your language, creates `.harness/state.json` and `docs/harness/<task-slug>/`, creates a `harness/*` git branch
-3. **Phase 1 -- Planner**: Claude explores the codebase, analyzes the task, and writes `spec.md`
+
+### Phase 1 -- Planner (Multi-Agent)
+
+Three specialist personas analyze the task **independently and in parallel**:
+
+| Persona | Focus |
+|---------|-------|
+| **System Architect** | Structure, scalability, dependency management, long-term design |
+| **Senior Developer** | Implementation feasibility, practical constraints, hidden complexity |
+| **QA Specialist** | Failure modes, edge cases, boundary conditions, error handling |
+
+After independent proposals, each specialist **cross-critiques** the other two proposals. The orchestrator then **synthesizes** all 6 documents (3 proposals + 3 critiques) into a single `spec.md` using majority-rule and evidence-based decision criteria.
+
+**Why this works:** Independent proposals eliminate anchoring bias. Cross-critique surfaces disagreements. Synthesis preserves the strongest ideas from all perspectives.
+
 4. **Confirmation Gate**: Claude shows the spec and waits for explicit user approval before proceeding. Ambiguous responses are re-confirmed.
-5. **Phase 2 -- Generator**: Claude implements the code following the spec, with scope pre-verification before writing code
-6. **Phase 3 -- Evaluator** (isolated subagent): Runs as a separate agent with anchor-free input, performs pre-mortem analysis, tests, and structured code review with bias reduction techniques. Writes `qa_report.md` with a PASS/FAIL verdict
-7. If FAIL, the user is asked whether to retry (up to max rounds)
-8. On completion, the user is asked whether to commit the artifacts
 
-### Evaluator Bias Reduction
+### Phase 2 -- Generator (Lead + Advisors)
 
-The Evaluator uses 6 research-backed techniques to reduce self-evaluation bias:
+A single Lead Developer owns the implementation for code coherence, supported by an advisory panel:
+
+| Persona | Role | Timing |
+|---------|------|--------|
+| **Lead Developer** | Creates implementation plan, then implements code | Sequential |
+| **Code Quality Advisor** | Reviews plan for anti-patterns, SOLID violations, consistency | Before implementation |
+| **Test & Stability Advisor** | Reviews plan for runtime risks, error handling gaps, test coverage | Before implementation |
+
+The advisory review happens **before code is written**, catching issues when they're cheap to fix rather than expensive to rework.
+
+### Phase 3 -- Evaluator (Isolated)
+
+Runs as an isolated sub-agent with research-backed bias reduction:
 
 | Technique | Research Basis |
 |-----------|---------------|
@@ -75,6 +101,18 @@ The Evaluator uses 6 research-backed techniques to reduce self-evaluation bias:
 | **PASS-before-rebuttal** (must list problems before PASS) | Confirmation bias: structural forced consideration of counterevidence |
 | **Rubric decomposition** (2-3 sub-checks per criterion) | G-Eval, RocketEval: finer granularity reduces evaluation bias |
 
+7. If FAIL, the user is asked whether to retry (up to max rounds)
+8. On completion, the user is asked whether to commit the artifacts
+
+### Token Cost vs. Quality Trade-off
+
+The multi-agent approach uses approximately **1.7-2x more tokens** per run compared to a single-agent approach. However, the higher first-pass success rate often **reduces total cost** by avoiding expensive retry rounds:
+
+| Scenario | Single Agent | Multi-Agent |
+|----------|-------------|-------------|
+| 1 round (PASS) | 100% baseline | ~175% |
+| 2 rounds (FAIL → PASS) | ~200% | ~175% (first-pass PASS) |
+
 ### Session Recovery
 
 If a session is interrupted, the harness detects the existing `.harness/state.json` on next invocation and offers to resume from where you left off.
@@ -83,12 +121,23 @@ If a session is interrupted, the harness detects the existing `.harness/state.js
 
 ```
 .harness/
-  state.json                    # Working state (temporary, cleaned up after completion)
+  state.json                        # Working state (temporary)
+  planner/
+    proposal_architect.md           # Architect's independent proposal
+    proposal_senior_developer.md    # Senior Developer's independent proposal
+    proposal_qa_specialist.md       # QA Specialist's independent proposal
+    critique_architect.md           # Architect's cross-critique
+    critique_senior_developer.md    # Senior Developer's cross-critique
+    critique_qa_specialist.md       # QA Specialist's cross-critique
+  generator/
+    plan.md                         # Lead Developer's implementation plan
+    review_code_quality.md          # Code Quality Advisor's review
+    review_test_stability.md        # Test & Stability Advisor's review
 
 docs/harness/<task-slug>/
-  spec.md                       # Planner output
-  changes.md                    # Generator output
-  qa_report.md                  # Evaluator output
+  spec.md                           # Planner output (preserved)
+  changes.md                        # Generator output (preserved)
+  qa_report.md                      # Evaluator output (preserved)
 ```
 
 ### Confirmation Gates
