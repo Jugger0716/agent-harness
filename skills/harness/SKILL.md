@@ -1,11 +1,11 @@
 ---
 name: harness
-description: 3-Phase (Planner -> Generator -> Evaluator) development workflow. Use when starting feature work, bug fixes, or maintenance tasks that benefit from structured planning, implementation, and review.
+description: 3-Phase (Planner -> Generator -> Evaluator) development workflow with multi-agent personas. Use when starting feature work, bug fixes, or maintenance tasks that benefit from structured planning, implementation, and review.
 ---
 
 # Agent Harness Workflow
 
-You are orchestrating a 3-Phase development workflow.
+You are orchestrating a 3-Phase development workflow with **multi-agent personas** for enhanced quality.
 
 **Zero-setup:** No initialization required. Auto-detects language, test commands, and build commands from the current directory.
 
@@ -71,6 +71,8 @@ When the user provides a task (via $ARGUMENTS or in conversation), execute this 
 
 4. **Create directories:**
    - `.harness/` (working state)
+   - `.harness/planner/` (planner intermediate outputs)
+   - `.harness/generator/` (generator intermediate outputs)
    - `docs/harness/<slug>/` (artifacts)
 
 5. **Create git branch:**
@@ -110,17 +112,90 @@ When the user provides a task (via $ARGUMENTS or in conversation), execute this 
      Scope    : <scope>
    ```
 
-### Step 2: Planner Phase
+### Step 2: Planner Phase (Multi-Agent)
 
-1. Read the planner template: `{CLAUDE_PLUGIN_ROOT}/templates/planner_prompt.md`
-2. Interpret it with the current context (task, repo_path, lang, scope, user_lang). Do NOT write a rendered file — process inline.
-3. Follow the planner instructions:
-   - Explore the codebase (CLAUDE.md, relevant files)
-   - **Invoke a brainstorming skill** — search installed skills for "brainstorming" or "ideation" and invoke the first match
-   - **Invoke a planning skill** — search installed skills for "writing-plans" or "plan" and invoke the first match
-   - If no matching skill is found, proceed without it
-   - Write `spec.md` to `docs/harness/<slug>/spec.md` — **all content in `user_lang`**
-4. Update `.harness/state.json`: set phase to `"plan_ready"` (spec written, awaiting confirmation).
+The Planner uses **3 specialist personas** to generate diverse, independently-reasoned proposals, followed by cross-critique and synthesis. This eliminates anchoring bias and maximizes edge case discovery.
+
+#### Step 2a: Independent Proposals (Parallel)
+
+1. Read three persona templates from `{CLAUDE_PLUGIN_ROOT}/templates/planner/`:
+   - `architect.md` — System Architect
+   - `senior_developer.md` — Senior Developer
+   - `qa_specialist.md` — QA / Edge Case Specialist
+
+2. For each persona, prepare the prompt by filling in template variables:
+   - `{task_description}`: from state.json `task`
+   - `{repo_path}`: from state.json `repo_path`
+   - `{lang}`: from state.json `lang`
+   - `{scope}`: from state.json `scope`
+   - `{user_lang}`: from state.json `user_lang`
+   - `{output_path}`: `.harness/planner/proposal_<persona>.md`
+
+3. **Launch 3 subagents in parallel** using the Agent tool. Each subagent:
+   - Receives its persona template as the prompt
+   - Has no knowledge of other subagents (anchoring prevention)
+   - Writes its proposal to `.harness/planner/proposal_<persona>.md`
+
+   ```
+   [parallel launch]
+   ├─ Agent (architect)        → .harness/planner/proposal_architect.md
+   ├─ Agent (senior_developer) → .harness/planner/proposal_senior_developer.md
+   └─ Agent (qa_specialist)    → .harness/planner/proposal_qa_specialist.md
+   ```
+
+4. Wait for all 3 subagents to complete. Verify all 3 proposal files exist.
+
+#### Step 2b: Cross-Critique (Parallel)
+
+1. Read the cross-critique template: `{CLAUDE_PLUGIN_ROOT}/templates/planner/cross_critique.md`
+
+2. Read all 3 proposal files from Step 2a.
+
+3. For each persona, prepare the cross-critique prompt:
+   - `{persona_name}`: the persona's role name
+   - `{task_description}`: from state.json
+   - `{user_lang}`: from state.json
+   - `{proposal_1_author}` and `{proposal_1_content}`: first OTHER proposal
+   - `{proposal_2_author}` and `{proposal_2_content}`: second OTHER proposal
+   - `{output_path}`: `.harness/planner/critique_<persona>.md`
+
+   Each persona reviews the OTHER two proposals (not their own).
+
+4. **Launch 3 subagents in parallel:**
+
+   ```
+   [parallel launch]
+   ├─ Agent (architect critique)        → reviews senior_developer + qa_specialist proposals
+   ├─ Agent (senior_developer critique) → reviews architect + qa_specialist proposals
+   └─ Agent (qa_specialist critique)    → reviews architect + senior_developer proposals
+   ```
+
+5. Wait for all 3 subagents to complete. Verify all 3 critique files exist.
+
+#### Step 2c: Synthesis
+
+1. Read the synthesis template: `{CLAUDE_PLUGIN_ROOT}/templates/planner/synthesis.md`
+
+2. Read all 6 intermediate files (3 proposals + 3 critiques).
+
+3. Interpret the synthesis template with:
+   - `{task_description}`: from state.json
+   - `{user_lang}`: from state.json
+   - `{all_proposals}`: concatenated content of all 3 proposal files with author labels
+   - `{all_critiques}`: concatenated content of all 3 critique files with author labels
+   - `{spec_path}`: `docs/harness/<slug>/spec.md`
+
+4. Follow the synthesis rules to write `spec.md` to `docs/harness/<slug>/spec.md`.
+
+5. Update `.harness/state.json`: set phase to `"plan_ready"`.
+
+6. Inform the user (in `user_lang`):
+   ```
+   [harness] Planner complete.
+     Proposals  : 3 specialists analyzed independently
+     Critiques  : 3 cross-reviews completed
+     Output     : spec.md synthesized
+   ```
 
 ### Step 3: HARD GATE — Spec Confirmation
 
@@ -139,29 +214,93 @@ On ambiguity, respond in `user_lang` with a message equivalent to:
 If user requests modifications, update spec.md and re-confirm. If user stops, halt the workflow.
 </HARD-GATE>
 
-### Step 4: Generator Phase
+### Step 4: Generator Phase (Lead + Advisors)
+
+The Generator uses a **Lead Developer + Advisory Panel** pattern. One agent owns the implementation for code coherence, while advisors review the plan before code is written to prevent costly rework.
+
+#### Step 4a: Implementation Plan (Subagent)
 
 1. Update state.json: phase → `"gen_ready"`, read current round.
-2. Read the generator template: `{CLAUDE_PLUGIN_ROOT}/templates/generator_prompt.md`
-3. Interpret with context:
-   - `spec_content`: read from `docs/harness/<slug>/spec.md`
-   - `qa_feedback`: read from `docs/harness/<slug>/qa_report.md` if round > 1, else "(First round — no QA feedback)"
-   - `round_num`, `scope`, `max_files`: from state.json
-   - If test_cmd is available, include TDD instructions; otherwise skip
+
+2. Read the lead developer template: `{CLAUDE_PLUGIN_ROOT}/templates/generator/lead_developer.md`
+
+3. Prepare the prompt:
+   - `{spec_content}`: read from `docs/harness/<slug>/spec.md`
+   - `{qa_feedback}`: read from `docs/harness/<slug>/qa_report.md` if round > 1, else "(First round — no QA feedback)"
+   - `{repo_path}`, `{lang}`, `{scope}`, `{max_files}`: from state.json
+   - `{user_lang}`: from state.json
+   - `{output_path}`: `.harness/generator/plan.md`
+
+4. **Launch 1 subagent** (Lead Developer) to create the implementation plan.
+
+5. Wait for completion. Verify `.harness/generator/plan.md` exists.
+
+#### Step 4b: Advisory Review (Parallel)
+
+1. Read both advisor templates from `{CLAUDE_PLUGIN_ROOT}/templates/generator/`:
+   - `code_quality_advisor.md`
+   - `test_stability_advisor.md`
+
+2. Read the plan from `.harness/generator/plan.md`.
+
+3. For each advisor, prepare the prompt:
+   - `{spec_content}`: from spec.md
+   - `{plan_content}`: from plan.md
+   - `{repo_path}`, `{lang}`, `{test_cmd}`: from state.json
+   - `{user_lang}`: from state.json
+   - `{output_path}`: `.harness/generator/review_<advisor>.md`
+
+4. **Launch 2 subagents in parallel:**
+
+   ```
+   [parallel launch]
+   ├─ Agent (code_quality_advisor)    → .harness/generator/review_code_quality.md
+   └─ Agent (test_stability_advisor)  → .harness/generator/review_test_stability.md
+   ```
+
+5. Wait for both to complete. Verify both review files exist.
+
+#### Step 4c: Implementation (Subagent)
+
+1. Read the implementation template: `{CLAUDE_PLUGIN_ROOT}/templates/generator/implementation.md`
+
+2. Read the plan and both reviews from `.harness/generator/`.
+
+3. Prepare the prompt:
+   - `{spec_content}`: from spec.md
+   - `{plan_content}`: from plan.md
+   - `{code_quality_review}`: from review_code_quality.md
+   - `{test_stability_review}`: from review_test_stability.md
+   - `{qa_feedback}`: from qa_report.md if round > 1, else "(First round — no QA feedback)"
+   - `{repo_path}`, `{lang}`, `{scope}`, `{max_files}`: from state.json
+   - `{user_lang}`: from state.json
+   - `{round_num}`: from state.json
+   - `{changes_path}`: `docs/harness/<slug>/changes.md`
+
 4. **Invoke implementation skills** — search installed skills and invoke matches:
    - If test_cmd available: search for "test-driven-development" or "tdd"
    - Search for "subagent-driven-development", "parallel-tasks", or "dispatching-parallel-agents"
    - If no matching skill is found, proceed without it
-5. Follow the generator instructions — implement code changes.
-   - The generator template includes a **scope pre-check step**: before writing any code, list planned files and verify they match the scope pattern. If scope is "(no limit)", skip this check.
-6. Write `docs/harness/<slug>/changes.md` listing all modified/created files.
+
+5. **Launch 1 subagent** (Lead Developer) to implement the code.
+
+6. Wait for completion. Verify `docs/harness/<slug>/changes.md` exists.
+
+7. Inform the user (in `user_lang`):
+   ```
+   [harness] Generator complete.
+     Plan     : Lead Developer created implementation plan
+     Reviews  : 2 advisors reviewed the plan
+     Code     : Lead Developer implemented with feedback
+     Output   : changes.md written
+   ```
 
 ### Step 5: Evaluator Phase (Isolated Subagent)
 
 The Evaluator runs as an **isolated subagent** to reduce self-evaluation bias. The subagent has a separate context and does not see the Generator's intermediate reasoning.
 
 1. Update state.json: phase → `"eval_ready"`.
-2. Read the evaluator template: `{CLAUDE_PLUGIN_ROOT}/templates/evaluator_prompt.md`
+2. Read the evaluator template: `{CLAUDE_PLUGIN_ROOT}/templates/evaluator/evaluator_prompt.md`
 3. **Prepare the subagent prompt.** Construct the prompt by filling in the evaluator template with:
    - `spec_content`: read from `docs/harness/<slug>/spec.md`
    - `changed_files_list`: file paths only from `docs/harness/<slug>/changes.md` — **strip all "reason" descriptions** to prevent anchoring
@@ -172,6 +311,7 @@ The Evaluator runs as an **isolated subagent** to reduce self-evaluation bias. T
 
    **Do NOT include:**
    - The Generator's reasoning or decision process
+   - The implementation plan or advisor reviews
    - Why specific files were changed
    - Any reference to "Generator", "AI", or "agent" as the code author
 
@@ -207,7 +347,7 @@ Read qa_report.md and determine verdict (look for "Verdict: PASS" or "Verdict: F
 Ask the user (in `user_lang`) whether to commit the artifacts (spec.md, changes.md, qa_report.md).
 
 - If commit: stage and commit `docs/harness/<slug>/` files
-- Clean up `.harness/` directory (delete state.json and the directory)
+- Clean up `.harness/` directory (delete state.json, planner/, generator/, and the directory itself)
 
 ### Status Check (anytime)
 
@@ -229,6 +369,9 @@ Phase labels: plan_ready → "Planner — writing spec", gen_ready → "Generato
 - **Confirmation gates are non-negotiable.** No implicit approval, no proceeding on ambiguity.
 - **Stay within scope.** Do not modify files outside the specified scope.
 - **Evaluator must be isolated.** Always run as a subagent with anchor-free input. Never pass Generator reasoning to the Evaluator.
+- **Planner proposals must be independent.** Never share one persona's proposal with another during the proposal phase. Cross-critique is a separate, subsequent step.
+- **Generator advisors review the plan, not the code.** Advisory input happens before implementation to prevent costly rework, not after.
 - **Git safety.** The workflow creates a branch automatically.
 - **Use whatever skills are available.** Search installed skills by capability keyword (e.g. "brainstorming", "tdd", "code-review"), not by plugin name. If no match exists, proceed without it. Never fail because a specific plugin is missing.
 - **User language.** All user-facing output (messages, spec, reports) must be in `user_lang`. Re-detect on every user message. Templates and internal state stay in English.
+- **Intermediate outputs are ephemeral.** Proposals, critiques, plans, and reviews in `.harness/` are working documents. Only final artifacts (spec.md, changes.md, qa_report.md) are preserved in `docs/`.
