@@ -81,7 +81,21 @@ When the user provides a task (via $ARGUMENTS or in conversation), execute this 
    git checkout -b harness/<slug>
    ```
 
-6. **Write `.harness/state.json`:**
+6. **Mode selection:**
+
+   - If `--mode single` or `--mode multi` was passed in the task arguments, set mode accordingly and skip the prompt.
+   - Otherwise, ask the user (in `user_lang`) with a message equivalent to:
+     ```
+     [harness] Select mode:
+       1. single — single agent (fast, token-saving)
+       2. multi  — multi-agent personas (deeper analysis, ~1.7x tokens)
+     > (1 / 2 / single / multi)
+     ```
+     (Translate the prompt to `user_lang`.)
+   - Accept: "1", "2", "single", "multi" (case-insensitive).
+   - If the user provides an unrecognized response, re-ask.
+
+7. **Write `.harness/state.json`:**
    ```json
    {
      "task": "<user's task description>",
@@ -103,35 +117,16 @@ When the user provides a task (via $ARGUMENTS or in conversation), execute this 
    }
    ```
 
-7. **Print setup summary** to the user (in `user_lang`):
+8. **Print setup summary** to the user (in `user_lang`):
    ```
    [harness] Task started!
      Repo     : <path>
      Branch   : harness/<slug>
+     Mode     : <single | multi>
      Language : <lang>
      Test     : <test_cmd or "none">
      Build    : <build_cmd or "none">
      Scope    : <scope>
-   ```
-
-8. **Mode selection:**
-
-   - If `--mode single` or `--mode multi` was passed in the task arguments, set mode accordingly and skip the prompt.
-   - Otherwise, ask the user (in `user_lang`) with a message equivalent to:
-     ```
-     [harness] Select mode:
-       1. single — single agent (fast, token-saving)
-       2. multi  — multi-agent personas (deeper analysis, ~1.7x tokens)
-     > (1 / 2 / single / multi)
-     ```
-     (Translate the prompt to `user_lang`.)
-   - Accept: "1", "2", "single", "multi" (case-insensitive).
-   - Write the selected mode to `state.json`.
-   - If the user provides an unrecognized response, re-ask.
-
-9. **Print mode confirmation** (in `user_lang`):
-   ```
-   [harness] Mode: <single | multi>
    ```
 
 ### Step 2: Planner Phase
