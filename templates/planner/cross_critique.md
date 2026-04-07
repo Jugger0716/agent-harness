@@ -14,7 +14,7 @@ Same as your original persona — evaluate the other proposals through your spec
 
 ## Output Language
 
-Write your critique in **{user_lang}**.
+Write all output in **{user_lang}**.
 
 ## Proposals to Review
 
@@ -53,7 +53,6 @@ Write your critique to: `{output_path}`
 
 ## Constraints
 
-- Do NOT write implementation code.
-- Do NOT explore or read the codebase. You already analyzed it during your proposal phase. Base your critique entirely on the proposals provided and your prior expertise.
-- Be specific — reference concrete points from the proposals, not vague generalities.
-- Disagree when warranted. Agreement without evidence is not useful.
+- Do NOT write implementation code or explore the codebase — base your critique entirely on the proposals and your prior expertise.
+- Be specific — reference concrete points from the proposals. Disagree when warranted; agreement without evidence is not useful.
+- Be concise — focus on key findings, not exhaustive analysis.

@@ -11,36 +11,38 @@ You are orchestrating a 3-Phase development workflow with **selectable single-ag
 
 ## User Language Detection
 
-Detect the user's language from their **most recent message** (the task description or latest reply). Store as `user_lang` in state.json (e.g. "ko", "en", "ja", "zh", "es", "de", etc.).
+Detect the user's language from their **most recent message**. Store as `user_lang` in state.json (e.g. "ko", "en", "ja", "zh", "es", "de", etc.).
 
-**All user-facing communication** must be in the detected language:
-- Progress updates, questions, confirmations, error messages
-- Spec sections (headings and content), QA report narrative, commit messages
-- Confirmation gate prompts and options
+**All user-facing communication** must be in the detected language: progress updates, questions, confirmations, error messages, spec sections, QA report narrative, commit messages, confirmation gate prompts and options.
 
-**Re-detection:** On every user message, check if the language has changed. If it has, update `user_lang` in state.json and switch all subsequent communication to the new language.
+**Re-detection:** On every user message, check if the language has changed. If so, update `user_lang` and switch all subsequent communication.
 
 **What stays in English:** Template instructions (this file and templates/*.md), state.json field names, file names (spec.md, changes.md, qa_report.md), git branch names.
+
+## Standard Status Format
+
+When displaying status, read `.harness/state.json` and print (in `user_lang`):
+```
+[harness]
+  Task   : <task>
+  Mode   : <single | multi>
+  Phase  : <phase label>
+  Round  : <round> / <max_rounds>
+  Branch : <branch>
+  Scope  : <scope>
+```
+Phase labels: plan_ready → "Planner — writing spec", gen_ready → "Generator — implementing", eval_ready → "Evaluator — reviewing", completed → "Completed"
 
 ## Session Recovery
 
 Before starting a new task, check if `.harness/state.json` already exists:
 
-1. If it exists, read it and display the current state (in `user_lang` from state.json):
-   ```
-   [harness] Previous session detected.
-     Task   : <task>
-     Mode   : <single | multi>
-     Phase  : <phase label>
-     Round  : <round> / <max_rounds>
-     Branch : <branch>
-   ```
+1. If it exists, print status in the standard format, prefixed with `[harness] Previous session detected.`
 2. Ask the user (in their language) whether to resume, restart, or stop:
-   - **Resume**: Read the phase from state.json and jump to the corresponding step:
-     - `plan_ready` → Check if spec.md exists in docs path. If yes, go to Step 3 (show spec and confirm). If no, go to Step 2 (re-run Planner).
-     - `gen_ready` → Step 4 (Generator)
-     - `eval_ready` → Step 5 (Evaluator)
-     - `completed` → Treat as no active session. Inform the user and proceed to Step 1.
+   - **Resume**: Jump to the step matching state.json phase:
+     `plan_ready` → if spec.md exists go to Step 3, else Step 2 |
+     `gen_ready` → Step 4 | `eval_ready` → Step 5 |
+     `completed` → no active session, proceed to Step 1
    - **Restart**: Delete `.harness/` directory and proceed to Step 1
    - **Stop**: Delete `.harness/` directory and halt
 
@@ -53,71 +55,25 @@ When the user provides a task (via $ARGUMENTS or in conversation), execute this 
 ### Step 1: Setup
 
 1. **Detect user language** from the task description. Store as `user_lang`.
-
-2. **Slugify the task:** lowercase, transliterate non-ASCII to ASCII if possible, remove non-word chars except hyphens, replace spaces with hyphens, truncate to 50 chars. Store as `<slug>`.
-
-3. **Auto-detect project language and commands.** Scan the repo root with Glob and check for these files:
+2. **Slugify the task:** lowercase, transliterate non-ASCII to ASCII, remove non-word chars except hyphens, replace spaces with hyphens, truncate to 50 chars. Store as `<slug>`.
+3. **Auto-detect project language and commands.** Scan the repo root:
 
    | File | Language | Test Command | Build Command |
    |------|----------|-------------|---------------|
-   | `build.gradle` or `build.gradle.kts` | java | `./gradlew test` | `./gradlew build` |
+   | `build.gradle(.kts)` | java | `./gradlew test` | `./gradlew build` |
    | `pom.xml` | java | `mvn test` | `mvn compile` |
-   | `pyproject.toml` or `setup.py` | python | `pytest` | (none) |
+   | `pyproject.toml` / `setup.py` | python | `pytest` | (none) |
    | `package.json` | typescript | `npm test` | `npm run build` |
    | `*.csproj` | csharp | `dotnet test` | `dotnet build` |
    | `go.mod` | go | `go test ./...` | `go build ./...` |
    | `Cargo.toml` | rust | `cargo test` | `cargo build` |
 
    If none match, set language to "unknown", test/build commands to null.
-
-4. **Create directories:**
-   - `.harness/` (working state)
-   - `.harness/planner/` (planner intermediate outputs)
-   - `.harness/generator/` (generator intermediate outputs)
-   - `docs/harness/<slug>/` (artifacts)
-
-5. **Create git branch:**
-   ```bash
-   git checkout -b harness/<slug>
-   ```
-
-6. **Mode selection:**
-
-   - If `--mode single` or `--mode multi` was passed in the task arguments, set mode accordingly and skip the prompt.
-   - Otherwise, ask the user (in `user_lang`) with a message equivalent to:
-     ```
-     [harness] Select mode:
-       1. single — single agent (fast, token-saving)
-       2. multi  — multi-agent personas (deeper analysis, ~1.7x tokens)
-     > (1 / 2 / single / multi)
-     ```
-     (Translate the prompt to `user_lang`.)
-   - Accept: "1", "2", "single", "multi" (case-insensitive).
-   - If the user provides an unrecognized response, re-ask.
-
-7. **Write `.harness/state.json`:**
-   ```json
-   {
-     "task": "<user's task description>",
-     "mode": "<selected mode: single or multi>",
-     "user_lang": "<detected language code>",
-     "repo_name": "<directory name>",
-     "repo_path": "<absolute path>",
-     "phase": "plan_ready",
-     "round": 1,
-     "scope": "<user-provided scope or '(no limit)'>",
-     "max_rounds": 3,
-     "max_files": 20,
-     "branch": "harness/<slug>",
-     "lang": "<detected project language>",
-     "test_cmd": "<detected or null>",
-     "build_cmd": "<detected or null>",
-     "docs_path": "docs/harness/<slug>/",
-     "created_at": "<ISO8601>"
-   }
-   ```
-
-8. **Print setup summary** to the user (in `user_lang`):
+4. **Create directories:** `.harness/`, `.harness/planner/`, `.harness/generator/`, `docs/harness/<slug>/`
+5. **Create git branch:** `git checkout -b harness/<slug>`
+6. **Mode selection:** If `--mode single` or `--mode multi` was passed, set mode and skip prompt. Otherwise, ask the user (in `user_lang`) to choose: (1) single — fast, token-saving; (2) multi — deeper analysis, ~1.7x tokens. Accept: "1", "2", "single", "multi" (case-insensitive). Re-ask on unrecognized input.
+7. **Write `.harness/state.json`** with fields: `task`, `mode` ("single"/"multi"), `user_lang`, `repo_name`, `repo_path`, `phase` ("plan_ready"), `round` (1), `max_rounds` (3), `max_files` (20), `scope` (user-provided or "(no limit)"), `branch` ("harness/<slug>"), `lang`, `test_cmd`, `build_cmd`, `docs_path` ("docs/harness/<slug>/"), `created_at` (ISO8601).
+8. **Print setup summary** (in `user_lang`):
    ```
    [harness] Task started!
      Repo     : <path>
@@ -133,101 +89,43 @@ When the user provides a task (via $ARGUMENTS or in conversation), execute this 
 
 Read `mode` from state.json and branch accordingly.
 
-#### If mode == "single": Step 2-S (Single Agent Planner)
+#### If mode == "single": Step 2-S
 
 1. Read the single planner template: `{CLAUDE_PLUGIN_ROOT}/templates/planner/planner_single.md`
-2. Interpret it with the current context (task, repo_path, lang, scope, user_lang, spec_path=`docs/harness/<slug>/spec.md`). Do NOT write a rendered file — process inline.
+2. Interpret it with current context (task, repo_path, lang, scope, user_lang, spec_path=`docs/harness/<slug>/spec.md`). Do NOT write a rendered file — process inline.
 3. Follow the planner instructions:
    - Explore the codebase (CLAUDE.md, relevant files)
-   - **Invoke a brainstorming skill** — search installed skills for "brainstorming" or "ideation" and invoke the first match
-   - **Invoke a planning skill** — search installed skills for "writing-plans" or "plan" and invoke the first match
-   - If no matching skill is found, proceed without it
+   - **Invoke a brainstorming skill** — search for "brainstorming" or "ideation", invoke first match
+   - **Invoke a planning skill** — search for "writing-plans" or "plan", invoke first match
+   - If no matching skill found, proceed without it
    - Write `spec.md` to `docs/harness/<slug>/spec.md` — **all content in `user_lang`**
-4. Update `.harness/state.json`: set phase to `"plan_ready"`.
-5. Inform the user (in `user_lang`):
-   ```
-   [harness] Planner complete.
-     Mode   : single
-     Output : spec.md written
-   ```
+4. Update state.json: phase → `"plan_ready"`.
+5. Print status in the standard format, prefixed with `[harness] Planner complete.`
 
-#### If mode == "multi": Step 2-M (Multi-Agent Planner)
-
-The Planner uses **3 specialist personas** to generate diverse, independently-reasoned proposals, followed by cross-critique and synthesis. This eliminates anchoring bias and maximizes edge case discovery.
+#### If mode == "multi": Step 2-M
 
 ##### Step 2a: Independent Proposals (Parallel)
 
-1. Read three persona templates from `{CLAUDE_PLUGIN_ROOT}/templates/planner/`:
-   - `architect.md` — System Architect
-   - `senior_developer.md` — Senior Developer
-   - `qa_specialist.md` — QA / Edge Case Specialist
-
-2. For each persona, prepare the prompt by filling in template variables:
-   - `{task_description}`: from state.json `task`
-   - `{repo_path}`: from state.json `repo_path`
-   - `{lang}`: from state.json `lang`
-   - `{scope}`: from state.json `scope`
-   - `{user_lang}`: from state.json `user_lang`
-   - `{output_path}`: `.harness/planner/proposal_<persona>.md`
-
-3. **Launch 3 subagents in parallel** using the Agent tool. Each subagent:
-   - Receives its persona template as the prompt
-   - Has no knowledge of other subagents (anchoring prevention)
-   - Writes its proposal to `.harness/planner/proposal_<persona>.md`
-
-   ```
-   [parallel launch]
-   ├─ Agent (architect)        → .harness/planner/proposal_architect.md
-   ├─ Agent (senior_developer) → .harness/planner/proposal_senior_developer.md
-   └─ Agent (qa_specialist)    → .harness/planner/proposal_qa_specialist.md
-   ```
-
-4. Wait for all 3 subagents to complete. Verify all 3 proposal files exist.
+1. Read three persona templates from `{CLAUDE_PLUGIN_ROOT}/templates/planner/`: `architect.md`, `senior_developer.md`, `qa_specialist.md`
+2. For each persona, fill template variables: `{task_description}`, `{repo_path}`, `{lang}`, `{scope}`, `{user_lang}` from state.json; `{output_path}`: `.harness/planner/proposal_<persona>.md`
+3. **Launch 3 subagents in parallel** using the Agent tool. Each receives its persona template, has no knowledge of other subagents (anchoring prevention), and writes to its output_path.
+4. Wait for all 3 to complete. Verify all 3 proposal files exist.
 
 ##### Step 2b: Cross-Critique (Parallel)
 
 1. Read the cross-critique template: `{CLAUDE_PLUGIN_ROOT}/templates/planner/cross_critique.md`
-
 2. Read all 3 proposal files from Step 2a.
-
-3. For each persona, prepare the cross-critique prompt:
-   - `{persona_name}`: the persona's role name
-   - `{task_description}`: from state.json
-   - `{user_lang}`: from state.json
-   - `{proposal_1_author}` and `{proposal_1_content}`: first OTHER proposal
-   - `{proposal_2_author}` and `{proposal_2_content}`: second OTHER proposal
-   - `{output_path}`: `.harness/planner/critique_<persona>.md`
-
-   Each persona reviews the OTHER two proposals (not their own).
-
-4. **Launch 3 subagents in parallel:**
-
-   ```
-   [parallel launch]
-   ├─ Agent (architect critique)        → reviews senior_developer + qa_specialist proposals
-   ├─ Agent (senior_developer critique) → reviews architect + qa_specialist proposals
-   └─ Agent (qa_specialist critique)    → reviews architect + senior_developer proposals
-   ```
-
-5. Wait for all 3 subagents to complete. Verify all 3 critique files exist.
+3. For each persona, prepare the cross-critique prompt with: `{persona_name}`, `{task_description}`, `{user_lang}`, `{proposal_1_author}`, `{proposal_1_content}`, `{proposal_2_author}`, `{proposal_2_content}` (the OTHER two proposals), `{output_path}`: `.harness/planner/critique_<persona>.md`
+4. **Launch 3 subagents in parallel.** Each writes to `.harness/planner/critique_<persona>.md`.
+5. Wait for all 3 to complete. Verify all 3 critique files exist.
 
 ##### Step 2c: Synthesis
 
 1. Read the synthesis template: `{CLAUDE_PLUGIN_ROOT}/templates/planner/synthesis.md`
-
 2. Read all 6 intermediate files (3 proposals + 3 critiques).
-
-3. Interpret the synthesis template with:
-   - `{task_description}`: from state.json
-   - `{user_lang}`: from state.json
-   - `{all_proposals}`: concatenated content of all 3 proposal files with author labels
-   - `{all_critiques}`: concatenated content of all 3 critique files with author labels
-   - `{spec_path}`: `docs/harness/<slug>/spec.md`
-
-4. Follow the synthesis rules to write `spec.md` to `docs/harness/<slug>/spec.md`.
-
-5. Update `.harness/state.json`: set phase to `"plan_ready"`.
-
+3. Interpret the synthesis template with: `{task_description}`, `{user_lang}`, `{all_proposals}` (concatenated with author labels), `{all_critiques}` (concatenated with author labels), `{spec_path}`: `docs/harness/<slug>/spec.md`
+4. Follow the synthesis rules to write `spec.md`.
+5. Update state.json: phase → `"plan_ready"`.
 6. Inform the user (in `user_lang`):
    ```
    [harness] Planner complete.
@@ -257,108 +155,42 @@ If user requests modifications, update spec.md and re-confirm. If user stops, ha
 
 Read `mode` from state.json and branch accordingly.
 
-#### If mode == "single": Step 4-S (Single Agent Generator)
+#### If mode == "single": Step 4-S
 
 1. Update state.json: phase → `"gen_ready"`, read current round.
-
 2. Read the single generator template: `{CLAUDE_PLUGIN_ROOT}/templates/generator/generator_single.md`
-
-3. Prepare the prompt:
-   - `{spec_content}`: read from `docs/harness/<slug>/spec.md`
-   - `{qa_feedback}`: read from `docs/harness/<slug>/qa_report.md` if round > 1, else "(First round — no QA feedback)"
-   - `{round_num}`, `{scope}`, `{max_files}`: from state.json
-   - `{user_lang}`: from state.json
-   - `{changes_path}`: `docs/harness/<slug>/changes.md`
-
-4. **Invoke implementation skills** — search installed skills and invoke matches:
-   - If test_cmd available: search for "test-driven-development" or "tdd"
-   - Search for "subagent-driven-development", "parallel-tasks", or "dispatching-parallel-agents"
-   - If no matching skill is found, proceed without it
-
+3. Prepare the prompt: `{spec_content}` from spec.md, `{qa_feedback}` from qa_report.md if round > 1 else "(First round — no QA feedback)", `{round_num}`, `{scope}`, `{max_files}`, `{user_lang}` from state.json, `{changes_path}`: `docs/harness/<slug>/changes.md`
+4. **Invoke implementation skills** — search and invoke matches: "test-driven-development"/"tdd" (if test_cmd available), "subagent-driven-development"/"parallel-tasks"/"dispatching-parallel-agents". Proceed without if no match.
 5. **Launch 1 subagent** to implement the code following the template.
-
 6. Wait for completion. Verify `docs/harness/<slug>/changes.md` exists.
+7. Print status in the standard format, prefixed with `[harness] Generator complete.`
 
-7. Inform the user (in `user_lang`):
-   ```
-   [harness] Generator complete.
-     Mode   : single
-     Code   : implemented
-     Output : changes.md written
-   ```
+#### If mode == "multi": Step 4-M
 
-#### If mode == "multi": Step 4-M (Lead + Advisors Generator)
-
-The Generator uses a **Lead Developer + Advisory Panel** pattern. One agent owns the implementation for code coherence, while advisors review the plan before code is written to prevent costly rework.
-
-##### Step 4a: Implementation Plan (Subagent)
+##### Step 4a: Implementation Plan
 
 1. Update state.json: phase → `"gen_ready"`, read current round.
-
 2. Read the lead developer template: `{CLAUDE_PLUGIN_ROOT}/templates/generator/lead_developer.md`
-
-3. Prepare the prompt:
-   - `{spec_content}`: read from `docs/harness/<slug>/spec.md`
-   - `{qa_feedback}`: read from `docs/harness/<slug>/qa_report.md` if round > 1, else "(First round — no QA feedback)"
-   - `{repo_path}`, `{lang}`, `{scope}`, `{max_files}`: from state.json
-   - `{user_lang}`: from state.json
-   - `{output_path}`: `.harness/generator/plan.md`
-
+3. Prepare the prompt: `{spec_content}` from spec.md, `{qa_feedback}` from qa_report.md if round > 1 else "(First round — no QA feedback)", `{repo_path}`, `{lang}`, `{scope}`, `{max_files}`, `{user_lang}` from state.json, `{output_path}`: `.harness/generator/plan.md`
 4. **Launch 1 subagent** (Lead Developer) to create the implementation plan.
-
 5. Wait for completion. Verify `.harness/generator/plan.md` exists.
 
 ##### Step 4b: Advisory Review (Parallel)
 
-1. Read both advisor templates from `{CLAUDE_PLUGIN_ROOT}/templates/generator/`:
-   - `code_quality_advisor.md`
-   - `test_stability_advisor.md`
-
+1. Read both advisor templates from `{CLAUDE_PLUGIN_ROOT}/templates/generator/`: `code_quality_advisor.md`, `test_stability_advisor.md`
 2. Read the plan from `.harness/generator/plan.md`.
-
-3. For each advisor, prepare the prompt:
-   - `{spec_content}`: from spec.md
-   - `{plan_content}`: from plan.md
-   - `{repo_path}`, `{lang}`, `{test_cmd}`: from state.json
-   - `{user_lang}`: from state.json
-   - `{output_path}`: `.harness/generator/review_<advisor>.md`
-
-4. **Launch 2 subagents in parallel:**
-
-   ```
-   [parallel launch]
-   ├─ Agent (code_quality_advisor)    → .harness/generator/review_code_quality.md
-   └─ Agent (test_stability_advisor)  → .harness/generator/review_test_stability.md
-   ```
-
+3. For each advisor, prepare the prompt: `{spec_content}`, `{plan_content}`, `{repo_path}`, `{lang}`, `{test_cmd}`, `{user_lang}` from state.json, `{output_path}`: `.harness/generator/review_<advisor>.md`
+4. **Launch 2 subagents in parallel.** Each writes to its output_path.
 5. Wait for both to complete. Verify both review files exist.
 
-##### Step 4c: Implementation (Subagent)
+##### Step 4c: Implementation
 
 1. Read the implementation template: `{CLAUDE_PLUGIN_ROOT}/templates/generator/implementation.md`
-
 2. Read the plan and both reviews from `.harness/generator/`.
-
-3. Prepare the prompt:
-   - `{spec_content}`: from spec.md
-   - `{plan_content}`: from plan.md
-   - `{code_quality_review}`: from review_code_quality.md
-   - `{test_stability_review}`: from review_test_stability.md
-   - `{qa_feedback}`: from qa_report.md if round > 1, else "(First round — no QA feedback)"
-   - `{repo_path}`, `{lang}`, `{scope}`, `{max_files}`: from state.json
-   - `{user_lang}`: from state.json
-   - `{round_num}`: from state.json
-   - `{changes_path}`: `docs/harness/<slug>/changes.md`
-
-4. **Invoke implementation skills** — search installed skills and invoke matches:
-   - If test_cmd available: search for "test-driven-development" or "tdd"
-   - Search for "subagent-driven-development", "parallel-tasks", or "dispatching-parallel-agents"
-   - If no matching skill is found, proceed without it
-
+3. Prepare the prompt: `{spec_content}`, `{plan_content}`, `{code_quality_review}`, `{test_stability_review}`, `{qa_feedback}` (from qa_report.md if round > 1), `{repo_path}`, `{lang}`, `{scope}`, `{max_files}`, `{user_lang}`, `{round_num}` from state.json, `{changes_path}`: `docs/harness/<slug>/changes.md`
+4. **Invoke implementation skills** — same as Step 4-S step 4.
 5. **Launch 1 subagent** (Lead Developer) to implement the code.
-
 6. Wait for completion. Verify `docs/harness/<slug>/changes.md` exists.
-
 7. Inform the user (in `user_lang`):
    ```
    [harness] Generator complete.
@@ -370,72 +202,34 @@ The Generator uses a **Lead Developer + Advisory Panel** pattern. One agent owns
 
 ### Step 5: Evaluator Phase (Isolated Subagent)
 
-The Evaluator runs as an **isolated subagent** to reduce self-evaluation bias. The subagent has a separate context and does not see the Generator's intermediate reasoning.
-
 1. Update state.json: phase → `"eval_ready"`.
 2. Read the evaluator template: `{CLAUDE_PLUGIN_ROOT}/templates/evaluator/evaluator_prompt.md`
-3. **Prepare the subagent prompt.** Construct the prompt by filling in the evaluator template with:
-   - `spec_content`: read from `docs/harness/<slug>/spec.md`
-   - `changed_files_list`: file paths only from `docs/harness/<slug>/changes.md` — **strip all "reason" descriptions** to prevent anchoring
-   - `test_available`, `build_cmd`, `test_cmd`: from state.json
-   - `round_num`, `scope`: from state.json
-   - `user_lang`: from state.json — the subagent must write the QA report in this language
-   - `qa_report_path`: `docs/harness/<slug>/qa_report.md` — tell the subagent exactly where to write the report
-
-   **Do NOT include:**
-   - The Generator's reasoning or decision process
-   - The implementation plan or advisor reviews
-   - Why specific files were changed
-   - Any reference to "Generator", "AI", or "agent" as the code author
-
-4. **Launch the Evaluator subagent** using the Agent tool:
-   - Pass the prepared prompt
-   - Use `subagent_type: "superpowers:code-reviewer"` if available, otherwise use default
-   - Instruct the subagent to write the QA report to `docs/harness/<slug>/qa_report.md`
-
+3. **Prepare the subagent prompt.** Fill in: `spec_content` from spec.md, `changed_files_list` (file paths only from changes.md — **strip all "reason" descriptions** to prevent anchoring), `test_available`, `build_cmd`, `test_cmd`, `round_num`, `scope`, `user_lang` from state.json, `qa_report_path`: `docs/harness/<slug>/qa_report.md`.
+   **Do NOT include:** Generator reasoning, implementation plan, advisor reviews, why files were changed, or references to "Generator"/"AI"/"agent" as code author.
+4. **Launch the Evaluator subagent** using the Agent tool. Use `subagent_type: "superpowers:code-reviewer"` if available. Instruct it to write the QA report to `docs/harness/<slug>/qa_report.md`.
 5. When the subagent returns, read `docs/harness/<slug>/qa_report.md` to get the verdict.
 
 ### Step 6: Verdict & Loop
 
 Read qa_report.md and determine verdict (look for "Verdict: PASS" or "Verdict: FAIL").
 
-**If PASS:**
-- Update state.json: phase → `"completed"`
-- Inform user (in `user_lang`): task complete
-- Proceed to Step 7
+**If PASS:** Update state.json: phase → `"completed"`. Inform user: task complete. Proceed to Step 7.
 
-**If FAIL and rounds remaining (round < max_rounds):**
-- Do NOT automatically retry. Ask user (in `user_lang`) with a message equivalent to:
-  > "QA result: FAIL. [failure summary]. Proceed to next round? (proceed / stop)"
-- If user confirms: increment round in state.json, go back to Step 4
-- If user stops: update phase to "completed", proceed to Step 7
+**If FAIL and rounds remaining (round < max_rounds):** Do NOT auto-retry. Ask user:
+> "QA result: FAIL. [failure summary]. Proceed to next round? (proceed / stop)"
+If confirmed: increment round, go to Step 4. If stopped: phase → "completed", go to Step 7.
 
-**If FAIL and max rounds reached:**
-- Update state.json: phase → `"completed"`
-- Inform user of remaining issues (in `user_lang`)
-- Proceed to Step 7
+**If FAIL and max rounds reached:** phase → `"completed"`. Inform user of remaining issues. Proceed to Step 7.
 
 ### Step 7: Cleanup & Commit
 
 Ask the user (in `user_lang`) whether to commit the artifacts (spec.md, changes.md, qa_report.md).
-
 - If commit: stage and commit `docs/harness/<slug>/` files
 - Clean up `.harness/` directory (delete state.json, planner/, generator/, and the directory itself)
 
 ### Status Check (anytime)
 
-If user asks for status, read `.harness/state.json` and display (in `user_lang`):
-```
-[harness]
-  Task   : <task>
-  Mode   : <single | multi>
-  Phase  : <phase label>
-  Round  : <round> / <max_rounds>
-  Branch : <branch>
-  Scope  : <scope>
-```
-
-Phase labels: plan_ready → "Planner — writing spec", gen_ready → "Generator — implementing", eval_ready → "Evaluator — reviewing", completed → "Completed"
+If user asks for status, print status in the standard format defined above.
 
 ## Key Rules
 
@@ -443,11 +237,9 @@ Phase labels: plan_ready → "Planner — writing spec", gen_ready → "Generato
 - **Confirmation gates are non-negotiable.** No implicit approval, no proceeding on ambiguity.
 - **Stay within scope.** Do not modify files outside the specified scope.
 - **Evaluator must be isolated.** Always run as a subagent with anchor-free input. Never pass Generator reasoning to the Evaluator.
-- **Planner proposals must be independent.** Never share one persona's proposal with another during the proposal phase. Cross-critique is a separate, subsequent step.
-- **Generator advisors review the plan, not the code.** Advisory input happens before implementation to prevent costly rework, not after.
-- **Git safety.** The workflow creates a branch automatically.
-- **Use whatever skills are available.** Search installed skills by capability keyword (e.g. "brainstorming", "tdd", "code-review"), not by plugin name. If no match exists, proceed without it. Never fail because a specific plugin is missing.
-- **User language.** All user-facing output (messages, spec, reports) must be in `user_lang`. Re-detect on every user message. Templates and internal state stay in English.
-- **Intermediate outputs are ephemeral.** Proposals, critiques, plans, and reviews in `.harness/` are working documents. Only final artifacts (spec.md, changes.md, qa_report.md) are preserved in `docs/`.
-- **Mode selection.** If `--mode` argument is provided, use it. Otherwise, ask the user after Setup. Store in state.json and preserve across session recovery.
-- **Single mode skips multi-agent steps.** No parallel proposals, no cross-critiques, no advisory reviews. The Evaluator phase is identical in both modes.
+- **Planner proposals must be independent.** Never share one persona's proposal with another during the proposal phase.
+- **Generator advisors review the plan, not the code.** Advisory input happens before implementation.
+- **Use whatever skills are available.** Search by capability keyword, not plugin name. If no match, proceed without it.
+- **User language.** All user-facing output must be in `user_lang`. Re-detect on every user message.
+- **Intermediate outputs are ephemeral.** Only final artifacts (spec.md, changes.md, qa_report.md) are preserved in `docs/`.
+- **Mode selection.** If `--mode` provided, use it. Otherwise ask. Store in state.json; preserve across session recovery.
