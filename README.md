@@ -103,10 +103,10 @@ Runs as an isolated sub-agent with research-backed bias reduction:
 |-----------|---------------|
 | **Context isolation** (separate subagent) | Agent-as-a-Judge (ICLR 2025): 90.44% human agreement vs 60.38% for inline evaluation |
 | **Anchor-free input** (no Generator reasoning passed) | Anchoring bias research: LLMs anchor strongly to provided context |
-| **Defect-assumption framing** ("assume defects exist") | Pre-mortem (Brookings): reduces overconfidence |
+| **Defect-assumption framing** ("assume defects, 2 pre-mortem hypotheses") | Pre-mortem (Brookings): reduces overconfidence |
 | **Author neutralization** (no author identity disclosed) | PNAS 2025: LLMs favor LLM-generated content at 89% rate |
-| **PASS-before-rebuttal** (must list problems before PASS) | Confirmation bias: structural forced consideration of counterevidence |
-| **Rubric decomposition** (2-3 sub-checks per criterion) | G-Eval, RocketEval: finer granularity reduces evaluation bias |
+| **Risk-before-PASS** (identify key risks + verify with code evidence) | Confirmation bias: structural forced consideration of counterevidence |
+| **Rubric decomposition** (5 criteria with inline sub-checks) | G-Eval, RocketEval: finer granularity reduces evaluation bias |
 
 7. If FAIL, the user is asked whether to retry (up to max rounds)
 8. On completion, the user is asked whether to commit the artifacts
@@ -120,7 +120,7 @@ Choose the mode that fits your task:
 | **single** | Small bug fixes, simple features, quick iterations | Baseline |
 | **multi** | Complex features, architectural changes, high-stakes code | ~1.7x baseline |
 
-The multi-agent approach uses more tokens per run, but the higher first-pass success rate often reduces total cost by avoiding expensive retry rounds.
+v4.2.0: All templates optimized for token efficiency (~27% reduction in template overhead). The multi-agent approach uses more tokens per run, but the higher first-pass success rate often reduces total cost by avoiding expensive retry rounds.
 
 ### Session Recovery
 
