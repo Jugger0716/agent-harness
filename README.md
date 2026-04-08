@@ -120,7 +120,7 @@ Choose the mode that fits your task:
 | **single** | Small bug fixes, simple features, quick iterations | Baseline |
 | **multi** | Complex features, architectural changes, high-stakes code | ~1.7x baseline |
 
-v4.2.0: All templates optimized for token efficiency (~27% reduction in template overhead). The multi-agent approach uses more tokens per run, but the higher first-pass success rate often reduces total cost by avoiding expensive retry rounds.
+v4.3.0: New `md-optimize` skill for token-efficient markdown restructuring. All templates optimized for token efficiency (~27% reduction in template overhead). The multi-agent approach uses more tokens per run, but the higher first-pass success rate often reduces total cost by avoiding expensive retry rounds.
 
 ### Session Recovery
 
@@ -188,6 +188,22 @@ The harness discovers skills by **capability keyword** (e.g. "brainstorming", "t
 | Evaluator | "verification-before-completion", "verification" | superpowers:verification-before-completion |
 
 If no matching skill is found, the harness proceeds without it. No specific plugin is required.
+
+## MD Optimize Skill (v4.3.0)
+
+A standalone utility skill that optimizes your project's CLAUDE.md and markdown files for token efficiency.
+
+```
+/agent-harness:md-optimize
+```
+
+**What it does:**
+- **Dual-Zone CLAUDE.md model**: Splits CLAUDE.md into Inline Zone (rules that must always be in context) and Index Zone (reference paths to detailed docs)
+- **Deduplication**: Hash-based exact-match detection across all `.md` files
+- **Token compression**: Removes redundancy, compresses verbose prose, generates before/after token savings report
+- **Auto-generation**: If no `.md` files exist, analyzes the project and generates appropriate documentation (minimal/standard/comprehensive levels)
+
+**Safety features**: Git-based rollback, HARD GATE confirmation before any changes, YAML frontmatter preservation, idempotency markers for safe re-runs.
 
 ## License
 
