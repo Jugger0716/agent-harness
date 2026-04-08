@@ -6,7 +6,7 @@
   },
   "metadata": {
     "description": "3-Phase (Planner, Generator, Evaluator) development workflow for Claude Code — no dependencies required",
-    "version": "4.4.0"
+    "version": "5.0.0"
   },
   "plugins": [
     {
@@ -15,12 +15,12 @@
         "source": "github",
         "repo": "Jugger0716/agent-harness"
       },
-      "description": "3-Phase (Planner, Generator, Evaluator) development workflow for Claude Code with multi-agent personas and md-optimize utility",
-      "version": "4.4.0",
+      "description": "3-Phase (Planner, Generator, Evaluator) development workflow for Claude Code with md-generate and md-optimize utilities",
+      "version": "5.0.0",
       "author": {
         "name": "Jugger"
       },
-      "keywords": ["harness-workflow", "harness-optimize", "planner", "generator", "evaluator", "token-efficiency"]
+      "keywords": ["workflow", "md-optimize", "md-generate", "planner", "generator", "evaluator", "token-efficiency"]
     }
   ]
 }
