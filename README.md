@@ -16,7 +16,7 @@ Inspired by Anthropic's [Harness Design for Long-Running Application Development
 ## Install
 
 ```bash
-claude plugin marketplace add Lee-JungGu/agent-harness
+claude plugin marketplace add Jugger0716/agent-harness
 claude plugin install agent-harness@agent-harness-marketplace
 ```
 
@@ -218,4 +218,4 @@ MIT
 
 ## Author
 
-Lee-JungGu
+Jugger
