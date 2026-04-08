@@ -10,8 +10,9 @@ Inspired by Anthropic's [Harness Design for Long-Running Application Development
 
 | Skill | Command | Description |
 |-------|---------|-------------|
-| **Workflow** | `/harness-workflow <task>` | 3-Phase (Planner -> Generator -> Evaluator) development workflow. Single or multi-agent mode. |
-| **Optimize** | `/harness-optimize` | Optimize CLAUDE.md and project `.md` files for token efficiency. |
+| **Workflow** | `/workflow <task>` | 3-Phase (Planner -> Generator -> Evaluator) development workflow. Single or multi-agent mode. |
+| **MD Optimize** | `/md-optimize` | Optimize CLAUDE.md and project `.md` files for token efficiency. |
+| **MD Generate** | `/md-generate` | Analyze project and generate/enhance CLAUDE.md for effective Claude Code development. |
 
 ## Install
 
@@ -23,21 +24,22 @@ claude plugin install agent-harness@agent-harness-marketplace
 ## Quick Start
 
 ```
-/harness-workflow fix login timeout bug                    # asks for mode
-/harness-workflow fix login timeout bug --mode single      # fast, token-saving
-/harness-workflow fix login timeout bug --mode multi       # deep multi-agent analysis
+/workflow fix login timeout bug                    # asks for mode
+/workflow fix login timeout bug --mode single      # fast, token-saving
+/workflow fix login timeout bug --mode multi       # deep multi-agent analysis
 
-/harness-optimize                                          # optimize markdown files
+/md-optimize                                       # optimize markdown files
+/md-generate                                       # analyze project & generate CLAUDE.md
 ```
 
 ---
 
-## harness-workflow
+## workflow
 
 Separates planning, implementation, and review into distinct phases with file-based handoffs. Each phase uses **specialized sub-agents with expert personas** that collaborate through structured debate and review patterns, eliminating single-agent blind spots.
 
 ```
-/harness-workflow  -> [Setup] Auto-detect + mode selection (single / multi)
+/workflow  -> [Setup] Auto-detect + mode selection (single / multi)
                         -> [Phase 1] Planner
                            single: 1 agent explores + writes spec.md
                            multi:  3 specialists propose independently
@@ -136,7 +138,7 @@ The multi-agent approach uses more tokens per run, but the higher first-pass suc
 | max rounds | 3 | Maximum Generator/Evaluator retry cycles |
 | max files | 20 | Maximum number of files that can be modified |
 
-Example: `/harness-workflow fix auth bug --mode single --scope "src/auth/**" --max-rounds 5`
+Example: `/workflow fix auth bug --mode single --scope "src/auth/**" --max-rounds 5`
 
 ### Session Recovery
 
@@ -194,19 +196,40 @@ If no matching skill is found, the harness proceeds without it. No specific plug
 
 ---
 
-## harness-optimize
+## md-generate
+
+A standalone utility skill that analyzes your project and generates/enhances CLAUDE.md for effective Claude Code development.
+
+```
+/md-generate
+```
+
+**What it does:**
+- **Project analysis**: Detects language, framework, architecture pattern, dependencies, and conventions from source code
+- **Command discovery**: Finds and verifies build/test/lint/dev commands from package configs and CI/CD
+- **Convention detection**: Samples source files to detect naming, testing, code style, and architecture patterns
+- **Gap analysis**: If CLAUDE.md already exists, identifies missing/outdated information and enhances it
+- **Monorepo support**: Generates root + sub-CLAUDE.md files for monorepo workspaces
+
+**Safety features**: Read-only analysis until confirmed, no secrets exposure, no speculative content, preserves existing CLAUDE.md content.
+
+**Composability**: Run `/md-generate` first to create content, then `/md-optimize` to compress for token efficiency.
+
+---
+
+## md-optimize
 
 A standalone utility skill that optimizes your project's CLAUDE.md and markdown files for token efficiency.
 
 ```
-/harness-optimize
+/md-optimize
 ```
 
 **What it does:**
 - **Dual-Zone CLAUDE.md model**: Splits CLAUDE.md into Inline Zone (rules that must always be in context) and Index Zone (reference paths to detailed docs)
 - **Deduplication**: Hash-based exact-match detection across all `.md` files
 - **Token compression**: Removes redundancy, compresses verbose prose, generates before/after token savings report
-- **Auto-generation**: If no `.md` files exist, analyzes the project and generates appropriate documentation (minimal/standard/comprehensive levels)
+- **Smart Routing**: Detects project state and suggests `/md-generate` when CLAUDE.md is missing or thin
 
 **Safety features**: Git-based rollback, HARD GATE confirmation before any changes, YAML frontmatter preservation, idempotency markers for safe re-runs.
 

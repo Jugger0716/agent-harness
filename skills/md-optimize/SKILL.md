@@ -1,5 +1,5 @@
 ---
-name: harness-optimize
+name: md-optimize
 description: Optimize CLAUDE.md and project .md files for token efficiency. Applies Dual-Zone model (Inline/Index), deduplication, and structural compression. Use on any project to reduce context token cost.
 ---
 
@@ -13,7 +13,7 @@ Detect the user's language from their **most recent message**. Store as `user_la
 
 ## Exclusion List
 
-Never modify: `.git/`, `node_modules/`, `vendor/`, `dist/`, `build/`, `__pycache__/`, `.venv/`, `*.lock`, `CHANGELOG.md`, `LICENSE.md`, `LICENSE`.
+Never modify: `.git/`, `node_modules/`, `vendor/`, `dist/`, `build/`, `__pycache__/`, `.venv/`, `*.lock`, `.next/`, `.nuxt/`, `coverage/`, `.turbo/`, `.cache/`, `CHANGELOG.md`, `LICENSE.md`, `LICENSE`.
 
 ## Phase 1: Analysis
 
@@ -23,15 +23,23 @@ Never modify: `.git/`, `node_modules/`, `vendor/`, `dist/`, `build/`, `__pycache
 2. Check for uncommitted changes. If found, warn: "Uncommitted changes detected. Commit or stash before proceeding? (continue / abort)".
 3. Search all `.md` files for the idempotency marker `<!-- managed by md-optimize -->`. If CLAUDE.md contains this marker, inform user: "This project was previously optimized. Re-running will refresh the optimization." Proceed normally (marker ensures idempotency).
 
-### 1b. Markdown Inventory
+### 1b. Smart Routing & Markdown Inventory
 
 1. Glob `**/*.md` (excluding items in Exclusion List). List all found files with byte sizes.
-2. If **no .md files found** (no-md project), ask user to choose generation level:
-   - **minimal**: CLAUDE.md with project root description only
-   - **standard**: CLAUDE.md + summary of root-level README-like content
-   - **comprehensive**: CLAUDE.md with surface analysis of root-level files only (no deep directory traversal)
-   Generate accordingly, insert idempotency marker, report, and halt.
-3. Estimate token count per file: `bytes / 4` for ASCII, `bytes / 3` for CJK-heavy content. Note: these are rough estimates; actual tokenization varies.
+2. Check if `CLAUDE.md` exists. If yes, read its content and note current size.
+3. Evaluate project state and recommend action:
+
+| State | Recommendation | Action |
+|-------|---------------|--------|
+| No .md files found | **Generate instead** | Suggest: "No markdown files found. `/md-generate` will analyze the project and create CLAUDE.md. Switch to generate? (generate / abort)" |
+| Only CLAUDE.md exists and < 500 bytes | **Generate instead** | Suggest: "CLAUDE.md is thin (N bytes). `/md-generate` can enhance it with project analysis. Switch to generate? (generate / continue with optimize)" |
+| CLAUDE.md exists and is comprehensive, .md files have redundancy | **Optimize** | Proceed with md-optimize (this skill) |
+| CLAUDE.md is thin but other .md files are substantial | **Generate then optimize** | Suggest: "CLAUDE.md is thin but other .md files have content. Recommend `/md-generate` first to enhance CLAUDE.md, then re-run `/md-optimize`. Switch to generate? (generate / continue with optimize)" |
+| No CLAUDE.md but other .md files exist | **Generate then optimize** | Suggest: "No CLAUDE.md found. `/md-generate` will create one from project analysis. Optimization can follow. Switch to generate? (generate / continue with optimize)" |
+
+If the user chooses to switch, halt this skill. The user should then invoke `/md-generate` manually. Otherwise proceed.
+
+4. Estimate token count per file: `bytes / 4` for ASCII, `bytes / 3` for CJK-heavy content. Note: these are rough estimates; actual tokenization varies.
 
 ### 1c. Duplication Detection
 
@@ -46,7 +54,7 @@ Scan existing CLAUDE.md (if any) and all .md content. Classify each piece of inf
 | **Inline** | Rules, constraints, conventions that MUST be in context at all times | "Never commit .env", "Use snake_case", "All API responses use JSON" |
 | **Index** | Reference material, guides, detailed docs that can be loaded on-demand | Architecture overviews, API endpoint lists, setup guides, onboarding docs |
 
-**Inline keyword safety net** — Content containing these keywords MUST stay Inline regardless of length: `never`, `always`, `must`, `forbidden`, `required`, `금지`, `필수`, `반드시`, `절대`. Apply case-insensitive matching.
+**Inline keyword safety net** — Content containing these keywords MUST stay Inline regardless of length: `never`, `always`, `must`, `forbidden`, `required` and their equivalents in the user's language (e.g., CJK constraint keywords). Apply case-insensitive matching.
 
 ## Phase 2: Confirmation Gate
 
@@ -106,16 +114,62 @@ For files whose content was fully migrated to CLAUDE.md Inline Zone or merged in
 
 Delete exact-duplicate files (keep the one with the shortest path or most canonical name). Update any references to deleted files in remaining `.md` files.
 
-## Phase 4: Verification & Report
+## Phase 4: Evaluator (Isolated Sub-Agent)
 
-### Verification Checks
+An independent sub-agent reviews the optimized result **without access to the optimizer's classification reasoning**. This catches content loss, misclassification, and broken references that self-verification tends to miss.
 
-1. **Path validation**: Every path in the Reference Index exists and is readable
-2. **Link check**: All internal `[text](path)` links in modified files resolve to existing files
-3. **Frontmatter integrity**: Files with YAML frontmatter still parse correctly
-4. **Marker check**: All managed files contain `<!-- managed by md-optimize -->`
+### 4a. Sub-Agent Dispatch
 
-### Report
+Launch an isolated sub-agent with the following brief:
+
+> You are an independent evaluator. A CLAUDE.md and related .md files have been restructured for token efficiency. Your job is to verify nothing was lost or broken. Assume defects exist — your job is to find them.
+
+The sub-agent receives:
+- The optimized CLAUDE.md and all modified/created .md files
+- The git diff of all changes (before vs after)
+- Full read access to the project files
+- No Phase 1 analysis results, no optimizer reasoning
+
+### 4b. Evaluation Criteria
+
+The sub-agent checks each criterion and scores PASS / ISSUE:
+
+| Criterion | Check | Method |
+|-----------|-------|--------|
+| **Content preservation** | No semantic information was lost during optimization | Compare git diff — every deleted line's meaning must exist in the new structure |
+| **Zone correctness** | Inline items are truly must-know rules; Index items are truly reference material | Review each Inline item for constraint keywords; review each Index item for reference nature |
+| **Path integrity** | Every path in Reference Index exists and is readable | Verify each path |
+| **Link integrity** | All internal `[text](path)` links resolve to existing files | Check all links in modified files |
+| **Marker consistency** | All managed files contain `<!-- managed by md-optimize -->` | Scan all modified files |
+| **Frontmatter integrity** | Files with YAML frontmatter still parse correctly | Validate frontmatter syntax |
+| **Keyword safety** | Content with constraint keywords (`never`, `always`, `must`, `forbidden`, `required` and user-language equivalents) is in Inline Zone | Search for keywords in Index files — any match is a misclassification |
+
+### 4c. Evaluation Output
+
+The sub-agent produces a structured report:
+
+```
+[md-optimize evaluator]
+  PASS : N criteria
+  ISSUE: N criteria
+
+Issues found:
+  1. [criterion] — [specific problem] — [suggested fix]
+  2. ...
+
+Content at risk:
+  1. [content that may have been lost or misclassified]
+  2. ...
+
+Verdict: PASS | NEEDS_REVISION
+```
+
+### 4d. Revision Handling
+
+- **PASS**: Proceed to Phase 5 (Report).
+- **NEEDS_REVISION**: Present issues to user (in `user_lang`). Apply fixes for each confirmed issue. Do not re-run the full evaluator — only verify the specific fixes were applied correctly.
+
+## Phase 5: Report
 
 Print final report (in `user_lang`):
 
@@ -126,10 +180,11 @@ Print final report (in `user_lang`):
   Files deleted    : N (duplicates/merged)
   Inline rules     : N items
   Index references : N entries
+  Evaluator        : PASS | REVISED (N issues fixed)
   Token estimate   : before → after (−X%)
 ```
 
-If any verification check failed, append warnings.
+If any evaluation criterion has unresolved issues, append warnings.
 
 ## Safety Rules
 
