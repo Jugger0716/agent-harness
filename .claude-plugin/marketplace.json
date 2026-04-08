@@ -1,7 +1,7 @@
 {
   "name": "agent-harness-marketplace",
   "owner": {
-    "name": "Lee-JungGu",
+    "name": "Jugger",
     "email": ""
   },
   "metadata": {
@@ -13,12 +13,12 @@
       "name": "agent-harness",
       "source": {
         "source": "github",
-        "repo": "Lee-JungGu/agent-harness"
+        "repo": "Jugger0716/agent-harness"
       },
       "description": "3-Phase (Planner, Generator, Evaluator) development workflow for Claude Code with multi-agent personas and md-optimize utility",
       "version": "4.4.0",
       "author": {
-        "name": "Lee-JungGu"
+        "name": "Jugger"
       },
       "keywords": ["harness-workflow", "harness-optimize", "planner", "generator", "evaluator", "token-efficiency"]
     }
