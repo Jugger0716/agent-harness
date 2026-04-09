@@ -11,6 +11,7 @@ Inspired by Anthropic's [Harness Design for Long-Running Application Development
 | Skill | Command | Description |
 |-------|---------|-------------|
 | **Workflow** | `/workflow <task>` | 3-Phase (Planner -> Generator -> Evaluator) development workflow. Single or multi-agent mode. |
+| **Migrate** | `/migrate <target> [--from v4 --to v5]` | Staged migration of frameworks, libraries, and dependencies. Single or multi-agent mode with WebSearch research. |
 | **Codebase Audit** | `/codebase-audit` | Systematic codebase analysis with 3-tier mode (quick/deep/thorough) for team onboarding. |
 | **Code Review** | `/code-review <target>` | Systematic, bias-free code review. Quick (1 agent), deep (2 specialists), or thorough (3 specialists + cross-verification). |
 | **MD Optimize** | `/md-optimize` | Optimize CLAUDE.md and project `.md` files for token efficiency. |
@@ -38,6 +39,10 @@ claude plugin install agent-harness@agent-harness-marketplace
 /code-review #123                                  # review PR, asks for mode
 /code-review feature/auth --mode deep              # review branch diff, deep mode
 /code-review --staged --mode quick                 # review staged changes, quick
+
+/migrate react --from 17 --to 18                   # staged React migration
+/migrate replace moment with dayjs                 # library replacement
+/migrate nextjs                                    # auto-detect versions
 
 /md-optimize                                       # optimize markdown files
 /md-generate                                       # analyze project & generate CLAUDE.md
@@ -214,6 +219,118 @@ The harness discovers skills by **capability keyword** (e.g. "brainstorming", "t
 | Evaluator | "verification-before-completion", "verification" | superpowers:verification-before-completion |
 
 If no matching skill is found, the harness proceeds without it. No specific plugin is required.
+
+---
+
+## migrate
+
+Executes framework/library version upgrades, language transitions, and dependency replacements using a staged approach — one breaking change at a time with build/test verification at every step.
+
+```
+/migrate <target>  -> [Setup] Auto-detect versions + mode selection
+                       -> [Phase 1] Analysis
+                          single: 1 agent researches guide + scans codebase
+                          multi:  External Research Analyst (WebSearch)
+                                  + Codebase Impact Analyst (parallel)
+                                  -> Synthesis: merge into migration_plan.md
+                       -> Confirmation Gate: user approves plan
+                       -> [Phase 2] Staged Execution
+                          Per breaking change:
+                            1. Apply change
+                            2. Build check
+                            3. Test check (compare vs baseline)
+                            4. Migration Advisor review (multi only)
+                          On failure -> stop + report
+                       -> [Phase 3] Evaluator (isolated subagent)
+                          Full test suite vs baseline
+                          Deprecated API scan (codebase-wide)
+                          Version consistency check
+                       -> PASS -> Done / FAIL -> Fix / Stop / Rollback
+```
+
+### How it works
+
+1. You invoke the migrate skill with a target and optional version range
+2. **Setup**: Auto-detects current version, researches target version, captures baseline tests, creates a `harness/migrate-*` git branch
+
+#### Phase 1 -- Analysis
+
+| Mode | Agents | What happens |
+|------|--------|-------------|
+| **single** | 1 agent | Researches migration guide via WebSearch, scans codebase for affected files, builds migration plan |
+| **multi** | 2 analysts | External Research Analyst + Codebase Impact Analyst work in parallel, then synthesize into migration plan |
+
+The analysis phase produces a `migration_plan.md` with ordered steps — one per breaking change — each listing affected files and concrete actions.
+
+**WebSearch fallback:** If WebSearch fails, the skill falls back to local CHANGELOG/MIGRATION files in the project or package directory.
+
+3. **Confirmation Gate**: The migration plan is shown to the user for explicit approval before any code changes.
+
+#### Phase 2 -- Staged Execution
+
+Each breaking change is applied as an isolated step:
+
+| Action | What happens | On failure |
+|--------|-------------|------------|
+| Apply change | Update deps, modify code, update config | — |
+| Build check | Run build command | 2 fix attempts, then stop |
+| Test check | Run tests, compare against baseline | 2 fix attempts, then stop |
+| Advisor review | Migration Advisor reviews step (multi only) | Critical → stop, Warning → continue |
+
+The key insight: **baseline test failures are excluded from regression detection.** Only NEW failures after migration count as regressions.
+
+#### Phase 3 -- Evaluator (Isolated)
+
+Runs as an isolated sub-agent with migration-specific checks:
+
+| Check | Purpose |
+|-------|---------|
+| **Full test suite** | Compare against baseline — any new failures? |
+| **Deprecated API scan** | Codebase-wide search for old patterns that should have been migrated |
+| **Version consistency** | No conflicting versions, peer dep mismatches, or duplicate packages |
+| **Code correctness** | New API usage follows correct patterns from migration guide |
+
+### Version Auto-Detection
+
+| File | Detection |
+|------|-----------|
+| `package.json` | dependencies / devDependencies |
+| `pyproject.toml` | project.dependencies / tool.poetry.dependencies |
+| `go.mod` | require block |
+| `Cargo.toml` | dependencies section |
+| `build.gradle(.kts)` | dependency declarations |
+| `pom.xml` | dependency elements |
+| `*.csproj` | PackageReference elements |
+
+### Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| --from | auto-detect | Source version |
+| --to | auto-detect (latest stable) | Target version |
+| --mode | auto (1 BC → single, 2+ → multi) | `single` for fast, `multi` for thorough |
+
+### File Structure
+
+```
+.harness/
+  state.json                          # Working state (temporary)
+  migrate/
+    research_external.md              # External research output
+    research_internal.md              # Codebase impact analysis
+    baseline_tests.txt                # Baseline test output
+    advisor_step_1.md                 # Per-step advisor review (multi)
+    advisor_step_2.md                 # ...
+
+docs/harness/<slug>/
+  migration_plan.md                   # Analysis output (preserved)
+  changes.md                          # Execution log (preserved)
+  qa_report.md                        # Evaluator output (preserved)
+```
+
+### Session Recovery
+
+If a session is interrupted, the harness detects the existing `.harness/state.json` on next invocation and offers to resume — including mid-execution recovery (resumes from the last completed step).
 
 ---
 
