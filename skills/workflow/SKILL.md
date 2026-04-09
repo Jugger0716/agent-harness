@@ -25,7 +25,7 @@ When displaying status, read `.harness/state.json` and print (in `user_lang`):
 ```
 [harness]
   Task   : <task>
-  Mode   : <single | multi>
+  Mode   : <single | standard | multi>
   Phase  : <phase label>
   Round  : <round> / <max_rounds>
   Branch : <branch>
@@ -71,8 +71,8 @@ When the user provides a task (via $ARGUMENTS or in conversation), execute this 
    If none match, set language to "unknown", test/build commands to null.
 4. **Create directories:** `.harness/`, `.harness/planner/`, `.harness/generator/`, `docs/harness/<slug>/`
 5. **Create git branch:** `git checkout -b harness/<slug>`
-6. **Mode selection:** If `--mode single` or `--mode multi` was passed, set mode and skip prompt. Otherwise, ask the user (in `user_lang`) to choose: (1) single — fast, token-saving; (2) multi — deeper analysis, ~1.7x tokens. Accept: "1", "2", "single", "multi" (case-insensitive). Re-ask on unrecognized input.
-7. **Write `.harness/state.json`** with fields: `task`, `mode` ("single"/"multi"), `user_lang`, `repo_name`, `repo_path`, `phase` ("plan_ready"), `round` (1), `max_rounds` (3), `max_files` (20), `scope` (user-provided or "(no limit)"), `branch` ("harness/<slug>"), `lang`, `test_cmd`, `build_cmd`, `docs_path` ("docs/harness/<slug>/"), `created_at` (ISO8601).
+6. **Mode selection:** If `--mode single`, `--mode standard`, or `--mode multi` was passed, set mode and skip prompt. Otherwise, ask the user (in `user_lang`) to choose: (1) single — fast, token-saving; (2) standard — balanced analysis, ~1.5x tokens; (3) multi — deep multi-agent analysis, ~2-2.5x tokens. Accept: "1", "2", "3", "single", "standard", "multi" (case-insensitive). Re-ask on unrecognized input.
+7. **Write `.harness/state.json`** with fields: `task`, `mode` ("single"/"standard"/"multi"), `user_lang`, `repo_name`, `repo_path`, `phase` ("plan_ready"), `round` (1), `max_rounds` (3), `max_files` (20), `scope` (user-provided or "(no limit)"), `branch` ("harness/<slug>"), `lang`, `test_cmd`, `build_cmd`, `docs_path` ("docs/harness/<slug>/"), `created_at` (ISO8601).
 8. **Print setup summary** (in `user_lang`):
    ```
    [harness] Task started!
@@ -101,6 +101,29 @@ Read `mode` from state.json and branch accordingly.
    - Write `spec.md` to `docs/harness/<slug>/spec.md` — **all content in `user_lang`**
 4. Update state.json: phase → `"plan_ready"`.
 5. Print status in the standard format, prefixed with `[harness] Planner complete.`
+
+#### If mode == "standard": Step 2-ST
+
+##### Step 2a-ST: Independent Proposals (Parallel)
+
+1. Read two persona templates from `{CLAUDE_PLUGIN_ROOT}/templates/planner/`: `architect.md`, `senior_developer.md`
+2. For each persona, fill template variables: `{task_description}`, `{repo_path}`, `{lang}`, `{scope}`, `{user_lang}` from state.json; `{output_path}`: `.harness/planner/proposal_<persona>.md`
+3. **Launch 2 subagents in parallel** using the Agent tool. Each receives its persona template, has no knowledge of the other subagent (anchoring prevention), and writes to its output_path.
+4. Wait for both to complete. Verify both proposal files exist.
+
+##### Step 2b-ST: Synthesis (No Cross-Critique)
+
+1. Read the standard synthesis template: `{CLAUDE_PLUGIN_ROOT}/templates/planner/synthesis_standard.md`
+2. Read both proposal files from Step 2a-ST.
+3. Interpret the synthesis template with: `{task_description}`, `{user_lang}`, `{all_proposals}` (concatenated with author labels), `{spec_path}`: `docs/harness/<slug>/spec.md`
+4. Follow the synthesis rules to write `spec.md`.
+5. Update state.json: phase → `"plan_ready"`.
+6. Inform the user (in `user_lang`):
+   ```
+   [harness] Planner complete.
+     Proposals  : 2 specialists analyzed independently
+     Output     : spec.md synthesized
+   ```
 
 #### If mode == "multi": Step 2-M
 
@@ -164,6 +187,41 @@ Read `mode` from state.json and branch accordingly.
 5. **Launch 1 subagent** to implement the code following the template.
 6. Wait for completion. Verify `docs/harness/<slug>/changes.md` exists.
 7. Print status in the standard format, prefixed with `[harness] Generator complete.`
+
+#### If mode == "standard": Step 4-ST
+
+##### Step 4a-ST: Implementation Plan
+
+1. Update state.json: phase → `"gen_ready"`, read current round.
+2. Read the lead developer template: `{CLAUDE_PLUGIN_ROOT}/templates/generator/lead_developer.md`
+3. Prepare the prompt: `{spec_content}` from spec.md, `{qa_feedback}` from qa_report.md if round > 1 else "(First round — no QA feedback)", `{repo_path}`, `{lang}`, `{scope}`, `{max_files}`, `{user_lang}` from state.json, `{output_path}`: `.harness/generator/plan.md`
+4. **Launch 1 subagent** (Lead Developer) to create the implementation plan.
+5. Wait for completion. Verify `.harness/generator/plan.md` exists.
+
+##### Step 4b-ST: Combined Advisory Review
+
+1. Read the combined advisor template: `{CLAUDE_PLUGIN_ROOT}/templates/generator/combined_advisor.md`
+2. Read the plan from `.harness/generator/plan.md`.
+3. Prepare the prompt: `{spec_content}`, `{plan_content}`, `{repo_path}`, `{lang}`, `{test_cmd}`, `{user_lang}` from state.json, `{output_path}`: `.harness/generator/review_combined.md`
+4. **Launch 1 subagent** (Combined Advisor) to review the plan.
+5. Wait for completion. Verify `.harness/generator/review_combined.md` exists.
+
+##### Step 4c-ST: Implementation
+
+1. Read the standard implementation template: `{CLAUDE_PLUGIN_ROOT}/templates/generator/implementation_standard.md`
+2. Read the plan and combined review from `.harness/generator/`.
+3. Prepare the prompt: `{spec_content}`, `{plan_content}`, `{advisor_review}` (from review_combined.md), `{qa_feedback}` (from qa_report.md if round > 1), `{repo_path}`, `{lang}`, `{scope}`, `{max_files}`, `{user_lang}`, `{round_num}` from state.json, `{changes_path}`: `docs/harness/<slug>/changes.md`
+4. **Invoke implementation skills** — same as Step 4-S step 4.
+5. **Launch 1 subagent** (Lead Developer) to implement the code.
+6. Wait for completion. Verify `docs/harness/<slug>/changes.md` exists.
+7. Inform the user (in `user_lang`):
+   ```
+   [harness] Generator complete.
+     Plan     : Lead Developer created implementation plan
+     Review   : Combined Advisor reviewed the plan
+     Code     : Lead Developer implemented with feedback
+     Output   : changes.md written
+   ```
 
 #### If mode == "multi": Step 4-M
 
@@ -242,4 +300,4 @@ If user asks for status, print status in the standard format defined above.
 - **Use whatever skills are available.** Search by capability keyword, not plugin name. If no match, proceed without it.
 - **User language.** All user-facing output must be in `user_lang`. Re-detect on every user message.
 - **Intermediate outputs are ephemeral.** Only final artifacts (spec.md, changes.md, qa_report.md) are preserved in `docs/`.
-- **Mode selection.** If `--mode` provided, use it. Otherwise ask. Store in state.json; preserve across session recovery.
+- **Mode selection.** If `--mode` provided, use it. Otherwise ask (3 options: single, standard, multi). Store in state.json; preserve across session recovery.
