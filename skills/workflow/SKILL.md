@@ -1,23 +1,34 @@
 ---
 name: workflow
-description: 3-Phase (Planner -> Generator -> Evaluator) development workflow with selectable single-agent or multi-agent persona mode. Use when starting feature work, bug fixes, or maintenance tasks that benefit from structured planning, implementation, and review.
+description: 3-Phase (Planner -> Generator -> Evaluator) workflow with selectable single-agent or multi-agent persona mode. Use for development tasks (feature work, bug fixes, maintenance) AND non-development tasks (planning data processing, document generation, analysis) that benefit from structured planning, implementation, and review.
 ---
 
 # Agent Harness Workflow
 
-You are orchestrating a 3-Phase development workflow with **selectable single-agent or multi-agent persona mode**.
+You are orchestrating a 3-Phase workflow with **selectable single-agent or multi-agent persona mode**.
 
-**Zero-setup:** No initialization required. Auto-detects language, test commands, and build commands from the current directory.
+**Zero-setup:** No initialization required. Auto-detects language, test commands, and build commands from the current directory. Works with or without a git repository.
+
+## Environment Detection
+
+At startup, detect whether the current directory is inside a git repository:
+```
+git rev-parse --is-inside-work-tree 2>/dev/null
+```
+- If the command succeeds → `has_git = true`
+- If the command fails → `has_git = false`
+
+Store `has_git` in state.json. This flag controls whether git operations (branch creation, commits) are performed. **All core workflow phases (Planner → Generator → Evaluator) work identically regardless of `has_git`.**
 
 ## User Language Detection
 
 Detect the user's language from their **most recent message**. Store as `user_lang` in state.json (e.g. "ko", "en", "ja", "zh", "es", "de", etc.).
 
-**All user-facing communication** must be in the detected language: progress updates, questions, confirmations, error messages, spec sections, QA report narrative, commit messages, confirmation gate prompts and options.
+**All user-facing communication** must be in the detected language: progress updates, questions, confirmations, error messages, spec sections, QA report narrative, commit messages (if has_git), confirmation gate prompts and options.
 
 **Re-detection:** On every user message, check if the language has changed. If so, update `user_lang` and switch all subsequent communication.
 
-**What stays in English:** Template instructions (this file and templates/*.md), state.json field names, file names (spec.md, changes.md, qa_report.md), git branch names.
+**What stays in English:** Template instructions (this file and templates/*.md), state.json field names, file names (spec.md, changes.md, qa_report.md), git branch names (if has_git).
 
 ## Standard Status Format
 
@@ -29,7 +40,7 @@ When displaying status, read `.harness/state.json` and print (in `user_lang`):
   Model  : <model_config preset name>
   Phase  : <phase label>
   Round  : <round> / <max_rounds>
-  Branch : <branch>
+  Branch : <branch>          ← omit this line if has_git == false
   Scope  : <scope>
 ```
 Phase labels: plan_ready → "Planner — writing spec", gen_ready → "Generator — implementing", eval_ready → "Evaluator — reviewing", completed → "Completed"
@@ -40,7 +51,8 @@ Before starting a new task, check if `.harness/state.json` already exists:
 
 1. If it exists, print status in the standard format (including Model line from `model_config`), prefixed with `[harness] Previous session detected.`
 2. Restore `model_config` from state.json. Apply it to all subsequent sub-agent launches.
-3. Ask the user using AskUserQuestion (in `user_lang`):
+3. If `has_git` is not present in state.json (pre-existing session from older version), re-detect using the Environment Detection command and store the result.
+4. Ask the user using AskUserQuestion (in `user_lang`):
      header: "Session"
      question: "[harness] Previous session detected. [print status in standard format]. Resume, restart, or stop?"
      options:
@@ -66,7 +78,7 @@ When the user provides a task (via $ARGUMENTS or in conversation), execute this 
 
 1. **Detect user language** from the task description. Store as `user_lang`.
 2. **Slugify the task:** lowercase, transliterate non-ASCII to ASCII, remove non-word chars except hyphens, replace spaces with hyphens, truncate to 50 chars. Store as `<slug>`.
-3. **Auto-detect project language and commands.** Scan the repo root:
+3. **Auto-detect project language and commands.** Scan the working directory:
 
    | File | Language | Test Command | Build Command |
    |------|----------|-------------|---------------|
@@ -80,7 +92,7 @@ When the user provides a task (via $ARGUMENTS or in conversation), execute this 
 
    If none match, set language to "unknown", test/build commands to null.
 4. **Create directories:** `.harness/`, `.harness/planner/`, `.harness/generator/`, `docs/harness/<slug>/`
-5. **Create git branch:** `git checkout -b harness/<slug>`
+5. **Create git branch (if has_git):** `git checkout -b harness/<slug>`. If `has_git == false`, skip this step entirely.
 6. **Mode selection:** If `--mode single`, `--mode standard`, or `--mode multi` was passed, set mode and skip prompt. Otherwise, use AskUserQuestion to ask the user (in `user_lang`):
      header: "Mode"
      question: "Select workflow mode:"
@@ -104,18 +116,18 @@ When the user provides a task (via $ARGUMENTS or in conversation), execute this 
 
    Store result as `model_config` object: `{ "preset": "<name>", "executor": "<model|null>", "advisor": "<model|null>", "evaluator": "<model|null>" }`. For the `default` preset, store `{ "preset": "default" }` (all roles inherit parent model).
 
-8. **Write `.harness/state.json`** with fields: `task`, `mode` ("single"/"standard"/"multi"), `model_config` (from step 7), `user_lang`, `repo_name`, `repo_path`, `phase` ("plan_ready"), `round` (1), `max_rounds` (3), `max_files` (20), `scope` (user-provided or "(no limit)"), `branch` ("harness/<slug>"), `lang`, `test_cmd`, `build_cmd`, `docs_path` ("docs/harness/<slug>/"), `created_at` (ISO8601).
+8. **Write `.harness/state.json`** with fields: `task`, `mode` ("single"/"standard"/"multi"), `model_config` (from step 7), `user_lang`, `has_git` (boolean), `repo_name`, `repo_path` (working directory path), `phase` ("plan_ready"), `round` (1), `max_rounds` (3), `max_files` (20), `scope` (user-provided or "(no limit)"), `branch` (if has_git: "harness/<slug>", else: null), `lang`, `test_cmd`, `build_cmd`, `docs_path` ("docs/harness/<slug>/"), `created_at` (ISO8601).
 9. **Print setup summary** (in `user_lang`):
    ```
    [harness] Task started!
-     Repo     : <path>
-     Branch   : harness/<slug>
-     Mode     : <single | multi>
-     Model    : <preset name> (e.g. "default", "all-opus", "balanced", "economy")
-     Language : <lang>
-     Test     : <test_cmd or "none">
-     Build    : <build_cmd or "none">
-     Scope    : <scope>
+     Directory : <path>
+     Branch    : harness/<slug>     ← omit if has_git == false
+     Mode      : <single | multi>
+     Model     : <preset name> (e.g. "default", "all-opus", "balanced", "economy")
+     Language  : <lang>
+     Test      : <test_cmd or "none">
+     Build     : <build_cmd or "none">
+     Scope     : <scope>
    ```
 
 ### Step 2: Planner Phase
@@ -316,8 +328,9 @@ If user selects "Fix": increment round, go to Step 4. If user selects "Accept as
 
 **If FAIL and max rounds reached:** phase → `"completed"`. Inform user of remaining issues. Proceed to Step 7.
 
-### Step 7: Cleanup & Commit
+### Step 7: Cleanup & Finalize
 
+**If has_git == true:**
 Ask the user using AskUserQuestion (in `user_lang`):
   header: "Commit"
   question: "Implementation complete. Choose how to finish:"
@@ -330,6 +343,11 @@ Actions per selection:
 - "Commit code only": delete `.harness/` dir, delete `docs/harness/<slug>/` dir, stage and commit remaining code changes
 - "Commit all": delete `.harness/` dir, stage and commit `docs/harness/<slug>/` files + code changes
 - "No commit": delete `.harness/` dir only
+
+**If has_git == false:**
+Inform the user that artifacts are saved in `docs/harness/<slug>/` (spec.md, changes.md, qa_report.md).
+- Clean up `.harness/` directory (delete state.json, planner/, generator/, and the directory itself)
+- Do NOT attempt any git operations.
 
 ### Status Check (anytime)
 
