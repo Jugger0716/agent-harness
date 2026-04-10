@@ -72,8 +72,26 @@ Detect the current version of `target` from project files:
 | `Gemfile` | `gem 'target', '~> <version>'` |
 | `composer.json` | `require[target]` — strip semver prefix |
 
-**If --from not provided:** Use detected version. If detection fails, ask the user.
-**If --to not provided:** Use WebSearch to find the latest stable version. If WebSearch fails, ask the user.
+**If --from not provided:**
+- If auto-detected successfully: Ask the user using AskUserQuestion (in `user_lang`):
+    header: "Version"
+    question: "Detected current version: {detected_version}."
+    options:
+      - label: "Use {detected_version}" / description: "Proceed with detected version as the source"
+      - label: "Enter manually" / description: "Specify a different source version"
+  If user selects "Enter manually" or provides a version via "Other": use that value.
+- If detection fails: present as text input (in `user_lang`): "Enter current version of {target}:" (free text required)
+
+**If --to not provided:**
+- If WebSearch returns a latest stable version: Ask the user using AskUserQuestion (in `user_lang`):
+    header: "Version"
+    question: "Latest stable version found: {detected_version}."
+    options:
+      - label: "Use {detected_version}" / description: "Proceed with this as the target version"
+      - label: "Enter manually" / description: "Specify a different target version"
+  If user selects "Enter manually" or provides a version via "Other": use that value.
+- If WebSearch fails: present as text input (in `user_lang`): "Enter target version of {target}:" (free text required)
+
 **If version is ambiguous** (e.g. multiple packages match target): List candidates and ask the user to choose.
 
 ## Session Recovery
@@ -82,7 +100,15 @@ Before starting a new task, check if `.harness/state.json` already exists:
 
 1. If it exists, print status in the standard format (including Model line from `model_config`), prefixed with `[harness:migrate] Previous session detected.`
 2. Restore `model_config` from state.json. Apply it to all subsequent sub-agent launches.
-3. Ask the user (in their language) whether to resume, restart, or stop:
+3. Ask the user using AskUserQuestion (in `user_lang`):
+     header: "Session"
+     question: "[harness:migrate] Previous session detected. [print status in standard format]. Resume, restart, or stop?"
+     options:
+       - label: "Resume" / description: "Continue from {phase} where the previous session left off"
+       - label: "Restart" / description: "Delete .harness/ and start from scratch"
+       - label: "Stop" / description: "Delete .harness/ and halt"
+
+   Actions per selection:
    - **Resume**: Jump to the step matching state.json phase:
      `setup` → Step 1 |
      `analyze_ready` → Step 2 |
@@ -101,11 +127,18 @@ Before proceeding, assess whether this skill is the right tool:
 
 | User Intent | Better Skill | Action |
 |-------------|-------------|--------|
-| Deprecated patterns cleanup without version change | `/workflow` with refactoring task | Suggest: "This looks like a refactoring task rather than a migration. Use `/workflow <task>` instead? (switch / continue)" |
-| Code state unclear, needs audit first | `/workflow` with audit task | Suggest: "Consider running a codebase audit first to understand the current state. Use `/workflow audit <target>` first? (switch / continue)" |
-| Wants to adopt new API features (not upgrading) | `/workflow` with feature task | Suggest: "This looks like a feature addition. Use `/workflow <task>` instead? (switch / continue)" |
+| Deprecated patterns cleanup without version change | `/workflow` with refactoring task | Suggest switching to `/workflow` |
+| Code state unclear, needs audit first | `/workflow` with audit task | Suggest running audit first |
+| Wants to adopt new API features (not upgrading) | `/workflow` with feature task | Suggest switching to `/workflow` |
 
-If the user chooses to switch, halt this skill.
+When a better skill is identified, ask the user using AskUserQuestion (in `user_lang`):
+  header: "Routing"
+  question: "[explanation of why the other skill may be better]"
+  options:
+    - label: "Switch: /{suggested}" / description: "Halt this skill and use /{suggested} instead"
+    - label: "Continue" / description: "Proceed with /migrate as requested"
+
+If the user selects "Switch", halt this skill.
 
 ## Scope-Aware Mode Selection
 
@@ -142,13 +175,23 @@ When the user provides a migration target (via $ARGUMENTS or in conversation), e
 4. **Detect current version** of the target using the Version Auto-Detection table above. Store as `from_version`.
 5. **Determine target version** from `--to` argument or via WebSearch for latest stable. Store as `to_version`.
 6. **Validate versions:** If `from_version` == `to_version`, inform user "Already on target version" and halt. If `from_version` > `to_version`, warn about downgrade and ask for confirmation.
-7. **Capture baseline test results:** If test command is available, run it and store output in `.harness/migrate/baseline_tests.txt`. Record pass/fail counts. If baseline tests are failing, report to user:
-   > "Baseline tests are failing (N failures). Proceeding with migration may make it harder to identify migration-caused regressions. Continue anyway? (continue / fix-first / abort)"
-   On fix-first: halt and suggest user fix tests first. On abort: halt.
+7. **Capture baseline test results:** If test command is available, run it and store output in `.harness/migrate/baseline_tests.txt`. Record pass/fail counts. If baseline tests are failing, ask the user using AskUserQuestion (in `user_lang`):
+     header: "Test Fail"
+     question: "Baseline tests are failing ({N} failures). Proceeding with migration may make it harder to identify migration-caused regressions."
+     options:
+       - label: "Continue" / description: "Proceed with migration despite failing baseline tests"
+       - label: "Fix first" / description: "Halt migration and fix existing test failures first"
+       - label: "Abort" / description: "Cancel migration entirely"
+   On "Fix first": halt and suggest user fix tests first. On "Abort": halt.
 
 8. **Create directories:** `.harness/`, `.harness/migrate/`, `docs/harness/<slug>/`
 9. **Create git branch:** `git checkout -b harness/migrate-<slug>`
-10. **Mode selection:** Apply Scope-Aware Mode Selection rules above. If auto-selected, inform user and allow override. Accept: "1", "2", "single", "multi" (case-insensitive).
+10. **Mode selection:** If `--mode single` or `--mode multi` was passed, use it directly and skip prompt. Otherwise, apply Scope-Aware Mode Selection rules above and ask the user using AskUserQuestion (in `user_lang`):
+     header: "Mode"
+     question: "Auto-detected mode: {auto_selected}. Select workflow mode:"
+     options:
+       - label: "single" / description: "1 agent handles analysis + execution. Fast, best for simple migrations"
+       - label: "multi" / description: "Parallel analysts + advisor review per step. Deeper analysis for complex migrations"
 11. **Model configuration selection:**
    If `--model-config <preset>` was passed, use it directly. Otherwise, ask the user (in `user_lang`):
 
@@ -287,18 +330,17 @@ Read `mode` from state.json and branch accordingly.
 ### Step 3: HARD GATE — Migration Plan Confirmation
 
 <HARD-GATE>
-Show migration_plan.md to the user and ask for explicit confirmation (in `user_lang`). Do NOT proceed to Execution until confirmed.
+Show migration_plan.md to the user and ask for explicit confirmation using AskUserQuestion (in `user_lang`):
+  header: "Plan"
+  question: "Review the migration plan above. Execution modifies code one breaking change at a time. Confirm to proceed."
+  options:
+    - label: "Proceed" / description: "Start migration execution as planned"
+    - label: "Modify" / description: "Edit the migration plan, then re-confirm"
+    - label: "Stop" / description: "Halt the migration workflow"
 
-**Allowed responses (proceed only on these — any language):**
-"go", "proceed", "approve", "yes", "ok", "lgtm", and natural affirmatives in the user's language.
-
-**Ambiguous — must re-confirm:**
-Hesitation, questions, conditional statements, topic changes.
-
-On ambiguity, respond in `user_lang` with a message equivalent to:
-> "Migration execution modifies code one breaking change at a time and can be stopped at any step. Explicit confirmation is required. Proceed with the plan as written? (proceed / modify / stop)"
-
-If user requests modifications, update migration_plan.md and re-confirm. If user stops, halt the workflow.
+If user selects "Modify" or provides modification details via "Other": update migration_plan.md and re-present this question.
+If user selects "Stop": halt the workflow.
+Only "Proceed" advances to the Execution phase.
 </HARD-GATE>
 
 ### Step 4: Execution Phase (Staged)
@@ -335,11 +377,21 @@ Execute each breaking change as an isolated step. For each step N (from `current
 
 1. **Build check:** If build command is available, run it. If build fails:
    - Attempt to fix build errors (up to 2 attempts).
-   - If still failing after 2 attempts → stop execution, report to user with error details, and ask: "Build failed on step N. Fix manually and resume, or abort? (fix details shown above)"
+   - If still failing after 2 attempts → stop execution, report to user with error details, and ask using AskUserQuestion (in `user_lang`):
+       header: "Build Fail"
+       question: "Build failed on step {N} after 2 fix attempts. [error summary]"
+       options:
+         - label: "Manual fix & resume" / description: "Pause migration — fix the build manually, then resume from this step"
+         - label: "Abort" / description: "Stop the migration entirely"
 2. **Test check:** If test command is available, run it. Compare results against baseline:
    - New test failures (not in baseline) → migration-caused regression
    - If regressions found → attempt to fix (up to 2 attempts)
-   - If still failing after 2 attempts → stop execution, report regressions, and ask user
+   - If still failing after 2 attempts → stop execution, report regressions, and ask user using AskUserQuestion (in `user_lang`):
+       header: "Build Fail"
+       question: "Test regressions on step {N} after 2 fix attempts. [regression summary]"
+       options:
+         - label: "Manual fix & resume" / description: "Pause migration — fix the test failures manually, then resume from this step"
+         - label: "Abort" / description: "Stop the migration entirely"
 3. **Update state.json** with step completion status.
 
 #### Step 4c: Migration Advisor Review (Multi Mode Only)
@@ -380,17 +432,33 @@ Read qa_report.md and determine verdict (look for "Verdict: PASS" or "Verdict: F
 
 **If PASS:** Update state.json: phase → `"completed"`. Inform user: migration complete. Proceed to Step 7.
 
-**If FAIL:** Do NOT auto-retry. Present failures to user and ask:
-> "Migration verification: FAIL. [failure summary]. Options: (fix — attempt to fix issues / stop — accept current state / rollback — revert all changes)"
+**If FAIL:** Do NOT auto-retry. Ask the user using AskUserQuestion (in `user_lang`):
+  header: "QA"
+  question: "Migration verification: FAIL. [failure summary]."
+  options:
+    - label: "Fix" / description: "Attempt to fix issues based on evaluator feedback, then re-verify"
+    - label: "Accept" / description: "Finish without fixing, keep current state with warnings"
+    - label: "Rollback" / description: "Revert all changes and restore original branch"
+
+Actions per selection:
 - **Fix:** Apply fixes based on evaluator's fix instructions, then re-run Step 5.
-- **Stop:** phase → "completed", proceed to Step 7 with warnings.
+- **Accept:** phase → "completed", proceed to Step 7 with warnings.
 - **Rollback:** `git checkout <original_branch>`, delete migration branch, clean up `.harness/`. Halt.
 
 ### Step 7: Cleanup & Commit
 
-Ask the user (in `user_lang`) whether to commit the artifacts (migration_plan.md, changes.md, qa_report.md).
-- If commit: stage and commit `docs/harness/<slug>/` files and all modified source files
-- Clean up `.harness/` directory (delete state.json, migrate/, and the directory itself)
+Ask the user using AskUserQuestion (in `user_lang`):
+  header: "Commit"
+  question: "Migration complete. Choose how to finish:"
+  options:
+    - label: "Commit code only (Recommended)" / description: "Clean up artifacts (.harness/, docs/harness/) then commit code changes only"
+    - label: "Commit all" / description: "Commit everything including artifacts (migration_plan.md, changes.md, qa_report.md)"
+    - label: "No commit" / description: "Clean up .harness/ only, do not commit (changes remain in working tree)"
+
+Actions per selection:
+- "Commit code only": delete `.harness/` dir, delete `docs/harness/<slug>/` dir, stage and commit remaining code changes
+- "Commit all": delete `.harness/` dir, stage and commit `docs/harness/<slug>/` files + code changes
+- "No commit": delete `.harness/` dir only
 
 ### Status Check (anytime)
 
@@ -429,6 +497,15 @@ Each sub-agent is assigned a role. The following table defines the concrete mode
 | Evaluator | evaluator | (no override) | opus | opus | sonnet |
 
 **Applying model config:** When launching any sub-agent, if `model_config.preset` is not `"default"`, pass the `model` parameter according to the table above for that sub-agent. Sub-agents must NOT directly access state.json to read model_config — the orchestrator passes the model parameter at launch time.
+
+## User Interaction Rules
+
+All user-facing questions MUST use AskUserQuestion tool when available.
+- If AskUserQuestion is available → use it (provides numbered selection UI)
+- If AskUserQuestion is NOT available or fails → present the same options as text and accept number/keyword responses (case-insensitive)
+- Every option must include a `label` (short name) and `description` (specific explanation)
+- "Other" (free text input) is automatically appended by the framework
+- Translate all question text, labels, and descriptions to `user_lang`
 
 ## Key Rules
 
