@@ -185,7 +185,9 @@ When the user provides a migration target (via $ARGUMENTS or in conversation), e
    On "Fix first": halt and suggest user fix tests first. On "Abort": halt.
 
 8. **Create directories:** `.harness/`, `.harness/migrate/`, `docs/harness/<slug>/`
-9. **Create git branch:** `git checkout -b harness/migrate-<slug>`
+9. **Capture original branch and create migration branch:**
+   - Run `git rev-parse --abbrev-ref HEAD` and store result as `original_branch`. If the result is `HEAD` (detached HEAD state), use `git rev-parse HEAD` instead to store the full commit hash.
+   - `git checkout -b harness/migrate-<slug>`
 10. **Mode selection:** If `--mode single` or `--mode multi` was passed, use it directly and skip prompt. Otherwise, apply Scope-Aware Mode Selection rules above and ask the user using AskUserQuestion (in `user_lang`):
      header: "Mode"
      question: "Auto-detected mode: {auto_selected}. Select workflow mode:"
@@ -208,7 +210,7 @@ When the user provides a migration target (via $ARGUMENTS or in conversation), e
 
    Store result as `model_config` object: `{ "preset": "<name>", "executor": "<model|null>", "advisor": "<model|null>", "evaluator": "<model|null>" }`. For the `default` preset, store `{ "preset": "default" }`.
 
-12. **Write `.harness/state.json`** with fields: `skill` ("migrate"), `target`, `migration_type` ("upgrade"/"replacement"), `from_version`, `to_version`, `mode` ("single"/"multi"), `model_config` (from step 11), `user_lang`, `repo_name`, `repo_path`, `phase` ("setup"), `current_step` (0), `total_steps` (0), `branch` ("harness/migrate-<slug>"), `lang`, `test_cmd`, `build_cmd`, `baseline_test_pass_count`, `baseline_test_fail_count`, `docs_path` ("docs/harness/<slug>/"), `created_at` (ISO8601).
+12. **Write `.harness/state.json`** with fields: `skill` ("migrate"), `target`, `migration_type` ("upgrade"/"replacement"), `from_version`, `to_version`, `mode` ("single"/"multi"), `model_config` (from step 11), `user_lang`, `repo_name`, `repo_path`, `phase` ("setup"), `current_step` (0), `total_steps` (0), `original_branch` (captured in step 9), `branch` ("harness/migrate-<slug>"), `lang`, `test_cmd`, `build_cmd`, `baseline_test_pass_count`, `baseline_test_fail_count`, `docs_path` ("docs/harness/<slug>/"), `created_at` (ISO8601).
 13. **Print setup summary** (in `user_lang`):
     ```
     [harness:migrate] Migration started!
@@ -432,7 +434,7 @@ Read qa_report.md and determine verdict (look for "Verdict: PASS" or "Verdict: F
 Actions per selection:
 - **Fix:** Apply fixes based on evaluator's fix instructions, then re-run Step 5.
 - **Accept:** phase → "completed", proceed to Step 7 with warnings.
-- **Rollback:** `git checkout <original_branch>`, delete migration branch, clean up `.harness/`. Halt.
+- **Rollback:** Read `original_branch` from state.json. If `original_branch` is not present (pre-existing session from older version), run `git log --oneline harness/migrate-<slug> --not --all` to identify the branch point, or ask the user for the original branch name. Then `git checkout <original_branch>`, `git branch -D harness/migrate-<slug>`, clean up `.harness/`. Halt.
 
 ### Step 7: Cleanup & Commit
 
