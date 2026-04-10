@@ -1,6 +1,6 @@
 # Agent Harness
 
-**Zero-setup, zero-dependency** 3-Phase development workflow for Claude Code with **selectable single-agent or multi-agent persona mode**.
+**Zero-setup, zero-dependency** 3-Phase workflow for Claude Code with **selectable single-agent or multi-agent persona mode**. Works for development tasks and non-development tasks (planning, document generation, analysis) alike.
 
 No dependencies required. No Python, no pip, no build steps -- just install the plugin and go.
 
@@ -10,7 +10,7 @@ Inspired by Anthropic's [Harness Design for Long-Running Application Development
 
 | Skill | Command | Description |
 |-------|---------|-------------|
-| **Workflow** | `/workflow <task>` | 3-Phase (Planner -> Generator -> Evaluator) development workflow. Single or multi-agent mode. |
+| **Workflow** | `/workflow <task>` | 3-Phase (Planner -> Generator -> Evaluator) workflow. Single or multi-agent mode. Works with or without git. |
 | **Refactor** | `/refactor <target>` | Safe, behavior-preserving code structure improvement. Single, multi, or comprehensive mode. |
 | **Migrate** | `/migrate <target> [--from v4 --to v5]` | Staged migration of frameworks, libraries, and dependencies. Single or multi-agent mode with WebSearch research. |
 | **Codebase Audit** | `/codebase-audit` | Systematic codebase analysis with 3-tier mode (quick/deep/thorough) for team onboarding. |
@@ -33,6 +33,8 @@ claude plugin install agent-harness@agent-harness-marketplace
 /workflow fix login timeout bug --mode standard    # balanced analysis, ~1.5x tokens
 /workflow fix login timeout bug --mode multi       # deep multi-agent analysis, ~2-2.5x tokens
 /workflow fix bug --model-config balanced          # Sonnet executor + Opus advisor (cost-efficient)
+
+/workflow draft product requirements spec           # works without git too (non-dev tasks)
 
 /codebase-audit                                    # auto-recommends mode based on project size
 /codebase-audit --mode thorough                    # comprehensive multi-agent analysis
@@ -80,7 +82,7 @@ Key interaction points:
 - **Mode selection**: numbered options with token cost hints and auto-recommendation
 - **Confirmation gates**: Proceed / Modify / Stop (replaces freeform text approval)
 - **QA retry**: Fix / Accept as-is
-- **Commit**: 3 options — "Commit code only" (recommended) / "Commit all with artifacts" / "No commit"
+- **Commit**: 3 options — "Commit code only" (recommended) / "Commit all with artifacts" / "No commit" (git environments only; non-git environments skip commit)
 - **Session recovery**: Resume / Restart / Stop
 
 Falls back to text-based input when AskUserQuestion is unavailable.
@@ -132,7 +134,7 @@ The harness detects language, test, and build commands from your project files:
 ### How it works
 
 1. You invoke the harness skill with a task description
-2. **Setup**: Auto-detects language/test/build, detects your language, creates `.harness/state.json` and `docs/harness/<task-slug>/`, creates a `harness/*` git branch
+2. **Setup**: Auto-detects language/test/build, detects your language, creates `.harness/state.json` and `docs/harness/<task-slug>/`, creates a `harness/*` git branch (skipped if not in a git repository)
 
 #### Phase 1 -- Planner (Multi-Agent)
 
@@ -203,6 +205,10 @@ Higher modes use more tokens per run but have higher first-pass success rates, o
 | max files | 20 | Maximum number of files that can be modified |
 
 Example: `/workflow fix auth bug --mode single --model-config balanced --scope "src/auth/**"`
+
+### Git-Free Mode
+
+The workflow automatically detects whether the current directory is a git repository. When running outside a git repo (e.g., for planning data processing, document generation, or analysis tasks), git operations (branch creation, commits) are skipped entirely. All core phases (Planner → Generator → Evaluator) work identically. Artifacts are saved to `docs/harness/<slug>/`.
 
 ### Session Recovery
 
@@ -402,7 +408,7 @@ Executes framework/library version upgrades, language transitions, and dependenc
 ### How it works
 
 1. You invoke the migrate skill with a target and optional version range
-2. **Setup**: Auto-detects current version, researches target version, captures baseline tests, creates a `harness/migrate-*` git branch
+2. **Setup**: Auto-detects current version, researches target version, captures baseline tests, saves original branch name, creates a `harness/migrate-*` git branch
 
 #### Phase 1 -- Analysis
 
