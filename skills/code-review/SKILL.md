@@ -57,7 +57,13 @@ When the user provides a review target (via $ARGUMENTS or in conversation), exec
    - **Empty diff** -> Inform user (in `user_lang`): "No changes found for the given target. Nothing to review." Halt.
    - **PR not found** -> Inform user: "PR #N not found or not accessible. Verify the PR number and try again." Halt.
    - **Binary files** -> Note binary files in the diff. Skip them from review. Add a note to the report: "Binary files skipped: [list]".
-   - **Diff > 2000 lines** -> Warn user (in `user_lang`): "Large diff detected (N lines). Review quality may decrease for very large diffs. Consider reviewing in smaller chunks. Proceed? (proceed / abort)". On abort, halt.
+   - **Diff > 2000 lines** -> Ask the user using AskUserQuestion (in `user_lang`):
+       header: "Large Diff"
+       question: "Large diff detected ({N} lines). Review quality may degrade."
+       options:
+         - label: "Proceed" / description: "Review the full diff as-is"
+         - label: "Abort" / description: "Split into smaller chunks before reviewing"
+     On "Abort", halt.
 
 5. **Collect metadata** (used only for report header, NOT passed to reviewers in deep/thorough modes):
    - File list with line counts per file
@@ -78,21 +84,15 @@ When the user provides a review target (via $ARGUMENTS or in conversation), exec
    | 100-500 lines | deep | Medium change, benefits from specialist perspectives |
    | 500+ lines | thorough | Large change, needs comprehensive multi-angle review |
 
-2. **Present recommendation** (in `user_lang`):
-   ```
-   [code-review] Diff: N files, M lines changed
-     Recommended: <mode> -- <rationale>
-
-     1. quick   -- 1 agent, 5-perspective checklist (~1x)
-     2. deep    -- 2 specialists + synthesis (~1.5x)
-     3. thorough -- 3 specialists + cross-verification + synthesis (~2.5x)
-
-     Select mode: (1/2/3 or quick/deep/thorough)
-   ```
-
-3. If mode was passed via argument (e.g., `--mode deep`), skip the prompt and use it directly.
-4. Accept: "1", "2", "3", "quick", "deep", "thorough" (case-insensitive). Re-ask on unrecognized input.
-5. **Model configuration selection (deep and thorough modes only):**
+2. **Mode selection.** If `--mode quick`, `--mode deep`, or `--mode thorough` was passed, set mode and skip prompt. Otherwise, ask the user using AskUserQuestion (in `user_lang`):
+     header: "Review Mode"
+     question: "Select review depth: (Diff: {N} files, {M} lines)"
+     options:
+       - label: "quick" / description: "1 agent, 5-perspective checklist (~1x tokens)"
+       - label: "deep" / description: "2 specialists + synthesis (~1.5x tokens)"
+       - label: "thorough" / description: "3 specialists + cross-verification + synthesis (~2.5x tokens)"
+     Add "(Recommended)" to the label of the auto-recommended mode based on the scope-aware recommendation table above.
+3. **Model configuration selection (deep and thorough modes only):**
    If mode is `quick`, skip this step (no sub-agents used).
 
    If `--model-config <preset>` was passed, use it directly. Otherwise, ask the user (in `user_lang`):
@@ -128,15 +128,15 @@ When the user provides a review target (via $ARGUMENTS or in conversation), exec
 <HARD-GATE>
 For `deep` and `thorough` modes only. Skip this gate for `quick` mode.
 
-Inform the user (in `user_lang`):
-> "Deep/thorough review dispatches multiple sub-agents and consumes more tokens. Proceed with <mode> review? (proceed / switch to quick / abort)"
+Ask the user using AskUserQuestion (in `user_lang`):
+  header: "Confirm"
+  question: "{mode} review runs multiple sub-agents and uses more tokens."
+  options:
+    - label: "Proceed" / description: "Start {mode} review as selected"
+    - label: "Switch to quick" / description: "Use single-agent quick review instead"
+    - label: "Abort" / description: "Cancel the review"
 
-**Allowed responses:** "go", "proceed", "approve", "yes", "ok", "lgtm", and natural affirmatives in the user's language.
-
-**Ambiguous -- must re-confirm:**
-Hesitation, questions, conditional statements, topic changes.
-
-On switch: change mode to quick and proceed. On abort: halt.
+On "Switch to quick": change mode to quick and proceed. On "Abort": halt.
 </HARD-GATE>
 
 ### Step 4: Review Execution
@@ -442,6 +442,15 @@ Each sub-agent is assigned a role. The following table defines the concrete mode
 | Cross-Verification (per reviewer) | advisor | (no override) | opus | opus | sonnet |
 
 **Applying model config:** When launching any sub-agent, if `model_config.preset` is not `"default"`, pass the `model` parameter according to the table above for that sub-agent. Sub-agents must NOT directly access `.harness/model_config.json` — the orchestrator passes the model parameter at launch time.
+
+## User Interaction Rules
+
+All user-facing questions MUST use AskUserQuestion tool when available.
+- If AskUserQuestion is available → use it (provides numbered selection UI)
+- If AskUserQuestion is NOT available or fails → present the same options as text and accept number/keyword responses (case-insensitive)
+- Every option must include a `label` (short name) and `description` (specific explanation)
+- "Other" (free text input) is automatically appended by the framework
+- Translate all question text, labels, and descriptions to `user_lang`
 
 ## Key Rules
 
