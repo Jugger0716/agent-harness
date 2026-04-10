@@ -283,7 +283,7 @@ Same as Step 2a-M.
 1. Read the cross-critique template: `{CLAUDE_PLUGIN_ROOT}/templates/refactor/cross_critique.md`
 2. Read all 3 analysis files from Step 2b-C.
 3. For each analyst, prepare the cross-critique prompt with: `{analyst_name}`, `{target_description}`, `{user_lang}`, `{analysis_1_author}`, `{analysis_1_content}`, `{analysis_2_author}`, `{analysis_2_content}` (the OTHER two analyses), `{output_path}`: `.harness/refactor/critique_<analyst>.md`
-4. **Launch 3 subagents in parallel.** Each writes to `.harness/refactor/critique_<analyst>.md`. If `model_config.preset` is not `"default"`, pass `model` parameter per the Model Selection table (same executor role as the original analyst).
+4. **Launch 3 subagents in parallel.** Each writes to `.harness/refactor/critique_<analyst>.md`. If `model_config.preset` is not `"default"`, pass `model` parameter per the Model Selection table (advisor role — cross-critique requires critical judgment).
 5. Wait for all 3 to complete. Verify all 3 critique files exist.
 
 ##### Step 2d-C: Synthesis
@@ -457,6 +457,7 @@ Each sub-agent is assigned a role. The following table defines the concrete mode
 | Structural Analyst | executor | (no override) | opus | sonnet | haiku |
 | Risk Analyst | executor | (no override) | opus | sonnet | haiku |
 | Feasibility Analyst | executor | (no override) | opus | sonnet | haiku |
+| Cross-Critique (per analyst) | advisor | (no override) | opus | opus | sonnet |
 
 ### Execution Phase Sub-agents
 
