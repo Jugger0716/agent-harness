@@ -129,25 +129,14 @@ When the user invokes `/codebase-audit`, execute this workflow:
 10. **Model configuration selection (deep and thorough modes only):**
    If mode is `quick`, skip this step (no sub-agents used).
 
-   If `--model-config <preset>` was passed, use it directly. Otherwise, ask the user (in `user_lang`):
-
-   If AskUserQuestion tool is available, use it:
-   ```
-   AskUserQuestion(
-     question: "Select model configuration for sub-agents:",
-     options: ["default", "all-opus", "balanced", "economy", "Other"]
-   )
-   ```
-   If AskUserQuestion is NOT available, present as a text question (in `user_lang`):
-   > "Select model configuration for sub-agents:
-   > (1) default — inherit parent model (no override)
-   > (2) all-opus — all sub-agents use Opus
-   > (3) balanced — Sonnet executor + Opus advisor/evaluator
-   > (4) economy — Haiku executor + Sonnet advisor/evaluator
-   > (5) Other — custom (format: executor:model,advisor:model,evaluator:model)
-   > Select: (1-5 or preset name)"
-
-   Accept: "1"-"5", preset names, or custom format (case-insensitive). Re-ask on unrecognized input.
+   If `--model-config <preset>` was passed, use it directly. Otherwise, use AskUserQuestion to ask the user (in `user_lang`):
+     header: "Model"
+     question: "Select model configuration for sub-agents:"
+     options:
+       - label: "default" / description: "Inherit parent model, no changes"
+       - label: "all-opus" / description: "All sub-agents use Opus (highest quality)"
+       - label: "balanced (Recommended)" / description: "Sonnet executor + Opus advisor/evaluator (cost-efficient)"
+       - label: "economy" / description: "Haiku executor + Sonnet advisor/evaluator (max savings)"
 
    **If "Other" selected:** Parse custom format `executor:<model>,advisor:<model>,evaluator:<model>`. Validate each model name — only `opus`, `sonnet`, `haiku` are allowed (case-insensitive). If any model name is invalid, inform the user which value is invalid and re-ask for input (max 3 retries, then apply `balanced` as default). If parsing succeeds but is partial, fill missing roles with the `balanced` defaults (executor=sonnet, advisor=opus, evaluator=opus). Show the parsed result to the user and ask for confirmation before proceeding.
 
