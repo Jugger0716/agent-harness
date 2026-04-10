@@ -40,7 +40,15 @@ Before starting a new task, check if `.harness/state.json` already exists:
 
 1. If it exists, print status in the standard format (including Model line from `model_config`), prefixed with `[harness] Previous session detected.`
 2. Restore `model_config` from state.json. Apply it to all subsequent sub-agent launches.
-3. Ask the user (in their language) whether to resume, restart, or stop:
+3. Ask the user using AskUserQuestion (in `user_lang`):
+     header: "Session"
+     question: "[harness] Previous session detected. [print status in standard format]. Resume, restart, or stop?"
+     options:
+       - label: "Resume" / description: "Continue from {phase} where the previous session left off"
+       - label: "Restart" / description: "Delete .harness/ and start from scratch"
+       - label: "Stop" / description: "Delete .harness/ and halt"
+
+   Actions per selection:
    - **Resume**: Jump to the step matching state.json phase:
      `plan_ready` → if spec.md exists go to Step 3, else Step 2 |
      `gen_ready` → Step 4 | `eval_ready` → Step 5 |
@@ -73,7 +81,13 @@ When the user provides a task (via $ARGUMENTS or in conversation), execute this 
    If none match, set language to "unknown", test/build commands to null.
 4. **Create directories:** `.harness/`, `.harness/planner/`, `.harness/generator/`, `docs/harness/<slug>/`
 5. **Create git branch:** `git checkout -b harness/<slug>`
-6. **Mode selection:** If `--mode single`, `--mode standard`, or `--mode multi` was passed, set mode and skip prompt. Otherwise, ask the user (in `user_lang`) to choose: (1) single — fast, token-saving; (2) standard — balanced analysis, ~1.5x tokens; (3) multi — deep multi-agent analysis, ~2-2.5x tokens. Accept: "1", "2", "3", "single", "standard", "multi" (case-insensitive). Re-ask on unrecognized input.
+6. **Mode selection:** If `--mode single`, `--mode standard`, or `--mode multi` was passed, set mode and skip prompt. Otherwise, use AskUserQuestion to ask the user (in `user_lang`):
+     header: "Mode"
+     question: "Select workflow mode:"
+     options:
+       - label: "standard (Recommended)" / description: "2 specialists analyze + synthesize. ~1.5x tokens. Balanced depth"
+       - label: "single" / description: "1 agent. Fast, token-saving. Best for simple tasks"
+       - label: "multi" / description: "3 specialists + cross-critique. ~2-2.5x tokens. Deepest analysis"
 7. **Model configuration selection:**
    If `--model-config <preset>` was passed, use it directly. Otherwise, ask the user (in `user_lang`):
 
@@ -190,18 +204,17 @@ Read `mode` from state.json and branch accordingly.
 ### Step 3: HARD GATE — Spec Confirmation
 
 <HARD-GATE>
-Show spec.md to the user and ask for explicit confirmation (in `user_lang`). Do NOT proceed to Generator until confirmed.
+Show spec.md to the user and ask for explicit confirmation using AskUserQuestion (in `user_lang`):
+  header: "Spec"
+  question: "Review the spec above. Implementation consumes significant tokens. Confirm to proceed."
+  options:
+    - label: "Proceed" / description: "Start implementation as specified"
+    - label: "Modify" / description: "Edit the spec, then re-confirm"
+    - label: "Stop" / description: "Halt the workflow"
 
-**Allowed responses (proceed only on these — any language):**
-"go", "proceed", "approve", "yes", "ok", "lgtm", and natural affirmatives in the user's language.
-
-**Ambiguous — must re-confirm:**
-Hesitation, questions, conditional statements, topic changes.
-
-On ambiguity, respond in `user_lang` with a message equivalent to:
-> "Implementation consumes significant tokens. Explicit confirmation is required. Proceed with the spec as written? (proceed / modify / stop)"
-
-If user requests modifications, update spec.md and re-confirm. If user stops, halt the workflow.
+If user selects "Modify" or provides modification details via "Other": update spec.md and re-present this question.
+If user selects "Stop": halt the workflow.
+Only "Proceed" advances to the Generator phase.
 </HARD-GATE>
 
 ### Step 4: Generator Phase
@@ -303,17 +316,31 @@ Read qa_report.md and determine verdict (look for "Verdict: PASS" or "Verdict: F
 
 **If PASS:** Update state.json: phase → `"completed"`. Inform user: task complete. Proceed to Step 7.
 
-**If FAIL and rounds remaining (round < max_rounds):** Do NOT auto-retry. Ask user:
-> "QA result: FAIL. [failure summary]. Proceed to next round? (proceed / stop)"
-If confirmed: increment round, go to Step 4. If stopped: phase → "completed", go to Step 7.
+**If FAIL and rounds remaining (round < max_rounds):** Do NOT auto-retry. Ask the user using AskUserQuestion (in `user_lang`):
+  header: "QA"
+  question: "QA result: FAIL. [failure summary]."
+  options:
+    - label: "Fix" / description: "Run next round to fix FAIL items only"
+    - label: "Accept as-is" / description: "Finish without fixing, keep current state"
+
+If user selects "Fix": increment round, go to Step 4. If user selects "Accept as-is": phase → "completed", go to Step 7.
 
 **If FAIL and max rounds reached:** phase → `"completed"`. Inform user of remaining issues. Proceed to Step 7.
 
 ### Step 7: Cleanup & Commit
 
-Ask the user (in `user_lang`) whether to commit the artifacts (spec.md, changes.md, qa_report.md).
-- If commit: stage and commit `docs/harness/<slug>/` files
-- Clean up `.harness/` directory (delete state.json, planner/, generator/, and the directory itself)
+Ask the user using AskUserQuestion (in `user_lang`):
+  header: "Commit"
+  question: "Implementation complete. Choose how to finish:"
+  options:
+    - label: "Commit code only (Recommended)" / description: "Clean up artifacts (.harness/, docs/harness/) then commit code changes only"
+    - label: "Commit all" / description: "Commit everything including artifacts (spec.md, changes.md, qa_report.md)"
+    - label: "No commit" / description: "Clean up .harness/ only, do not commit (changes remain in working tree)"
+
+Actions per selection:
+- "Commit code only": delete `.harness/` dir, delete `docs/harness/<slug>/` dir, stage and commit remaining code changes
+- "Commit all": delete `.harness/` dir, stage and commit `docs/harness/<slug>/` files + code changes
+- "No commit": delete `.harness/` dir only
 
 ### Status Check (anytime)
 
@@ -357,6 +384,15 @@ Each sub-agent is assigned a role. The following table defines the concrete mode
 | Evaluator | evaluator | (no override) | opus | opus | sonnet |
 
 **Applying model config:** When launching any sub-agent, if `model_config.preset` is not `"default"`, pass the `model` parameter according to the table above for that sub-agent. Sub-agents must NOT directly access state.json to read model_config — the orchestrator passes the model parameter at launch time.
+
+## User Interaction Rules
+
+All user-facing questions MUST use AskUserQuestion tool when available.
+- If AskUserQuestion is available → use it (provides numbered selection UI)
+- If AskUserQuestion is NOT available or fails → present the same options as text and accept number/keyword responses (case-insensitive)
+- Every option must include a `label` (short name) and `description` (specific explanation)
+- "Other" (free text input) is automatically appended by the framework
+- Translate all question text, labels, and descriptions to `user_lang`
 
 ## Key Rules
 
