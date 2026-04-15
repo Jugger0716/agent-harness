@@ -20,6 +20,12 @@ Read each file directly from the filesystem. Do not rely on summaries.
 
 Tests: **{test_available}** | Build: `{build_cmd}` | Test: `{test_cmd}`
 
+## Mechanical Verification (Layer 1) Results
+
+{verify_context}
+
+> If Layer 1 passed, build/test/lint/type-check have already been verified mechanically. Focus your review on logic correctness, spec compliance, and design quality rather than re-running passing checks. If Layer 1 was skipped, run tests as described in Step 2 below.
+
 ## Scope
 
 {scope}
@@ -32,7 +38,9 @@ Before reviewing, identify the 2 most likely causes if this code fails in produc
 
 ### Step 2 — Run Tests (if available)
 
-If `{test_available}` is `true`:
+**If Layer 1 passed** (verify_context indicates PASSED): Skip build and test execution — they have already been verified mechanically. Proceed to Step 3.
+
+**If Layer 1 was not executed or failed**, and `{test_available}` is `true`:
 1. Run `{build_cmd}` (if non-empty) and capture output.
 2. Run `{test_cmd}` and capture full output including pass/fail counts.
 3. Record all failures verbatim — do not summarise or omit error messages.
@@ -63,7 +71,7 @@ Write the report (in `{user_lang}`) to the docs path specified by the caller.
 ### Pre-mortem Findings
 (2 hypothesized failure causes — confirmed or disproven)
 ### Test Results
-(test output, or "N/A — no tests available")
+(test output, or "N/A — no tests available", or "Verified by Layer 1 — see verify_report.md" if Layer 1 passed and tests were skipped)
 ### Review
 | Criterion | Result | Evidence |
 |-----------|--------|----------|

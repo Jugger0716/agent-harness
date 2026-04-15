@@ -43,7 +43,7 @@ When displaying status, read `.harness/state.json` and print (in `user_lang`):
   Branch : <branch>          ← omit this line if has_git == false
   Scope  : <scope>
 ```
-Phase labels: plan_ready → "Planner — writing spec", gen_ready → "Generator — implementing", eval_ready → "Evaluator — reviewing", completed → "Completed"
+Phase labels: plan_ready → "Planner — writing spec", gen_ready → "Generator — implementing", verify_ready → "Verify — mechanical check", verifying → "Verify — running checks", verify_done → "Verify — checks complete", eval_ready → "Evaluator — reviewing", completed → "Completed"
 
 ## Session Recovery
 
@@ -63,7 +63,8 @@ Before starting a new task, check if `.harness/state.json` already exists:
    Actions per selection:
    - **Resume**: Jump to the step matching state.json phase:
      `plan_ready` → if spec.md exists go to Step 3, else Step 2 |
-     `gen_ready` → Step 4 | `eval_ready` → Step 5 |
+     `gen_ready` → Step 4 | `verify_ready` / `verifying` / `verify_done` → Step 4.5 (Auto-Verify) |
+     `eval_ready` → Step 5 |
      `completed` → no active session, proceed to Step 1
    - **Restart**: Delete `.harness/` directory and proceed to Step 1
    - **Stop**: Delete `.harness/` directory and halt
@@ -91,6 +92,33 @@ When the user provides a task (via $ARGUMENTS or in conversation), execute this 
    | `Cargo.toml` | rust | `cargo test` | `cargo build` |
 
    If none match, set language to "unknown", test/build commands to null.
+
+   **3a. Auto-detect lint command.** Check in order, stop at first match:
+
+   | Priority | Detection | Condition | lint_cmd |
+   |----------|-----------|-----------|----------|
+   | 1 | Read `package.json` | `scripts.lint` key exists | `npm run lint` |
+   | 2 | Glob | `.eslintrc` / `.eslintrc.js` / `.eslintrc.json` / `.eslintrc.yml` / `eslint.config.js` / `eslint.config.mjs` exists | `npx eslint .` |
+   | 3 | Read `pyproject.toml` | `[tool.ruff]` section exists | `ruff check .` |
+   | 4 | Glob + Read | `.pylintrc` exists OR `pyproject.toml` has `[tool.pylint]` | `pylint {scope}` |
+   | 5 | Glob | `.golangci.yml` / `.golangci.yaml` exists | `golangci-lint run` |
+   | 6 | Glob | `Cargo.toml` exists | `cargo clippy` |
+
+   If none match, set `lint_cmd` to null (will be SKIPPED during verification).
+
+   **3b. Auto-detect type-check command.** Check in order, stop at first match:
+
+   | Priority | Detection | Condition | type_check_cmd |
+   |----------|-----------|-----------|----------------|
+   | 1 | Glob | `tsconfig.json` exists | `npx tsc --noEmit` |
+   | 2 | Glob + Read | `mypy.ini` exists OR `pyproject.toml` has `[tool.mypy]` | `mypy .` |
+   | 3 | Glob + Read | `pyrightconfig.json` exists OR `pyproject.toml` has `[tool.pyright]` | `pyright` |
+   | 4-6 | — | `*.csproj` / `go.mod` / `Cargo.toml` (build includes type-check) | null |
+
+   If none match, set `type_check_cmd` to null (will be SKIPPED during verification).
+
+   **CLI override:** If `--lint-cmd` or `--type-check-cmd` was passed, use that value directly and skip auto-detection for the respective command.
+
 4. **Create directories:** `.harness/`, `.harness/planner/`, `.harness/generator/`, `docs/harness/<slug>/`
 5. **Create git branch (if has_git):** `git checkout -b harness/<slug>`. If `has_git == false`, skip this step entirely.
 6. **Mode selection:** If `--mode single`, `--mode standard`, or `--mode multi` was passed, set mode and skip prompt. Otherwise, use AskUserQuestion to ask the user (in `user_lang`):
@@ -114,9 +142,9 @@ When the user provides a task (via $ARGUMENTS or in conversation), execute this 
 
    **Model config is set once at session start and cannot be changed mid-session.** To change, restart the session.
 
-   Store result as `model_config` object: `{ "preset": "<name>", "executor": "<model|null>", "advisor": "<model|null>", "evaluator": "<model|null>" }`. For the `default` preset, store `{ "preset": "default" }` (all roles inherit parent model).
+   Store result as `model_config` object: `{ "preset": "<name>", "executor": "<model|null>", "advisor": "<model|null>", "evaluator": "<model|null>", "verifier": "haiku" }`. For the `default` preset, store `{ "preset": "default", "verifier": "haiku" }` (executor/advisor/evaluator inherit parent model, but verifier is always explicit).
 
-8. **Write `.harness/state.json`** with fields: `task`, `mode` ("single"/"standard"/"multi"), `model_config` (from step 7), `user_lang`, `has_git` (boolean), `repo_name`, `repo_path` (working directory path), `phase` ("plan_ready"), `round` (1), `max_rounds` (3), `max_files` (20), `scope` (user-provided or "(no limit)"), `branch` (if has_git: "harness/<slug>", else: null), `lang`, `test_cmd`, `build_cmd`, `docs_path` ("docs/harness/<slug>/"), `created_at` (ISO8601).
+8. **Write `.harness/state.json`** with fields: `task`, `mode` ("single"/"standard"/"multi"), `model_config` (from step 7 — include `"verifier": "haiku"` in addition to executor/advisor/evaluator), `user_lang`, `has_git` (boolean), `repo_name`, `repo_path` (working directory path), `phase` ("plan_ready"), `round` (1), `max_rounds` (3), `max_files` (20), `scope` (user-provided or "(no limit)"), `branch` (if has_git: "harness/<slug>", else: null), `lang`, `test_cmd`, `build_cmd`, `lint_cmd` (from step 3a, or null), `type_check_cmd` (from step 3b, or null), `verify` (`{ "layer1_result": null, "layer1_retries": 0, "todo_blocking": false }`), `docs_path` ("docs/harness/<slug>/"), `created_at` (ISO8601).
 9. **Print setup summary** (in `user_lang`):
    ```
    [harness] Task started!
@@ -127,6 +155,8 @@ When the user provides a task (via $ARGUMENTS or in conversation), execute this 
      Language  : <lang>
      Test      : <test_cmd or "none">
      Build     : <build_cmd or "none">
+     Lint      : <lint_cmd or "none">
+     TypeCheck : <type_check_cmd or "none">
      Scope     : <scope>
    ```
 
@@ -302,11 +332,81 @@ Read `mode` from state.json and branch accordingly.
      Output   : changes.md written
    ```
 
+### Step 4.5: Auto-Verify (Layer 1 — Mechanical Verification)
+
+> **Compatibility:** If state.json has no `verify` field (pre-v7.1 session), skip this entire step and proceed to Step 5.
+>
+> **Session recovery:** When resuming from `verify_ready`, `verifying`, or `verify_done`, retries reset to 0 (assumes code may have been manually fixed between sessions).
+
+1. Update state.json: phase → `"verify_ready"`, set `verify.layer1_result` → null, `verify.layer1_retries` → 0.
+2. Read the verify template: `{CLAUDE_PLUGIN_ROOT}/templates/verify/verify_layer1.md`
+3. **Prepare the Verify subagent prompt.** Fill in template variables:
+   - `{build_cmd}`: from state.json (`build_cmd` or `"SKIP"` if null)
+   - `{test_cmd}`: from state.json (`test_cmd` or `"SKIP"` if null)
+   - `{lint_cmd}`: from state.json (`lint_cmd` or `"SKIP"` if null)
+   - `{type_check_cmd}`: from state.json (`type_check_cmd` or `"SKIP"` if null)
+   - `{changes_md_path}`: `docs/harness/<slug>/changes.md`
+   - `{verify_report_path}`: `docs/harness/<slug>/verify_report.md`
+   - `{todo_blocking}`: from state.json `verify.todo_blocking` (default false)
+4. Update state.json: phase → `"verifying"`.
+5. **Launch the Verify subagent** using the Agent tool. If `model_config.preset` is not `"default"`, pass `model: "haiku"` (all presets use haiku for verifier). If `model_config.preset` is `"default"`, also pass `model: "haiku"` — verifier always uses haiku regardless of preset.
+6. When the subagent returns, parse the first line of its response:
+   - If contains `"PASS"` → set `verify.layer1_result` → `"PASS"` in state.json
+   - If contains `"FAIL"` → set `verify.layer1_result` → `"FAIL"` in state.json (do NOT increment retries here — increment happens at retry dispatch)
+
+7. **If PASS:** Update state.json: phase → `"verify_done"`. Print status:
+   ```
+   [harness] Verify (Layer 1) complete.
+     Result : PASS
+     {1-line summary from subagent response}
+   ```
+   Proceed to Step 5.
+
+8. **If FAIL and retries < 3:** Increment `verify.layer1_retries` in state.json. Print status:
+   ```
+   [harness] Verify (Layer 1) FAIL — retrying Generator (attempt {layer1_retries}/3)
+     {1-line error summary from subagent response}
+   ```
+   Launch a **new Generator subagent** (retry) per the rules below, then return to step 4.5.4 (re-run Verify).
+
+   **Generator retry rules (all modes):**
+   Regardless of mode (single/standard/multi), retry launches **one implementation subagent only** — do NOT re-run the plan or advisory review steps. The plan and reviews from the original Step 4 are still valid; only the code needs fixing.
+   - **single mode**: use `generator_single.md` template
+   - **standard mode**: use `implementation_standard.md` template (with existing plan.md and review_combined.md)
+   - **multi mode**: use `implementation.md` template (with existing plan.md, review_code_quality.md, review_test_stability.md)
+
+   Add to the implementation prompt:
+   - `{verify_failure}`: the 1-line FAIL summary from the Verify subagent response
+   - `{verify_report_path}`: `docs/harness/<slug>/verify_report.md` (so the Generator can read detailed errors)
+   - Instruction: `"Fix ONLY the items that failed verification. Do NOT rewrite code that already works. The verification failure was: {verify_failure}"`
+
+   If `model_config.preset` is not `"default"`, pass `model` per the Model Selection table (executor role for implementation subagents).
+
+9. **If FAIL and retries >= 3:** Update state.json: phase → `"verify_done"`. Print status:
+   ```
+   [harness] Verify (Layer 1) FAIL — max retries reached (3/3)
+     Latest error: {1-line error summary}
+     See: docs/harness/<slug>/verify_report.md
+   ```
+   Ask the user using AskUserQuestion (in `user_lang`):
+     header: "Verify"
+     question: "Mechanical verification failed after 3 attempts. [error summary]"
+     options:
+       - label: "Continue to Evaluator" / description: "Skip remaining verify issues and proceed to QA evaluation"
+       - label: "Stop" / description: "Halt workflow for manual intervention. Review verify_report.md"
+
+   If "Continue to Evaluator": proceed to Step 5.
+   If "Stop": halt workflow (do not change phase from verify_done).
+
 ### Step 5: Evaluator Phase (Isolated Subagent)
 
 1. Update state.json: phase → `"eval_ready"`.
 2. Read the evaluator template: `{CLAUDE_PLUGIN_ROOT}/templates/evaluator/evaluator_prompt.md`
 3. **Prepare the subagent prompt.** Fill in: `spec_content` from spec.md, `changed_files_list` (file paths only from changes.md — **strip all "reason" descriptions** to prevent anchoring), `test_available`, `build_cmd`, `test_cmd`, `round_num`, `scope`, `user_lang` from state.json, `qa_report_path`: `docs/harness/<slug>/qa_report.md`.
+   **`verify_context`**: Check state.json `verify.layer1_result`:
+   - If `"PASS"`: set to `"Layer 1 PASSED — build/test/lint/type-check verified. See docs/harness/<slug>/verify_report.md for details."`
+   - If `"FAIL"` (user chose "Continue to Evaluator"): set to `"Layer 1 FAILED (user chose to proceed despite failures) — see docs/harness/<slug>/verify_report.md for error details. Pay extra attention to build/test correctness."`
+   - If verify was skipped (no `verify` field in state.json or verify_report.md missing): set to `"Layer 1 was not executed for this session."`
    **Do NOT include:** Generator reasoning, implementation plan, advisor reviews, why files were changed, or references to "Generator"/"AI"/"agent" as code author.
 4. **Launch the Evaluator subagent** using the Agent tool. Use `subagent_type: "superpowers:code-reviewer"` if available. If `model_config.preset` is not `"default"`, pass `model` parameter per the Model Selection table (Evaluator → evaluator role). Instruct it to write the QA report to `docs/harness/<slug>/qa_report.md`.
 5. When the subagent returns, read `docs/harness/<slug>/qa_report.md` to get the verdict.
@@ -372,12 +472,12 @@ If user asks for status, print status in the standard format defined above.
 
 Sub-agents can run on different models depending on the selected `model_config` preset. The presets map each role (executor, advisor, evaluator) to a model:
 
-| Preset | executor | advisor | evaluator |
-|--------|----------|---------|-----------|
-| default | (parent inherit) | (parent inherit) | (parent inherit) |
-| all-opus | opus | opus | opus |
-| balanced | sonnet | opus | opus |
-| economy | haiku | sonnet | sonnet |
+| Preset | executor | advisor | evaluator | verifier |
+|--------|----------|---------|-----------|----------|
+| default | (parent inherit) | (parent inherit) | (parent inherit) | haiku |
+| all-opus | opus | opus | opus | haiku |
+| balanced | sonnet | opus | opus | haiku |
+| economy | haiku | sonnet | sonnet | haiku |
 
 Each sub-agent is assigned a role. The following table defines the concrete model for every sub-agent under each preset:
 
@@ -405,6 +505,14 @@ Each sub-agent is assigned a role. The following table defines the concrete mode
 |-----------|------|---------|----------|----------|---------|
 | Evaluator | evaluator | (no override) | opus | opus | sonnet |
 
+### Verify Phase Sub-agents
+
+| Sub-agent | Role | default | all-opus | balanced | economy |
+|-----------|------|---------|----------|----------|---------|
+| Verify (Layer 1) | verifier | haiku | haiku | haiku | haiku |
+
+> **All presets use haiku for verifier.** Layer 1 Mechanical Verification only executes commands and parses exit codes — no LLM judgment required, so the lowest-cost model is always sufficient.
+
 **Applying model config:** When launching any sub-agent, if `model_config.preset` is not `"default"`, pass the `model` parameter according to the table above for that sub-agent. Sub-agents must NOT directly access state.json to read model_config — the orchestrator passes the model parameter at launch time.
 
 ## User Interaction Rules
@@ -418,7 +526,7 @@ All user-facing questions MUST use AskUserQuestion tool when available.
 
 ## Key Rules
 
-- **Never skip phases.** Always Planner → Generator → Evaluator.
+- **Never skip phases.** Always Planner → Generator → Verify → Evaluator. (Verify is skipped only for pre-v7.1 sessions without `verify` field in state.json.)
 - **Confirmation gates are non-negotiable.** No implicit approval, no proceeding on ambiguity.
 - **Stay within scope.** Do not modify files outside the specified scope.
 - **Evaluator must be isolated.** Always run as a subagent with anchor-free input. Never pass Generator reasoning to the Evaluator.
