@@ -548,7 +548,7 @@ Update state.json: `substep → "git_push_pending"`.
 **Pre-check**: Verify remote exists: `git remote -v 2>/dev/null`
 - If no remote → warn user, skip push.
 
-**Input validation:** Verify `branch` matches `^[a-zA-Z0-9/_.-]+$` and `tag_name` (if not null) matches `^v?[0-9a-zA-Z][0-9a-zA-Z._-]*$`. If either fails → print error, halt (state corruption).
+**Input validation:** Verify `branch` matches `^[a-zA-Z0-9/_.-]+$` and `tag_name` (if not null) matches `^(v[0-9a-zA-Z][0-9a-zA-Z._-]{0,252}|[0-9a-zA-Z][0-9a-zA-Z._-]{0,253})$` (strict 254-char hard cap regardless of optional `v` prefix; alternation prevents the `v?` + 254 trailing case from inflating to 255 chars). If either fails → print error, halt (state corruption).
 
 **Recovery check:** If resuming from `git_push_pending` or `git_branch_pushed`:
 - Check if branch already pushed: `git log origin/{branch}..{branch} --oneline` — if empty, branch is up-to-date → skip to tag push.
@@ -656,10 +656,15 @@ Print (in `user_lang`):
 ```
 
 **Cleanup (Safety Guard):**
-1. Verify `.harness/state.json` exists and `skill` field is `"ship"`. If not → do NOT delete, warn user.
-2. Verify `.harness/` is a direct child of the current working directory (resolve absolute path, confirm depth).
-3. Delete `.harness/` directory.
-4. Inform user artifacts are in `docs/harness/ship-<slug>/` if any were created.
+
+Before deleting `.harness/` (in `user_lang`). `Path(...)` expressions below are Python `pathlib`-style pseudocode; agent must execute via `python -c`, `realpath`, PowerShell `Resolve-Path`, or platform-equivalent that follows symlinks for the resolution semantics:
+
+1. **Skill identity check**: Verify `.harness/state.json` exists and `skill` field is `"ship"`. If missing, unreadable, or `skill` field is not `"ship"` → **ABORT**, warn user: `[harness:ship] Safety Guard: state.json missing or skill field mismatch — .harness/ not deleted.`
+2. **Path depth check (resolved)**: Verify `Path('.harness').resolve().parent == Path.cwd().resolve()` — the resolved parent of `.harness/` must equal the resolved cwd (ensures `.harness/` after symlink resolution is exactly one level below cwd, blocking symlinks that redirect 2+ levels deeper inside cwd). If not → **ABORT**, warn user: `[harness:ship] Safety Guard: .harness/ is not a direct child of cwd — refusing to delete.`
+3. **Symlink escape prevention**: **Always** verify `Path('.harness').resolve()` ⊆ `Path.cwd().resolve()` (no `has_git` condition, no skip path; defense-in-depth duplication retained for `/workflow` parity per `skills/workflow/SKILL.md:937` — Item 2 already implies this, but Item 3 stays for explicit escape-rejection symmetry). If the resolved real path escapes the working directory → **ABORT**, warn user: `[harness:ship] Safety Guard: .harness/ resolves outside cwd — refusing to delete.`
+4. **Display before delete**: Print exact absolute target path: `[harness:ship] Deleting: {Path('.harness').resolve()}`.
+5. Delete `.harness/` directory. **If `Path('.harness').is_symlink()` is true: remove the symlink itself (e.g. `Path('.harness').unlink()` or `rm .harness`), do NOT follow the link to delete the resolved target.** Otherwise (regular directory): recursively remove the directory contents (e.g. `shutil.rmtree('.harness', follow_symlinks=False)` or `rm -rf .harness`).
+6. Inform user artifacts are in `docs/harness/ship-<slug>/` if any were created.
 
 ---
 
