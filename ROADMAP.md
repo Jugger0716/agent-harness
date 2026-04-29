@@ -37,9 +37,9 @@
 
 ---
 
-## v8.2+ — Planned
+## v8.3+ — Planned
 
-Items deferred from v8.1 with rationale:
+Items deferred from v8.1 / v8.2 with rationale:
 
 | Item | Reason deferred | Notes |
 |------|----------------|-------|
@@ -48,6 +48,7 @@ Items deferred from v8.1 with rationale:
 | **L1 — External CLI wrapper** | Claude Code's `/skill` invocation already functions as CLI; separate repo adds maintenance burden disproportionate to value | Reconsider if community demand emerges |
 | **M1 (remaining) — GIF/asciinema demo** | AI cannot record terminal sessions or produce binary media | **Manual action required**: user must record with asciinema/VHS and add to README |
 | **M2 (remaining) — Stars/Forks growth, X/Reddit posts, Discussion replies** | AI cannot perform social or community actions | **Manual action required** |
+| **N1 — `/ship` version_bump auto-detection for `.claude-plugin/*.json`** | Discovered during v8.2.0 release: `/ship` Stage 2 auto-detects only standard package manifests (`package.json`, `pyproject.toml`, `Cargo.toml`, `pom.xml`, `build.gradle(.kts)`, `*.csproj`); plugin/marketplace metadata required manual bumping | Extend Stage 2 search patterns at `skills/ship/SKILL.md:287-290` to include `.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json` (top-level + nested `plugins[].version`) |
 
 ### Residual review gaps (post-v8.1 verification)
 
