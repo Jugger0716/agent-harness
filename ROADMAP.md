@@ -2,6 +2,15 @@
 
 ## v8.x — Shipped
 
+**v8.2.0** — Ship security hardening: Safety Guard parity + tag-length bound
+
+- **S1 — Ship Safety Guard parity with /workflow**: `.harness/` cleanup now performs unconditional symlink-escape check (`Path.resolve() ⊆ Path.cwd()`, no `has_git` gating) and prints the exact absolute target path before deletion, mirroring the `/workflow` Artifact Cleanup Safety Guard.
+  See: `skills/ship/SKILL.md §Step 8 Cleanup (Safety Guard)`, `skills/workflow/SKILL.md §Step 8 Artifact Cleanup Safety Guard`
+- **S2 — Tag-name length bound**: Tag regex tightened from `^v?[0-9a-zA-Z][0-9a-zA-Z._-]*$` to `^v?[0-9a-zA-Z][0-9a-zA-Z._-]{0,253}$` (254-char max), rejecting pathological large inputs.
+  See: `skills/ship/SKILL.md §Step 6c Push (Input validation)`
+
+---
+
 **v8.1.0** — Release hardening: Path Validator + state invariants + schema parity
 
 - **H1 — Verifier model flexibility**: Layer 1 Mechanical Verification primarily runs commands and parses exit codes, so haiku is sufficient by default. An opt-in override is provided for high-cost diagnosis (concurrency, complex test failures).
@@ -42,12 +51,7 @@ Items deferred from v8.1 with rationale:
 
 ### Residual review gaps (post-v8.1 verification)
 
-Verified residual items from `/ship` skill review (`docs/harness/unstaged-changes/review_report_final.md`). Critical/Correctness items from v8.1 were resolved in `11c4d5e`; the following remain:
-
-| Item | File:Line | Severity | Description |
-|------|-----------|----------|-------------|
-| **S1 — Ship Safety Guard parity with /workflow** | `skills/ship/SKILL.md:658-662` | Major | Ship's `.harness/` cleanup uses depth check + skill identity check, but lacks explicit symlink-escape verification (`Path.resolve() ⊆ Path.cwd()`) and the "Display target before delete" step that `/workflow` uses (`skills/workflow/SKILL.md:931-944`). |
-| **S2 — Tag name length bound** | `skills/ship/SKILL.md:551` | Minor | Tag regex `^v?[0-9a-zA-Z][0-9a-zA-Z._-]*$` has no upper length bound; pathological inputs (e.g., 10k-char tags) bypass validation. Add `{N,M}` length constraint or explicit `len(tag_name) <= 255` check. |
+Verified residual items from `/ship` skill review (`docs/harness/unstaged-changes/review_report_final.md`). Critical/Correctness items from v8.1 were resolved in `11c4d5e`. **S1 and S2 shipped in v8.2.0** (see Shipped section above). No further residual review gaps remain at this time.
 
 ---
 
