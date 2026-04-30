@@ -53,10 +53,11 @@ Items deferred from v8.1 / v8.2 with rationale:
 | **M4 — Custom persona override** (`templates/user-override/`) | Variable contract definition required first; ROI analysis pending real usage data | Architect/Senior split: Senior recommended deferral. Minimum viable: `.harness/templates/` project-level override only |
 | **M3 — Template compression** | Senior measured actual templates: avg 46 lines, max 185 lines (~2–3k tokens). Feedback premise of "8–12k tokens" did not match measurements | Re-evaluate after v8.1 usage data |
 | **L1 — External CLI wrapper** | Claude Code's `/skill` invocation already functions as CLI; separate repo adds maintenance burden disproportionate to value | Reconsider if community demand emerges |
+| **N2 — `/ship` merge-to-base-branch step** | Discovered during v8.3.0 release: `/ship` Setup auto-detects `base_branch` (`main`/`master`) but Stage 6 (`git_ops`) only commits/tags/pushes on the current branch. There is no step that merges the release branch into `base_branch`, leaving `main` lag in develop→main GitFlow setups (v8.1.0/v8.2.0/v8.3.0 all initially shipped without `main` reflecting the release). Tag points to the release branch's commit, so a pure tag-based release still works, but consumers tracking `main` see no update. | Add Stage 6.5 `merge_to_base` (skipped if `current_branch == base_branch` or `base_branch` not detected): try `git merge --ff-only` first; on non-ff, prompt user with merge-style options (no-ff merge / rebase-then-ff / skip / stop). HARD-GATE before any merge. Push `base_branch` after success. Should run BEFORE tag push so the tag includes the merge commit when applicable, OR after — needs design decision (current pattern = tag on release branch, `main` no-ff merge after, both pushed; tag remains on release branch lineage). |
 
 ### Residual review gaps (post-v8.1 verification)
 
-Verified residual items from `/ship` skill review (`docs/harness/unstaged-changes/review_report_final.md`). Critical/Correctness items from v8.1 were resolved in `11c4d5e`. **S1 and S2 shipped in v8.2.0** (see Shipped section above). No further residual review gaps remain at this time.
+Verified residual items from `/ship` skill review (`docs/harness/unstaged-changes/review_report_final.md`). Critical/Correctness items from v8.1 were resolved in `11c4d5e`. **S1 and S2 shipped in v8.2.0** (see Shipped section above). **N1 shipped in v8.3.0** (`.claude-plugin/*.json` auto-detect, see Shipped section above). No further residual review gaps remain at this time.
 
 ---
 
