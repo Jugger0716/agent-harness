@@ -6,11 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/).
 
-## [8.3.0] — 2026-04-29
+## [8.3.0] — 2026-04-30
 
 ### Added
 
 - **feat(ship): auto-detect `.claude-plugin/*.json` version fields in Stage 2** — `/ship` Stage 2 (`version_bump`) now identifies version references in `.claude-plugin/plugin.json` (top-level `$.version`) and `.claude-plugin/marketplace.json` (`$.metadata.version` and `$.plugins[*].version` for each plugin entry) alongside the existing standard package manifests (`package.json`, `pyproject.toml`, etc.). Pass 2 applies updates via JSON parsing on these key paths, preserving the original line-ending convention (CRLF vs LF) and avoiding the regression where naive string replace would taint coincidentally-equal version strings in other fields (e.g., `description: "Initial 8.2.0 release notes…"`). Resolves residual gap N1 from v8.2.0.
+- **feat(md-optimize): add `.gitignore`-aware exclusion to scan/index/safety** — `/md-optimize` Phase 1b now runs `git rev-parse --is-inside-work-tree` and excludes gitignored paths via per-path `git check-ignore --quiet`, preventing the Reference Index from emitting broken references for files that exist locally but not on teammates' machines or in CI. Phase 4 evaluator gains a "Gitignore safety" row, and Safety Rules adds a "Gitignore-aware" bullet (precedence-resolved against the Sub-CLAUDE.md rule: gitignore-aware wins). Non-git projects fall back to the existing Exclusion List with bit-identical behaviour.
+
+### Documentation
+
+- **docs(readme): add `/ship` skill section and Skills table entry** — README's Skills table now lists all 12 skills (previously 11), and a dedicated `## ship` section documents the 6-stage pipeline, auto-detection signals, HARD-GATE matrix, safety guards (including v8.2.0 hardening), and session-recovery substep model.
+- **docs(roadmap)**: rename `v8.2+` → `v8.3+` Planned section and adjust scope (added then resolved the `/ship` version_bump auto-detect item; dropped non-development items).
 
 ## [8.2.0] — 2026-04-29
 

@@ -286,7 +286,7 @@ Print: `[harness:ship] Stage: Version Bump`
 
 1. Find all files containing the current version string:
    - `package.json`, `pyproject.toml`, `Cargo.toml`, `pom.xml`, `build.gradle(.kts)`, `*.csproj`
-   - `.claude-plugin/plugin.json` (top-level `$.version`) and `.claude-plugin/marketplace.json` (`$.metadata.version` and `$.plugins[*].version` for each plugin entry). Use JSON parsing to identify exact key paths; the `$.foo` notation is a readability convention, not strict JSONPath. If a file is missing, treat as not-detected and continue. If JSON parse fails in Pass 1, treat as not-detected here and let Pass 2 handle the failure with full user-facing error flow (avoids duplicate prompts).
+   - `.claude-plugin/plugin.json` (top-level `$.version`) and `.claude-plugin/marketplace.json` (`$.metadata.version` and `$.plugins[*].version` for each plugin entry). Use JSON parsing to identify exact key paths; the `$.foo` notation is a readability convention, not strict JSONPath. If a file is missing, treat as not-detected and continue. If JSON parse fails in Pass 1, **still include the file in the detection list** with key-path metadata empty and a `parse_failed=true` flag, and display it to the user as `⚠ JSON parse error — Pass 2 will prompt`. Pass 2 step 2 then re-parses authoritatively and routes to the skip/abort AskUserQuestion — centralizing parse-error handling in Pass 2 keeps Pass 1 listing-only and avoids duplicate prompts.
    - Also search: `git tag --list | grep {current_version}` (do NOT apply — record only)
    - Also grep source files for version constants (e.g., `VERSION = "..."`, `const VERSION`)
 2. **List all found locations** to user. Update state.json: `substep → "version_bump_pass1_done"`.

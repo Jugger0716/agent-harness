@@ -6,7 +6,7 @@ No dependencies required. No Python, no pip, no build steps — just install the
 
 Inspired by Anthropic's [Harness Design for Long-Running Application Development](https://www.anthropic.com/engineering/harness-design-long-running-apps).
 
-> Demo GIF coming soon — see [ROADMAP.md](ROADMAP.md#v82--planned).
+> Demo GIF coming soon — see [ROADMAP.md](ROADMAP.md#v83--planned).
 
 ## At a Glance
 
@@ -1042,7 +1042,7 @@ A Q&A-driven release pipeline orchestrator. Guides version bump, changelog gener
 
 | # | Stage | What it does | HARD-GATE |
 |---|-------|-------------|-----------|
-| 2 | **version_bump** | Pass 1 detects version refs across package manifests + source constants; Pass 2 applies after user confirms | Pass 1 confirm |
+| 2 | **version_bump** | Pass 1 detects version refs across package manifests, `.claude-plugin/{plugin,marketplace}.json`, and source constants; Pass 2 dispatches by file kind (JSON-aware path for plugin manifests preserves CRLF/LF, BOM, and trailing-newline; string-replace path for standard manifests) | Pass 1 confirm |
 | 3 | **changelog** | Parses git log → Conventional Commits categorization → drafts entry → prepends to `CHANGELOG.md` | Edit gate before write |
 | 4 | **build_verify** | Runs auto-detected build/test commands; writes `docs/harness/ship-<slug>/changes.md` | None (read-only verify) |
 | 5 | **code_review** | Optional summary review of staged changes (delegates to `/code-review`) | (delegates) |
@@ -1056,7 +1056,7 @@ A Q&A-driven release pipeline orchestrator. Guides version bump, changelog gener
 | `has_git` | `git rev-parse --is-inside-work-tree` | Skip `git_ops` |
 | `has_gh` | `gh --version` | Skip `gh_release` |
 | `has_gh_auth` | `gh auth status` | Skip `gh_release` |
-| Package manifest | `package.json` / `pyproject.toml` / `Cargo.toml` / `pom.xml` / `build.gradle(.kts)` / `*.csproj` | Skip `version_bump` |
+| Package manifest | `package.json` / `pyproject.toml` / `Cargo.toml` / `pom.xml` / `build.gradle(.kts)` / `*.csproj` / `.claude-plugin/plugin.json` / `.claude-plugin/marketplace.json` | Skip `version_bump` |
 | Build/test commands | Inferred from manifest type | Skip `build_verify` |
 
 ### Safety
@@ -1096,9 +1096,10 @@ Communicates in the user's language for progress, questions, confirmations, erro
 
 See [ROADMAP.md](ROADMAP.md) for the full roadmap with rationale.
 
+- **v8.3** (Shipped): `/ship` version_bump auto-detection for `.claude-plugin/plugin.json` (`$.version`) and `.claude-plugin/marketplace.json` (`$.metadata.version` + `$.plugins[*].version`) — JSON-aware Pass 2 preserves CRLF/LF, BOM, trailing-newline, and avoids the naive-string-replace regression on coincidentally-equal version strings in other fields
 - **v8.2** (Shipped): `/ship` Safety Guard parity with `/workflow` (unconditional symlink-escape check, display-before-delete, symlink-aware deletion), strict 254-char tag-name regex hard cap
 - **v8.1** (Shipped): Path Validator single source, Auto-fix State Transition Table (invariants I1–I4), `--verifier-model` flexibility, `--output-dir` flag, Auto-fix proposal for Layer 1 failures (both `/workflow` and `/refactor`), `.github/` contribution templates
-- **v8.3+**: Custom persona override (`templates/user-override/`), external CLI wrapper, `/ship` version_bump auto-detection for `.claude-plugin/*.json`
+- **v8.3+**: Custom persona override (`templates/user-override/`), external CLI wrapper
 
 ---
 
