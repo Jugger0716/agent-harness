@@ -1,5 +1,6 @@
 ---
 name: code-review
+disallowed-tools: NotebookEdit, WebSearch, WebFetch
 description: Systematic, bias-free code review for PRs, branches, or file changes. 3-tier modes — quick (1 agent, 5-perspective checklist), deep (2 specialist sub-agents + synthesis), thorough (3 specialists + cross-verification + synthesis). Use for reviewing PRs, staged changes, or any diff.
 ---
 

@@ -1,5 +1,6 @@
 ---
 name: migrate
+disallowed-tools: NotebookEdit
 description: Execute framework/library version upgrades, language transitions, and dependency replacements with staged execution and verification. Supports single-agent and multi-agent modes with WebSearch-based migration guide research, per-step test verification, and session recovery.
 ---
 

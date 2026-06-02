@@ -1,5 +1,6 @@
 ---
 name: md-optimize
+disallowed-tools: NotebookEdit, WebSearch, WebFetch
 description: Optimize CLAUDE.md and project .md files for token efficiency. Applies Dual-Zone model (Inline/Index), deduplication, and structural compression. Use on any project to reduce context token cost.
 ---
 

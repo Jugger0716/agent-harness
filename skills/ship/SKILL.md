@@ -1,5 +1,6 @@
 ---
 name: ship
+disallowed-tools: NotebookEdit
 description: Q&A-based universal release pipeline orchestrator. Guides version bump (2-pass), changelog generation (Conventional Commits), build/test verification, code review summary, git operations (commit/tag/push), and GitHub release — with HARD-GATEs before every irreversible action. Auto-detects environment, skips unavailable stages. Session recovery with substep tracking.
 ---
 

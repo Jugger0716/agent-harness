@@ -1,5 +1,6 @@
 ---
 name: md-generate
+disallowed-tools: NotebookEdit, WebSearch, WebFetch
 description: Analyze project source code and generate/enhance CLAUDE.md for effective Claude Code development. Detects conventions, dependencies, build/test commands, architecture patterns, and produces actionable documentation. Use on new projects or when existing CLAUDE.md is thin.
 ---
 

@@ -1,5 +1,6 @@
 ---
 name: test-gen
+disallowed-tools: NotebookEdit, WebSearch, WebFetch
 description: Automated test generator with mutation-based quality verification. Generates unit and integration tests, runs them, and validates meaningfulness via simplified mutation testing. Supports coverage-gap detection and regression test generation from debug reports.
 ---
 

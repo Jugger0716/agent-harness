@@ -1,5 +1,6 @@
 ---
 name: debug
+disallowed-tools: NotebookEdit
 description: Hypothesis-driven debugger with mandatory executable verification. Classifies build/compile vs runtime/logic errors, attempts reproduction, generates falsifiable hypotheses verified by code search, git history, and test execution. Quick mode (orchestrator only) or deep mode (2 specialist sub-agents + cross-verification). Use when facing a bug, unexpected behavior, or error that needs systematic root cause analysis.
 ---
 
