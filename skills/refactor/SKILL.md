@@ -1,5 +1,6 @@
 ---
 name: refactor
+disallowed-tools: NotebookEdit, WebSearch, WebFetch
 description: Safe, behavior-preserving code structure improvement with 3-tier mode (single/multi/comprehensive). Atomic changes, test after each step, stop on failure. Use when improving code structure without changing behavior.
 ---
 

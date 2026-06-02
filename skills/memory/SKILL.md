@@ -1,5 +1,6 @@
 ---
 name: memory
+disallowed-tools: NotebookEdit, Task, Agent, Workflow, WebSearch, WebFetch
 description: Team knowledge base manager. Save, show, search, and clean git-committed team knowledge records (decisions, bugs, patterns, todos, conventions) stored in docs/harness/memory/. Distinct from Claude Code's built-in personal auto-memory — this is shared, version-controlled, and team-wide.
 ---
 

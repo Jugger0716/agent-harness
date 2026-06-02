@@ -1,5 +1,6 @@
 ---
 name: workflow
+disallowed-tools: NotebookEdit
 description: 3-Phase (Planner -> Generator -> Evaluator) workflow with selectable single-agent or multi-agent persona mode. Use for development tasks (feature work, bug fixes, maintenance) AND non-development tasks (planning data processing, document generation, analysis) that benefit from structured planning, implementation, and review.
 ---
 

@@ -1,5 +1,6 @@
 ---
 name: spec
+disallowed-tools: NotebookEdit
 description: Requirements specification writer with multi-round Q&A discovery. Transforms vague ideas into structured specs compatible with /workflow input. Modes — quick (orchestrator only) / deep (requirements analyst + user scenario analyst + synthesis). Use when you need a well-defined spec before starting implementation.
 ---
 

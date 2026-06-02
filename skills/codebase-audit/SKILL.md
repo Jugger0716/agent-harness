@@ -1,5 +1,6 @@
 ---
 name: codebase-audit
+disallowed-tools: NotebookEdit, WebSearch, WebFetch
 description: Systematically analyze project structure, dependencies, and patterns for team onboarding and codebase understanding. 3-tier mode (quick/deep/thorough) with incremental analysis support. Use when joining a new project or generating reproducible codebase documentation.
 ---
 
