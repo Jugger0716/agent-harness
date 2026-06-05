@@ -78,6 +78,18 @@ this object, then renders HARD GATE #1.
 > gets skipped for schema-optional fields. The canonical shape above is unchanged
 > for /harness (its plan output has no seven-section obligation).
 
+> Phase 2e (refactor) additive delta: `refactor.plan.workflow.js`'s inlined copy (named
+> `RefactorPlanSchema` in-script) promotes `steps` into `required` (items gain a required
+> `risk: {enum: [low, med, high]}` and `files` becomes required) and ADDS three
+> refactor-only fields — `currentState` (string, Current State Analysis),
+> `impactScope` (`{direct[], indirect[]}`, both required), `testCoverage`
+> (`[{target, coverage: good|partial|none, gapAction}]`, required; the array may be
+> empty — the orchestrator renders "N/A" for an empty array) — so the orchestrator can
+> faithfully reconstruct the seven-section refactor_plan.md (Goal / Current State
+> Analysis / Impact Scope / Refactoring Steps / Test Coverage Assessment / Completion
+> Criteria / Risks). Same wf_75de1836 lesson: rendered sections must be schema-required.
+> The canonical shape above is unchanged for the other consumers.
+
 ```js
 const PlanResultSchema = {
   type: 'object',
@@ -149,6 +161,16 @@ retry/gates on `verdict` — replaces the `### Verdict:` regex parse.
 > Encoding note: the verdict enum is locked to `PASS|FAIL_L2|FAIL_L3`. An L1
 > mechanical failure is `{ layer: 'L1', verdict: 'FAIL_L2' }` — branch on
 > **(layer, verdict)**, never on verdict alone.
+
+> Phase 2e (refactor) consumer note: `refactor.eval.workflow.js` returns this canonical
+> shape unchanged. Mapping — a test regression / build failure (mechanical evidence; the
+> evaluator's baseline-comparison test run IS the L1-mechanical check) →
+> `{ layer: 'L1', verdict: 'FAIL_L2' }` per the encoding note above; tests green but a
+> behavior-preservation criterion fails by judgment → `{ layer: 'L3', verdict: 'FAIL_L3' }`;
+> PASS → `{ layer: 'L3', verdict: 'PASS' }`. `layer: 'L2'` is unused by refactor (its
+> five criteria are judgment, not checklist-structural). The /refactor orchestrator
+> treats ANY non-PASS as FAIL for its Step 6 QA gate (UX unchanged), with
+> `failures[].fix` feeding the gate text.
 
 ```js
 const VerifyVerdictSchema = {
@@ -295,16 +317,103 @@ const RootCauseSchema = {
 }
 ```
 
+## Finding / FindingSet
+
+`Finding` is the item shape carried by `FindingSet.findings[]`. Returned by the
+deep-review specialist reviewers AND by the deep-review synthesis step
+(`deep-review.review.workflow.js`) — replaces the reviewers' file-write + findings-table
+prose contract and the orchestrator's `.harness/code-review/review_*.md` re-reads. The
+ORCHESTRATOR writes `review_report.md` from the final (synthesis) FindingSet.
+
+> Count consistency note: the synthesis step in `deep-review.review.workflow.js`
+> normalizes `counts` from `findings[]` before returning (spec.eval precedent) and fills
+> a missing/short `filesReviewed` from the union of the reviewers' `filesReviewed`
+> arrays — consumers can branch/render directly.
+>
+> `filesReviewed` is REQUIRED: the report's "Files Reviewed" table (which includes
+> no-issue files) is reconstructible ONLY from this field — prose-only obligations on
+> schema-optional fields get skipped (Phase 2a lesson, wf_75de1836).
+
+```js
+const FindingSchema = {
+  type: 'object',
+  required: ['file', 'severity', 'category', 'title', 'detail'],
+  properties: {
+    file: { type: 'string', description: 'repo-relative path, raw' },
+    line: { type: 'integer', description: 'omit for file-level findings' },
+    endLine: { type: 'integer' },
+    severity: { enum: ['critical', 'major', 'minor', 'suggestion'] },
+    category: { type: 'string', description: 'short token (Correctness/Security/Performance/Maintainability/Testing/Architecture/Design), English raw' },
+    title: { type: 'string', description: `short title, render in ${A.userLang}` },
+    detail: { type: 'string', description: `what the issue is and why it matters, render in ${A.userLang}` },
+    suggestion: { type: 'string', description: `concrete actionable fix, render in ${A.userLang}` }
+  }
+}
+
+const FindingSetSchema = {
+  type: 'object',
+  required: ['findings', 'counts', 'filesReviewed', 'summary'],
+  properties: {
+    findings: { type: 'array', items: FindingSchema },
+    counts: { type: 'object', required: ['critical', 'major', 'minor', 'suggestion'],
+      properties: { critical: { type: 'integer' }, major: { type: 'integer' },
+        minor: { type: 'integer' }, suggestion: { type: 'integer' } } },
+    filesReviewed: { type: 'array', items: { type: 'string' }, description: 'every file examined, including no-issue files, raw paths' },
+    summary: { type: 'string', description: `one-line, counts English raw, render in ${A.userLang}` }
+  }
+}
+```
+
+## CrossVerifyReport
+
+Returned by the deep-review thorough-mode cross-verification step
+(`deep-review.review.workflow.js`). Unplanned-but-needed (2c `DebugAnalysis` precedent):
+preserves the cross-verification template's Confirmed / False-Positive /
+severity-adjust / new-finding / disagreement semantics, which a plain FindingSet return
+would lose (the pre-correction draft's own flagged lossiness).
+
+> Correlation contract: `verdicts[].findingIndex` is the 1-based `[#N]` index in the
+> script-composed digest of `sourceReviewer`'s findings. The script composes each
+> reviewer's digest ONCE and reuses it for BOTH the cross-verify prompts and the
+> synthesis prompt, so `(sourceReviewer, findingIndex)` dereferences deterministically
+> against a single key space.
+
+```js
+const CrossVerifyReportSchema = {
+  type: 'object',
+  required: ['reviewer', 'verdicts', 'newFindings', 'summary'],
+  properties: {
+    reviewer: { type: 'string', description: 'identifier, English raw' },
+    verdicts: { type: 'array', items: {
+      type: 'object', required: ['sourceReviewer', 'findingIndex', 'verdict', 'note'],
+      properties: {
+        sourceReviewer: { type: 'string', description: 'identifier as shown in the digest header, raw' },
+        findingIndex: { type: 'integer', description: '1-based [#N] index in that reviewer\'s digest (correlation key)' },
+        verdict: { enum: ['Confirmed', 'FalsePositive', 'SeverityAdjusted'] },
+        adjustedSeverity: { enum: ['critical', 'major', 'minor', 'suggestion'], description: 'only when verdict=SeverityAdjusted' },
+        note: { type: 'string', description: `evidence-based rationale quoting the diff, render in ${A.userLang}` }
+      } } },
+    newFindings: { type: 'array', items: FindingSchema },
+    disagreements: { type: 'array', items: {
+      type: 'object', required: ['topic', 'assessment'],
+      properties: { topic: { type: 'string', description: `render in ${A.userLang}` },
+        assessment: { type: 'string', description: `which position is correct and why, render in ${A.userLang}` } } } },
+    summary: { type: 'string', description: `one-line, render in ${A.userLang}` }
+  }
+}
+```
+
 ## Reserved (added by their owning phases — do not define here yet)
 
 | Schema | Owning phase |
 |---|---|
-| Finding / FindingSet | Phase 2b deep-review |
 | AutoFixProposal | auto-fix-focused phase (Proposer stays inline-1-line in the pilot — deliberate carve-out) |
 | MutationVerdict / SkepticVote | Phase 2g test-gen |
 | MdEvalVerdict | Phase 3 polish |
 
-> Landed from this queue: `CriticReport` (Phase 2a spec) and `Hypothesis`/`RootCause`
-> (Phase 2c debug, plus the unplanned-but-needed `DebugAnalysis` analyst shape) — defined
-> above. Debug no longer waits on `FindingSet`; the earlier "(also debug)" note on the
-> Finding/FindingSet row is superseded.
+> Landed from this queue: `CriticReport` (Phase 2a spec), `Hypothesis`/`RootCause`
+> (Phase 2c debug, plus the unplanned-but-needed `DebugAnalysis` analyst shape), and
+> `Finding`/`FindingSet` (Phase 2b deep-review, plus the unplanned-but-needed
+> `CrossVerifyReport` cross-verification shape) — defined above. Debug no longer waits
+> on `FindingSet`; the earlier "(also debug)" note on the Finding/FindingSet row is
+> superseded.
