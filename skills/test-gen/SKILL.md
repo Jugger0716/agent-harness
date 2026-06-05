@@ -101,9 +101,15 @@ If `.harness/state.json` does not exist (or `state.json.skill` is not `"test-gen
 4. **Detect environment** — run `git rev-parse --is-inside-work-tree 2>/dev/null`, store `has_git`.
 5. **Auto-detect project language and test framework.** Scan the working directory:
 
-   Language/test/build/lint/typecheck detection: see `templates/_shared/detection_table.md`.
-
-   **Mock library by framework** (test-gen-specific addendum): Jest → `jest.mock`; Vitest → `vi.mock`; pytest → `pytest.monkeypatch`, `unittest.mock`; JUnit → `Mockito`; Go test → `testify/mock`; RSpec → `rspec-mocks`. If the framework is not in this list, ask the user.
+   | Framework | Detection | Test file pattern | Run command | Mock library |
+   |-----------|-----------|------------------|-------------|-------------|
+   | Jest | `package.json` contains jest dependency | `*.test.ts`, `*.spec.ts` | `npx jest` | `jest.mock` |
+   | Vitest | `package.json` contains vitest | `*.test.ts`, `*.spec.ts` | `npx vitest run` | `vi.mock` |
+   | pytest | `pyproject.toml` or `conftest.py` present | `test_*.py`, `*_test.py` | `pytest` | `pytest.monkeypatch`, `unittest.mock` |
+   | JUnit | `build.gradle` contains junit | `*Test.java` | `./gradlew test` | `Mockito` |
+   | Go test | `go.mod` present | `*_test.go` | `go test ./...` | `testify/mock` |
+   | RSpec | `Gemfile` contains rspec | `*_spec.rb` | `bundle exec rspec` | `rspec-mocks` |
+   | Other | none of the above match | ask user | ask user | ask user |
 
    **If detection fails:** Ask the user using AskUserQuestion (in `user_lang`):
      header: "Framework"
@@ -433,14 +439,9 @@ After successful completion, suggest related actions (in `user_lang`):
 
 ## Model Selection
 
-Sub-agents run on different models depending on the selected `model_config` preset. All test-gen sub-agents use the executor role:
+Preset table + rules: see `templates/_shared/model_config.md`. All test-gen sub-agents (Coverage Analyst, Test Generator) use the **executor** role.
 
-| Sub-agent | Role | default | all-opus | balanced | economy |
-|-----------|------|---------|----------|----------|---------|
-| Coverage Analyst | executor | (inherit) | opus | sonnet | haiku |
-| Test Generator | executor | (inherit) | opus | sonnet | haiku |
-
-**Applying model config:** When launching any sub-agent, if `model_config.preset` is not `"default"`, pass the `model` parameter according to the table above. Sub-agents must NOT directly access state.json to read model_config — the orchestrator passes the model parameter at launch time.
+**Applying model config:** When launching any sub-agent, if `model_config.preset` is not `"default"`, pass the `model` parameter per the role-map above combined with the preset table in `templates/_shared/model_config.md`. Sub-agents must NOT directly access state.json to read model_config — the orchestrator passes the model parameter at launch time.
 
 ## User Interaction Rules
 

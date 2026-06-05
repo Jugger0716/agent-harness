@@ -22,10 +22,16 @@ Detect the user's language from their **most recent message**. Store as `user_la
 
 ## Standard Status Format
 
-Status block shape + label rules: see `templates/_shared/status_format.md`.
-
-- **Mode enum:** `quick | deep | thorough`
-- **Phase labels:** input_parse -> "Parsing input", diff_collect -> "Collecting diff", review -> "Reviewing", cross_verify -> "Cross-verifying", synthesis -> "Synthesizing", complete -> "Complete"
+Status block shape + label rules: see `templates/_shared/status_format.md`. code-review uses the `[code-review]` prefix and its own block (label `Target`, not `Task`; no Style/Round/Branch):
+```
+[code-review]
+  Target : <PR#, branch, commit range, or file path>
+  Mode   : <quick | deep | thorough>
+  Model  : <model_config preset name>
+  Phase  : <phase label>
+  Scope  : <N files, M lines>
+```
+Phase labels: input_parse -> "Parsing input", diff_collect -> "Collecting diff", review -> "Reviewing", cross_verify -> "Cross-verifying", synthesis -> "Synthesizing", complete -> "Complete"
 
 ## Workflow
 

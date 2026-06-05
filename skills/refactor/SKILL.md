@@ -24,9 +24,17 @@ Detect the user's language from their **most recent message**. Store as `user_la
 
 ## Standard Status Format
 
-Status block shape + label rules: see `templates/_shared/status_format.md`.
-
-Mode enum: `<single | multi | comprehensive>`.
+Status block shape + label rules: see `templates/_shared/status_format.md`. refactor uses the `[harness]` prefix with a `Skill : refactor` identity line and a `Target` label:
+```
+[harness]
+  Skill  : refactor
+  Target : <target>
+  Mode   : <single | multi | comprehensive>
+  Model  : <model_config preset name>
+  Phase  : <phase label>
+  Branch : <branch>          ← omit if has_git == false
+  Scope  : <scope>
+```
 Phase labels: plan_ready → "Analyzer — writing refactor plan", gen_ready → "Executor — applying changes", eval_ready → "Verifier — checking behavior preservation", completed → "Completed"
 
 ## Session Recovery
@@ -82,7 +90,7 @@ When the user provides a refactoring target (via $ARGUMENTS or in conversation),
 2. **Slugify the target:** lowercase, transliterate non-ASCII to ASCII, remove non-word chars except hyphens, replace spaces with hyphens, truncate to 50 chars. Store as `<slug>`.
 3. **Auto-detect project language and commands.** Scan the repo root:
 
-   Language/test/build/lint/typecheck detection: see `templates/_shared/detection_table.md`.
+   Language/test/build detection: see `templates/_shared/detection_table.md`.
 
    If none match, set language to "unknown", test/build commands to null.
 

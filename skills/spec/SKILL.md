@@ -686,22 +686,13 @@ The spec written to `docs/harness/<slug>/spec.md` must use this exact structure 
 
 ## Model Selection
 
-Sub-agents are used only in **deep mode**. Both sub-agents use the **advisor role**.
+Sub-agents are used only in **deep mode**.
 
 Preset table + rules: see `templates/_shared/model_config.md`.
 
-Role map: Requirements Analyst / User Scenario Analyst / Synthesis / Critic → advisor.
+Role-map: Requirements Analyst / User Scenario Analyst / Risk Auditor / Tech Constraint Analyst (and the Synthesis + Critic phases) → advisor.
 
-### Deep Mode Sub-agents
-
-| Sub-agent | Role | default | all-opus | balanced | economy |
-|-----------|------|---------|----------|----------|---------|
-| Requirements Analyst | advisor | (no override) | opus | opus | sonnet |
-| User Scenario Analyst | advisor | (no override) | opus | opus | sonnet |
-| Risk Auditor (NEW in 8.4) | advisor | (no override) | opus | opus | sonnet |
-| Tech Constraint Analyst (NEW in 8.4) | advisor | (no override) | opus | opus | sonnet |
-
-**Applying model config:** When launching any sub-agent, if `model_config.preset` is not `"default"`, pass the `model` parameter according to the table above. Sub-agents must NOT directly access state.json to read model_config — the orchestrator passes the model parameter at launch time.
+**Applying model config:** When launching any sub-agent, if `model_config.preset` is not `"default"`, pass the `model` parameter per the role-map above combined with the preset table in `templates/_shared/model_config.md`. Sub-agents must NOT directly access state.json to read model_config — the orchestrator passes the model parameter at launch time.
 
 ## User Interaction Rules
 

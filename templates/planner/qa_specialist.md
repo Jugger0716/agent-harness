@@ -35,7 +35,8 @@ Use these conventions to align your analysis with existing codebase patterns.
 
 <!-- BLOCK-START:spec-context-block v1
      Why: 4 planner sub-agents (architect, planner_single, qa_specialist, senior_developer) MUST receive byte-identical Discovery Notes context so Synthesis assumptions hold across all 4 outputs. Drift silently degrades synthesis quality.
-     How to verify: SHA256 of the content between BLOCK-START and BLOCK-END (exclusive of these marker comments) MUST match across all 4 planner template files. Run `python scripts/verify_block_sync.py` (exit 0 = match, 1 = drift, 2 = missing markers). Wire into pre-commit or CI as needed.
+     Single source: templates/_shared/spec_context_block.md (verifier hashes it against the content between these markers).
+     How to verify: SHA256 of the content between BLOCK-START and BLOCK-END (exclusive of these marker comments) MUST match across all 4 planner template files AND the single-source file. Run `python scripts/verify_block_sync.py` (exit 0 = match, 1 = drift, 2 = missing markers). Run manually; pre-commit/CI wiring is a later-phase TODO.
      Migration policy: bump the version tag (v1 → v2 → ...) on intentional content changes; the hash check is per-version uniformity, not cross-version sameness.
      -->
 
