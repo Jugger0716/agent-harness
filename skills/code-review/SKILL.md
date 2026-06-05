@@ -206,7 +206,7 @@ After completing the checklist, proceed to Step 5 (Report Generation).
 
 3. **Create directory:** `.harness/code-review/`
 
-4. **Launch 2 sub-agents in parallel** using the Agent tool. Each receives its reviewer template with the diff. Each writes to its output_path. If `model_config.preset` is not `"default"`, pass `model` parameter per the Model Selection table (Security & Correctness Reviewer, Architecture & Maintainability Reviewer → executor role).
+4. **Launch 2 sub-agents in parallel** using the Agent tool. Each receives its reviewer template with the diff. Each writes to its output_path. If `model_config.preset` is not `"default"`, pass `model` parameter per the preset table in `templates/_shared/model_config.md` (Security & Correctness Reviewer, Architecture & Maintainability Reviewer → executor role).
 
    **Bias reduction applied to each sub-agent:**
    - **Context isolation**: each reviewer runs as a separate sub-agent with no shared state
@@ -237,7 +237,7 @@ Proceed to Step 5 (Report Generation). The main agent reads both review files an
 
 3. **Create directory:** `.harness/code-review/`
 
-4. **Launch 3 sub-agents in parallel** using the Agent tool. Each receives its reviewer template. Each writes to its output_path. If `model_config.preset` is not `"default"`, pass `model` parameter per the Model Selection table (all three reviewers → executor role).
+4. **Launch 3 sub-agents in parallel** using the Agent tool. Each receives its reviewer template. Each writes to its output_path. If `model_config.preset` is not `"default"`, pass `model` parameter per the preset table in `templates/_shared/model_config.md` (all three reviewers → executor role).
 
    Same bias reduction as deep mode (context isolation, anchor-free, defect assumption, author neutralization).
 
@@ -257,7 +257,7 @@ Proceed to Step 5 (Report Generation). The main agent reads both review files an
    - `{user_lang}`: detected user language
    - `{output_path}`: `.harness/code-review/crossverify_<reviewer>.md`
 
-4. **Launch 3 sub-agents in parallel.** If `model_config.preset` is not `"default"`, pass `model` parameter per the Model Selection table (Cross-Verification → advisor role). Each reads the other two reviewers' findings and verifies:
+4. **Launch 3 sub-agents in parallel.** If `model_config.preset` is not `"default"`, pass `model` parameter per the preset table in `templates/_shared/model_config.md` (Cross-Verification → advisor role). Each reads the other two reviewers' findings and verifies:
    - Are the reported findings real? (validate against actual diff)
    - Are there findings they missed that the others caught?
    - Are severity ratings appropriate?

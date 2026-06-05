@@ -218,7 +218,7 @@ Update state.json: `phase` → `"analyzing"`.
 7. **Large target delegation:** If `target_file_count >= 4`, delegate coverage analysis to a sub-agent:
    - Read template: `{CLAUDE_PLUGIN_ROOT}/templates/test-gen/coverage_analyst.md`
    - Fill variables: `{target}`, `{framework}`, `{mock_library}`, `{repo_path}`, `{user_lang}`, `{output_path}`: `.harness/test-gen/analysis.md`
-   - If `model_config.preset` is not `"default"`, pass `model` parameter per the Model Selection table (Coverage Analyst → executor role).
+   - If `model_config.preset` is not `"default"`, pass `model` parameter per the preset table in `templates/_shared/model_config.md` (Coverage Analyst → executor role).
    - Launch sub-agent. Wait for completion.
    - Verify `.harness/test-gen/analysis.md` exists.
 
@@ -278,7 +278,7 @@ Update state.json: `phase` → `"generating"`.
 2. **Large target delegation:** If `target_file_count >= 4`, delegate test writing to a sub-agent:
    - Read template: `{CLAUDE_PLUGIN_ROOT}/templates/test-gen/test_generator.md`
    - Fill variables: `{target}`, `{framework}`, `{mock_library}`, `{mocking_strategy}` (mocking section from analysis.md), `{analysis_content}` (full analysis.md content), `{user_lang}`, `{test_file_pattern}`
-   - If `model_config.preset` is not `"default"`, pass `model` parameter per the Model Selection table (Test Generator → executor role).
+   - If `model_config.preset` is not `"default"`, pass `model` parameter per the preset table in `templates/_shared/model_config.md` (Test Generator → executor role).
    - Launch sub-agent. Wait for completion.
 
    If `target_file_count < 4`: write test files directly yourself.

@@ -280,14 +280,14 @@ Read `mode` from state.json and branch accordingly.
 1. Update state.json: phase → `"analyze_ready"`.
 2. Read the external research template: `{CLAUDE_PLUGIN_ROOT}/templates/migrate/external_research_analyst.md`
 3. Fill template variables: `{target}`, `{from_version}`, `{to_version}`, `{migration_type}`, `{lang}`, `{user_lang}`, `{output_path}`: `.harness/migrate/research_external.md`
-4. **Launch 1 subagent** (External Research Analyst) using the Agent tool. If `model_config.preset` is not `"default"`, pass `model` parameter per the Model Selection table (External Research Analyst → executor role). This subagent uses WebSearch/WebFetch to research the migration guide and extract breaking changes, deprecated APIs, and version requirements.
+4. **Launch 1 subagent** (External Research Analyst) using the Agent tool. If `model_config.preset` is not `"default"`, pass `model` parameter per the preset table in `templates/_shared/model_config.md` (External Research Analyst → executor role). This subagent uses WebSearch/WebFetch to research the migration guide and extract breaking changes, deprecated APIs, and version requirements.
 5. Wait for completion. Verify `.harness/migrate/research_external.md` exists.
 
 ##### Step 2b: Codebase Impact Analyst (Subagent — parallel with 2a)
 
 1. Read the codebase impact template: `{CLAUDE_PLUGIN_ROOT}/templates/migrate/codebase_impact_analyst.md`
 2. Fill template variables: `{target}`, `{from_version}`, `{to_version}`, `{migration_type}`, `{repo_path}`, `{lang}`, `{user_lang}`, `{output_path}`: `.harness/migrate/research_internal.md`
-3. **Launch 1 subagent** (Codebase Impact Analyst) in parallel with Step 2a. If `model_config.preset` is not `"default"`, pass `model` parameter per the Model Selection table (Codebase Impact Analyst → executor role). This subagent scans the codebase for all usages of the target library, identifies affected files, and assesses impact.
+3. **Launch 1 subagent** (Codebase Impact Analyst) in parallel with Step 2a. If `model_config.preset` is not `"default"`, pass `model` parameter per the preset table in `templates/_shared/model_config.md` (Codebase Impact Analyst → executor role). This subagent scans the codebase for all usages of the target library, identifies affected files, and assesses impact.
 4. Wait for completion. Verify `.harness/migrate/research_internal.md` exists.
 
 **Launch Steps 2a and 2b in parallel.** Wait for both to complete before proceeding.
@@ -380,7 +380,7 @@ If `mode == "multi"`:
 
 1. Read the migration advisor template: `{CLAUDE_PLUGIN_ROOT}/templates/migrate/migration_advisor.md`
 2. Fill template variables: `{step_number}` (N), `{step_title}`, `{step_changes}` (changes made in this step only), `{build_result}`, `{test_result}`, `{previous_steps_summary}` (one-line summary of each completed step — NOT full details), `{remaining_steps}` (titles only), `{user_lang}`, `{output_path}`: `.harness/migrate/advisor_step_<N>.md`
-3. **Launch 1 subagent** (Migration Advisor) to review this step. If `model_config.preset` is not `"default"`, pass `model` parameter per the Model Selection table (Migration Advisor → advisor role). Lightweight review — only current step context + previous results summary.
+3. **Launch 1 subagent** (Migration Advisor) to review this step. If `model_config.preset` is not `"default"`, pass `model` parameter per the preset table in `templates/_shared/model_config.md` (Migration Advisor → advisor role). Lightweight review — only current step context + previous results summary.
 4. Read advisor output. If advisor flags issues:
    - **Critical:** Stop and fix before proceeding
    - **Warning:** Log and continue, address in next step or during evaluation
@@ -403,7 +403,7 @@ If `mode == "multi"`:
 2. Read the evaluator template: `{CLAUDE_PLUGIN_ROOT}/templates/migrate/evaluator.md`
 3. **Prepare the subagent prompt.** Fill in: `{target}`, `{from_version}`, `{to_version}`, `{migration_type}`, `{migration_plan_content}` (from migration_plan.md — breaking changes list only, no research reasoning), `{changed_files_list}` (file paths only from changes.md — strip all "reason" descriptions), `{test_available}`, `{build_cmd}`, `{test_cmd}`, `{baseline_test_pass_count}`, `{baseline_test_fail_count}`, `{user_lang}`, `{qa_report_path}`: `docs/harness/<slug>/qa_report.md`.
    **Do NOT include:** Research notes, analyst reasoning, advisor reviews, why files were changed, or references to "Generator"/"AI"/"agent" as code author.
-4. **Launch the Evaluator subagent** using the Agent tool. If `model_config.preset` is not `"default"`, pass `model` parameter per the Model Selection table (Evaluator → evaluator role). Instruct it to write the QA report to `docs/harness/<slug>/qa_report.md`.
+4. **Launch the Evaluator subagent** using the Agent tool. If `model_config.preset` is not `"default"`, pass `model` parameter per the preset table in `templates/_shared/model_config.md` (Evaluator → evaluator role). Instruct it to write the QA report to `docs/harness/<slug>/qa_report.md`.
 5. When the subagent returns, read `docs/harness/<slug>/qa_report.md` to get the verdict.
 
 ### Step 6: Verdict & Resolution
