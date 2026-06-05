@@ -373,7 +373,7 @@ After generating the report, evaluate findings and suggest next steps (in `user_
 | Anti-patterns detected (severity: high) | "Consider `/refactor` to address structural issues in <files>" |
 | Outdated dependency versions detected | "Consider `/migrate` to update <dependency> from <old> to <new>" |
 | Clean project, no CLAUDE.md found | "Consider `/md-generate` to create project documentation for Claude Code" |
-| Complex areas identified | "Consider `/workflow` to address complexity in <area>" |
+| Complex areas identified | "Consider `/harness` to address complexity in <area>" |
 
 Present as recommendations, not commands. User decides.
 

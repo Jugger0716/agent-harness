@@ -67,7 +67,7 @@ Before beginning, evaluate the user's request. If it does not match a refactorin
 
 | Signal | Suggested Skill |
 |--------|----------------|
-| User describes a new feature or bug fix | `/workflow` |
+| User describes a new feature or bug fix | `/harness` |
 | User mentions version upgrades, dependency changes, or migration | `/migrate` |
 | User wants to understand the codebase before refactoring | `/codebase-audit` |
 
@@ -116,7 +116,7 @@ When the user provides a refactoring target (via $ARGUMENTS or in conversation),
        options:
          - label: "Fix first" / description: "Halt refactoring and fix failing tests before proceeding"
          - label: "Proceed anyway" / description: "Continue with known failures (evaluator will ignore them)"
-     If user selects "Fix first": halt and suggest `/workflow fix failing tests`. If "Proceed anyway": store baseline failures in state.json as `baseline_failures` so the evaluator can distinguish pre-existing failures from regressions.
+     If user selects "Fix first": halt and suggest `/harness fix failing tests`. If "Proceed anyway": store baseline failures in state.json as `baseline_failures` so the evaluator can distinguish pre-existing failures from regressions.
    - **If no test command detected:**
      Ask using AskUserQuestion (in `user_lang`):
        header: "No Tests"
@@ -154,7 +154,7 @@ When the user provides a refactoring target (via $ARGUMENTS or in conversation),
 
    **Model config is set once at session start and cannot be changed mid-session.** To change, restart the session.
 
-   **Verifier model** (for consistency with /workflow): `model_config.verifier = cli_flags.verifier_model ?? "haiku"`. Parse `--verifier-model <haiku|sonnet|opus>` from CLI if provided; reject other values. Note: `/refactor` does not currently dispatch a Verify sub-agent directly (test regression uses `test_cmd` directly), so this field is stored for future extension.
+   **Verifier model** (for consistency with /harness): `model_config.verifier = cli_flags.verifier_model ?? "haiku"`. Parse `--verifier-model <haiku|sonnet|opus>` from CLI if provided; reject other values. Note: `/refactor` does not currently dispatch a Verify sub-agent directly (test regression uses `test_cmd` directly), so this field is stored for future extension.
 
    Store result as `model_config` object: `{ "preset": "<name>", "executor": "<model|null>", "advisor": "<model|null>", "evaluator": "<model|null>", "verifier": "<haiku|sonnet|opus>" }`. For the `default` preset, store `{ "preset": "default", "verifier": "<resolved>" }`.
 
@@ -168,7 +168,7 @@ When the user provides a refactoring target (via $ARGUMENTS or in conversation),
 
 11. **Write `.harness/state.json`** with fields: `skill` ("refactor"), `target`, `mode` ("single"/"multi"/"comprehensive"), `model_config` (from step 9 — includes `verifier` field), `user_lang`, `repo_name`, `repo_path`, `phase` ("plan_ready"), `round` (1), `max_rounds` (3), `scope` (user-provided or "(no limit)"), `branch` ("harness/refactor-<slug>"), `lang`, `test_cmd`, `build_cmd`, `test_available` (true/false), `baseline_test_results` (summary string), `baseline_failures` (list of known-failing tests, or []), `docs_path` ("docs/harness/<slug>/"), `verify: { autofix_attempted: false }`, `autofix` (null), `created_at` (ISO8601).
 
-> `verify.autofix_attempted`: nested field (aligned with `/workflow` schema — not a flat top-level field). Session-wide once-only limit — applies across all steps, not reset on round increment. `/workflow` Layer 1/2 fields are absent from `/refactor` `verify` object.
+> `verify.autofix_attempted`: nested field (aligned with `/harness` schema — not a flat top-level field). Session-wide once-only limit — applies across all steps, not reset on round increment. `/harness` Layer 1/2 fields are absent from `/refactor` `verify` object.
 > `autofix` transitions to `{ "last_patch_path": ".harness/refactor/auto_fix_patch.md", "applied": "proposed"|"applied"|"rejected"|"stopped", "triggered_at": "<ISO8601>" }` during H2 flow.
 > **Backward compat (reader-union)**: Reader: check `verify.autofix_attempted` first; if missing/null, fall back to top-level `autofix_attempted` (legacy pre-v8.1). Writer: write only to `verify.autofix_attempted`.
 > Example — pre-v8.1 session fixture: `{ "autofix_attempted": true, "autofix": null, ... }` → reader-union result: effective `verify.autofix_attempted == true` (fallback hit). Next write: `{ "verify": { "autofix_attempted": true }, "autofix": null, ... }`.

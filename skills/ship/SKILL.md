@@ -613,7 +613,7 @@ On success → update substep → `"git_branch_pushed"`. Proceed to Stage 6.5 en
 This sub-stage merges the current release branch into `base_branch` BEFORE tag push, so the tag points to a commit reachable from `base_branch`. Closes the develop→main lag that occurred in 8.1.0/8.2.0/8.3.0 releases.
 
 **Variable conventions (Stage 6.5 scope):**
-- `release_branch` ≡ `state.branch` — the branch ship was invoked on (single source of truth — both names refer to the persisted state). **This is the same value that 6c-i refers to as `{branch}`** (e.g., `git push origin {branch}` at line 598); the rename to `release_branch` inside Stage 6.5 is purely for clarity when the prose discusses both branches simultaneously, not a different variable.
+- `release_branch` ≡ `state.branch` — the branch ship was invoked on (single source of truth — both names refer to the persisted state). **This is the same value that 6c-i refers to as `{branch}`** (e.g., the 6c-i `git push origin {branch}` step); the rename to `release_branch` inside Stage 6.5 is purely for clarity when the prose discusses both branches simultaneously, not a different variable.
 - `base_branch` ≡ `state.base_branch` — auto-detected (or user-supplied) merge target (e.g., `main`).
 - `current_branch` is used ONLY inside the entry guard below (live `git` query result, compared against `state.branch` to detect mid-session branch switches).
 
@@ -639,7 +639,7 @@ Compare result (`current_branch`) to `state.branch`. On mismatch → halt with e
 
 **Branch protection pre-check**:
 
-Before running the API call, **re-validate `{base_branch}`** against the strict pattern `^[a-zA-Z0-9/_.-]+$` (the same pattern used for `branch` at line 577). The original `base_branch` value comes from auto-detection (`main`/`master`) or from a free-text user input at Step 1, and the user-input path does not enforce the pattern at the source. Re-validating here closes a URL-injection vector: a value containing `..`, spaces, `?`, `#`, or path separators outside the allowed set could traverse or rewrite the API request URL. On pattern mismatch → halt with error: `Invalid base_branch '{base_branch}' — must match ^[a-zA-Z0-9/_.-]+$. Restart /ship and provide a valid branch name.`
+Before running the API call, **re-validate `{base_branch}`** against the strict pattern `^[a-zA-Z0-9/_.-]+$` (the same pattern the Stage 6 entry input validation uses for `branch`). The original `base_branch` value comes from auto-detection (`main`/`master`) or from a free-text user input at Step 1, and the user-input path does not enforce the pattern at the source. Re-validating here closes a URL-injection vector: a value containing `..`, spaces, `?`, `#`, or path separators outside the allowed set could traverse or rewrite the API request URL. On pattern mismatch → halt with error: `Invalid base_branch '{base_branch}' — must match ^[a-zA-Z0-9/_.-]+$. Restart /ship and provide a valid branch name.`
 
 ```bash
 gh api repos/:owner/:repo/branches/{base_branch}/protection

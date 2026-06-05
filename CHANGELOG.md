@@ -6,6 +6,34 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/).
 
+## [Unreleased]
+
+> Version stays 8.4.0 until the docs/version release-train phase lands (doc-code skew guard);
+> this block collects the ultracode-reframe pilot changes.
+
+### Added
+
+- **`/harness` (formerly `/workflow`)** — renamed to end the concept collision with Claude Code's native Workflow engine. The old `/workflow` name is preserved as a ~30-line deprecation alias stub (frontmatter `name: workflow` kept for discovery; AskUserQuestion → Yes delegates to `/harness`).
+- **WORKFLOW path (opt-in)**: `/harness` now runs plugin-shipped native Workflow segment scripts via `Workflow {scriptPath: ${CLAUDE_PLUGIN_ROOT}/workflows/...}` — `harness.plan.workflow.js` (persona fan-out → synthesis → `PlanResult`), `harness.build.workflow.js` (plan → advisors → implementation → `ChangeSet`, `retry:true` skips re-plan/re-review), `harness.eval.workflow.js` (L1 mechanical → L2/L3 evaluation → `VerifyVerdict`, `skipL1`/`onlyL1` flags). Schema-validated `agent({schema})` returns replace 1-line parsing, proposal-file re-reads, and the `### Verdict:` regex on this path. The 3 HARD-GATEs (spec-confirm / verify-fail / auto-fix-apply) stay in the orchestrator BETWEEN segment runs — `scripts/verify_meta_literal.py` rejects any gate token inside a script.
+- **Mode Gate wiring (first consumer of `templates/_shared/mode_gate.md`)**: default = inline single path; workflow path only when the Workflow tool is available AND (ultracode session OR explicit `--mode standard/multi`); `has_git == false` forces inline; any engine failure degrades gracefully to inline single. The mode-selection AskUserQuestion roundtrip is removed (mode is derived, `--model-config` ask kept).
+- **`scripts/verify_meta_literal.py` full implementation** (was a Phase-0 stub): meta pure-literal (name/description + `phases` as `[{title, detail?}]` OBJECT literals), ban on `Date.now`/`new Date`/`Math.random`, HARD-GATE-leak ban, **ban on `import` and any `export` beyond the leading meta** (the engine rejects them as SyntaxError), and a required defensive-args-parse guard (`typeof args === 'string'` — the engine delivers `args` as a JSON string). Negative-tested (12 violations on a bad fixture).
+- **`scripts/check_workflow_syntax.mjs` (NEW)**: engine-dialect syntax gate. Discovery: `node --check` is a TOTAL false-green for files containing ESM `export` syntax on Node 24 (even `function {{{` passes) — the planned `node --check` gate was useless for these scripts. The checker compiles each script body inside an AsyncFunction (top-level await/return legal, never executed).
+- **`workflows/_reference/schemas.md`**: canonical hand-sync schema copies (no runtime `schemas.js` import — engine scripts are self-contained plain JS). Pilot schema deltas recorded there: `PlanResult` gains `background`/`scope{}`/`approach`/`testingStrategy`/`risks[].source` and `steps` is no longer required; `ChangeSet` gains `advisorFeedbackApplied/Declined`; L1 mechanical failure is encoded `{layer:'L1', verdict:'FAIL_L2'}` (branch on layer+verdict).
+
+### Changed
+
+- **state.json v3** (`version: "3.0"`, `skill: "harness"`): adds `path_resolved`, `runs.{plan|build|eval}.runId` (audit + same-session only), `workflow_ctx` (plan/advisor digests reused on retries). **Cross-session recovery is the state.json phase machine** — `resumeFromRunId` is same-session only and is never used across sessions. Pre-harness `/workflow` sessions (v1/v2 state.json) get "Restart recommended" — no silent migration, no legacy resume.
+- **Inline path preserved verbatim** (deviation from the pre-correction pilot plan, aligned with the corrected mode-gate contract "default = current behavior"): `planner_single.md`, `generator_single.md` keep their file-write + 1-line contracts; `verify_layer1.md` / `evaluator_prompt.md` are dual-use (1-line contract on disk for inline, schema-return variant embedded in `harness.eval.workflow.js`). Hand-rolled standard/multi prose orchestration is REMOVED from the skill — standard/multi now exist only on the workflow path (engine fan-out); without opt-in or tool availability they fall back to inline single with a notice.
+- **11 workflow-only templates** (3 personas, 2 syntheses, lead_developer, 3 advisors, 2 implementations) — 1-line `## Output Contract` + file-write directives replaced with schema-return `## Output` notes matching the author-time copies embedded in the segment scripts (`SYNC-SOURCE`/`WORKFLOW-PATH TEMPLATE` headers added). `implementation*.md` no longer instructs sub-agents to invoke parallel-dispatch skills (engine nesting is 1-level). multi-mode `cross_critique` is no longer dispatched (deliberate simplification — `AnalysisResult.risks/recommendations` carry the dissent; `templates/planner/cross_critique.md` retained on disk for rollback).
+- **`input-trust-model` shared block v1 → v2** (4 planner templates + `templates/_shared/input_trust_model.md` + verifier): drops the literal `{placeholder}` mentions (a mechanical renderer would substitute task content INTO the trust prose) and the dangling `## Output Contract` section name. `scripts/verify_block_sync.py` now supports per-group block versions.
+- **`templates/evaluator/evaluator_prompt.md`**: report destination made explicit (`{qa_report_path}` — the variable was passed but never declared in the template).
+- **README**: `/workflow` → `/harness` sweep (Skills table row renamed with "formerly /workflow" note; Quick Start reflects the derived Mode Gate — no mode roundtrip; architecture diagram shows segment scripts). Historical v8.1–v8.4 entries keep the `/workflow` token. `plugin.json` keywords gain `harness` (`workflow` kept for alias-period discovery).
+- **Auto-fix Proposer carve-out**: still dispatched inline by the orchestrator with its 1-line confidence contract (it Reads source directly — Architecture Principle #2). `AutoFixProposal` schema lands in a later phase.
+
+### Engine facts verified by the Phase-1 spike (5/5 PASS)
+
+plugin-cache-rooted `{scriptPath}` resolves and runs; `agent({schema})` returns validated objects (and plain text without a schema — fallback preserved); schema-description language directives (`render in <userLang>`) control output language (ko/en verified); `args` arrives as a JSON string; `export default`/`import` are launch-time SyntaxErrors (top-level body + global hooks only); unregistered `agentType` values fail the call (all `agentType` usage dropped); resume caching is sequential-prefix (editing the first `agent()` call re-runs everything after it).
+
 ## [8.4.0] — 2026-05-06
 
 ### Added
@@ -31,7 +59,7 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
 
 ### Fixed
 
-- **Stage 6.5 hardening (audit trail)**: numerous correctness/recovery fixes to `/ship` Stage 6.5 (`merge_to_base`) — closed issues M1, M2, M3, M4, M10, M11, m1, m3, m9, m12, s1, s2, NF2, NF3, NF5, C3, CC5, Sec N1, Sec N3, DX #8, Arch N3. These IDs were formerly inline `(closes …)` annotations in `skills/ship/SKILL.md`; relocated here so the skill prose stays behavior-focused while the audit trail is preserved in its proper home.
+- **Stage 6.5 hardening (audit trail)**: numerous correctness/recovery fixes to `/ship` Stage 6.5 (`merge_to_base`) — closed issues M1, M2, M3, M4, M10, M11, m1, m3, m9, m12, m14, s1, s2, NF2, NF3, NF5, C3, CC5, Sec N1, Sec N3, DX #8, Arch N3. These IDs were formerly inline `(closes …)` annotations in `skills/ship/SKILL.md`; relocated here so the skill prose stays behavior-focused while the audit trail is preserved in its proper home.
 
 ## [8.3.0] — 2026-04-30
 

@@ -1,14 +1,14 @@
 ---
 name: spec
 disallowed-tools: NotebookEdit
-description: Requirements specification writer with multi-round Q&A discovery. Transforms vague ideas into structured specs compatible with /workflow input. Modes — quick (orchestrator only) / deep (requirements analyst + user scenario analyst + synthesis). Use when you need a well-defined spec before starting implementation.
+description: Requirements specification writer with multi-round Q&A discovery. Transforms vague ideas into structured specs compatible with /harness input. Modes — quick (orchestrator only) / deep (requirements analyst + user scenario analyst + synthesis). Use when you need a well-defined spec before starting implementation.
 ---
 
 # Agent Harness Spec
 
 You are orchestrating a **requirements specification workflow** with multi-round Q&A discovery and selectable quick or deep analysis mode.
 
-**Core principle:** Ambiguity is the enemy of good specs. Every vague requirement must be surfaced and resolved before writing the spec. The output must be immediately usable as `/workflow` input.
+**Core principle:** Ambiguity is the enemy of good specs. Every vague requirement must be surfaced and resolved before writing the spec. The output must be immediately usable as `/harness` input.
 
 **Zero-setup:** Works with or without a git repository. No codebase required — spec can describe a greenfield project.
 
@@ -25,9 +25,9 @@ Skim this list to locate sections by name. Section-anchor cross-references throu
 7. `### Phase 1 — Requirements Discovery (Multi-round Q&A)` — idempotent state init (qa_round preserved on Resume).
 8. `### Phase 2: Spec Generation` — Quick mode (single synthesis) / Deep mode (`#### Phase 2a-D Analysts` + `#### Phase 2b-D Synthesis` + `#### Phase 2c-D Critic` + `#### Phase 2d-D Re-synthesis`).
 9. `### HARD GATE — Spec Approval` — final approval gate with translated 3-way options + Modify reset.
-10. `### Phase 3 — Handoff` — artifacts persistence, slug-safe `/workflow` invocation, cleanup safety guard, M17 variable↔filename mapping.
+10. `### Phase 3 — Handoff` — artifacts persistence, slug-safe `/harness` invocation, cleanup safety guard, M17 variable↔filename mapping.
 11. `### Status Check (anytime)` — status summary command (subsection of Phase 3).
-12. `## Spec Output Format` — 7-section template with /workflow compatibility mapping.
+12. `## Spec Output Format` — 7-section template with /harness compatibility mapping.
 13. `## Model Selection` — model_config preset → role mapping (executor / advisor).
 
 ## Environment Detection
@@ -119,7 +119,7 @@ Before starting a new task, check if `.harness/state.json` already exists **and*
    - **Restart**: Delete `.harness/` directory and proceed to Step 1
    - **Stop**: Delete `.harness/` directory and halt
 
-**Backward compat (8.4)**: pre-8.4 state.json files lack the `cli_flags.reference`, `conventions`, and `critic` fields. Treat each as `null` default via the `state.get(field, null)` pattern. **(M9) Cross-skill policy asymmetry — intentional**: this `/spec` policy diverges from `/workflow`'s pre-v8.1 soft-default backward-compat policy in `skills/workflow/SKILL.md`. `/workflow` recovers missing fields silently and proceeds; `/spec` halts. Reason: 8.4 analyst injection requires `state.conventions` to be set (the 4-analyst Phase 2a-D pipeline depends on convention context for high-quality output), so silently degrading pre-8.4 sessions through the 8.4 flow would produce lower-quality specs without user awareness. A pre-8.4 state.json reaching `qa_complete` and resuming under 8.4 will: (a) treat conventions as null and trigger a hard-error halt at Phase 2a-D step 3 (per single-source-of-truth contract), forcing the user to either Restart or fix conventions manually — this halt is the intentional design, not a bug.
+**Backward compat (8.4)**: pre-8.4 state.json files lack the `cli_flags.reference`, `conventions`, and `critic` fields. Treat each as `null` default via the `state.get(field, null)` pattern. **(M9) Cross-skill policy asymmetry — intentional**: this `/spec` policy diverges from `/harness`'s pre-v8.1 soft-default backward-compat policy in `skills/harness/SKILL.md`. `/harness` recovers missing fields silently and proceeds; `/spec` halts. Reason: 8.4 analyst injection requires `state.conventions` to be set (the 4-analyst Phase 2a-D pipeline depends on convention context for high-quality output), so silently degrading pre-8.4 sessions through the 8.4 flow would produce lower-quality specs without user awareness. A pre-8.4 state.json reaching `qa_complete` and resuming under 8.4 will: (a) treat conventions as null and trigger a hard-error halt at Phase 2a-D step 3 (per single-source-of-truth contract), forcing the user to either Restart or fix conventions manually — this halt is the intentional design, not a bug.
 
 If `.harness/state.json` does not exist (or `skill` field is not `"spec"`), proceed to Step 1 normally.
 
@@ -130,7 +130,7 @@ Before beginning, evaluate the user's request. If it does not match a requiremen
 | Signal | Suggested Skill |
 |--------|----------------|
 | User describes working code to improve | `/refactor` |
-| User has a spec and wants implementation | `/workflow` |
+| User has a spec and wants implementation | `/harness` |
 | User wants to understand existing code | `/codebase-audit` |
 
 When a mismatch is detected, ask using AskUserQuestion:
@@ -251,21 +251,21 @@ When the user provides a task description (via $ARGUMENTS or in conversation), e
 
 This step runs after Setup and before Phase 1 Q&A. It populates `state.conventions` for downstream analyst injection.
 
-**`conventions` field contract** (mirrors workflow) — **(s3) canonical source for allowed values of `state.conventions`**; the state.json schema doc above ("§Step 1 step 7 schema doc — `conventions` field" — section anchor, not line number, to survive future edits) and `skills/workflow/SKILL.md` (`§Conventions injection rule`) both cross-reference this section. **(M16) SYNC-WITH markers** (revised after M10 consolidation removed the per-mode `Conventions injection:` sub-bullets): when changing allowed values, edit this section FIRST, then update (a) the state.json schema doc above and (b) `skills/workflow/SKILL.md §Conventions injection rule` enum — both locations carry a `<!-- SYNC-WITH: skills/spec/SKILL.md §Step 1.5 conventions field contract -->` HTML comment so a CI lint pass can `grep` the marker and verify all sites declare the same enum. (Prior to 8.4 M10, a third location existed in workflow Step 2 mode-specific dispatch sub-bullets, but those `Conventions injection:` blocks were consolidated into the single `§Conventions injection rule` declaration covered by (b); no third sync site remains.) The current allowed value set is:
+**`conventions` field contract** (mirrors workflow) — **(s3) canonical source for allowed values of `state.conventions`**; the state.json schema doc above ("§Step 1 step 7 schema doc — `conventions` field" — section anchor, not line number, to survive future edits) and `skills/harness/SKILL.md` (`§Conventions injection rule`) both cross-reference this section. **(M16) SYNC-WITH markers** (revised after M10 consolidation removed the per-mode `Conventions injection:` sub-bullets): when changing allowed values, edit this section FIRST, then update (a) the state.json schema doc above and (b) `skills/harness/SKILL.md §Conventions injection rule` enum — both locations carry a `<!-- SYNC-WITH: skills/spec/SKILL.md §Step 1.5 conventions field contract -->` HTML comment so a CI lint pass can `grep` the marker and verify all sites declare the same enum. (Prior to 8.4 M10, a third location existed in workflow Step 2 mode-specific dispatch sub-bullets, but those `Conventions injection:` blocks were consolidated into the single `§Conventions injection rule` declaration covered by (b); no third sync site remains.) The current allowed value set is:
 - `null` → Step 1.5 not yet executed
 - `"skipped"` → user explicitly chose to skip
 - `"file:.harness/conventions.md"` → conventions copied locally; analysts inject via `{conventions}` variable. The `"file:"` prefix is a literal sentinel (NOT a URI scheme), and the orchestrator always emits the exact string `"file:.harness/conventions.md"` — no platform-specific path with embedded colons (e.g. Windows `C:\...`) is ever assigned to `state.conventions`, so prefix detection via `startswith("file:")` cannot collide with absolute paths.
 
-**Shared file ownership note** (NEW in 8.4 hardening, **(M13) policy clarified**): `.harness/conventions.md` is shared between `/spec` and `/workflow` skills (both write and read it via the same path). To prevent contract drift the policy is **/spec-precedence**, not "last writer wins" (the latter is implementation-impossible without timestamps and was a documentation bug):
-- **Writer authority**: `/spec` is the canonical writer when both skills run in sequence — Phase 3 step 3 explicitly copies `.harness/conventions.md` to `docs/harness/<slug>/conventions.md` before cleanup, so the durable snapshot is always the /spec-version. `/workflow` Step 1.5 prefers `docs/harness/<slug>/conventions.md` over re-running its own scan when the file exists (mtime not consulted — file existence is the sole signal). Standalone `/workflow` runs (no preceding `/spec` for the same slug) write `.harness/conventions.md` themselves and produce a /workflow-only snapshot at `docs/harness/<slug>/conventions.md` later if that file did not exist; subsequent `/spec` runs against the same slug will overwrite it via Phase 3 step 3 (intentional — /spec output is canonical).
-- **Lifetime**: the file's *contents* persist across `/spec` → `/workflow` handoff via the Phase 3 step 3 copy to `docs/harness/<slug>/conventions.md` (executed BEFORE cleanup). The original `.harness/conventions.md` itself is then deleted with the rest of `.harness/` in Phase 3 step 4 — it is NOT a long-lived file. The durable snapshot lives at `docs/harness/<slug>/conventions.md` and is what `/workflow` Step 1.5 reads during handoff.
+**Shared file ownership note** (NEW in 8.4 hardening, **(M13) policy clarified**): `.harness/conventions.md` is shared between `/spec` and `/harness` skills (both write and read it via the same path). To prevent contract drift the policy is **/spec-precedence**, not "last writer wins" (the latter is implementation-impossible without timestamps and was a documentation bug):
+- **Writer authority**: `/spec` is the canonical writer when both skills run in sequence — Phase 3 step 3 explicitly copies `.harness/conventions.md` to `docs/harness/<slug>/conventions.md` before cleanup, so the durable snapshot is always the /spec-version. `/harness` Step 1.5 prefers `docs/harness/<slug>/conventions.md` over re-running its own scan when the file exists (mtime not consulted — file existence is the sole signal). Standalone `/harness` runs (no preceding `/spec` for the same slug) write `.harness/conventions.md` themselves and produce a /harness-only snapshot at `docs/harness/<slug>/conventions.md` later if that file did not exist; subsequent `/spec` runs against the same slug will overwrite it via Phase 3 step 3 (intentional — /spec output is canonical).
+- **Lifetime**: the file's *contents* persist across `/spec` → `/harness` handoff via the Phase 3 step 3 copy to `docs/harness/<slug>/conventions.md` (executed BEFORE cleanup). The original `.harness/conventions.md` itself is then deleted with the rest of `.harness/` in Phase 3 step 4 — it is NOT a long-lived file. The durable snapshot lives at `docs/harness/<slug>/conventions.md` and is what `/harness` Step 1.5 reads during handoff.
 - **Schema sync**: if either skill changes the `conventions` field's allowed values (`null` / `"skipped"` / `"file:..."` literal), both skills must be updated together — otherwise the receiving skill silently accepts an unknown form.
 
 **Order of evaluation:**
 
 1. **`--reference` priority**: If `cli_flags.reference` is non-null and the file exists, copy its content to `.harness/conventions.md`, set `state.conventions → "file:.harness/conventions.md"`, and skip the rest of Step 1.5. **(NEW in 8.4 v2 hardening) Resume re-validation**: when this branch runs from a Session Recovery resume (not the original session run), re-execute the full Step 4.5 validation chain on `cli_flags.reference` before copying — `validate_path(kind=file_reference)`, extension whitelist, leaf symlink, intermediate symlink/junction, size limit. Reasoning: a stale session's `cli_flags.reference` may now point to a file that has been modified, replaced with a symlink, or grown beyond the size cap; the original validation occurred at session-creation time and is not authoritative on resume. Halt-on-fail behavior identical to step 4.5. (Closes the gap where a long-paused session resumed against a now-tampered reference file silently injects altered convention content.)
 
-2. **`has_git == true` branch** (mirrors workflow Step 1.5 logic — must be kept in sync if `/workflow` Step 1.5 changes; this is convention duplication, not code reuse):
+2. **`has_git == true` branch** (mirrors /harness Step 1.5 logic — must be kept in sync if `/harness` Step 1.5 changes; this is convention duplication, not code reuse):
    - CLAUDE.md >= 50 lines AND <= 5000 lines AND <= 200 KB → copy to `.harness/conventions.md`, set conventions accordingly. **(NEW in 8.4 v2 hardening)** size cap (5000 lines / 200 KB) mirrors the `has_git == false` branch and `--reference` flag step 4.5 limit, preventing token-explosion when CLAUDE.md is auto-generated, dump-style, or otherwise oversized for analyst injection. If CLAUDE.md exceeds the cap, treat as `sparse/missing` and follow the Scan/Skip flow below.
    - CLAUDE.md sparse/missing/oversized → AskUserQuestion: `Scan / Skip`. If Scan, dispatch convention scanner sub-agent using template `{CLAUDE_PLUGIN_ROOT}/templates/planner/convention_scanner.md` (model: `model_config.advisor` or default). Verify file exists; on retry × 2 failure, fall back to `"skipped"`.
 
@@ -483,7 +483,7 @@ Print status in the standard format, prefixed with `[harness] Spec draft ready.`
 3. Dispatch Critic sub-agent. Model: `model_config.advisor` (or default if preset == "default") — same pattern as Synthesis.
 
 4. **Failure handling:**
-   - Crash/timeout → retry × 2 → if still failing, set `critic.applied = "approved"`, `critic.round = 0`, `critic.last_findings_path = null` (no findings file produced), `critic.failure_reason = "dispatch_failed"`, `phase → "critic_complete"` (single atomic write per §Atomicity Contract) and emit a **prominent warning banner** in `user_lang`: `[harness] ⚠⚠⚠ CRITIC DISPATCH FAILED — auto-approved without quality review. Recommend manual spec review before /workflow handoff.` Skip to Final HARD-GATE; HARD-GATE display MUST surface `failure_reason="dispatch_failed"` as a visible banner (not buried in summary text) so automation pipelines do not miss the silent-quality-degradation signal.
+   - Crash/timeout → retry × 2 → if still failing, set `critic.applied = "approved"`, `critic.round = 0`, `critic.last_findings_path = null` (no findings file produced), `critic.failure_reason = "dispatch_failed"`, `phase → "critic_complete"` (single atomic write per §Atomicity Contract) and emit a **prominent warning banner** in `user_lang`: `[harness] ⚠⚠⚠ CRITIC DISPATCH FAILED — auto-approved without quality review. Recommend manual spec review before /harness handoff.` Skip to Final HARD-GATE; HARD-GATE display MUST surface `failure_reason="dispatch_failed"` as a visible banner (not buried in summary text) so automation pipelines do not miss the silent-quality-degradation signal.
    - 1-line parse failure → emit warn `[harness] ⚠ Critic 1-line parse failed — manual review required. critic_findings.md may have content; do NOT auto-approve.` Then present **Critic Parse-Fail Gate** via AskUserQuestion (translate header/question/options to `{user_lang}`):
 
      ```
@@ -598,18 +598,18 @@ Update state.json: `phase` → `"completed"`.
      header: "Next Step"
      question: "Your spec is ready. Would you like to start implementation?"
      options:
-       - label: "Start /workflow" / description: "Launch implementation workflow using this spec"
+       - label: "Start /harness" / description: "Launch implementation workflow using this spec"
        - label: "Done" / description: "Keep the spec for later use"
 
-   If user selects "Start /workflow": **first run step 3 (persist artifacts) and step 4 (cleanup), THEN** invoke `/workflow --output-dir docs/harness/<slug>/ "Implement based on {docs_path}spec.md"` (translate the quoted string to `user_lang`). This ordering is critical (C1): persisting artifacts BEFORE invoke ensures `/workflow` Step 1.5 / Step 2 can actually read `qa_notes.md` / `critic_findings.md` / `conventions.md` from `{docs_path}` — invoking first would short-circuit step 3 and make the persistence contract a no-op. The explicit `{docs_path}spec.md` form (vs bare `spec.md`) documents the path-assembly contract at the call site so future maintainers don't mistake the bare filename for a working-dir lookup.
+   If user selects "Start /harness": **first run step 3 (persist artifacts) and step 4 (cleanup), THEN** invoke `/harness --output-dir docs/harness/<slug>/ "Implement based on {docs_path}spec.md"` (translate the quoted string to `user_lang`). This ordering is critical (C1): persisting artifacts BEFORE invoke ensures `/harness` Step 1.5 / Step 2 can actually read `qa_notes.md` / `critic_findings.md` / `conventions.md` from `{docs_path}` — invoking first would short-circuit step 3 and make the persistence contract a no-op. The explicit `{docs_path}spec.md` form (vs bare `spec.md`) documents the path-assembly contract at the call site so future maintainers don't mistake the bare filename for a working-dir lookup.
 
-   The `--output-dir` argument is **load-bearing** for slug-safe handoff: without it, `/workflow` re-slugifies its own task description and writes to a different `docs/harness/<re-slug>/` directory — silently bypassing the artifacts persisted in step 3 below. Always pass `--output-dir docs/harness/<slug>/` so `/workflow`'s `docs_path` matches `/spec`'s `docs_path` exactly.
+   The `--output-dir` argument is **load-bearing** for slug-safe handoff: without it, `/harness` re-slugifies its own task description and writes to a different `docs/harness/<re-slug>/` directory — silently bypassing the artifacts persisted in step 3 below. Always pass `--output-dir docs/harness/<slug>/` so `/harness`'s `docs_path` matches `/spec`'s `docs_path` exactly.
 
-   If user selects "Done": **first run step 3 (persist artifacts) and step 4 (cleanup)**, then halt. Persisting artifacts on the "Done" path preserves `qa_notes.md` / `critic_findings.md` / `conventions.md` so a future `/workflow` session invoked manually via `--output-dir docs/harness/<slug>/` can still consume them.
+   If user selects "Done": **first run step 3 (persist artifacts) and step 4 (cleanup)**, then halt. Persisting artifacts on the "Done" path preserves `qa_notes.md` / `critic_findings.md` / `conventions.md` so a future `/harness` session invoked manually via `--output-dir docs/harness/<slug>/` can still consume them.
 
 3. **Persist spec artifacts to `{docs_path}` (NEW in 8.4)** — BEFORE cleanup:
 
-   **(s1) Path Safety Guard for `{docs_path}`** — before any file operation on `{docs_path}`, validate (mirroring `/workflow` Step 8 Artifact Cleanup Safety Guard):
+   **(s1) Path Safety Guard for `{docs_path}`** — before any file operation on `{docs_path}`, validate (mirroring `/harness` Step 8 Artifact Cleanup Safety Guard):
    - Extract `<slug>` via explicit rstrip then split: `slug = docs_path.rstrip("/").split("/")[-1]` (NEW in 8.4: explicit form so a trailing slash on `docs_path` does not produce an empty `slug` and false-abort the cleanup; equivalent to "last path segment before trailing /" but unambiguous in implementation). It must be non-empty/non-whitespace, must NOT be `memory` (reserved name), must NOT contain `..` or `/` within itself, and must NOT be `.`.
    - `Path(docs_path).resolve()` ⊆ `Path.cwd()` (symlink escape prevention; no `has_git` condition).
    - On any check failure: **ABORT Phase 3** — do NOT delete `.harness/`, do NOT run cleanup. Print the failed check. The `.harness/spec/` artifacts remain intact for manual recovery.
@@ -619,7 +619,7 @@ Update state.json: `phase` → `"completed"`.
    - `.harness/spec/critic_findings.md` → `docs/harness/<slug>/critic_findings.md`
    - `.harness/conventions.md` → `docs/harness/<slug>/conventions.md`
 
-   These artifacts are consumed by `/workflow` Step 1.5 (conventions reuse — skip rescan if `docs/harness/<slug>/conventions.md` exists) and `/workflow` Step 2 (planner dispatch fills `{qa_discovery_notes}` from `qa_notes.md` and `{critic_findings}` from `critic_findings.md`). Without persistence, `/workflow` falls back to its own Convention Scan and dispatches planners with empty Discovery Notes — producing less context-aware plans. Note: `.harness/conventions.md` is the shared file documented under the Step 1.5 ownership note; copying to `docs/harness/<slug>/` makes the snapshot durable across the spec→workflow handoff regardless of any subsequent /workflow Convention Scan run.
+   These artifacts are consumed by `/harness` Step 1.5 (conventions reuse — skip rescan if `docs/harness/<slug>/conventions.md` exists) and `/harness` Step 2 (planner dispatch fills `{qa_discovery_notes}` from `qa_notes.md` and `{critic_findings}` from `critic_findings.md`). Without persistence, `/harness` falls back to its own Convention Scan and dispatches planners with empty Discovery Notes — producing less context-aware plans. Note: `.harness/conventions.md` is the shared file documented under the Step 1.5 ownership note; copying to `docs/harness/<slug>/` makes the snapshot durable across the spec→workflow handoff regardless of any subsequent /harness Convention Scan run.
 
    **(M17) Variable ↔ filename mapping** (NEW in 8.4 hardening) — the persisted file names use snake_case short forms while template variable placeholders use longer descriptive names. This intentional asymmetry separates "what is on disk" from "how it appears in prose":
 
@@ -630,7 +630,7 @@ Update state.json: `phase` → `"completed"`.
    | `conventions.md` | `{conventions}` | analyst templates + 4 planner templates |
    | `spec.md` | `{spec_content}` (critic.md) / `{spec_path}` (planner_single.md) | critic.md (spec) + planner_single.md (workflow single mode) |
 
-   Do NOT rename either side without updating both: renaming the file (e.g., `qa_notes.md` → `qa_discovery_notes.md`) without updating Phase 3 step 3 here AND `/workflow` Step 1.5 / Step 2 read sites silently breaks the handoff (file-missing → empty-string fallback → planners receive empty Discovery Notes). Renaming the variable requires updating all template files that reference it — see grep `qa_discovery_notes` and `qa_notes` for the full surface.
+   Do NOT rename either side without updating both: renaming the file (e.g., `qa_notes.md` → `qa_discovery_notes.md`) without updating Phase 3 step 3 here AND `/harness` Step 1.5 / Step 2 read sites silently breaks the handoff (file-missing → empty-string fallback → planners receive empty Discovery Notes). Renaming the variable requires updating all template files that reference it — see grep `qa_discovery_notes` and `qa_notes` for the full surface.
 
 4. **Cleanup:** Delete `.harness/` directory (state.json, `spec/`, `conventions.md`, and the directory itself). The final `docs/harness/<slug>/spec.md` AND the artifacts persisted in step 3 are preserved. (Halted sessions do NOT reach this step — see Halt semantics in Phase 2d-D.)
 
@@ -642,7 +642,7 @@ If user asks for status, print status in the standard format defined above.
 
 ## Spec Output Format
 
-The spec written to `docs/harness/<slug>/spec.md` must use this exact structure for `/workflow` compatibility. Write all content in `user_lang`.
+The spec written to `docs/harness/<slug>/spec.md` must use this exact structure for `/harness` compatibility. Write all content in `user_lang`.
 
 ```markdown
 ## Goal
@@ -670,11 +670,11 @@ The spec written to `docs/harness/<slug>/spec.md` must use this exact structure 
 - {risk} — Likelihood: {low/med/high} — Mitigation: {approach}
 ```
 
-**All headings and content must be translated to `user_lang`.** The English labels above are canonical identifiers for /workflow compatibility.
+**All headings and content must be translated to `user_lang`.** The English labels above are canonical identifiers for /harness compatibility.
 
-### Section Mapping to /workflow
+### Section Mapping to /harness
 
-| /spec section | /workflow usage |
+| /spec section | /harness usage |
 |---------------|----------------|
 | Goal | Goal |
 | Background & Decisions | Background |
@@ -706,7 +706,7 @@ See `templates/_shared/askuserquestion.md`.
 - **Confirmation gate is non-negotiable.** The user must explicitly approve the spec before handoff.
 - **"Modify" triggers Phase 2 re-run.** Q&A notes are preserved; the spec is regenerated, not patched.
 - **Analyst proposals must be independent.** Never share one analyst's findings with another during parallel analysis.
-- **Section mapping must be preserved.** The seven spec sections must appear in every spec for /workflow compatibility.
+- **Section mapping must be preserved.** The seven spec sections must appear in every spec for /harness compatibility.
 - **User language.** All user-facing output must be in `user_lang`. Re-detect on every user message.
 - **Intermediate outputs are ephemeral.** Only `spec.md` and the Phase 3 persisted artifacts (`qa_notes.md`, `critic_findings.md`, `conventions.md`) are preserved in `docs/harness/<slug>/`. All other `.harness/` contents are cleaned up after completion.
 - **skill field is "spec".** state.json must always have `skill: "spec"` — session recovery depends on this.

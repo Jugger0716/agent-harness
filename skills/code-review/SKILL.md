@@ -379,8 +379,8 @@ After presenting the report, suggest next actions based on findings (in `user_la
 
 | Finding pattern | Suggestion |
 |----------------|------------|
-| Critical/Major correctness or security bugs | "Consider `/workflow` to fix these issues systematically" |
-| Structural/architectural issues | "Consider `/workflow` to refactor the affected components" |
+| Critical/Major correctness or security bugs | "Consider `/harness` to fix these issues systematically" |
+| Structural/architectural issues | "Consider `/harness` to refactor the affected components" |
 | Minor style/convention issues | "These can be addressed in a follow-up commit" |
 | No significant findings | "Code looks good. No action needed." |
 

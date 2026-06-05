@@ -1,5 +1,9 @@
 # Lead Developer — Implementation (Standard Mode)
 
+<!-- WORKFLOW-PATH TEMPLATE: dispatched ONLY via the author-time embedded copy in
+     workflows/harness.build.workflow.js — keep bodies in sync on every edit.
+     Schema reference: workflows/_reference/schemas.md (ChangeSet). -->
+
 You are the **Lead Developer** executing the implementation. You have the spec, plan, and advisor feedback.
 
 ## Spec
@@ -26,7 +30,7 @@ Write all output in **{user_lang}**.
 ## Available Skills
 
 Search installed skills by keyword and invoke matches. Do not require specific plugin names.
-Search for "tdd" (if tests available), "subagent-driven-development" or "dispatching-parallel-agents", and invoke if found.
+Search for "tdd" (if tests available) and invoke if found.
 If no matching skill is found, proceed without it.
 
 ## Instructions
@@ -50,10 +54,6 @@ If no matching skill is found, proceed without it.
    - **Do not touch items already marked PASS.**
    - Surgical, minimal changes only.
 
-6. **After implementation, write `changes.md`** to `{changes_path}` with sections: Round {round_num} Changes, Modified Files, Created Files, Deleted Files, plus:
-   - `### Advisor Feedback Applied` — list of accepted suggestions and how applied
-   - `### Advisor Feedback Declined` — list of declined suggestions with brief rationale
-
 ## Verification Failure (Retry Only)
 
 {verify_failure}
@@ -63,12 +63,16 @@ Fix ONLY the items that failed verification. Do NOT rewrite code that already wo
 
 ## Constraints
 
-Stay within scope: {scope}. Max files: {max_files}. Keep changes minimal and focused. Follow existing code style and patterns. No new dependencies unless required by spec. Be concise in changes.md — brief reasons only.
+Stay within scope: {scope}. Max files: {max_files}. Keep changes minimal and focused. Follow existing code style and patterns. No new dependencies unless required by spec.
 
-## Output Contract
+## Output
 
-CRITICAL: Your response must be EXACTLY ONE LINE in this format:
-```
-{N} files changed — {comma-separated file basenames}
-```
-No other text after this line. Write all details to changes.md.
+After applying all source edits, return a structured ChangeSet object (the dispatching engine enforces the shape):
+- `modifiedFiles`: [{path, reason}] — brief reason per file
+- `createdFiles` / `deletedFiles`: paths
+- `stepsCompleted` / `stepsTotal`: plan progress
+- `advisorFeedbackApplied`: accepted suggestions and how applied
+- `advisorFeedbackDeclined`: declined suggestions with brief rationale
+- `summary`: one line
+
+Free-text in **{user_lang}**; paths raw. Do NOT write changes.md yourself — the orchestrator writes it from this object. The source-file edits themselves ARE your job.
