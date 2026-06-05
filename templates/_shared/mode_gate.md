@@ -8,12 +8,14 @@
 At Setup, resolve the execution path:
 
 1. **Default = INLINE path** (current behavior). The orchestrator runs the skill's existing
-   single/standard sub-agent flow directly — no Workflow engine.
+   inline sub-agent flow directly — no Workflow engine.
 2. **Take the WORKFLOW path only when BOTH hold:**
    - the `Workflow` tool is actually available this session, AND
    - the session opts in — ultracode mode is on, OR the user passed an explicit
-     `--mode multi/comprehensive/thorough/deep`, OR the skill's own instructions direct the
-     model to call the `Workflow` tool (a documented valid opt-in).
+     `--mode standard/multi/comprehensive/thorough/deep` (any mode the skill maps to the
+     engine path; pilot precedent: /harness routes `standard` and `multi` to the engine),
+     OR the skill's own instructions direct the model to call the `Workflow` tool
+     (a documented valid opt-in).
 3. **Graceful fallback.** If the `Workflow` tool is unavailable (or a Workflow call errors),
    silently fall back to the INLINE path — **never error out**. Optionally tell the user they
    can re-invoke with ultracode / `--mode` for the deeper path.

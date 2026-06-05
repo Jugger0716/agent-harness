@@ -18,14 +18,17 @@ export const meta = {
 }
 
 // ---- args (SPIKE-F1: defensive parse) -------------------------------------
-// contract: { specContent, qaFeedback, repoPath, lang, scope, maxFiles, userLang,
-//             roundNum, verifyFailure, verifyReportPath, mode: 'standard'|'multi',
+// contract: { specContent, qaFeedback, repoPath, lang, scope, maxFiles, testCmd,
+//             userLang, verifyFailure, verifyReportPath, mode: 'standard'|'multi',
 //             models, retry: bool, planDigest?, advisorDigests?: {combined?, quality?, stability?} }
 const A = typeof args === 'string' ? JSON.parse(args) : (args || {})
 const LANG = A.userLang || 'the language of the task description'
 const MODELS = A.models || {}
 const mopt = (m) => (m ? { model: m } : {})
 
+// Substitution order = vars insertion order. Keep STRUCTURAL keys first and
+// user-influenced payload keys LAST: a payload substituted early could otherwise
+// hijack later {placeholders} with injected literals.
 const render = (tpl, vars) =>
   Object.entries(vars).reduce(
     (t, [k, v]) => t.split('{' + k + '}').join(v == null ? '' : String(v)),
@@ -428,13 +431,13 @@ if (!A.retry) {
   phase('Plan')
   const implPlan = await agent(
     render(TPL_LEAD_DEVELOPER, {
-      spec_content: A.specContent,
-      qa_feedback: A.qaFeedback,
       repo_path: A.repoPath,
       lang: A.lang,
       scope: A.scope,
       max_files: A.maxFiles,
       user_lang: A.userLang,
+      qa_feedback: A.qaFeedback,
+      spec_content: A.specContent,
     }),
     { schema: AnalysisResultSchema, label: 'lead_developer', phase: 'Plan', ...mopt(MODELS.executor) },
   )
@@ -453,13 +456,13 @@ if (!A.retry) {
     advisorDefs.map((d) => () =>
       agent(
         render(d.tpl, {
-          spec_content: A.specContent,
-          plan_content: planDigest,
           repo_path: A.repoPath,
           lang: A.lang,
           test_cmd: A.testCmd,
           user_lang: A.userLang,
           persona_id: d.id,
+          plan_content: planDigest,
+          spec_content: A.specContent,
         }),
         { schema: AnalysisResultSchema, label: d.id, phase: 'Advise', ...mopt(MODELS.advisor) },
       ),
@@ -476,18 +479,16 @@ if (!A.retry) {
 
 // ---- Phase 3: implementation -------------------------------------------------
 phase('Implement')
+// Structural keys first; model-output digests then user-influenced spec content LAST.
 const implVars = {
-  spec_content: A.specContent,
-  plan_content: planDigest,
-  qa_feedback: A.qaFeedback,
   repo_path: A.repoPath,
   lang: A.lang,
   scope: A.scope,
   max_files: A.maxFiles,
   user_lang: A.userLang,
-  round_num: A.roundNum,
-  verify_failure: A.verifyFailure || '',
   verify_report_path: A.verifyReportPath || '',
+  verify_failure: A.verifyFailure || '',
+  qa_feedback: A.qaFeedback,
 }
 const changes =
   A.mode === 'multi'
@@ -496,6 +497,8 @@ const changes =
           ...implVars,
           code_quality_review: advisorDigests.quality || '(advisor unavailable)',
           test_stability_review: advisorDigests.stability || '(advisor unavailable)',
+          plan_content: planDigest,
+          spec_content: A.specContent,
         }),
         { schema: ChangeSetSchema, label: 'implementation', phase: 'Implement', ...mopt(MODELS.executor) },
       )
@@ -503,6 +506,8 @@ const changes =
         render(TPL_IMPLEMENTATION_STANDARD, {
           ...implVars,
           advisor_review: advisorDigests.combined || '(advisor unavailable)',
+          plan_content: planDigest,
+          spec_content: A.specContent,
         }),
         { schema: ChangeSetSchema, label: 'implementation', phase: 'Implement', ...mopt(MODELS.executor) },
       )
