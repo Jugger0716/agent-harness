@@ -51,6 +51,13 @@ const AnalysisResultSchema = {
 }
 ```
 
+> Phase 2a (spec) additive delta: `spec.plan.workflow.js`'s inlined copy ADDS
+> `hasFindings: { type: 'boolean', description: 'false ONLY for a genuine greenfield/input-ambiguous result with no actionable findings' }`
+> and lists it in `required` — it replaces the old `— no findings —` 1-line sentinel scan
+> (the orchestrator's empty-input contract now checks `proposals.every(p => p.hasFindings === false)`).
+> The canonical shape above is unchanged for the other consumers (harness scripts); treat
+> `hasFindings` as a spec-only extension until another consumer adopts it.
+
 ## PlanResult
 
 Returned by the plan-segment synthesis step. The orchestrator writes `spec.md` from
@@ -63,6 +70,13 @@ this object, then renders HARD GATE #1.
 > `approach`, `testingStrategy` — so the orchestrator can reconstruct spec.md
 > faithfully (Goal/Background/Scope/Approach/Completion Criteria/Testing
 > Strategy/Risks). `risks[].source` added (which persona raised it).
+
+> Phase 2a (spec) tightening delta: `spec.plan.workflow.js`'s inlined copy promotes
+> `background`/`scope`/`edgeCases` into `required` (and `scope.required =
+> [inScope, outOfScope]`) — the seven-section spec.md format makes them mandatory,
+> and live dry-run wf_75de1836 showed prose-only "populate all seven sections"
+> gets skipped for schema-optional fields. The canonical shape above is unchanged
+> for /harness (its plan output has no seven-section obligation).
 
 ```js
 const PlanResultSchema = {
@@ -157,12 +171,140 @@ const VerifyVerdictSchema = {
 }
 ```
 
+## CriticReport
+
+Returned by the spec eval-segment Critic step (`spec.eval.workflow.js`). Replaces the
+`^critic_findings written — Critical=(\d+)...$` 1-line regex parse and its parse-fail
+gate — a schema return cannot be unparseable, so the `parse_failed_*` failure modes are
+structurally unreachable. The Critic agent still WRITES `critic_findings.md` (user-facing
+artifact + re-synthesis injection source + Phase 3 handoff persistence), mirroring the
+pilot evaluator/verify_layer1 kept-file pattern. The orchestrator branches the Critic
+Gate on `counts`.
+
+> Count consistency note: `spec.eval.workflow.js` normalizes `counts` from `items[]`
+> before returning (items are the ground truth the gate displays) — consumers can branch
+> on `counts` directly without re-tallying.
+
+```js
+const CriticReportSchema = {
+  type: 'object',
+  required: ['counts', 'items', 'summary'],
+  properties: {
+    counts: { type: 'object', required: ['critical', 'major', 'minor'],
+      properties: { critical: { type: 'integer' }, major: { type: 'integer' },
+        minor: { type: 'integer' } } },
+    items: { type: 'array', items: {
+      type: 'object', required: ['id', 'severity', 'title', 'issue', 'suggestedFix'],
+      properties: {
+        id: { type: 'string', description: '[C1]/[M1]/[m1], sequential within severity, English raw' },
+        severity: { enum: ['Critical', 'Major', 'Minor'] },
+        title: { type: 'string', description: `short title, render in ${A.userLang}` },
+        issue: { type: 'string', description: `what is wrong with the spec, render in ${A.userLang}` },
+        impact: { type: 'string', description: `what breaks at implementation or runtime, render in ${A.userLang}` },
+        suggestedFix: { type: 'string', description: `concrete change the spec author can apply, render in ${A.userLang}` } } } },
+    summary: { type: 'string', description: `one-line, e.g. "Critical=2, Major=0, Minor=3", counts English raw, render in ${A.userLang}` }
+  }
+}
+```
+
+## Hypothesis
+
+Sub-shape carried by `DebugAnalysis.hypotheses[]` and `RootCause.hypotheses[]`
+(debug segment). `verification.minItems: 1` enforces the executable-verification
+mandate (`templates/_shared/falsification_rules.md`) at the schema layer — the rule
+the prose could only assert.
+
+```js
+const HypothesisSchema = {
+  type: 'object',
+  required: ['claim', 'confidence', 'status', 'verification'],
+  properties: {
+    claim: { type: 'string', description: `one-sentence hypothesis, render in ${A.userLang}` },
+    confidence: { enum: ['High', 'Medium', 'Low'] },
+    status: { enum: ['ACTIVE', 'REFUTED', 'CONFIRMED'] },
+    falsificationQuestion: { type: 'string', description: `"if this is wrong, what evidence should exist?", render in ${A.userLang}` },
+    verification: { type: 'array', minItems: 1, items: {
+      type: 'object', required: ['action', 'output', 'conclusion'],
+      properties: {
+        action: { type: 'string', description: 'exact Grep/file-read/git/test command used — raw, not translated' },
+        output: { type: 'string', description: 'captured output, truncated to relevant lines, raw' },
+        conclusion: { enum: ['Supports', 'Refutes', 'Inconclusive'] } } } }
+  }
+}
+```
+
+## DebugAnalysis
+
+Returned by the two independent debug analysts (error_analyst, code_archaeologist) in
+`debug.analyze.workflow.js`. Carries structured `Hypothesis[]` instead of encoding
+hypotheses as `AnalysisResult.keyPoints` strings — the cross-verifier needs
+claim/confidence/status/verification[] intact to populate `RootCause.hypotheses[]`
+faithfully (the pre-correction draft's own flagged lossiness risk).
+
+```js
+const DebugAnalysisSchema = {
+  type: 'object',
+  required: ['persona', 'summary', 'hypotheses', 'preliminaryRootCause', 'confidence'],
+  properties: {
+    persona: { type: 'string', description: 'identifier, English raw' },
+    summary: { type: 'string', description: `key observations from this analyst's lens, render in ${A.userLang}` },
+    hypotheses: { type: 'array', minItems: 1, items: HypothesisSchema },
+    preliminaryRootCause: { type: 'string', description: `most likely root cause based on verification evidence only, render in ${A.userLang}` },
+    confidence: { enum: ['High', 'Medium', 'Low'] },
+    affectedLocation: { type: 'string', description: 'file:line (or commit hash / dependency), raw' },
+    keyEvidence: { type: 'string', description: `the verification result that most strongly supports the conclusion, render in ${A.userLang}` },
+    openQuestions: { type: 'array', items: { type: 'string', description: `unverifiable angles, render in ${A.userLang}` } }
+  }
+}
+```
+
+## RootCause
+
+Returned by the debug adversarial cross-verify step. The ORCHESTRATOR writes
+`root_cause.md` from this object (PlanResult→spec.md pattern), then renders the Fix
+Decision HARD-GATE. `hypotheses[]` carries every hypothesis from both analysts at its
+final status, including the adversarial verification action(s) appended by the
+cross-verifier.
+
+```js
+const RootCauseSchema = {
+  type: 'object',
+  required: ['rootCause', 'confidence', 'affectedLocations', 'hypotheses', 'summary'],
+  properties: {
+    rootCause: { type: 'string', description: `2-4 sentence actionable root cause citing file:line/function/commit, render in ${A.userLang}` },
+    confidence: { enum: ['High', 'Medium', 'Low', 'Unknown'] },
+    confidenceRationale: { type: 'array', items: { type: 'string', description: `render in ${A.userLang}` } },
+    errorType: { enum: ['build', 'runtime', 'logic'] },
+    reproduction: { type: 'string', description: `reproduction conditions, or state that it was not reproduced (log/environment analysis), render in ${A.userLang}` },
+    affectedLocations: { type: 'array', items: {
+      type: 'object', required: ['file'],
+      properties: { file: { type: 'string' }, line: { type: 'integer' },
+        description: { type: 'string', description: `render in ${A.userLang}` } } } },
+    agreementPoints: { type: 'array', items: { type: 'string', description: `where both analysts independently converged, render in ${A.userLang}` } },
+    conflictsResolved: { type: 'array', items: {
+      type: 'object', required: ['topic', 'resolution'],
+      properties: {
+        topic: { type: 'string', description: `what the analysts disagreed on, render in ${A.userLang}` },
+        verificationAction: { type: 'string', description: 'exact command used to resolve, raw' },
+        resolution: { type: 'string', description: `which claim won and why, render in ${A.userLang}` } } } },
+    adversarialAudit: { type: 'string', description: `the fresh falsification attempt(s) on the surviving hypothesis and the outcome, render in ${A.userLang}` },
+    hypotheses: { type: 'array', items: HypothesisSchema },
+    recommendedFixDirection: { type: 'string', description: `conceptual fix direction, no code, render in ${A.userLang}` },
+    summary: { type: 'string', description: `one-line progress msg, render in ${A.userLang}` }
+  }
+}
+```
+
 ## Reserved (added by their owning phases — do not define here yet)
 
 | Schema | Owning phase |
 |---|---|
-| Finding / FindingSet | Phase 2b deep-review (also debug) |
-| CriticReport | Phase 2a spec |
+| Finding / FindingSet | Phase 2b deep-review |
 | AutoFixProposal | auto-fix-focused phase (Proposer stays inline-1-line in the pilot — deliberate carve-out) |
 | MutationVerdict / SkepticVote | Phase 2g test-gen |
 | MdEvalVerdict | Phase 3 polish |
+
+> Landed from this queue: `CriticReport` (Phase 2a spec) and `Hypothesis`/`RootCause`
+> (Phase 2c debug, plus the unplanned-but-needed `DebugAnalysis` analyst shape) — defined
+> above. Debug no longer waits on `FindingSet`; the earlier "(also debug)" note on the
+> Finding/FindingSet row is superseded.
