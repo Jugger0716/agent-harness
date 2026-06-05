@@ -358,7 +358,7 @@ Update state.json: `phase` → `"fixing"`.
 | Complexity | Criteria | Strategy |
 |------------|----------|----------|
 | Simple | Single file, < 20 lines, no architectural impact | Orchestrator applies directly |
-| Complex | Multiple files, architectural change, or touches shared interfaces | Smart Routing → `/workflow` |
+| Complex | Multiple files, architectural change, or touches shared interfaces | Smart Routing → `/harness` |
 
 **Simple fix (orchestrator applies directly):**
 1. Read `docs/harness/<slug>/root_cause.md`.
@@ -386,11 +386,11 @@ Update state.json: `phase` → `"fixing"`.
 2. Inform the user (in `user_lang`) that the fix requires a structured workflow:
    ```
    [debug] This fix is complex (multiple files / architectural change).
-   Suggested next step: /workflow "Fix based on docs/harness/<slug>/root_cause.md"
+   Suggested next step: /harness "Fix based on docs/harness/<slug>/root_cause.md"
    ```
    Translate the quoted suggestion text to `user_lang`.
-3. Write `docs/harness/<slug>/fix_changes.md` noting that fix was deferred to `/workflow`.
-4. Do NOT auto-invoke `/workflow`. Suggestion only.
+3. Write `docs/harness/<slug>/fix_changes.md` noting that fix was deferred to `/harness`.
+4. Do NOT auto-invoke `/harness`. Suggestion only.
 
 ### Phase 3: Prevention (Optional)
 
@@ -430,7 +430,7 @@ Inform the user (in `user_lang`):
    <full content from root_cause.md>
 
    ## Fix Applied
-   <full content from fix_changes.md, or "Fix deferred to /workflow">
+   <full content from fix_changes.md, or "Fix deferred to /harness">
 
    ## Prevention
    ### Same Pattern Found Elsewhere
@@ -450,7 +450,7 @@ Inform the user (in `user_lang`):
    ```
    [debug] Debug session complete.
      Root cause : <one-sentence summary>
-     Fix        : <"Applied directly" | "Deferred to /workflow" | "Not applied">
+     Fix        : <"Applied directly" | "Deferred to /harness" | "Not applied">
      Report     : docs/harness/<slug>/debug_report.md
    ```
 
@@ -478,7 +478,7 @@ See `templates/_shared/askuserquestion.md`.
 - **Falsification rules are non-negotiable** — see the Falsification Rules (Core Differentiator) section.
 - **Never skip reproduction attempt for runtime/logic errors.** Always attempt Phase 0.7 before Phase 1.
 - **Hypothesis verification loop is bounded.** Maximum 3 rounds. If no high-confidence hypothesis after 3 rounds, write root_cause.md with `Confidence: Unknown`.
-- **Fix phase: never auto-chain to /workflow.** Only suggest. The user must explicitly invoke `/workflow`.
+- **Fix phase: never auto-chain to /harness.** Only suggest. The user must explicitly invoke `/harness`.
 - **Deep mode: analysts are isolated.** Code Archaeologist must NOT read Error Analyst output (anchoring prevention). Each sub-agent runs independently.
 - **All permanent artifacts go to docs/harness/.** Temporary files (.harness/debug/) are ephemeral and cleaned up at session end.
 - **Build errors get the fast path.** Skip reproduction and hypothesis loop for build/compile errors. Compiler output is direct evidence.

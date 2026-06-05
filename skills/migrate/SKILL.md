@@ -128,9 +128,9 @@ Before proceeding, assess whether this skill is the right tool:
 
 | User Intent | Better Skill | Action |
 |-------------|-------------|--------|
-| Deprecated patterns cleanup without version change | `/workflow` with refactoring task | Suggest switching to `/workflow` |
-| Code state unclear, needs audit first | `/workflow` with audit task | Suggest running audit first |
-| Wants to adopt new API features (not upgrading) | `/workflow` with feature task | Suggest switching to `/workflow` |
+| Deprecated patterns cleanup without version change | `/harness` with refactoring task | Suggest switching to `/harness` |
+| Code state unclear, needs audit first | `/harness` with audit task | Suggest running audit first |
+| Wants to adopt new API features (not upgrading) | `/harness` with feature task | Suggest switching to `/harness` |
 
 When a better skill is identified, ask the user using AskUserQuestion (in `user_lang`):
   header: "Routing"

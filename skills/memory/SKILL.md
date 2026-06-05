@@ -234,7 +234,7 @@ If AskUserQuestion is unavailable, present as numbered text.
 
 ### Step 4 — Update README Index
 
-After all deletions, rebuild `docs/harness/memory/README.md` from the remaining files using the same structure as in `save` Step 4. Remove rows for deleted files.
+After all deletions, rebuild `docs/harness/memory/README.md` from the remaining files per **§README Index Structure (canonical)** (defined under `save` Step 4). Remove rows for deleted files.
 
 ### Step 5 — Clean Report
 

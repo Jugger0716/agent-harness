@@ -16,9 +16,9 @@ Inspired by Anthropic's [Harness Design for Long-Running Application Development
 
 **With agent-harness:**
 ```
-/workflow "add rate limiting to the API"
+/harness --mode standard "add rate limiting to the API"
 ```
-→ Two specialists (Architect + Senior Dev) propose plans independently  
+→ Two specialists (Architect + Senior Dev) propose plans independently (native Workflow fan-out)  
 → Synthesis produces `spec.md` — you review and approve  
 → Lead Dev + Advisor implement code, write `changes.md`  
 → Layer 1: build ✓ test 42/42 ✓ lint 0e/2w ✓ (auto-retry on fail, up to 3x)  
@@ -66,11 +66,11 @@ Higher modes cost more per run but save total cost by reducing retry rounds. Sta
 
 | Skill | Command | Description |
 |-------|---------|-------------|
-| **Workflow** | `/workflow <task>` | 3-Phase (Planner -> Generator -> Evaluator) workflow. Single or multi-agent mode. Works with or without git. |
+| **Harness** | `/harness <task>` | 3-Phase (Planner -> Generator -> Evaluator) orchestrator. Inline single path by default; opt-in workflow path (ultracode or `--mode standard/multi`) runs plugin-shipped native Workflow segment scripts with schema-validated returns. Works with or without git. _(formerly `/workflow` — old name kept as a deprecation alias)_ |
 | **Refactor** | `/refactor <target>` | Safe, behavior-preserving code structure improvement. Single, multi, or comprehensive mode. |
 | **Migrate** | `/migrate <target> [--from v4 --to v5]` | Staged migration of frameworks, libraries, and dependencies. Single or multi-agent mode with WebSearch research. |
 | **Debug** | `/debug <error>` | Hypothesis-driven debugging with mandatory executable verification. Quick or deep (2-agent cross-verification) mode. |
-| **Spec** | `/spec <requirement>` | Multi-round Q&A requirements specification. Output directly compatible with `/workflow` input. Quick or deep mode. |
+| **Spec** | `/spec <requirement>` | Multi-round Q&A requirements specification. Output directly compatible with `/harness` input. Quick or deep mode. |
 | **Test Gen** | `/test-gen <target>` | Automated test generation with mutation-based quality verification. Supports coverage-gap and regression modes. |
 | **Memory** | `/memory <cmd>` | Team knowledge base (save/show/clean/search). Git-committed, team-shared decisions, patterns, and conventions. |
 | **Codebase Audit** | `/codebase-audit` | Systematic codebase analysis with 3-tier mode (quick/deep/thorough) for team onboarding. |
@@ -89,18 +89,18 @@ claude plugin install agent-harness@agent-harness-marketplace
 ## Quick Start
 
 ```
-/workflow fix login timeout bug                    # asks for mode + model config
-/workflow fix login timeout bug --mode single      # fast, token-saving
-/workflow fix login timeout bug --mode standard    # balanced analysis, ~1.5x tokens
-/workflow fix login timeout bug --mode multi       # deep multi-agent analysis, ~2-2.5x tokens
-/workflow fix bug --model-config balanced          # Sonnet executor + Opus advisor (cost-efficient)
+/harness fix login timeout bug                    # default: inline single path (no mode roundtrip); asks model config
+/harness fix login timeout bug --mode single      # fast, token-saving (inline, forced)
+/harness fix login timeout bug --mode standard    # workflow path: 2-specialist fan-out via native Workflow scripts
+/harness fix login timeout bug --mode multi       # workflow path: 3-specialist fan-out, deepest analysis
+/harness fix bug --model-config balanced          # Sonnet executor + Opus advisor (cost-efficient)
 
-/workflow plan "add user auth"                     # phase mode: plan only, end session
-/workflow generate                                 # phase mode: resume from plan, generate only
-/workflow verify                                   # step mode: mechanical verification only
-/workflow evaluate                                 # step mode: evaluation only
+/harness plan "add user auth"                     # phase mode: plan only, end session
+/harness generate                                 # phase mode: resume from plan, generate only
+/harness verify                                   # step mode: mechanical verification only
+/harness evaluate                                 # step mode: evaluation only
 
-/workflow draft product requirements spec           # works without git too (non-dev tasks)
+/harness draft product requirements spec           # works without git too (non-dev tasks)
 
 /debug "NullPointerException in UserController"    # hypothesis-driven debugging
 /debug --mode deep --attach error.log              # 2-agent cross-verification
@@ -177,19 +177,19 @@ Falls back to text-based input when AskUserQuestion is unavailable.
 **Thin Orchestrator** architecture — the orchestrator manages state transitions and dispatches sub-agents with minimal context (~8-15K tokens). Sub-agents return 1-line summaries; detailed results are written to files. This achieves **40-60% token savings** compared to fat orchestrator designs while maintaining quality through **3-layer mechanical quality gates**.
 
 ```
-/workflow  -> [Setup] Auto-detect + mode/style selection
-                        -> [Plan] Planner sub-agent
-                           single:   1 agent explores + writes spec.md
-                           standard: 2 specialists propose -> Synthesis
-                           multi:    3 specialists -> Cross-critique -> Synthesis
+/harness  -> [Setup] Auto-detect + Mode Gate (inline vs workflow path) + style
+                        -> [Plan] Planner
+                           single (inline):     1 agent explores + writes spec.md
+                           standard (workflow): harness.plan script — 2 specialists propose -> Synthesis
+                           multi (workflow):    harness.plan script — 3 specialists propose -> Synthesis
                         -> Confirmation Gate: user approves spec
-                        -> [Generate] Generator sub-agent
-                           single:   1 agent implements code
-                           standard: Lead Dev plan -> Combined Advisor -> Implementation
-                           multi:    Lead Dev plan -> 2 Advisors parallel -> Implementation
+                        -> [Generate] Generator
+                           single (inline):     1 agent implements code
+                           standard (workflow): harness.build script — Lead Dev plan -> Combined Advisor -> Implementation
+                           multi (workflow):    harness.build script — Lead Dev plan -> 2 Advisors parallel -> Implementation
                         -> [Verify] Layer 1 Mechanical (build/test/lint/type-check/TODO scan)
                            FAIL -> auto-retry Generator (max 3x)
-                        -> [Evaluate] Layer 2 Structural + Layer 3 LLM Judgment
+                        -> [Evaluate] Layer 2 Structural + Layer 3 LLM Judgment (workflow: harness.eval script runs Verify+Evaluate in one segment)
                            L2 FAIL -> auto-retry (max 2x)
                            L3 FAIL -> user Fix/Accept (max N rounds)
                         -> PASS -> Cleanup & Commit
@@ -316,15 +316,15 @@ Higher modes use more tokens per run but have higher first-pass success rates, o
 
 | Style | Usage | Behavior |
 |-------|-------|----------|
-| **auto** (default) | `/workflow "task"` | Full pipeline, user gates at spec approval and FAIL only |
-| **phase** | `/workflow plan "task"` then `/workflow generate` | Each phase ends session; resume in next session for max token savings |
-| **step** | `/workflow verify` or `/workflow evaluate` | Execute single step only |
+| **auto** (default) | `/harness "task"` | Full pipeline, user gates at spec approval and FAIL only |
+| **phase** | `/harness plan "task"` then `/harness generate` | Each phase ends session; resume in next session for max token savings |
+| **step** | `/harness verify` or `/harness evaluate` | Execute single step only |
 
 ### Options
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| mode | (ask user) | `single` for fast/token-saving, `standard` for balanced analysis, `multi` for deep multi-agent analysis |
+| mode | Mode Gate (no roundtrip) | `single` (inline, default without opt-in), `standard` / `multi` (workflow path via native Workflow segment scripts). Opt-in = ultracode session or explicit `--mode`; `has_git == false` or missing Workflow tool forces inline single. |
 | model-config | (ask user) | `default` / `all-opus` / `balanced` / `economy` — see Model Configuration section |
 | scope | auto-detected | Restrict file modifications to a pattern |
 | max rounds | 3 | Maximum Generator/Evaluator retry cycles |
@@ -334,8 +334,8 @@ Higher modes use more tokens per run but have higher first-pass success rates, o
 | `--verifier-model <model>` | `haiku` | Override Layer 1 Verifier model. Allowed: `haiku`, `sonnet`, `opus`. Cost warning shown for sonnet/opus. |
 | `--output-dir <path>` | `docs/harness` | Override output directory base for spec, changes, verify, and QA reports. Relative path from repo root. Disallows: absolute paths, `..`, reserved names (`memory`, `spec`, `planner`, `generator`). |
 
-Example: `/workflow fix auth bug --mode single --model-config balanced --scope "src/auth/**"`
-Example: `/workflow add caching --output-dir build/harness --verifier-model sonnet`
+Example: `/harness fix auth bug --mode single --model-config balanced --scope "src/auth/**"`
+Example: `/harness add caching --output-dir build/harness --verifier-model sonnet`
 
 ### Git-Free Mode
 
@@ -480,7 +480,7 @@ Runs as an isolated sub-agent with the same bias-reduction techniques as workflo
 
 | Finding | Suggestion |
 |---------|-----------|
-| User wants new features | `/workflow` |
+| User wants new features | `/harness` |
 | Version/dependency issues | `/migrate` |
 | Needs codebase understanding first | `/codebase-audit` |
 
@@ -679,7 +679,7 @@ Every hypothesis must be tested with **executable verification actions** -- pure
 
 | Signal | Suggested next step |
 |--------|-------------------|
-| Complex fix needed | `/workflow "Fix based on docs/harness/<slug>/root_cause.md"` |
+| Complex fix needed | `/harness "Fix based on docs/harness/<slug>/root_cause.md"` |
 | Regression test needed | `/test-gen --regression docs/harness/<slug>/debug_report.md` |
 | Pattern to record | `/memory save` |
 
@@ -696,7 +696,7 @@ docs/harness/<slug>/
 
 ## spec
 
-Transforms vague or incomplete requirements into structured, actionable specifications through **multi-round Q&A discovery**. Output is directly compatible with `/workflow` input via section mapping.
+Transforms vague or incomplete requirements into structured, actionable specifications through **multi-round Q&A discovery**. Output is directly compatible with `/harness` input via section mapping.
 
 ```
 /spec  -> [Setup] mode selection (quick / deep)
@@ -709,18 +709,18 @@ Transforms vague or incomplete requirements into structured, actionable specific
                      deep:  Requirements Analyst + User Scenario Analyst (parallel)
                             -> Synthesis
                   -> HARD-GATE: Approve / Modify (re-generate) / Stop
-                  -> [Phase 3] Handoff: suggest /workflow with spec path
+                  -> [Phase 3] Handoff: suggest /harness with spec path
 ```
 
 ### Core: Multi-round Q&A
 
-The key differentiator from `/workflow`'s Planner phase:
+The key differentiator from `/harness`'s Planner phase:
 
-| Feature | /workflow Planner | /spec |
+| Feature | /harness Planner | /spec |
 |---------|------------------|-------|
 | Input | Clear requirements | Vague/incomplete requirements |
 | Q&A | None | **Up to 3 rounds** with follow-up questions |
-| Approach section | Included (implementation-focused) | Not included (implementation is /workflow's job) |
+| Approach section | Included (implementation-focused) | Not included (implementation is /harness's job) |
 | Acceptance criteria | Brief checklist | **Given/When/Then format** |
 | Out of Scope | Brief in Scope section | **Dedicated section** |
 | Refinement | One-shot | **Modify -> regenerate loop** |
@@ -734,7 +734,7 @@ Goal -> Background & Decisions -> Scope -> Out of Scope ->
 Edge Cases -> Acceptance Criteria (Given/When/Then) -> Risks
 ```
 
-Maps directly to `/workflow` input: Goal->Goal, Background->Background, Scope->Scope, Acceptance Criteria->Completion Criteria, Risks->Risks, Edge Cases->Testing Strategy.
+Maps directly to `/harness` input: Goal->Goal, Background->Background, Scope->Scope, Acceptance Criteria->Completion Criteria, Risks->Risks, Edge Cases->Testing Strategy.
 
 ### Modes
 
@@ -926,7 +926,7 @@ A standalone review skill that performs systematic, bias-free code reviews on PR
 - **Bias reduction**: context isolation, anchor-free input (no PR descriptions/commit messages), defect-assumption framing, author neutralization
 - **Smart scope routing**: recommends review depth based on diff size (< 100 lines -> quick, 100-500 -> deep, 500+ -> thorough)
 - **Structured findings**: each finding has severity (Critical/Major/Minor/Suggestion), category, file:line, description, and concrete fix suggestion
-- **Smart routing**: suggests next actions based on findings (e.g., `/workflow` for critical fixes)
+- **Smart routing**: suggests next actions based on findings (e.g., `/harness` for critical fixes)
 
 ### Modes
 

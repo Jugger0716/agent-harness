@@ -3,18 +3,21 @@
 Verify byte-identical BLOCK content sync across marker-delimited template copies
 and their canonical single-source file under templates/_shared/.
 
-Each group is `(tag, [marker-delimited files], shared-source-file | None)`:
+Each group is `(tag, version, [marker-delimited files], shared-source-file | None)`:
   - Every file in `[marker-delimited files]` must carry
-    `<!-- BLOCK-START:<tag> v1 ... -->` / `<!-- BLOCK-END:<tag> v1 -->` markers.
-    The content BETWEEN the markers (exclusive of the marker comments) is hashed.
+    `<!-- BLOCK-START:<tag> <version> ... -->` / `<!-- BLOCK-END:<tag> <version> -->`
+    markers. The content BETWEEN the markers (exclusive of the marker comments) is
+    hashed. The version is per-group (bumped on intentional content change — e.g.
+    input-trust-model went v1 -> v2 in Phase 1 when the literal {placeholder} mentions
+    and the dangling '## Output Contract' section name were removed).
   - The shared-source file has NO markers; its WHOLE content is hashed.
   - Both sides are `.strip()`-normalized before hashing so a leading/trailing
     newline difference (marker-delimited vs whole-file) is not false drift.
   - All hashes in a group MUST match.
 
 Groups:
-  - spec-context-block : 4 planner templates + templates/_shared/spec_context_block.md
-  - input-trust-model  : 4 planner templates + templates/_shared/input_trust_model.md
+  - spec-context-block (v1) : 4 planner templates + templates/_shared/spec_context_block.md
+  - input-trust-model  (v2) : 4 planner templates + templates/_shared/input_trust_model.md
 
 Exit codes:
   0  All groups' BLOCK contents are byte-identical (after strip-normalization).
@@ -44,33 +47,36 @@ PLANNERS = [
     "templates/planner/senior_developer.md",
 ]
 
-# (tag, marker-delimited files, shared-source file without markers or None)
-GROUPS: list[tuple[str, list[str], str | None]] = [
-    ("spec-context-block", PLANNERS, "templates/_shared/spec_context_block.md"),
-    ("input-trust-model", PLANNERS, "templates/_shared/input_trust_model.md"),
+# (tag, version, marker-delimited files, shared-source file without markers or None)
+GROUPS: list[tuple[str, str, list[str], str | None]] = [
+    ("spec-context-block", "v1", PLANNERS, "templates/_shared/spec_context_block.md"),
+    ("input-trust-model", "v2", PLANNERS, "templates/_shared/input_trust_model.md"),
 ]
 
 
-def markers(tag: str) -> tuple[re.Pattern[str], re.Pattern[str]]:
-    start = re.compile(rf"<!--\s*BLOCK-START:{re.escape(tag)}\s+v1.*?-->", re.DOTALL)
-    end = re.compile(rf"<!--\s*BLOCK-END:{re.escape(tag)}\s+v1\s*-->")
+def markers(tag: str, version: str) -> tuple[re.Pattern[str], re.Pattern[str]]:
+    start = re.compile(
+        rf"<!--\s*BLOCK-START:{re.escape(tag)}\s+{re.escape(version)}.*?-->", re.DOTALL
+    )
+    end = re.compile(rf"<!--\s*BLOCK-END:{re.escape(tag)}\s+{re.escape(version)}\s*-->")
     return start, end
 
 
-def extract_block(path: Path, tag: str) -> str:
-    start_re, end_re = markers(tag)
+def extract_block(path: Path, tag: str, version: str) -> str:
+    start_re, end_re = markers(tag, version)
     text = path.read_text(encoding="utf-8")
     start_match = start_re.search(text)
     end_match = end_re.search(text)
     if not start_match or not end_match:
         print(
-            f"[verify_block_sync] {path} [{tag}]: BLOCK-START or BLOCK-END marker missing",
+            f"[verify_block_sync] {path} [{tag} {version}]: "
+            "BLOCK-START or BLOCK-END marker missing (check the version tag)",
             file=sys.stderr,
         )
         sys.exit(2)
     if end_match.start() <= start_match.end():
         print(
-            f"[verify_block_sync] {path} [{tag}]: BLOCK-END appears before BLOCK-START",
+            f"[verify_block_sync] {path} [{tag} {version}]: BLOCK-END appears before BLOCK-START",
             file=sys.stderr,
         )
         sys.exit(2)
@@ -82,14 +88,16 @@ def sha(content: str) -> str:
     return hashlib.sha256(content.strip().encode("utf-8")).hexdigest()
 
 
-def check_group(repo_root: Path, tag: str, files: list[str], source: str | None) -> int:
+def check_group(
+    repo_root: Path, tag: str, version: str, files: list[str], source: str | None
+) -> int:
     hashes: dict[str, str] = {}
     for rel in files:
         path = repo_root / rel
         if not path.exists():
             print(f"[verify_block_sync] {rel}: file does not exist", file=sys.stderr)
             return 2
-        hashes[rel] = sha(extract_block(path, tag))
+        hashes[rel] = sha(extract_block(path, tag, version))
 
     if source is not None:
         spath = repo_root / source
@@ -104,12 +112,15 @@ def check_group(repo_root: Path, tag: str, files: list[str], source: str | None)
     unique = set(hashes.values())
     if len(unique) == 1:
         print(
-            f"[verify_block_sync] OK [{tag}]: {len(hashes)} copies match "
+            f"[verify_block_sync] OK [{tag} {version}]: {len(hashes)} copies match "
             f"(sha256={next(iter(unique))[:16]}...)"
         )
         return 0
 
-    print(f"[verify_block_sync] FAIL [{tag}]: content drift detected", file=sys.stderr)
+    print(
+        f"[verify_block_sync] FAIL [{tag} {version}]: content drift detected",
+        file=sys.stderr,
+    )
     for rel, h in hashes.items():
         print(f"  {h[:16]}...  {rel}", file=sys.stderr)
     return 1
@@ -118,8 +129,8 @@ def check_group(repo_root: Path, tag: str, files: list[str], source: str | None)
 def main() -> int:
     repo_root = Path(__file__).resolve().parent.parent
     rc = 0
-    for tag, files, source in GROUPS:
-        result = check_group(repo_root, tag, files, source)
+    for tag, version, files, source in GROUPS:
+        result = check_group(repo_root, tag, version, files, source)
         if result == 2:
             return 2
         if result == 1:

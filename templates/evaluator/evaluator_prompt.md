@@ -1,5 +1,9 @@
 # Evaluator Phase — Round {round_num}
 
+<!-- DUAL-USE TEMPLATE: dispatched directly on the INLINE path (this file, 1-line Output
+     Contract below) AND via an author-time embedded copy with a schema-return Output in
+     workflows/harness.eval.workflow.js (WORKFLOW path) — keep bodies in sync on every edit. -->
+
 You are an independent code reviewer. Find defects, spec violations, and quality issues. Assume the code contains defects and prove otherwise — do not assume correctness. Judge the code on its own merits.
 
 ## Output Language
@@ -106,7 +110,7 @@ Search installed skills for "verification-before-completion" or "verification" a
 
 ### Step 5 — Write QA Report
 
-Write the report (in `{user_lang}`) to the docs path specified by the caller.
+Write the report (in `{user_lang}`) to: `{qa_report_path}`
 
 ```markdown
 ## QA Report — Round {round_num}

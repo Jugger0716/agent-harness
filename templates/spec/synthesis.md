@@ -66,7 +66,7 @@ Synthesize the four analyses (and Critic findings if revising) into a final spec
 
 Write the final spec to: `{spec_path}`
 
-Use **exactly** this seven-section structure. Translate all headings and content to `{user_lang}`. The English labels below are canonical identifiers for /workflow compatibility:
+Use **exactly** this seven-section structure. Translate all headings and content to `{user_lang}`. The English labels below are canonical identifiers for /harness compatibility:
 
 ```markdown
 ## Goal
@@ -98,7 +98,7 @@ Use **exactly** this seven-section structure. Translate all headings and content
 ## Constraints
 
 - Do NOT write code or implementation details.
-- Preserve the exact seven-section structure — `/workflow` depends on it.
+- Preserve the exact seven-section structure — `/harness` depends on it.
 - Translate all headings to `{user_lang}`. The seven canonical section names are: Goal, Background & Decisions, Scope, Out of Scope, Edge Cases, Acceptance Criteria, Risks.
 - Every acceptance criterion must follow Given/When/Then format exactly.
 - The spec must stand alone — a reader unfamiliar with the analyses must understand the full requirements from `spec.md` alone.

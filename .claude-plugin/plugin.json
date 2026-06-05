@@ -7,5 +7,5 @@
   },
   "repository": "https://github.com/Jugger0716/agent-harness",
   "license": "MIT",
-  "keywords": ["workflow", "refactor", "migrate", "codebase-audit", "code-review", "md-optimize", "md-generate", "debug", "memory", "test-gen", "spec", "planner", "generator", "evaluator", "multi-agent", "token-efficiency", "behavior-preservation", "hypothesis", "knowledge-base", "test-generation", "requirements"]
+  "keywords": ["harness", "workflow", "refactor", "migrate", "codebase-audit", "code-review", "md-optimize", "md-generate", "debug", "memory", "test-gen", "spec", "planner", "generator", "evaluator", "multi-agent", "token-efficiency", "behavior-preservation", "hypothesis", "knowledge-base", "test-generation", "requirements"]
 }
