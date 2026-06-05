@@ -162,7 +162,7 @@ Works with: workflow, refactor, migrate, debug, spec, test-gen, code-review, cod
 All user-facing prompts use **AskUserQuestion** — a numbered selection UI where you pick by number instead of typing keywords. Every prompt includes descriptive options and an automatic `Other` option for free text input.
 
 Key interaction points:
-- **Mode selection**: numbered options with token cost hints and auto-recommendation
+- **Mode selection** (refactor/migrate/debug/spec — `/harness` derives mode via its Mode Gate, no roundtrip): numbered options with token cost hints and auto-recommendation
 - **Confirmation gates**: Proceed / Modify / Stop (replaces freeform text approval)
 - **QA retry**: Fix / Accept as-is
 - **Commit**: 3 options — "Commit code only" (recommended) / "Commit all with artifacts" / "No commit" (git environments only; non-git environments skip commit)

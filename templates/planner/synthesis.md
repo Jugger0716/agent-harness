@@ -72,7 +72,7 @@ Return the spec as a structured object (the dispatching engine enforces the shap
 - `acceptanceCriteria` ← Completion Criteria, as [{id: "AC-1", text}, ...] (ids English raw)
 - `testingStrategy` ← Testing Strategy, one string per scenario
 - `risks` ← Risks, as [{risk, likelihood: low|med|high, mitigation, source}]
-- `edgeCases` ← boundary conditions that must be explicitly handled
+- `edgeCases` ← boundary conditions that must be explicitly handled (extract from the proposals' risk/boundary analyses — there is no dedicated section above)
 - `summary` ← one line: "{N} acceptance criteria, {M} edge cases"
 
 Free-text fields in **{user_lang}**; ids and enum values English raw.

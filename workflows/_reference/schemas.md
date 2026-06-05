@@ -16,12 +16,17 @@
 - `agent(prompt, {schema})` forces StructuredOutput and returns a **validated object**
   (spike-verified). No 1-line parsing, no verdict regex.
 - **Free-text fields carry a language directive in their `description`.** Scripts build
-  it dynamically from args (spike-verified to control output language ko/en):
+  it dynamically from args (spike-verified to control output language ko/en) — ALWAYS via
+  a fallback const, never bare `A.userLang` (a missing userLang silently renders
+  "render in undefined", SPIKE-F1's exact failure mode):
   ```js
   const A = typeof args === 'string' ? JSON.parse(args) : (args || {})   // SPIKE-F1 guard
+  const LANG = A.userLang || 'the language of the task description'      // fallback REQUIRED
   // inside the schema literal:
-  summary: { type: 'string', description: `render in ${A.userLang}` }
+  summary: { type: 'string', description: `render in ${LANG}` }
   ```
+  (The `${A.userLang}` forms in the schema blocks below are shorthand — copy them as
+  `${LANG}` with the fallback const, exactly as the three shipped scripts do.)
 - **Enum/identifier fields stay English raw** (verdicts, severities, personas, paths) —
   shrinks the translation surface (user-lang leak guard, 2a2aa68).
 - Verdict enum is fixed: `PASS | FAIL_L2 | FAIL_L3`.

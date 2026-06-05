@@ -24,6 +24,9 @@ const MODELS = A.models || {}
 const mopt = (m) => (m ? { model: m } : {}) // null/undefined -> inherit parent model
 
 // ---- minimal deterministic renderer (replaces dead render.js, C1) ----------
+// Substitution order = vars insertion order. Keep STRUCTURAL keys first and
+// user-influenced payload keys LAST (task last of all): a payload substituted
+// early could otherwise hijack later {placeholders} with injected literals.
 const render = (tpl, vars) =>
   Object.entries(vars).reduce(
     (t, [k, v]) => t.split('{' + k + '}').join(v == null ? '' : String(v)),
@@ -301,7 +304,7 @@ Return the spec as a structured object (the dispatching engine enforces the shap
 - \`acceptanceCriteria\` ← Completion Criteria, as [{id: "AC-1", text}, ...] (ids English raw)
 - \`testingStrategy\` ← Testing Strategy, one string per scenario
 - \`risks\` ← Risks, as [{risk, likelihood: low|med|high, mitigation, source}]
-- \`edgeCases\` ← boundary conditions that must be explicitly handled
+- \`edgeCases\` ← boundary conditions that must be explicitly handled (extract from the proposals' risk/boundary analyses — there is no dedicated section above)
 - \`summary\` ← one line: "{N} acceptance criteria, {M} edge cases"
 
 Free-text fields in **{user_lang}**; ids and enum values English raw.
@@ -451,8 +454,8 @@ const PERSONAS =
         { id: 'senior_developer', tpl: TPL_SENIOR_DEVELOPER },
       ]
 
+// Structural keys first; user-influenced payloads last (task_description last of all).
 const commonVars = {
-  task_description: A.task,
   repo_path: A.repoPath,
   lang: A.lang,
   scope: A.scope,
@@ -460,11 +463,12 @@ const commonVars = {
   conventions: A.conventions,
   qa_discovery_notes: A.qaNotes,
   critic_findings: A.criticFindings,
+  task_description: A.task,
 }
 
 const rawProposals = await parallel(
   PERSONAS.map((p) => () =>
-    agent(render(p.tpl, { ...commonVars, persona_id: p.id }), {
+    agent(render(p.tpl, { persona_id: p.id, ...commonVars }), {
       schema: AnalysisResultSchema,
       label: p.id,
       phase: 'Propose',
@@ -493,9 +497,9 @@ const allProposals = proposals
 const synthTpl = A.mode === 'multi' ? TPL_SYNTHESIS_MULTI : TPL_SYNTHESIS_STANDARD
 const plan = await agent(
   render(synthTpl, {
-    task_description: A.task,
     user_lang: A.userLang,
     all_proposals: allProposals,
+    task_description: A.task,
   }),
   { schema: PlanResultSchema, label: 'synthesis', phase: 'Synthesize', ...mopt(MODELS.advisor) },
 )

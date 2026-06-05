@@ -3,7 +3,9 @@
 // Retry budgeting (L1<=3, L2<=2) and HARD GATES #2/#3 live in the ORCHESTRATOR between
 // segment runs — each retry is a fresh harness.build(retry) then harness.eval pass.
 // Flags: skipL1=true (user chose "Continue to Evaluator" after L1 max-fail) jumps straight
-// to evaluation; onlyL1=true (post-auto-fix re-verify) returns after the L1 pass.
+// to evaluation; onlyL1=true returns after the L1 pass (generic capability for orchestrators
+// needing an L1-only recheck — the shipped /harness flow runs ONE full eval after auto-fix
+// apply instead of an onlyL1 pre-pass, so L1 is not executed twice).
 //
 // L1 mechanical failure is encoded as { layer: 'L1', verdict: 'FAIL_L2' } — the verdict
 // enum is locked to PASS|FAIL_L2|FAIL_L3; branch on (layer, verdict), not verdict alone.
@@ -27,6 +29,9 @@ const LANG = A.userLang || 'the language of the task description'
 const MODELS = A.models || {}
 const mopt = (m) => (m ? { model: m } : {})
 
+// Substitution order = vars insertion order. Keep STRUCTURAL keys first and
+// user-influenced payload keys LAST: a payload substituted early could otherwise
+// hijack later {placeholders} with injected literals.
 const render = (tpl, vars) =>
   Object.entries(vars).reduce(
     (t, [k, v]) => t.split('{' + k + '}').join(v == null ? '' : String(v)),
@@ -338,7 +343,7 @@ Write the report (in \`{user_lang}\`) to: \`{qa_report_path}\`
 
 ## Constraints
 
-- The verdict is **PASS** only if ALL Layer 2 checks pass AND all Layer 3 criteria are PASS and all tests pass. Any single FAIL makes the verdict FAIL.
+- **Verdict** is **PASS** only if ALL Layer 2 checks pass AND all Layer 3 criteria are PASS and all tests pass. Any single FAIL makes the verdict FAIL.
 - Do not modify source files — your only output is the QA report.
 - Fix instructions must be concrete so the implementer can act directly.
 - Be concise — evidence over explanation.
@@ -387,8 +392,6 @@ const verifyContext = A.skipL1
 
 const verdict = await agent(
   render(TPL_EVALUATOR, {
-    spec_content: A.specContent,
-    changed_files_list: A.changedFilesList,
     test_available: A.testAvailable ? 'true' : 'false',
     build_cmd: A.buildCmd || '',
     test_cmd: A.testCmd || '',
@@ -397,6 +400,8 @@ const verdict = await agent(
     user_lang: A.userLang,
     verify_context: verifyContext,
     qa_report_path: A.qaReportPath,
+    changed_files_list: A.changedFilesList,
+    spec_content: A.specContent,
   }),
   { schema: VerifyVerdictSchema, label: 'evaluator', phase: 'Evaluate', ...mopt(MODELS.evaluator) },
 )

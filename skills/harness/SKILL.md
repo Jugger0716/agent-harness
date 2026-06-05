@@ -111,7 +111,7 @@ Apply the shared opt-in convention in `templates/_shared/mode_gate.md`. /harness
 | no `--mode` AND session is in ultracode mode | multi | **workflow** |
 | no `--mode`, no opt-in | single | **inline** |
 
-- **Opt-in signals** (any one suffices, per mode_gate.md): ultracode mode is on for the session; the user passed an explicit deep `--mode`; or these skill instructions direct the Workflow call (valid documented opt-in — but /harness only exercises it when one of the first two holds).
+- **Opt-in signals** (any one suffices, per mode_gate.md): ultracode mode is on for the session; the user passed an explicit `--mode standard/multi` (or a deeper alias: `comprehensive`/`thorough`/`deep`); or these skill instructions direct the Workflow call (valid documented opt-in — but /harness only exercises it when one of the first two holds).
 - **Graceful fallback:** if a `Workflow` invocation errors at any step, print `[harness] ⚠ Workflow engine unavailable — falling back to the inline single path.` (in `user_lang`), set `path_resolved → "inline"`, `mode → "single"`, and continue the CURRENT step on the inline path. Never error out.
 - Record `path_resolved` in state.json and show `Path` in the Setup Summary.
 - INLINE = the preserved single-agent flow (planner_single → generator_single → verify_layer1 → evaluator). Standard/multi fan-out exists ONLY on the workflow path — the engine replaces the old hand-rolled parallel-dispatch prose.
@@ -638,18 +638,18 @@ Print: `[harness] Phase: Generate`
      args: {
        specContent: <spec.md content>,
        qaFeedback: <qa_report.md content if round > 1, else "(First round)">,
-       repoPath, lang, scope, maxFiles: <max_files>, userLang,
-       roundNum: <round>, verifyFailure: <"" first pass>, verifyReportPath: "{docs_path}verify_report.md",
+       repoPath, lang, scope, maxFiles: <max_files>, testCmd: <test_cmd>, userLang,
+       verifyFailure: <"" first pass>, verifyReportPath: "{docs_path}verify_report.md",
        mode, models: { ... as in Step 2 },
        retry: false
      }
    }
    ```
 3. Record `runs.build → { "runId": "<id>" }`.
-4. The segment returns `{ changes: ChangeSet, planDigest, advisorDigests }`. Store `workflow_ctx → { planDigest, advisorDigests }` in state.json (reused on retries).
+4. The segment returns `{ changes: ChangeSet, planDigest, advisorDigests }`. Store `workflow_ctx → { planDigest, advisorDigests, changedFiles }` in state.json — `changedFiles` = repo-relative paths from `changes.modifiedFiles[].path` + `createdFiles` (reasons stripped; normalize any absolute paths to repo-relative). Digests are reused on retries; `changedFiles` is the sanctioned Step 5 source on resume.
 5. **Orchestrator writes `{docs_path}changes.md` from the ChangeSet object**:
    - `## Round {round} Changes` header
-   - `### Modified Files` ← `modifiedFiles[]` as `- path — reason` ; `### Created Files` / `### Deleted Files`
+   - `### Modified Files` ← `modifiedFiles[]` as `- path — reason` (normalize absolute paths to repo-relative) ; `### Created Files` / `### Deleted Files`
    - `### Advisor Feedback Applied` ← `advisorFeedbackApplied[]` ; `### Advisor Feedback Declined` ← `advisorFeedbackDeclined[]`
 6. Print per OLC: `  ✓ Code: {changes.summary}`
 7. Verify `changes.md` exists (orchestrator-written).
@@ -705,7 +705,7 @@ Print: `[harness] Phase: Verify (Layer 1 — Mechanical)`
        changesMdPath: "{docs_path}changes.md", verifyReportPath: "{docs_path}verify_report.md",
        todoBlocking: <verify.todo_blocking>,
        specContent: <spec.md content>,
-       changedFilesList: <paths only from ChangeSet.modifiedFiles+createdFiles — strip all "reason" text (anchoring prevention)>,
+       changedFilesList: <repo-relative paths only from the in-context ChangeSet.modifiedFiles+createdFiles — strip all "reason" text (anchoring prevention); on resume with no in-context ChangeSet, use state.workflow_ctx.changedFiles>,
        testAvailable: <bool>, roundNum: <round>, scope, userLang,
        qaReportPath: "{docs_path}qa_report.md",
        models: { ... }, skipL1: false, onlyL1: false
@@ -815,9 +815,9 @@ After 2nd HARD-GATE decision, set `verify.autofix_attempted = true` in state.jso
 3. Apply unified diff from `.harness/generator/auto_fix_patch.md` using Edit tool.
    - If any hunk fails to apply: restore from snapshot, warn user "Apply failed — reverted to pre-apply state.", return to HARD-GATE (retries >= 3, Auto-fix hidden).
 4. Update state.json: `autofix.applied → "applied"`. Reset `verify.layer1_result → null`.
-5. Re-run Layer 1 Verify (retry counter `layer1_retries` unchanged — do NOT increment). INLINE → re-dispatch verify_layer1; WORKFLOW → `harness.eval` with `onlyL1: true`:
-   - **PASS** → proceed to Step 6 (INLINE) / full `harness.eval` (`onlyL1: false`) then Step 7 (WORKFLOW).
-   - **FAIL** → update state.json: `autofix.applied → "stopped"`, `layer1_retries = min(layer1_retries, 3)` (clamp — see §State Machine I4). Return to FAIL retries >= 3 HARD-GATE (Auto-fix option hidden since `verify.autofix_attempted == true`).
+5. Re-run verification (retry counter `layer1_retries` unchanged — do NOT increment). INLINE → re-dispatch verify_layer1. WORKFLOW → run ONE full `harness.eval` (`skipL1: false, onlyL1: false`) — its L1 phase IS the re-verification (no separate `onlyL1` pre-pass; avoids running L1 twice):
+   - **L1 PASS** → INLINE: proceed to Step 6. WORKFLOW: the same eval run already continued to L2/L3 — take its verdict to Step 7.
+   - **L1 FAIL** (`layer == "L1"`) → update state.json: `autofix.applied → "stopped"`, `layer1_retries = min(layer1_retries, 3)` (clamp — see §State Machine I4). Return to FAIL retries >= 3 HARD-GATE (Auto-fix option hidden since `verify.autofix_attempted == true`).
 
 **If "Reject":**
 1. Update state.json: `autofix.applied → "rejected"`.
@@ -874,7 +874,7 @@ Print: `[harness] Evaluate complete.`
 
 Determine the verdict:
 - **INLINE path:** Read `qa_report.md`. Look for `"### Verdict: PASS"` or `"### Verdict: FAIL"`. Also check `verify.layer2_result` from state.json to determine failing layer.
-- **WORKFLOW path:** use the `VerifyVerdict` object from `harness.eval` — `verdict ∈ {PASS, FAIL_L2, FAIL_L3}` with `layer`. Set `verify.layer2_result → "FAIL"` iff `verdict == "FAIL_L2"`, else `"PASS"`. The QA report file was still written by the evaluator agent for the user.
+- **WORKFLOW path:** use the `VerifyVerdict` object from `harness.eval` — `verdict ∈ {PASS, FAIL_L2, FAIL_L3}` with `layer`. Set `verify.layer2_result → "FAIL"` iff `verdict == "FAIL_L2"`, else `"PASS"`. The QA report file was still written by the evaluator agent for the user. **On resume with no in-context VerifyVerdict:** read `qa_report.md`'s `### Verdict:` line (PASS/FAIL) and combine it with `verify.layer2_result` from state.json to reconstruct {PASS, FAIL_L2, FAIL_L3} — mirrors the INLINE procedure (sanctioned read, see §Architecture Principles #1).
 
 #### If PASS:
 
@@ -1003,7 +1003,7 @@ The following principles are invariant constraints for the harness Orchestrator.
 
 1. **Orchestrator reads no intermediate files.** Exceptions:
    - spec.md at plan gate (and the orchestrator WRITES spec.md/changes.md from returned objects — writing final artifacts is not reading intermediates)
-   - qa_report.md at verdict gate (INLINE path)
+   - qa_report.md at verdict gate (INLINE path; WORKFLOW path on session resume — verdict reconstruction)
    - verify_report.md path for user message
    - **verify_report.md failing-file extraction for Auto-fix Proposer dispatch**:
      Orchestrator reads verify_report.md to extract failing file paths only (no content analysis).
