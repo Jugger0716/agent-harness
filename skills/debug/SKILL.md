@@ -311,7 +311,7 @@ Every hypothesis MUST be tested with executable verification actions. Pure reaso
    c. Fill template variables for each:
       - Error Analyst: `{error_description}`, `{stack_trace}` (from error or attached file), `{repo_path}`, `{user_lang}`, `{output_path}`: `.harness/debug/analysis_error_analyst.md`
       - Code Archaeologist: `{error_description}`, `{repo_path}`, `{user_lang}`, `{output_path}`: `.harness/debug/analysis_code_archaeologist.md`
-   d. **Launch 2 sub-agents in parallel** using the Agent tool. Each receives its template only — no access to the other sub-agent's output (anchoring prevention). If `model_config.preset` is not `"default"`, pass `model` parameter per the Model Selection table (both → advisor role).
+   d. **Launch 2 sub-agents in parallel** using the Agent tool. Each receives its template only — no access to the other sub-agent's output (anchoring prevention). If `model_config.preset` is not `"default"`, pass `model` parameter per the preset table in `templates/_shared/model_config.md` (both → advisor role).
    e. Wait for both to complete. Verify both analysis files exist.
 
 3. **Launch Cross Verification:**
@@ -322,7 +322,7 @@ Every hypothesis MUST be tested with executable verification actions. Pure reaso
       - `{archaeologist_output}`: full content of `analysis_code_archaeologist.md`
       - `{user_lang}`
       - `{root_cause_path}`: `docs/harness/<slug>/root_cause.md`
-   d. **Launch 1 sub-agent** (Cross Verifier). If `model_config.preset` is not `"default"`, pass `model` parameter per the Model Selection table (Cross Verifier → advisor role).
+   d. **Launch 1 sub-agent** (Cross Verifier). If `model_config.preset` is not `"default"`, pass `model` parameter per the preset table in `templates/_shared/model_config.md` (Cross Verifier → advisor role).
    e. Wait for completion. Verify `docs/harness/<slug>/root_cause.md` exists.
 
 4. Inform the user (in `user_lang`):

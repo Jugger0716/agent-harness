@@ -231,7 +231,7 @@ Proceed to Step 4 with findings.
    - `{shared_context}`: contents of `.harness/context.md`
    - `{incremental_context}`: incremental info if applicable, else "(Full analysis — no prior audit)"
    - `{output_path}`: `.harness/analysis_<agent_name>.md`
-4. **Launch 2 sub-agents in parallel** using the Agent tool. Each receives its template and shared context. If `model_config.preset` is not `"default"`, pass `model` parameter per the Model Selection table (Structure & Dependency Analyst, Pattern & Quality Analyst → executor role).
+4. **Launch 2 sub-agents in parallel** using the Agent tool. Each receives its template and shared context. If `model_config.preset` is not `"default"`, pass `model` parameter per the preset table in `templates/_shared/model_config.md` (Structure & Dependency Analyst, Pattern & Quality Analyst → executor role).
 5. Wait for both to complete. Verify both analysis files exist.
 6. Proceed to Step 3-D Synthesis.
 
@@ -262,7 +262,7 @@ Proceed to Step 4 with findings.
    - `{shared_context}`: contents of `.harness/context.md`
    - `{incremental_context}`: incremental info if applicable, else "(Full analysis — no prior audit)"
    - `{output_path}`: `.harness/analysis_<agent_name>.md`
-4. **Launch 3 sub-agents in parallel** using the Agent tool. Each receives its template and shared context. No agent has knowledge of the others. If `model_config.preset` is not `"default"`, pass `model` parameter per the Model Selection table (Structure Analyst, Dependency Analyst, Pattern Analyst → executor role).
+4. **Launch 3 sub-agents in parallel** using the Agent tool. Each receives its template and shared context. No agent has knowledge of the others. If `model_config.preset` is not `"default"`, pass `model` parameter per the preset table in `templates/_shared/model_config.md` (Structure Analyst, Dependency Analyst, Pattern Analyst → executor role).
 5. Wait for all 3 to complete. Verify all 3 analysis files exist.
 
 ##### Step 3b-T: Cross-Verification (Parallel)
@@ -276,7 +276,7 @@ Proceed to Step 4 with findings.
    - `{analysis_1_author}` / `{analysis_1_content}`: first OTHER agent's analysis
    - `{analysis_2_author}` / `{analysis_2_content}`: second OTHER agent's analysis
    - `{output_path}`: `.harness/critique_<agent_name>.md`
-4. **Launch 3 sub-agents in parallel.** Each reviews the other two agents' analyses. If `model_config.preset` is not `"default"`, pass `model` parameter per the Model Selection table (Cross-Critique → advisor role).
+4. **Launch 3 sub-agents in parallel.** Each reviews the other two agents' analyses. If `model_config.preset` is not `"default"`, pass `model` parameter per the preset table in `templates/_shared/model_config.md` (Cross-Critique → advisor role).
 5. Wait for all 3 to complete. Verify all 3 critique files exist.
 
 ##### Step 3c-T: Synthesis

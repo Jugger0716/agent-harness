@@ -239,7 +239,7 @@ If `.harness/context.md` was not created in Setup (e.g., resuming from session r
 
 1. Read two analyst templates from `{CLAUDE_PLUGIN_ROOT}/templates/refactor/`: `structural_analyst.md`, `risk_analyst.md`
 2. For each analyst, fill template variables: `{target_description}`, `{repo_path}`, `{lang}`, `{scope}`, `{user_lang}`, `{context}` (from .harness/context.md), `{test_cmd}`, `{baseline_test_results}` from state.json; `{output_path}`: `.harness/refactor/analysis_<analyst>.md`
-3. **Launch 2 subagents in parallel** using the Agent tool. Each receives its analyst template and context.md, has no knowledge of the other subagent (anchoring prevention), and writes to its output_path. If `model_config.preset` is not `"default"`, pass `model` parameter per the Model Selection table (Structural Analyst, Risk Analyst → executor role).
+3. **Launch 2 subagents in parallel** using the Agent tool. Each receives its analyst template and context.md, has no knowledge of the other subagent (anchoring prevention), and writes to its output_path. If `model_config.preset` is not `"default"`, pass `model` parameter per the preset table in `templates/_shared/model_config.md` (Structural Analyst, Risk Analyst → executor role).
 4. Wait for both to complete. Verify both analysis files exist.
 
 ##### Step 2c-M: Synthesis
@@ -266,7 +266,7 @@ Same as Step 2a-M.
 
 1. Read three analyst templates from `{CLAUDE_PLUGIN_ROOT}/templates/refactor/`: `structural_analyst.md`, `risk_analyst.md`, `feasibility_analyst.md`
 2. For each analyst, fill template variables: same as Step 2b-M, plus `{output_path}`: `.harness/refactor/analysis_<analyst>.md`
-3. **Launch 3 subagents in parallel.** Each receives its analyst template and context.md, has no knowledge of other subagents, and writes to its output_path. If `model_config.preset` is not `"default"`, pass `model` parameter per the Model Selection table (Structural Analyst, Risk Analyst, Feasibility Analyst → executor role).
+3. **Launch 3 subagents in parallel.** Each receives its analyst template and context.md, has no knowledge of other subagents, and writes to its output_path. If `model_config.preset` is not `"default"`, pass `model` parameter per the preset table in `templates/_shared/model_config.md` (Structural Analyst, Risk Analyst, Feasibility Analyst → executor role).
 4. Wait for all 3 to complete. Verify all 3 analysis files exist.
 
 ##### Step 2c-C: Cross-Verification (Parallel)
@@ -274,7 +274,7 @@ Same as Step 2a-M.
 1. Read the cross-critique template: `{CLAUDE_PLUGIN_ROOT}/templates/refactor/cross_critique.md`
 2. Read all 3 analysis files from Step 2b-C.
 3. For each analyst, prepare the cross-critique prompt with: `{analyst_name}`, `{target_description}`, `{user_lang}`, `{analysis_1_author}`, `{analysis_1_content}`, `{analysis_2_author}`, `{analysis_2_content}` (the OTHER two analyses), `{output_path}`: `.harness/refactor/critique_<analyst>.md`
-4. **Launch 3 subagents in parallel.** Each writes to `.harness/refactor/critique_<analyst>.md`. If `model_config.preset` is not `"default"`, pass `model` parameter per the Model Selection table (advisor role — cross-critique requires critical judgment).
+4. **Launch 3 subagents in parallel.** Each writes to `.harness/refactor/critique_<analyst>.md`. If `model_config.preset` is not `"default"`, pass `model` parameter per the preset table in `templates/_shared/model_config.md` (advisor role — cross-critique requires critical judgment).
 5. Wait for all 3 to complete. Verify all 3 critique files exist.
 
 ##### Step 2d-C: Synthesis
@@ -399,7 +399,7 @@ Read `mode` from state.json and branch accordingly.
    a. Announce the step (in `user_lang`): `[harness] Step N: <description>`
    b. Read the safety advisor template: `{CLAUDE_PLUGIN_ROOT}/templates/refactor/safety_advisor.md`
    c. Prepare the safety advisor prompt: `{step_number}`, `{step_description}`, `{files_affected}`, `{refactor_plan_content}` (full plan for context), `{repo_path}`, `{lang}`, `{test_cmd}`, `{user_lang}`, `{previous_steps_summary}` (what was already done)
-   d. **Launch 1 subagent** (Safety Advisor) to review the proposed step BEFORE execution. If `model_config.preset` is not `"default"`, pass `model` parameter per the Model Selection table (Safety Advisor → advisor role). The Safety Advisor:
+   d. **Launch 1 subagent** (Safety Advisor) to review the proposed step BEFORE execution. If `model_config.preset` is not `"default"`, pass `model` parameter per the preset table in `templates/_shared/model_config.md` (Safety Advisor → advisor role). The Safety Advisor:
       - Verifies the step preserves behavior
       - Identifies any behavioral side effects
       - Gives GO / CAUTION / STOP recommendation
@@ -432,7 +432,7 @@ Read `mode` from state.json and branch accordingly.
 2. Read the evaluator template: `{CLAUDE_PLUGIN_ROOT}/templates/refactor/evaluator.md`
 3. **Prepare the subagent prompt.** Fill in: `{refactor_plan_content}` (structural goals only — strip implementation details), `{changed_files_list}` (file paths only from changes.md — **strip all reasoning** to prevent anchoring), `{test_available}`, `{build_cmd}`, `{test_cmd}`, `{baseline_test_results}`, `{baseline_failures}` (pre-existing failures to ignore), `{round_num}`, `{scope}`, `{user_lang}` from state.json, `{qa_report_path}`: `{docs_path}qa_report.md`.
    **Do NOT include:** Execution reasoning, safety advisor assessments, why files were changed, or references to "Generator"/"AI"/"agent" as code author.
-4. **Launch the Evaluator subagent** using the Agent tool. If `model_config.preset` is not `"default"`, pass `model` parameter per the Model Selection table (Evaluator → evaluator role). Instruct it to write the QA report to `{docs_path}qa_report.md`.
+4. **Launch the Evaluator subagent** using the Agent tool. If `model_config.preset` is not `"default"`, pass `model` parameter per the preset table in `templates/_shared/model_config.md` (Evaluator → evaluator role). Instruct it to write the QA report to `{docs_path}qa_report.md`.
 5. When the subagent returns, read `{docs_path}qa_report.md` to get the verdict.
 
 ### Step 6: Verdict & Loop
