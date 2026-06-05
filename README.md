@@ -69,8 +69,8 @@ Higher modes cost more per run but save total cost by reducing retry rounds. Sta
 | **Harness** | `/harness <task>` | 3-Phase (Planner -> Generator -> Evaluator) orchestrator. Inline single path by default; opt-in workflow path (ultracode or `--mode standard/multi`) runs plugin-shipped native Workflow segment scripts with schema-validated returns. Works with or without git. _(formerly `/workflow` — old name kept as a deprecation alias)_ |
 | **Refactor** | `/refactor <target>` | Safe, behavior-preserving code structure improvement. Single, multi, or comprehensive mode. |
 | **Migrate** | `/migrate <target> [--from v4 --to v5]` | Staged migration of frameworks, libraries, and dependencies. Single or multi-agent mode with WebSearch research. |
-| **Debug** | `/debug <error>` | Hypothesis-driven debugging with mandatory executable verification. Quick or deep (2-agent cross-verification) mode. |
-| **Spec** | `/spec <requirement>` | Multi-round Q&A requirements specification. Output directly compatible with `/harness` input. Quick or deep mode. |
+| **Debug** | `/debug <error>` | Hypothesis-driven debugging with mandatory executable verification. Quick (inline) or deep (2 analysts + adversarial cross-verify, native Workflow path). |
+| **Spec** | `/spec <requirement>` | Multi-round Q&A requirements specification. Output directly compatible with `/harness` input. Quick (inline) or deep (4 analysts + Critic, native Workflow path). |
 | **Test Gen** | `/test-gen <target>` | Automated test generation with mutation-based quality verification. Supports coverage-gap and regression modes. |
 | **Memory** | `/memory <cmd>` | Team knowledge base (save/show/clean/search). Git-committed, team-shared decisions, patterns, and conventions. |
 | **Codebase Audit** | `/codebase-audit` | Systematic codebase analysis with 3-tier mode (quick/deep/thorough) for team onboarding. |
@@ -103,10 +103,10 @@ claude plugin install agent-harness@agent-harness-marketplace
 /harness draft product requirements spec           # works without git too (non-dev tasks)
 
 /debug "NullPointerException in UserController"    # hypothesis-driven debugging
-/debug --mode deep --attach error.log              # 2-agent cross-verification
+/debug --mode deep --attach error.log              # workflow path: 2 analysts + adversarial cross-verify
 
 /spec "Add payment retry on failure"               # multi-round Q&A -> structured spec
-/spec --mode deep                                  # 2 analysts (requirements + user scenario)
+/spec --mode deep                                  # workflow path: 4 analysts + Critic cold review
 
 /test-gen src/auth/                                # generate tests for directory
 /test-gen --coverage-gap                           # auto-find low-coverage areas
@@ -628,7 +628,7 @@ If a session is interrupted, the harness detects the existing `.harness/state.js
 Hypothesis-driven debugger with mandatory executable verification actions. Classifies error types, attempts reproduction, generates falsifiable hypotheses, and verifies them through code search, git history, and test execution.
 
 ```
-/debug  -> [Setup] Error info collection + error type classification + mode selection
+/debug  -> [Setup] Error info collection + error type classification + mode gate (derived, no roundtrip)
                     -> [Phase 0.5] Error Type Classification
                        build/compile: fast path -> simplified HARD-GATE -> Fix
                        runtime/logic: -> Phase 0.7
@@ -636,11 +636,12 @@ Hypothesis-driven debugger with mandatory executable verification actions. Class
                        success: record conditions, proceed
                        failure: switch to log/environment analysis
                     -> [Phase 1] Root Cause Analysis (Hypothesis Loop)
-                       quick: orchestrator generates 3 hypotheses
+                       quick (inline): orchestrator generates 3 hypotheses
                               -> falsification (executable actions only)
                               -> loop until High confidence or max 3 rounds
-                       deep:  Error Analyst + Code Archaeologist (parallel)
-                              -> Cross Verification (synthesize)
+                       deep (workflow): debug.analyze script — Error Analyst + Code
+                              Archaeologist (parallel) -> ADVERSARIAL cross-verify
+                              -> schema-validated RootCause return
                     -> HARD-GATE: Fix it / Record only / Stop
                     -> [Phase 2] Fix (optional, simple fixes only)
                     -> [Phase 3] Prevention (optional, pattern scan + smart routing)
@@ -648,17 +649,17 @@ Hypothesis-driven debugger with mandatory executable verification actions. Class
 
 ### Core: Falsification Rules
 
-Every hypothesis must be tested with **executable verification actions** -- pure reasoning-only falsification is prohibited:
+Every hypothesis must be tested with **executable verification actions** -- pure reasoning-only falsification is prohibited (canonical source: `templates/_shared/falsification_rules.md`):
 
-1. **Physical separation**: Write hypotheses to `.harness/debug/hypotheses.md` before verification
+1. **Record first**: hypotheses land in `.harness/debug/hypotheses.md` (inline) or the `hypotheses[]` schema field (workflow) before verification
 2. **Falsification question**: "If this hypothesis is WRONG, what evidence should exist in the code?"
-3. **Executable actions required** (at least 1 per hypothesis):
+3. **Executable actions required** (at least 1 per hypothesis; schema-enforced `minItems: 1` on the workflow path):
    - Code search (Grep/Glob) -- check for specific patterns
    - `git blame`/`git log` -- check change history
    - Test execution -- verify expected behavior
    - File read -- check configs, env vars
 4. **Confidence adjusted only from evidence**, not reasoning
-5. **Refuted hypotheses marked `[REFUTED]`** with evidence in hypotheses.md
+5. **Refuted hypotheses marked `[REFUTED]`** with the evidence that refuted them
 
 ### Error Type Fast Path
 
@@ -670,10 +671,10 @@ Every hypothesis must be tested with **executable verification actions** -- pure
 
 ### Modes
 
-| Mode | Agents | Process | Token cost |
-|------|--------|---------|------------|
-| **quick** | Orchestrator only | Direct hypothesis loop | ~1x |
-| **deep** | Error Analyst + Code Archaeologist + Cross Verifier | Independent parallel analysis -> cross-verification | ~1.7x |
+| Mode | Path | Agents | Process | Token cost |
+|------|------|--------|---------|------------|
+| **quick** | inline | Orchestrator only | Direct hypothesis loop | ~1x |
+| **deep** | workflow (opt-in: ultracode or `--mode deep`; requires git + Workflow tool) | Error Analyst + Code Archaeologist + Cross Verifier | Independent parallel analysis -> adversarial cross-verify (refute the survivor) | ~1.7x |
 
 ### Smart Routing (after completion)
 
@@ -699,15 +700,17 @@ docs/harness/<slug>/
 Transforms vague or incomplete requirements into structured, actionable specifications through **multi-round Q&A discovery**. Output is directly compatible with `/harness` input via section mapping.
 
 ```
-/spec  -> [Setup] mode selection (quick / deep)
+/spec  -> [Setup] mode gate (derived, no roundtrip: quick=inline / deep=workflow)
                   -> [Phase 1] Requirements Discovery (Multi-round Q&A)
                      Round 1: parse vague requirements -> generate up to 5 questions
                      Round 2-3: follow-up questions from new ambiguities (conditional)
                      Max 3 rounds. "Don't know" -> [unconfirmed]
                   -> [Phase 2] Spec Generation
-                     quick: orchestrator writes spec directly
-                     deep:  Requirements Analyst + User Scenario Analyst (parallel)
-                            -> Synthesis
+                     quick (inline): orchestrator writes spec directly
+                     deep (workflow): spec.plan script — 4 analysts (requirements /
+                            user-scenario / risk / tech-constraint, parallel) -> Synthesis
+                            -> spec.eval script — Critic cold review -> Critic Gate
+                            (Auto-revise / Modify / Approve; max 1 re-synthesis round)
                   -> HARD-GATE: Approve / Modify (re-generate) / Stop
                   -> [Phase 3] Handoff: suggest /harness with spec path
 ```
@@ -738,10 +741,10 @@ Maps directly to `/harness` input: Goal->Goal, Background->Background, Scope->Sc
 
 ### Modes
 
-| Mode | Agents | Token cost |
-|------|--------|------------|
-| **quick** | Orchestrator only | ~0.5x |
-| **deep** | Requirements Analyst + User Scenario Analyst + Synthesis | ~1.3x |
+| Mode | Path | Agents | Token cost |
+|------|------|--------|------------|
+| **quick** | inline | Orchestrator only | ~0.5x |
+| **deep** | workflow (opt-in: ultracode or `--mode deep`; requires git + Workflow tool) | Requirements + User Scenario + Risk Auditor + Tech Constraint analysts -> Synthesis -> Critic | ~1.9x (estimated, TBD per smoke test) |
 
 ---
 
