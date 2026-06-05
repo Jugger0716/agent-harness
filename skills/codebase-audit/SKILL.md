@@ -393,43 +393,15 @@ Present as recommendations, not commands. User decides.
 
 ## Model Selection
 
-Sub-agents (deep and thorough modes only) can run on different models depending on the selected `model_config` preset. The presets map each role (executor, advisor, evaluator) to a model:
+Preset table + rules: see `templates/_shared/model_config.md`.
 
-| Preset | executor | advisor | evaluator |
-|--------|----------|---------|-----------|
-| default | (parent inherit) | (parent inherit) | (parent inherit) |
-| all-opus | opus | opus | opus |
-| balanced | sonnet | opus | opus |
-| economy | haiku | sonnet | sonnet |
-
-Each sub-agent is assigned a role. The following table defines the concrete model for every sub-agent under each preset:
-
-### Deep Mode Sub-agents
-
-| Sub-agent | Role | default | all-opus | balanced | economy |
-|-----------|------|---------|----------|----------|---------|
-| Structure & Dependency Analyst | executor | (no override) | opus | sonnet | haiku |
-| Pattern & Quality Analyst | executor | (no override) | opus | sonnet | haiku |
-
-### Thorough Mode Sub-agents
-
-| Sub-agent | Role | default | all-opus | balanced | economy |
-|-----------|------|---------|----------|----------|---------|
-| Structure Analyst | executor | (no override) | opus | sonnet | haiku |
-| Dependency Analyst | executor | (no override) | opus | sonnet | haiku |
-| Pattern Analyst | executor | (no override) | opus | sonnet | haiku |
-| Cross-Critique (per analyst) | advisor | (no override) | opus | opus | sonnet |
+**Role-map:** deep analysts (Structure & Dependency Analyst, Pattern & Quality Analyst) and thorough analysts (Structure Analyst, Dependency Analyst, Pattern Analyst) → executor; Cross-Critique (per analyst) → advisor. (No evaluator role is used.)
 
 **Applying model config:** When launching any sub-agent, if `model_config.preset` is not `"default"`, pass the `model` parameter according to the table above for that sub-agent. Sub-agents must NOT directly access `.harness/model_config.json` — the orchestrator passes the model parameter at launch time.
 
 ## User Interaction Rules
 
-All user-facing questions MUST use AskUserQuestion tool when available.
-- If AskUserQuestion is available → use it (provides numbered selection UI)
-- If AskUserQuestion is NOT available or fails → present the same options as text and accept number/keyword responses (case-insensitive)
-- Every option must include a `label` (short name) and `description` (specific explanation)
-- "Other" (free text input) is automatically appended by the framework
-- Translate all question text, labels, and descriptions to `user_lang`
+See `templates/_shared/askuserquestion.md`.
 
 ## Key Rules
 

@@ -104,7 +104,9 @@ For each approved item:
 
 ### Step 4 — Update README Index
 
-Read the current `docs/harness/memory/README.md` (create it if missing). Maintain this structure:
+Read the current `docs/harness/memory/README.md` (create it if missing). Maintain the canonical structure defined in **README Index Structure (canonical)** below.
+
+### README Index Structure (canonical)
 
 ```markdown
 # Team Memory
@@ -327,3 +329,5 @@ docs/harness/memory/
 9. **Index rebuild is additive for save, full-rebuild for clean.** Save only appends new rows. Clean rebuilds the entire README from surviving files to avoid stale entries.
 
 10. **All user-facing text in `user_lang`.** File content (the saved records themselves) is written in the language appropriate to the session. Template instruction text in this SKILL.md stays in English.
+
+11. **Never escalate to Workflow / ultracode / sub-agents.** This is a human-gated CRUD skill: every write/delete passes the per-item HARD-GATE. Do NOT dispatch Task/Agent sub-agents, do NOT invoke the Workflow tool, do NOT call WebSearch/WebFetch. The disallowed-tools frontmatter enforces this at runtime; this rule states the intent. All knowledge operations run inline in the orchestrator.

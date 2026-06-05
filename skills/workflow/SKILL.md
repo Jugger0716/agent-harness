@@ -114,22 +114,15 @@ Sub-agent 1-line return (`<keyword> — <summary>`) processing:
 - **Display phase (force user_lang):** The non-keyword free-text summary portion is force-converted to `user_lang` at display time. If the input is already `user_lang`, the result is identical (idempotent — no language-detection heuristic required). Partial-English or mixed-language text follows the same rule for consistency and predictability.
 - **Format:** `<keyword> — <summary>`. Split on first ` — ` (space-em-dash-space). On split failure, apply fallback per §Sub-agent Return Value Rules: treat as `confidence: Unknown`.
 
+**Shorthand:** "Print per OLC" = render this directive per the Print Translation Pattern (Glossary tokens stay English raw).
+
 <!-- SYNC-WITH: §Sub-agent Return Value Rules — item 3 + 1-line return parse failure -->
 
 ## Standard Status Format
 
-Read `.harness/state.json` and print per §Output Language Contract — Print Translation Pattern (labels remain English raw for monospace alignment; values follow §Output Language Contract — Preserved-English Glossary):
-```
-[harness]
-  Task   : <task>
-  Mode   : <single | standard | multi>
-  Model  : <model_config preset name>
-  Style  : <auto | phase | step>
-  Phase  : <phase label>
-  Round  : <round> / <max_rounds>
-  Branch : <branch>          ← omit if has_git == false
-  Scope  : <scope>
-```
+Status block shape + label rules: see `templates/_shared/status_format.md`.
+
+Mode enum: `<single | standard | multi>`.
 
 Phase labels:
 - `plan_ready` → "Plan — ready"
@@ -305,43 +298,13 @@ Retry loops:
      - **Step 4.5** (NEW in 8.4) `docs` first-segment exception for `/spec → /workflow` slug-safe handoff: if `path.split("/")[0] == "docs"`, the second segment MUST be `harness` (i.e. path starts with `docs/harness/...`). Otherwise halt with error: "output-dir under docs/ must be docs/harness/..." Rationale: the default `output_base = "docs/harness"` always writes under this tree, so the standard /spec handoff value `docs/harness/<slug>/` is the only legitimate `docs/...` override; any other `docs/<other>/` first-segment override is rejected to prevent accidental writes outside the harness namespace.
      - If valid: normalize with trailing slash stripped, store in `cli_flags.output_dir`.
 3. **Slugify the task:** lowercase, transliterate non-ASCII to ASCII, remove non-word chars except hyphens, replace spaces with hyphens, truncate to 50 chars. Store as `<slug>`.
-4. **Auto-detect project language and commands.** Scan the working directory:
+4. **Auto-detect project language and commands.** Scan the working directory.
 
-   | File | Language | Test Command | Build Command |
-   |------|----------|-------------|---------------|
-   | `build.gradle(.kts)` | java | `./gradlew test` | `./gradlew build` |
-   | `pom.xml` | java | `mvn test` | `mvn compile` |
-   | `pyproject.toml` / `setup.py` | python | `pytest` | (none) |
-   | `package.json` | typescript | `npm test` | `npm run build` |
-   | `*.csproj` | csharp | `dotnet test` | `dotnet build` |
-   | `go.mod` | go | `go test ./...` | `go build ./...` |
-   | `Cargo.toml` | rust | `cargo test` | `cargo build` |
+5. **Auto-detect lint command** (skip if `--lint-cmd` provided).
 
-   If none match, set language to "unknown", test/build commands to null.
+6. **Auto-detect type-check command** (skip if `--type-check-cmd` provided).
 
-5. **Auto-detect lint command** (skip if `--lint-cmd` provided). Check in order, stop at first match:
-
-   | # | Detection | Condition | lint_cmd |
-   |---|-----------|-----------|----------|
-   | 1 | Read `package.json` | `scripts.lint` key exists | `npm run lint` |
-   | 2 | Glob | `.eslintrc*` / `eslint.config.*` exists | `npx eslint .` |
-   | 3 | Read `pyproject.toml` | `[tool.ruff]` section exists | `ruff check .` |
-   | 4 | Glob+Read | `.pylintrc` exists OR `pyproject.toml` has `[tool.pylint]` | `pylint {scope}` |
-   | 5 | Glob | `.golangci.yml` / `.golangci.yaml` exists | `golangci-lint run` |
-   | 6 | Glob | `Cargo.toml` exists | `cargo clippy` |
-
-   If none match → `null` (SKIPPED during verify).
-
-6. **Auto-detect type-check command** (skip if `--type-check-cmd` provided). Check in order, stop at first match:
-
-   | # | Detection | Condition | type_check_cmd |
-   |---|-----------|-----------|----------------|
-   | 1 | Glob | `tsconfig.json` exists | `npx tsc --noEmit` |
-   | 2 | Glob+Read | `mypy.ini` exists OR `pyproject.toml` has `[tool.mypy]` | `mypy .` |
-   | 3 | Glob+Read | `pyrightconfig.json` exists OR `pyproject.toml` has `[tool.pyright]` | `pyright` |
-   | 4-6 | — | `*.csproj` / `go.mod` / `Cargo.toml` | null (build includes type-check) |
-
-   If none match → `null` (SKIPPED during verify).
+   Language/test/build/lint/typecheck detection: see `templates/_shared/detection_table.md`.
 
 7. **Determine `docs_path`:**
    ```
@@ -806,7 +769,7 @@ Print: `[harness] Phase: Verify (Layer 1 — Mechanical)`
 
 #### If PASS:
 
-Print (translate body to user_lang per §Output Language Contract — Print Translation Pattern; preserve `[harness]`, `PASS`):
+Print per OLC:
 ```
 [harness] Verify (Layer 1) complete.
   Result : PASS
@@ -817,7 +780,7 @@ Continue to Step 6.
 #### If FAIL and retries < 3:
 
 Increment `verify.layer1_retries` in state.json.
-Print (translate body to user_lang per §Output Language Contract — Print Translation Pattern; preserve `[harness]`, `FAIL`):
+Print per OLC:
 ```
 [harness] Verify (Layer 1) FAIL — retrying Generator (attempt {layer1_retries}/3)
   {first line error summary}
@@ -838,7 +801,7 @@ After retry sub-agent completes: phase → `"generate_done"`, `updated_at → no
 
 #### If FAIL and retries >= 3:
 
-Print (translate body to user_lang per §Output Language Contract — Print Translation Pattern; preserve `[harness]`, `FAIL`):
+Print per OLC:
 ```
 [harness] Verify (Layer 1) FAIL — max retries reached (3/3)
   Latest error: {first line error summary}
@@ -976,7 +939,7 @@ Proceed to Step 8.
 Layer 2 failed. Auto-retry without user gate (same pattern as Layer 1 retry).
 
 Increment `verify.layer2_retries` in state.json.
-Print (translate body to user_lang per §Output Language Contract — Print Translation Pattern; preserve `[harness]`, `FAIL`):
+Print per OLC:
 ```
 [harness] Evaluate FAIL (Layer 2) — retrying Generator (attempt {layer2_retries}/2)
   {first line from evaluator}
@@ -995,7 +958,7 @@ After retry completes: phase → `"generate_done"`, `updated_at → now`, then *
 
 #### If FAIL — Layer 2 and layer2_retries >= 2:
 
-Print (translate body to user_lang per §Output Language Contract — Print Translation Pattern; preserve `[harness]`, `FAIL`):
+Print per OLC:
 ```
 [harness] Evaluate FAIL (Layer 2) — max retries reached (2/2)
   Failing items: {summary from qa_report.md}
@@ -1041,18 +1004,7 @@ Proceed to Step 8.
 
 #### Artifact Cleanup Safety Guard
 
-Before deleting any output directory:
-
-1. **Read `docs_path`** from state.json. If missing/null: reconstruct as `"docs/harness/<slug>/"`. Extract `<slug>` = last path segment before the trailing `/`.
-2. **Validate slug**: If empty/null/whitespace → **ABORT**, warn user.
-3. **Path depth check**: `docs_path` must be a relative path exactly one level below its parent directory. slug must NOT be `memory` (reserved), must NOT contain `..` or `/`, must NOT be `.`. **Always** verify: `Path(docs_path).resolve()` ⊆ `Path.cwd()` (symlink escape prevention — no `has_git` condition). If any fail → **ABORT**.
-4. **Display before delete**: Print exact target path before executing.
-
-**Full output base cleanup** (only on explicit user request):
-1. List all subdirectories with file counts.
-2. If `docs/harness/memory/` exists, warn separately: "Contains team knowledge from /memory skill."
-3. Warn: "`docs/` is git-ignored — all artifacts permanently deleted."
-4. Confirm via AskUserQuestion (yes/no).
+Cleanup safety rules: see `templates/_shared/safety_guard.md`.
 
 #### If has_git == true:
 
@@ -1090,55 +1042,15 @@ Delete `.harness/` only. No git operations.
 
 ## Model Selection
 
-| Preset | executor | advisor | evaluator | verifier |
-|--------|----------|---------|-----------|----------|
-| default | (parent) | (parent) | (parent) | haiku (default) |
-| all-opus | opus | opus | opus | haiku (default) |
-| balanced | sonnet | opus | opus | haiku (default) |
-| economy | haiku | sonnet | sonnet | haiku (default) |
+Preset table + rules: see `templates/_shared/model_config.md`.
 
-### Planner Phase Sub-agents
-
-| Sub-agent | Role | default | all-opus | balanced | economy |
-|-----------|------|---------|----------|----------|---------|
-| Architect | advisor | (no override) | opus | opus | sonnet |
-| Senior Developer | advisor | (no override) | opus | opus | sonnet |
-| QA Specialist | advisor | (no override) | opus | opus | sonnet |
-
-### Generator Phase Sub-agents
-
-| Sub-agent | Role | default | all-opus | balanced | economy |
-|-----------|------|---------|----------|----------|---------|
-| Lead Developer | executor | (no override) | opus | sonnet | haiku |
-| Code Quality Advisor | advisor | (no override) | opus | opus | sonnet |
-| Test & Stability Advisor | advisor | (no override) | opus | opus | sonnet |
-| Combined Advisor | advisor | (no override) | opus | opus | sonnet |
-| Generator (single) | executor | (no override) | opus | sonnet | haiku |
-
-### Evaluator Phase Sub-agents
-
-| Sub-agent | Role | default | all-opus | balanced | economy |
-|-----------|------|---------|----------|----------|---------|
-| Evaluator | evaluator | (no override) | opus | opus | sonnet |
-
-### Verify Phase Sub-agents
-
-| Sub-agent | Role | default | all-opus | balanced | economy |
-|-----------|------|---------|----------|----------|---------|
-| Verify (Layer 1) | verifier | haiku (default) | haiku (default) | haiku (default) | haiku (default) |
+Architect / Senior Developer / QA Specialist -> advisor; Lead Developer & Generator(single) -> executor; Code Quality / Test & Stability / Combined Advisor -> advisor; Evaluator -> evaluator; Verify (Layer 1) -> verifier (haiku default).
 
 > **Verifier defaults to haiku across all presets.** Layer 1 only executes commands and parses exit codes — lowest-cost model is always sufficient. Override with `--verifier-model sonnet|opus` for sensitive mechanical verification (e.g., concurrency, complex test failures). Opt-in only. When set to `sonnet` or `opus`, a cost warning is shown in Setup Summary.
 
-**Applying model config:** When launching any sub-agent, if `model_config.preset` ≠ `"default"`, pass `model` per the table. Sub-agents do NOT read model_config from state.json — the orchestrator passes the model at launch.
-
 ## User Interaction Rules
 
-All user-facing questions MUST use AskUserQuestion tool when available.
-- If AskUserQuestion available → use it
-- If not available or fails → present as text with numbered options
-- Every option: `label` (short) + `description` (specific)
-- "Other" (free text) is automatically appended
-- Translate all text to `user_lang`
+See `templates/_shared/askuserquestion.md`.
 
 ## Architecture Principles
 

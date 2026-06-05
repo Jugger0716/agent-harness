@@ -172,7 +172,7 @@ The sub-agent checks each criterion and scores PASS / ISSUE:
 | **Content preservation** | No semantic information was lost during optimization | Compare git diff — every deleted line's meaning must exist in the new structure |
 | **Zone correctness** | Inline items are truly must-know rules; Index items are truly reference material | Review each Inline item for constraint keywords; review each Index item for reference nature |
 | **Path integrity** | Every path in Reference Index exists and is readable | Verify each path |
-| **Gitignore safety** | No path in Reference Index or relative `.md`/directory reference inside the Inline Zone is gitignored | Sub-agent runs `git rev-parse --is-inside-work-tree` itself (preserving the isolation contract — no Phase 1 results passed in), then for each path runs `git check-ignore --quiet <path>` (exit `0` = ignored → ISSUE; exit `1` = not ignored → OK; exit `128` = fatal, surface error). See Phase 1b sub-step for command alternatives. Non-git repo → N/A → PASS |
+| **Gitignore safety** | No path in Reference Index or relative `.md`/directory reference inside the Inline Zone is gitignored | Sub-agent runs `git rev-parse --is-inside-work-tree` itself (preserving the isolation contract — no Phase 1 results passed in), then for each path runs `git check-ignore --quiet <path>`, interpreting the result per the gitignore exit-code semantics in the Phase 1b section (0=ignored, 1=not-ignored, 128=fatal): ignored → ISSUE; not-ignored → OK; fatal → surface error. See Phase 1b sub-step for command alternatives. Non-git repo → N/A → PASS |
 | **Link integrity** | All internal `[text](path)` links resolve to existing files | Check all links in modified files |
 | **Marker consistency** | All managed files contain `<!-- managed by md-optimize -->` | Scan all modified files |
 | **Frontmatter integrity** | Files with YAML frontmatter still parse correctly | Validate frontmatter syntax |
@@ -230,7 +230,7 @@ If any evaluation criterion has unresolved issues, append warnings.
 ## Safety Rules
 
 - **Git-first**: Always verify git status before any write operation. Recommend commit/stash for dirty trees.
-- **Gitignore-aware**: Files matched by `.gitignore` are excluded from scanning, indexing, and migration. Including a gitignored path in the committed CLAUDE.md Reference Index produces broken references for collaborators and CI environments where the file does not exist. When this rule conflicts with the Sub-CLAUDE.md rule below (a gitignored sub-directory contains its own `CLAUDE.md`), Gitignore-aware takes precedence — the gitignored CLAUDE.md is excluded from the Reference Index, since including it would create a broken reference in the committed parent CLAUDE.md. If the project is not a git repo, this rule is N/A and the hardcoded Exclusion List is the only filter.
+- **Gitignore-aware**: Files matched by `.gitignore` are excluded from scanning, indexing, and migration (see the Phase 1b section for exit-code handling and detection mechanics). Including a gitignored path in the committed CLAUDE.md Reference Index produces broken references for collaborators and CI environments where the file does not exist. When this rule conflicts with the Sub-CLAUDE.md rule below (a gitignored sub-directory contains its own `CLAUDE.md`), Gitignore-aware takes precedence — the gitignored CLAUDE.md is excluded from the Reference Index, since including it would create a broken reference in the committed parent CLAUDE.md. If the project is not a git repo, this rule is N/A and the hardcoded Exclusion List is the only filter.
 - **Idempotency**: `<!-- managed by md-optimize -->` marker prevents re-processing conflicts. On re-run, refresh existing optimization rather than duplicating.
 - **No data loss**: Never delete content without verifying it exists elsewhere. When in doubt, keep the original.
 - **Sequential execution**: Phase 3 steps run in order (a→b→c→d). Not atomic — on failure, guide user to `git checkout` for recovery.
@@ -240,9 +240,4 @@ If any evaluation criterion has unresolved issues, append warnings.
 
 ## User Interaction Rules
 
-All user-facing questions MUST use AskUserQuestion tool when available.
-- If AskUserQuestion is available → use it (provides numbered selection UI)
-- If AskUserQuestion is NOT available or fails → present the same options as text and accept number/keyword responses (case-insensitive)
-- Every option must include a `label` (short name) and `description` (specific explanation)
-- "Other" (free text input) is automatically appended by the framework
-- Translate all question text, labels, and descriptions to `user_lang`
+See `templates/_shared/askuserquestion.md`.

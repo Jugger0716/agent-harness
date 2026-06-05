@@ -259,12 +259,7 @@ Every hypothesis MUST be tested with executable verification actions. Pure reaso
    ...
    ```
 
-3. **For each hypothesis (in confidence order, High first):**
-   a. Formulate the falsification question: "If hypothesis N is wrong, X evidence should be visible."
-   b. Execute at least 1 verification action (Grep, file read, git blame, test run).
-   c. Record the verification action and its output in hypotheses.md.
-   d. Adjust confidence or mark as `[REFUTED]` based on evidence.
-   e. If a hypothesis is confirmed at High confidence → proceed to write root_cause.md.
+3. **For each hypothesis (in confidence order, High first):** run the falsification procedure from the Falsification Rules section (formulate question -> at least 1 executable verification action -> record -> adjust/refute). If a hypothesis is confirmed at High confidence → proceed to write root_cause.md.
 
 4. **Loop termination conditions (max 3 rounds):**
    - **High confidence found:** Write root_cause.md and exit loop.
@@ -465,37 +460,22 @@ If the user asks for status, print status in the standard format defined above.
 
 ## Model Selection
 
-Sub-agents (deep mode only) can run on different models depending on the selected `model_config` preset:
+Preset table + rules: see `templates/_shared/model_config.md`.
 
-| Preset | executor | advisor |
-|--------|----------|---------|
-| default | (parent inherit) | (parent inherit) |
-| all-opus | opus | opus |
-| balanced | sonnet | opus |
-| economy | haiku | sonnet |
+**Role map (deep mode sub-agents):**
+- Error Analyst → advisor
+- Code Archaeologist → advisor
+- Cross Verifier → advisor
 
-### Deep Mode Sub-agents
-
-| Sub-agent | Role | default | all-opus | balanced | economy |
-|-----------|------|---------|----------|----------|---------|
-| Error Analyst | advisor | (no override) | opus | opus | sonnet |
-| Code Archaeologist | advisor | (no override) | opus | opus | sonnet |
-| Cross Verifier | advisor | (no override) | opus | opus | sonnet |
-
-**Applying model config:** When launching any sub-agent, if `model_config.preset` is not `"default"`, pass the `model` parameter according to the table above for that sub-agent. Sub-agents must NOT directly access state.json to read model_config — the orchestrator passes the model parameter at launch time.
+**Applying model config:** When launching any sub-agent, if `model_config.preset` is not `"default"`, pass the `model` parameter for that sub-agent's role per the preset table. Sub-agents must NOT directly access state.json to read model_config — the orchestrator passes the model parameter at launch time.
 
 ## User Interaction Rules
 
-All user-facing questions MUST use AskUserQuestion tool when available.
-- If AskUserQuestion is available → use it (provides numbered selection UI)
-- If AskUserQuestion is NOT available or fails → present the same options as text and accept number/keyword responses (case-insensitive)
-- Every option must include a `label` (short name) and `description` (specific explanation)
-- "Other" (free text input) is automatically appended by the framework
-- Translate all question text, labels, and descriptions to `user_lang`
+See `templates/_shared/askuserquestion.md`.
 
 ## Key Rules
 
-- **Falsification rules are non-negotiable.** Every hypothesis must be verified by at least one executable action (Grep, file read, git blame, test run). Pure reasoning-only falsification is prohibited.
+- **Falsification rules are non-negotiable** — see the Falsification Rules (Core Differentiator) section.
 - **Never skip reproduction attempt for runtime/logic errors.** Always attempt Phase 0.7 before Phase 1.
 - **Hypothesis verification loop is bounded.** Maximum 3 rounds. If no high-confidence hypothesis after 3 rounds, write root_cause.md with `Confidence: Unknown`.
 - **Fix phase: never auto-chain to /workflow.** Only suggest. The user must explicitly invoke `/workflow`.
