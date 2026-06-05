@@ -24,17 +24,9 @@ Detect the user's language from their **most recent message**. Store as `user_la
 
 ## Standard Status Format
 
-When displaying status, read `.harness/state.json` and print (in `user_lang`):
-```
-[harness]
-  Skill  : refactor
-  Target : <target>
-  Mode   : <single | multi | comprehensive>
-  Model  : <model_config preset name>
-  Phase  : <phase label>
-  Branch : <branch>
-  Scope  : <scope>
-```
+Status block shape + label rules: see `templates/_shared/status_format.md`.
+
+Mode enum: `<single | multi | comprehensive>`.
 Phase labels: plan_ready → "Analyzer — writing refactor plan", gen_ready → "Executor — applying changes", eval_ready → "Verifier — checking behavior preservation", completed → "Completed"
 
 ## Session Recovery
@@ -90,15 +82,7 @@ When the user provides a refactoring target (via $ARGUMENTS or in conversation),
 2. **Slugify the target:** lowercase, transliterate non-ASCII to ASCII, remove non-word chars except hyphens, replace spaces with hyphens, truncate to 50 chars. Store as `<slug>`.
 3. **Auto-detect project language and commands.** Scan the repo root:
 
-   | File | Language | Test Command | Build Command |
-   |------|----------|-------------|---------------|
-   | `build.gradle(.kts)` | java | `./gradlew test` | `./gradlew build` |
-   | `pom.xml` | java | `mvn test` | `mvn compile` |
-   | `pyproject.toml` / `setup.py` | python | `pytest` | (none) |
-   | `package.json` | typescript | `npm test` | `npm run build` |
-   | `*.csproj` | csharp | `dotnet test` | `dotnet build` |
-   | `go.mod` | go | `go test ./...` | `go build ./...` |
-   | `Cargo.toml` | rust | `cargo test` | `cargo build` |
+   Language/test/build/lint/typecheck detection: see `templates/_shared/detection_table.md`.
 
    If none match, set language to "unknown", test/build commands to null.
 
@@ -463,18 +447,7 @@ If user selects "Fix": increment round, go to Step 4. If "Accept as-is": phase �
 
 #### Artifact Cleanup Safety Guard
 
-Before deleting any `docs/harness/` subdirectory, these checks are **mandatory**:
-
-1. **Validate slug**: Read `docs_path` from `.harness/state.json`, extract `<slug>` (last path segment). If `<slug>` is empty, null, or whitespace → **ABORT** cleanup and warn user (in `user_lang`): "Cannot determine delete target — slug is empty."
-2. **Path depth check**: Delete target must match pattern `docs/harness/<non-empty-slug>/` — exactly one level below `docs/harness/`. **NEVER** delete `docs/harness/` itself during normal cleanup. Additionally: slug must **NOT** be `memory` (reserved for `/memory` skill), must **NOT** contain `..` or `/`, and must **NOT** be a single dot `.`. If any of these conditions fail → **ABORT** and warn user.
-3. **Display before delete**: Print the exact delete target path (e.g., `docs/harness/my-task/`) to the user before executing. Do not silently delete.
-
-**Full `docs/harness/` cleanup (only when user explicitly requests):**
-If the user explicitly asks to delete the **entire** `docs/harness/` directory:
-1. List all subdirectories with their file counts
-2. If `docs/harness/memory/` exists, list it **separately** with warning: "This directory contains team knowledge managed by `/memory` skill."
-3. Warn (in `user_lang`): "`docs/` is git-ignored — all session artifacts will be permanently deleted and **cannot be recovered**."
-4. Ask confirmation via AskUserQuestion (yes/no) — only proceed on explicit "Yes, delete all"
+Cleanup safety rules: see `templates/_shared/safety_guard.md`.
 
 Ask the user using AskUserQuestion (in `user_lang`):
   header: "Commit"
@@ -495,50 +468,15 @@ If user asks for status, print status in the standard format defined above.
 
 ## Model Selection
 
-Sub-agents can run on different models depending on the selected `model_config` preset. The presets map each role (executor, advisor, evaluator) to a model:
+Preset table + rules: see `templates/_shared/model_config.md`.
 
-| Preset | executor | advisor | evaluator | verifier |
-|--------|----------|---------|-----------|----------|
-| default | (parent inherit) | (parent inherit) | (parent inherit) | haiku (default) |
-| all-opus | opus | opus | opus | haiku (default) |
-| balanced | sonnet | opus | opus | haiku (default) |
-| economy | haiku | sonnet | sonnet | haiku (default) |
+Role-map: Structural / Risk / Feasibility Analyst -> executor; Cross-Critique / Safety Advisor -> advisor; Evaluator -> evaluator.
 
 > **Verifier defaults to haiku; override with `--verifier-model sonnet|opus`** (stored in `model_config.verifier`). `/refactor` currently does not dispatch a separate Verify sub-agent — test regression uses `test_cmd` directly. The verifier field is stored for future extension. Auto-fix Proposer uses `model_config.advisor ?? "opus"` instead.
 
-Each sub-agent is assigned a role. The following table defines the concrete model for every sub-agent under each preset:
-
-### Analysis Phase Sub-agents
-
-| Sub-agent | Role | default | all-opus | balanced | economy |
-|-----------|------|---------|----------|----------|---------|
-| Structural Analyst | executor | (no override) | opus | sonnet | haiku |
-| Risk Analyst | executor | (no override) | opus | sonnet | haiku |
-| Feasibility Analyst | executor | (no override) | opus | sonnet | haiku |
-| Cross-Critique (per analyst) | advisor | (no override) | opus | opus | sonnet |
-
-### Execution Phase Sub-agents
-
-| Sub-agent | Role | default | all-opus | balanced | economy |
-|-----------|------|---------|----------|----------|---------|
-| Safety Advisor | advisor | (no override) | opus | opus | sonnet |
-
-### Verification Phase Sub-agents
-
-| Sub-agent | Role | default | all-opus | balanced | economy |
-|-----------|------|---------|----------|----------|---------|
-| Evaluator | evaluator | (no override) | opus | opus | sonnet |
-
-**Applying model config:** When launching any sub-agent, if `model_config.preset` is not `"default"`, pass the `model` parameter according to the table above for that sub-agent. Sub-agents must NOT directly access state.json to read model_config — the orchestrator passes the model parameter at launch time.
-
 ## User Interaction Rules
 
-All user-facing questions MUST use AskUserQuestion tool when available.
-- If AskUserQuestion is available → use it (provides numbered selection UI)
-- If AskUserQuestion is NOT available or fails → present the same options as text and accept number/keyword responses (case-insensitive)
-- Every option must include a `label` (short name) and `description` (specific explanation)
-- "Other" (free text input) is automatically appended by the framework
-- Translate all question text, labels, and descriptions to `user_lang`
+See `templates/_shared/askuserquestion.md`.
 
 ## Key Rules
 

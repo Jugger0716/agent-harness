@@ -29,6 +29,10 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
 - **/spec → /workflow handoff CLI contract changed**. Users of automation scripts that wrap /spec output strings should update to expect `--output-dir docs/harness/<slug>/` in the invocation. The task description string also changed from `"Implement based on docs/harness/<slug>/spec.md"` (absolute-looking) to `"Implement based on {docs_path}spec.md"` (placeholder form documenting the assembly contract).
 - **Planner templates**: forked custom planner templates that omit the new `{qa_discovery_notes}` / `{critic_findings}` placeholders will silently render an empty Discovery Notes section. Recommended: update fork to include the placeholders (see `templates/planner/architect.md` for reference).
 
+### Fixed
+
+- **Stage 6.5 hardening (audit trail)**: numerous correctness/recovery fixes to `/ship` Stage 6.5 (`merge_to_base`) — closed issues M1, M2, M3, M4, M10, M11, m1, m3, m9, m12, s1, s2, NF2, NF3, NF5, C3, CC5, Sec N1, Sec N3, DX #8, Arch N3. These IDs were formerly inline `(closes …)` annotations in `skills/ship/SKILL.md`; relocated here so the skill prose stays behavior-focused while the audit trail is preserved in its proper home.
+
 ## [8.3.0] — 2026-04-30
 
 ### Added

@@ -101,15 +101,9 @@ If `.harness/state.json` does not exist (or `state.json.skill` is not `"test-gen
 4. **Detect environment** — run `git rev-parse --is-inside-work-tree 2>/dev/null`, store `has_git`.
 5. **Auto-detect project language and test framework.** Scan the working directory:
 
-   | Framework | Detection | Test file pattern | Run command | Mock library |
-   |-----------|-----------|------------------|-------------|-------------|
-   | Jest | `package.json` contains jest dependency | `*.test.ts`, `*.spec.ts` | `npx jest` | `jest.mock` |
-   | Vitest | `package.json` contains vitest | `*.test.ts`, `*.spec.ts` | `npx vitest run` | `vi.mock` |
-   | pytest | `pyproject.toml` or `conftest.py` present | `test_*.py`, `*_test.py` | `pytest` | `pytest.monkeypatch`, `unittest.mock` |
-   | JUnit | `build.gradle` contains junit | `*Test.java` | `./gradlew test` | `Mockito` |
-   | Go test | `go.mod` present | `*_test.go` | `go test ./...` | `testify/mock` |
-   | RSpec | `Gemfile` contains rspec | `*_spec.rb` | `bundle exec rspec` | `rspec-mocks` |
-   | Other | none of the above match | ask user | ask user | ask user |
+   Language/test/build/lint/typecheck detection: see `templates/_shared/detection_table.md`.
+
+   **Mock library by framework** (test-gen-specific addendum): Jest → `jest.mock`; Vitest → `vi.mock`; pytest → `pytest.monkeypatch`, `unittest.mock`; JUnit → `Mockito`; Go test → `testify/mock`; RSpec → `rspec-mocks`. If the framework is not in this list, ask the user.
 
    **If detection fails:** Ask the user using AskUserQuestion (in `user_lang`):
      header: "Framework"
@@ -126,18 +120,7 @@ If `.harness/state.json` does not exist (or `state.json.skill` is not `"test-gen
 6. **Create directories:** `.harness/test-gen/`, `docs/harness/<slug>/`
 7. **Create git branch (if has_git):** `git checkout -b harness/test-gen-<slug>`
 8. **Model configuration selection:**
-   If `--model-config <preset>` was passed, use it directly. Otherwise, use AskUserQuestion to ask the user (in `user_lang`):
-     header: "Model"
-     question: "Select model configuration for sub-agents:"
-     options:
-       - label: "default" / description: "Inherit parent model, no changes"
-       - label: "all-opus" / description: "All sub-agents use Opus (highest quality)"
-       - label: "balanced (Recommended)" / description: "Sonnet executors (cost-efficient)"
-       - label: "economy" / description: "Haiku executors (max savings)"
-
-   Store result as `model_config` object: `{ "preset": "<name>", "executor": "<model|null>" }`. For the `default` preset, store `{ "preset": "default" }`.
-
-   **Model config is set once at session start and cannot be changed mid-session.** To change, restart the session.
+   Preset table + rules: see `templates/_shared/model_config.md`. Role-map: all test-gen sub-agents (Coverage Analyst, Test Generator) use the executor role.
 
 9. **Write `.harness/state.json`** with fields:
    - `skill`: `"test-gen"` ← used for session recovery identification
@@ -216,17 +199,9 @@ Update state.json: `phase` → `"analyzing"`.
    - Extract: root cause, reproduction conditions, affected functions.
 
 5. **Dependency analysis + mocking strategy:**
-   For each target function, inspect its imports/dependencies:
+   For each target function, inspect its imports/dependencies.
 
-   | Dependency type | Default strategy |
-   |----------------|-----------------|
-   | DB (Repository, ORM, ActiveRecord) | Repository interface mock |
-   | External API (HTTP client, fetch, axios) | HTTP client mock |
-   | File system (fs, os.path, File) | Temp dir or fs mock |
-   | Time (Date, Timer, time.Now) | Fake timers |
-   | Environment vars (process.env, os.environ) | Test-specific env setup |
-
-   Document the mocking strategy for each identified dependency.
+   Dependency -> mock-approach mapping: defined in `templates/test-gen/coverage_analyst.md` (DB -> repository mock, External API -> HTTP client mock, FS -> temp dir/fs mock). Document the chosen approach per dependency.
 
 6. **Generate edge cases + boundary values list** for each target function:
    - Null / empty / zero inputs
@@ -469,12 +444,7 @@ Sub-agents run on different models depending on the selected `model_config` pres
 
 ## User Interaction Rules
 
-All user-facing questions MUST use AskUserQuestion tool when available.
-- If AskUserQuestion is available → use it (provides numbered selection UI)
-- If AskUserQuestion is NOT available or fails → present the same options as text and accept number/keyword responses (case-insensitive)
-- Every option must include a `label` (short name) and `description` (specific explanation)
-- "Other" (free text input) is automatically appended by the framework
-- Translate all question text, labels, and descriptions to `user_lang`
+See `templates/_shared/askuserquestion.md`.
 
 ## Key Rules
 

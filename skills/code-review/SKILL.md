@@ -22,16 +22,10 @@ Detect the user's language from their **most recent message**. Store as `user_la
 
 ## Standard Status Format
 
-When displaying status, print (in `user_lang`):
-```
-[code-review]
-  Target : <PR#, branch, commit range, or file path>
-  Mode   : <quick | deep | thorough>
-  Model  : <model_config preset name>
-  Phase  : <phase label>
-  Scope  : <N files, M lines>
-```
-Phase labels: input_parse -> "Parsing input", diff_collect -> "Collecting diff", review -> "Reviewing", cross_verify -> "Cross-verifying", synthesis -> "Synthesizing", complete -> "Complete"
+Status block shape + label rules: see `templates/_shared/status_format.md`.
+
+- **Mode enum:** `quick | deep | thorough`
+- **Phase labels:** input_parse -> "Parsing input", diff_collect -> "Collecting diff", review -> "Reviewing", cross_verify -> "Cross-verifying", synthesis -> "Synthesizing", complete -> "Complete"
 
 ## Workflow
 
@@ -404,43 +398,17 @@ These are suggestions only -- do not auto-invoke other skills.
 
 ## Model Selection
 
-Sub-agents (deep and thorough modes only) can run on different models depending on the selected `model_config` preset. The presets map each role (executor, advisor, evaluator) to a model:
+Sub-agents (deep and thorough modes only) can run on different models depending on the selected `model_config` preset.
 
-| Preset | executor | advisor | evaluator |
-|--------|----------|---------|-----------|
-| default | (parent inherit) | (parent inherit) | (parent inherit) |
-| all-opus | opus | opus | opus |
-| balanced | sonnet | opus | opus |
-| economy | haiku | sonnet | sonnet |
+Preset table + rules: see `templates/_shared/model_config.md`.
 
-Each sub-agent is assigned a role. The following table defines the concrete model for every sub-agent under each preset:
+**Role map (code-review):** all specialist reviewers (deep: Security & Correctness, Architecture & Maintainability; thorough: Security & Correctness, Architecture & Design, DX & Maintainability) → `executor`; Cross-Verification (per reviewer, thorough only) → `advisor`. Synthesis is handled by the main agent (no sub-agent, no `evaluator` role used).
 
-### Deep Mode Sub-agents
-
-| Sub-agent | Role | default | all-opus | balanced | economy |
-|-----------|------|---------|----------|----------|---------|
-| Security & Correctness Reviewer | executor | (no override) | opus | sonnet | haiku |
-| Architecture & Maintainability Reviewer | executor | (no override) | opus | sonnet | haiku |
-
-### Thorough Mode Sub-agents
-
-| Sub-agent | Role | default | all-opus | balanced | economy |
-|-----------|------|---------|----------|----------|---------|
-| Security & Correctness Reviewer | executor | (no override) | opus | sonnet | haiku |
-| Architecture & Design Reviewer | executor | (no override) | opus | sonnet | haiku |
-| DX & Maintainability Reviewer | executor | (no override) | opus | sonnet | haiku |
-| Cross-Verification (per reviewer) | advisor | (no override) | opus | opus | sonnet |
-
-**Applying model config:** When launching any sub-agent, if `model_config.preset` is not `"default"`, pass the `model` parameter according to the table above for that sub-agent. Sub-agents must NOT directly access `.harness/model_config.json` — the orchestrator passes the model parameter at launch time.
+**Applying model config:** When launching any sub-agent, if `model_config.preset` is not `"default"`, pass the `model` parameter according to the role map above and the preset table. Sub-agents must NOT directly access `.harness/model_config.json` — the orchestrator passes the model parameter at launch time.
 
 ## User Interaction Rules
 
-All user-facing questions MUST use AskUserQuestion tool when available.
-- If AskUserQuestion is available → use it (provides numbered selection UI)
-- If AskUserQuestion is NOT available or fails → present the same options as text and accept number/keyword responses (case-insensitive)
-- Every option must include a `label` (short name) and `description` (specific explanation)
-- "Other" (free text input) is automatically appended by the framework
-- Translate all question text, labels, and descriptions to `user_lang`
+See `templates/_shared/askuserquestion.md`.
 
 ## Key Rules
 

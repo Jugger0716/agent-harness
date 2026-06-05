@@ -159,19 +159,7 @@ When the user provides a migration target (via $ARGUMENTS or in conversation), e
 
 1. **Detect user language** from the task description. Store as `user_lang`.
 2. **Slugify the target:** lowercase, transliterate non-ASCII to ASCII, remove non-word chars except hyphens, replace spaces with hyphens, truncate to 50 chars. For replacements, use format `<from>-to-<to>`. Store as `<slug>`.
-3. **Auto-detect project language and commands.** Scan the repo root:
-
-   | File | Language | Test Command | Build Command |
-   |------|----------|-------------|---------------|
-   | `build.gradle(.kts)` | java | `./gradlew test` | `./gradlew build` |
-   | `pom.xml` | java | `mvn test` | `mvn compile` |
-   | `pyproject.toml` / `setup.py` | python | `pytest` | (none) |
-   | `package.json` | typescript | `npm test` | `npm run build` |
-   | `*.csproj` | csharp | `dotnet test` | `dotnet build` |
-   | `go.mod` | go | `go test ./...` | `go build ./...` |
-   | `Cargo.toml` | rust | `cargo test` | `cargo build` |
-
-   If none match, set language to "unknown", test/build commands to null.
+3. **Auto-detect project language and commands.** Scan the repo root. Language/test/build/lint/typecheck detection: see `templates/_shared/detection_table.md`.
 
 4. **Detect current version** of the target using the Version Auto-Detection table above. Store as `from_version`.
 5. **Determine target version** from `--to` argument or via WebSearch for latest stable. Store as `to_version`.
@@ -473,14 +461,9 @@ If user asks for status, print status in the standard format defined above.
 
 ## Model Selection
 
-Sub-agents can run on different models depending on the selected `model_config` preset. The presets map each role (executor, advisor, evaluator) to a model:
+Preset table + rules: see `templates/_shared/model_config.md`.
 
-| Preset | executor | advisor | evaluator |
-|--------|----------|---------|-----------|
-| default | (parent inherit) | (parent inherit) | (parent inherit) |
-| all-opus | opus | opus | opus |
-| balanced | sonnet | opus | opus |
-| economy | haiku | sonnet | sonnet |
+**migrate role-map:** External Research Analyst → executor, Codebase Impact Analyst → executor, Migration Advisor → advisor, Evaluator → evaluator.
 
 Each sub-agent is assigned a role. The following table defines the concrete model for every sub-agent under each preset:
 
@@ -507,12 +490,7 @@ Each sub-agent is assigned a role. The following table defines the concrete mode
 
 ## User Interaction Rules
 
-All user-facing questions MUST use AskUserQuestion tool when available.
-- If AskUserQuestion is available → use it (provides numbered selection UI)
-- If AskUserQuestion is NOT available or fails → present the same options as text and accept number/keyword responses (case-insensitive)
-- Every option must include a `label` (short name) and `description` (specific explanation)
-- "Other" (free text input) is automatically appended by the framework
-- Translate all question text, labels, and descriptions to `user_lang`
+See `templates/_shared/askuserquestion.md`.
 
 ## Key Rules
 

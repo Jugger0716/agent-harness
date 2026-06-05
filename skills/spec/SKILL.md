@@ -688,12 +688,9 @@ The spec written to `docs/harness/<slug>/spec.md` must use this exact structure 
 
 Sub-agents are used only in **deep mode**. Both sub-agents use the **advisor role**.
 
-| Preset | advisor |
-|--------|---------|
-| default | (parent inherit) |
-| all-opus | opus |
-| balanced | opus |
-| economy | sonnet |
+Preset table + rules: see `templates/_shared/model_config.md`.
+
+Role map: Requirements Analyst / User Scenario Analyst / Synthesis / Critic → advisor.
 
 ### Deep Mode Sub-agents
 
@@ -708,12 +705,7 @@ Sub-agents are used only in **deep mode**. Both sub-agents use the **advisor rol
 
 ## User Interaction Rules
 
-All user-facing questions MUST use AskUserQuestion tool when available.
-- If AskUserQuestion is available → use it (provides numbered selection UI)
-- If AskUserQuestion is NOT available or fails → present the same options as text and accept number/keyword responses (case-insensitive)
-- Every option must include a `label` (short name) and `description` (specific explanation)
-- "Other" (free text input) is automatically appended by the framework
-- Translate all question text, labels, and descriptions to `user_lang`
+See `templates/_shared/askuserquestion.md`.
 
 ## Key Rules
 
