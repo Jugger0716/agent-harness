@@ -1,7 +1,7 @@
 ---
 name: debug
 disallowed-tools: NotebookEdit
-description: Hypothesis-driven debugger with mandatory executable verification. Classifies build/compile vs runtime/logic errors, attempts reproduction, generates falsifiable hypotheses verified by code search, git history, and test execution. Quick mode (orchestrator only) or deep mode (2 specialist sub-agents + cross-verification). Use when facing a bug, unexpected behavior, or error that needs systematic root cause analysis.
+description: Hypothesis-driven debugger with mandatory executable verification. Classifies build/compile vs runtime/logic errors, attempts reproduction, generates falsifiable hypotheses verified by code search, git history, and test execution. Quick mode (orchestrator only, inline) or deep mode (2 specialist analysts + adversarial cross-verification via a plugin-shipped native Workflow segment, opt-in gated). Use when facing a bug, unexpected behavior, or error that needs systematic root cause analysis.
 ---
 
 # Agent Harness Debug
@@ -31,7 +31,25 @@ Detect the user's language from their **most recent message**. Store as `user_la
 
 **Re-detection:** On every user message, check if the language has changed. If so, update `user_lang` and switch all subsequent communication.
 
-**What stays in English:** Template instructions (this file and templates/*.md), state.json field names, file names (hypotheses.md, root_cause.md, fix_changes.md, debug_report.md), git branch names (if has_git).
+**What stays in English:** Template instructions (this file and templates/*.md), state.json field names, file names (hypotheses.md, root_cause.md, fix_changes.md, debug_report.md), git branch names (if has_git), Workflow `args` field names.
+
+## Mode Gate — path & mode resolution (single source: `templates/_shared/mode_gate.md`)
+
+Apply the shared opt-in convention in `templates/_shared/mode_gate.md`. /debug-specific resolution (replaces the old Step 1 mode-selection AskUserQuestion roundtrip):
+
+| Signal (first match wins) | `mode` | `path_resolved` |
+|---|---|---|
+| `has_git == false` | quick | **inline** (engine isolation requires git) |
+| `--mode quick` | quick | **inline** |
+| `Workflow` tool NOT available this session | quick | **inline** (notify only if an explicit `--mode deep` was requested) |
+| `--mode deep` (or `comprehensive`/`thorough`/`multi`) | deep | **workflow** |
+| no `--mode` AND session is in ultracode mode | deep | **workflow** |
+| no `--mode`, no opt-in | quick | **inline** |
+
+- **Deep mode exists ONLY on the workflow path** — the engine's `parallel()` fan-out replaces the old hand-rolled "Launch 2 sub-agents in parallel" prose (pilot precedent: /harness standard/multi). The inline path is the preserved quick mode (Phase 1-Q: orchestrator runs the hypothesis loop directly).
+- **Mode Gate applies to runtime/logic errors only** — `error_type == "build"` takes the fast path (Phase 0.5) regardless of mode/path; no analysts are dispatched.
+- **Graceful fallback:** if a `Workflow` invocation errors at any step, print `[debug] ⚠ Workflow engine unavailable — falling back to the inline quick path.` (in `user_lang`), set `path_resolved → "inline"`, `mode → "quick"`, and continue the CURRENT step on the quick path (Phase 1-Q hypothesis loop). Never error out.
+- Record `path_resolved` in state.json and show `Path` in the status format.
 
 ## Standard Status Format
 
@@ -40,6 +58,7 @@ When displaying status, read `.harness/state.json` and print (in `user_lang`):
 [debug]
   Error  : <error description, truncated to 60 chars>
   Mode   : <quick | deep>
+  Path   : <inline | workflow>
   Model  : <model_config preset name>
   Phase  : <phase label>
   Branch : <branch>    ← omit this line if has_git == false
@@ -51,8 +70,9 @@ Phase labels: `setup` → "Setup", `reproducing` → "Reproducing error", `analy
 Before starting a new debug session, check if `.harness/state.json` already exists **and** `state.json.skill` equals `"debug"`:
 
 1. If it exists and matches, print status in the standard format (including Model line from `model_config`), prefixed with `[debug] Previous debug session detected.`
-2. Restore `model_config` from state.json. Apply it to all subsequent sub-agent launches.
+2. Restore `model_config` from state.json. Apply it to all subsequent sub-agent launches and Workflow `args.models`.
 3. If `has_git` is not present in state.json (pre-existing session from older version), re-detect using the Environment Detection command and store the result.
+3.5. **Re-resolve §Mode Gate** (the new session may lack the Workflow tool or the opt-in) and update `path_resolved` — a session that started on the workflow path may legitimately resume on the inline path. Cross-session resume re-RUNS the segment; `state.runs.analyze.runId` is audit-only (`resumeFromRunId` is same-session only — never attempt it across sessions).
 4. Ask the user using AskUserQuestion (in `user_lang`):
      header: "Session"
      question: "[debug] Previous debug session detected. [print status in standard format]. Resume, restart, or stop?"
@@ -65,7 +85,10 @@ Before starting a new debug session, check if `.harness/state.json` already exis
    - **Resume**: Jump to the phase matching state.json phase:
      `setup` → Step 1 |
      `reproducing` → Phase 0.7 |
-     `analyzing` → Phase 1 (if `.harness/debug/hypotheses.md` exists, resume hypothesis loop; else restart Phase 1) |
+     `analyzing` →
+       - **FIRST, on BOTH paths**: if `docs/harness/<slug>/root_cause.md` already exists, the analysis completed before the crash — skip directly to the Fix Decision HARD-GATE. Do NOT re-run any loop or segment (a deep session resumed without the engine would otherwise re-enter the quick loop and OVERWRITE the completed adversarial analysis — data loss).
+       - else, inline path (quick): Phase 1-Q (if `.harness/debug/hypotheses.md` exists, resume hypothesis loop; else restart Phase 1-Q)
+       - else, workflow path (deep): re-RUN the Analyze segment from Phase 1-D step 2 (re-read `.harness/debug/context.md`; if context.md is missing, restart Phase 1-D from step 1). If the re-resolved path is inline (engine/opt-in lost), degrade to Phase 1-Q with a notice. |
      `fixing` → Phase 2 |
      `completed` → no active session, proceed to Step 1
    - **Restart**: Delete `.harness/` directory and proceed to Step 1
@@ -87,13 +110,7 @@ When the user describes a bug or error (via $ARGUMENTS or in conversation), exec
 3. **Slugify the error description:** lowercase, transliterate non-ASCII to ASCII, remove non-word chars except hyphens, replace spaces with hyphens, truncate to 40 chars. Store as `<slug>`.
 4. **Create directories:** `.harness/`, `.harness/debug/`, `docs/harness/<slug>/`
 5. **Create git branch (if has_git):** `git checkout -b harness/debug-<slug>`. If `has_git == false`, skip this step entirely.
-6. **Mode selection:**
-   If `--mode quick` or `--mode deep` was passed, set mode and skip prompt. Otherwise, ask the user using AskUserQuestion (in `user_lang`):
-     header: "Mode"
-     question: "Select debug mode:"
-     options:
-       - label: "quick (Recommended)" / description: "Orchestrator runs hypothesis loop directly. Fast, ~1x tokens"
-       - label: "deep" / description: "2 specialist sub-agents (Error Analyst + Code Archaeologist) + cross-verification. ~2x tokens. Deepest analysis"
+6. **Mode Gate resolution:** apply §Mode Gate (no AskUserQuestion roundtrip — mode is derived from `--mode` flags / ultracode opt-in / tool availability / `has_git`). Store `mode` and `path_resolved` in state.json. If the user explicitly requested `--mode deep` but the gate resolved to inline (Workflow tool unavailable or `has_git == false`), notify (in `user_lang`): "deep mode requires the native Workflow engine and git — proceeding on the inline quick path."
 7. **Model configuration selection (deep mode only):**
    If mode is `quick`, skip this step entirely (no sub-agents in quick mode).
 
@@ -116,6 +133,8 @@ When the user describes a bug or error (via $ARGUMENTS or in conversation), exec
    - `skill`: `"debug"`
    - `phase`: `"setup"`
    - `mode`: `"quick"` or `"deep"`
+   - `path_resolved`: `"inline"` or `"workflow"` (from §Mode Gate; re-resolved on resume)
+   - `runs`: `{ "analyze": null }`; records `{ "runId": "<wf_...>" }` after the segment launch. **Audit + same-session iteration only** — cross-session resume re-RUNS the segment (see §Session Recovery step 3.5).
    - `model_config`: (from step 7; for quick mode: `{ "preset": "default" }`)
    - `user_lang`
    - `has_git` (boolean)
@@ -133,6 +152,7 @@ When the user describes a bug or error (via $ARGUMENTS or in conversation), exec
      Directory : <path>
      Branch    : harness/debug-<slug>     ← omit if has_git == false
      Mode      : <quick | deep>
+     Path      : <inline | workflow>
      Model     : <preset name>            ← omit if quick mode
    ```
 
@@ -225,17 +245,11 @@ Update state.json: `phase` → `"analyzing"`.
 
 ## Falsification Rules (Core Differentiator)
 
-Every hypothesis MUST be tested with executable verification actions. Pure reasoning-only falsification is **PROHIBITED**.
+The canonical 5 falsification rules live in `{CLAUDE_PLUGIN_ROOT}/templates/_shared/falsification_rules.md` (single source — do not duplicate them here or in templates). Read that file once at the start of Phase 1 and apply it to every hypothesis:
+- **Quick mode (inline)**: the orchestrator applies the rules directly in the Phase 1-Q hypothesis loop (hypotheses recorded in `.harness/debug/hypotheses.md`).
+- **Deep mode (workflow)**: the segment script appends the canonical block to both analyst prompts, and the `Hypothesis.verification` schema enforces ≥1 executable action per hypothesis (`minItems: 1`) at the schema layer.
 
-1. Write hypotheses to `.harness/debug/hypotheses.md` FIRST (physical separation from docs/).
-2. For each hypothesis, formulate: **"If this hypothesis is WRONG, what evidence should exist in the code?"**
-3. Execute **at least 1 verification action** per hypothesis:
-   - Code search (Grep/Glob): check for specific patterns that should or should not exist
-   - `git blame`/`git log`: check change history of the relevant file/function (only if has_git)
-   - Test execution: run specific targeted tests to verify expected behavior
-   - File read: check config files, environment variables, dependency versions
-4. **Adjust confidence ONLY based on verification action results**, not reasoning.
-5. Mark refuted hypotheses as `[REFUTED]` with the evidence that refuted them in hypotheses.md.
+These rules are non-negotiable.
 
 ---
 
@@ -259,7 +273,7 @@ Every hypothesis MUST be tested with executable verification actions. Pure reaso
    ...
    ```
 
-3. **For each hypothesis (in confidence order, High first):** run the falsification procedure from the Falsification Rules section (formulate question -> at least 1 executable verification action -> record -> adjust/refute). If a hypothesis is confirmed at High confidence → proceed to write root_cause.md.
+3. **For each hypothesis (in confidence order, High first):** apply the canonical rules from `templates/_shared/falsification_rules.md` (see §Falsification Rules). Record each verification action and its output in hypotheses.md; adjust confidence or mark `[REFUTED]` based on evidence only. If a hypothesis is confirmed at High confidence → proceed to write root_cause.md.
 
 4. **Loop termination conditions (max 3 rounds):**
    - **High confidence found:** Write root_cause.md and exit loop.
@@ -297,39 +311,60 @@ Every hypothesis MUST be tested with executable verification actions. Pure reaso
    <brief summary of refuted hypotheses and why they were ruled out>
    ```
 
-#### If mode == "deep": Phase 1-D
+#### If mode == "deep": Phase 1-D (WORKFLOW path)
 
-1. **Collect shared context** and save to `.harness/debug/context.md`:
+> Deep mode exists ONLY on the workflow path (§Mode Gate). The engine's `parallel()` replaces the old hand-rolled 2-sub-agent dispatch, the analysis-file writes/re-reads, and file-existence verification loops. The Fix Decision HARD-GATE stays in THIS orchestrator, immediately after the segment returns — never inside the script.
+
+1. **Collect shared context** and save to `.harness/debug/context.md` (written ONCE here and not mutated afterward — it is also the resume source for a re-run):
    - Directory structure (top 3 levels)
    - Relevant file list (based on error description)
    - Reproduction output (from hypotheses.md)
    - Tech stack summary
 
-2. **Launch Error Analyst and Code Archaeologist in parallel:**
-   a. Read `{CLAUDE_PLUGIN_ROOT}/templates/debug/error_analyst.md`.
-   b. Read `{CLAUDE_PLUGIN_ROOT}/templates/debug/code_archaeologist.md`.
-   c. Fill template variables for each:
-      - Error Analyst: `{error_description}`, `{stack_trace}` (from error or attached file), `{repo_path}`, `{user_lang}`, `{output_path}`: `.harness/debug/analysis_error_analyst.md`
-      - Code Archaeologist: `{error_description}`, `{repo_path}`, `{user_lang}`, `{output_path}`: `.harness/debug/analysis_code_archaeologist.md`
-   d. **Launch 2 sub-agents in parallel** using the Agent tool. Each receives its template only — no access to the other sub-agent's output (anchoring prevention). If `model_config.preset` is not `"default"`, pass `model` parameter per the preset table in `templates/_shared/model_config.md` (both → advisor role).
-   e. Wait for both to complete. Verify both analysis files exist.
+2. **Run the Analyze segment** via the Workflow tool (pass `args` as a JSON object — the script defensively parses; the field set below is the 1:1 contract with the script's `// contract` comment — a field missing on either side silently renders as `''`):
+   ```
+   Workflow {
+     scriptPath: "${CLAUDE_PLUGIN_ROOT}/workflows/debug.analyze.workflow.js",
+     args: {
+       errorDescription: <state.error_description>,
+       stackTrace: <from the error or --attach file, or "">,
+       repoPath: <state.repo_path>,
+       userLang: <state.user_lang>,
+       hasGit: <state.has_git>,
+       contextMd: <content of .harness/debug/context.md>,
+       errorType: <state.error_type>,
+       models: { advisor: <model_config.advisor or null> }
+     }
+   }
+   ```
+   Record `runs.analyze → { "runId": "<id>" }`, `updated_at → now`.
+   The script runs both analysts in parallel (anchoring-free — neither sees the other's output) and then an ADVERSARIAL cross-verify (the synthesizer actively tries to refute the surviving hypothesis with a fresh verification action, max 2 rounds).
 
-3. **Launch Cross Verification:**
-   a. Read `{CLAUDE_PLUGIN_ROOT}/templates/debug/cross_verification.md`.
-   b. Read both analysis files from step 2.
-   c. Fill template variables:
-      - `{error_analyst_output}`: full content of `analysis_error_analyst.md`
-      - `{archaeologist_output}`: full content of `analysis_code_archaeologist.md`
-      - `{user_lang}`
-      - `{root_cause_path}`: `docs/harness/<slug>/root_cause.md`
-   d. **Launch 1 sub-agent** (Cross Verifier). If `model_config.preset` is not `"default"`, pass `model` parameter per the preset table in `templates/_shared/model_config.md` (Cross Verifier → advisor role).
-   e. Wait for completion. Verify `docs/harness/<slug>/root_cause.md` exists.
+3. **Persist results.** The segment returns `{ rootCause: RootCause, stats }` — schema-validated; NO analysis-file re-reads, NO 1-line parsing. Every hypothesis carries ≥1 executable verification action (schema-enforced `minItems: 1`).
+   a. If `stats.analystsSucceeded < stats.analystsRequested`, warn (in `user_lang`): `[debug] ⚠ 1 analyst unavailable — cross-verify proceeded from the surviving analysis.`
+   b. **Write `docs/harness/<slug>/root_cause.md` FROM the returned `RootCause` object** (orchestrator-owned render — the resume source; segment returns are in-context only). Map fields onto the established document structure:
+      ```
+      # Root Cause Analysis
+      ## Error Description        ← state.error_description
+      ## Error Type               ← rootCause.errorType
+      ## Reproduction             ← rootCause.reproduction
+      ## Agreement Points         ← rootCause.agreementPoints (bullets)
+      ## Conflicts & Resolution   ← rootCause.conflictsResolved (topic / verificationAction / resolution per item)
+      ## Adversarial Audit        ← rootCause.adversarialAudit
+      ## Root Cause               ← rootCause.rootCause
+      ## Confidence               ← rootCause.confidence + confidenceRationale bullets
+      ## Affected Locations       ← table from rootCause.affectedLocations
+      ## Hypothesis History       ← rootCause.hypotheses grouped by status (claim, confidence, verification actions)
+      ## Recommended Fix Direction ← rootCause.recommendedFixDirection
+      ```
+      All free-text already arrives in `user_lang` (schema-enforced). Verify the file exists after writing.
+   c. Append a brief copy of `rootCause.hypotheses[]` (claim — status — confidence — first action per hypothesis) to `.harness/debug/hypotheses.md` for audit continuity with the quick path.
 
-4. Inform the user (in `user_lang`):
+4. Inform the user (in `user_lang`, one-liner sourced from `rootCause.summary`):
    ```
    [debug] Analysis complete.
-     Analysts  : Error Analyst + Code Archaeologist (independent)
-     Synthesis : Cross Verifier synthesized findings
+     Analysts  : Error Analyst + Code Archaeologist (independent, parallel)
+     Synthesis : adversarial cross-verify — {rootCause.summary}
      Output    : root_cause.md written
    ```
 
@@ -462,12 +497,12 @@ If the user asks for status, print status in the standard format defined above.
 
 Preset table + rules: see `templates/_shared/model_config.md`.
 
-**Role map (deep mode sub-agents):**
+**Role map (deep mode segment agents):**
 - Error Analyst → advisor
 - Code Archaeologist → advisor
 - Cross Verifier → advisor
 
-**Applying model config:** When launching any sub-agent, if `model_config.preset` is not `"default"`, pass the `model` parameter for that sub-agent's role per the preset table. Sub-agents must NOT directly access state.json to read model_config — the orchestrator passes the model parameter at launch time.
+**Applying model config:** pass the resolved advisor model once per segment run as `args.models` (`{ advisor: <model or null> }`; null = inherit parent model, i.e. the `default` preset) — the segment script applies it per agent. Sub-agents must NOT directly access state.json to read model_config — the orchestrator passes the resolved value at segment launch.
 
 ## User Interaction Rules
 
@@ -475,11 +510,13 @@ See `templates/_shared/askuserquestion.md`.
 
 ## Key Rules
 
-- **Falsification rules are non-negotiable** — see the Falsification Rules (Core Differentiator) section.
+- **Falsification rules are non-negotiable.** Canonical: `templates/_shared/falsification_rules.md` (see §Falsification Rules). Pure reasoning-only falsification is prohibited in both quick and deep modes — deep mode additionally enforces ≥1 executable action per hypothesis at the schema layer.
 - **Never skip reproduction attempt for runtime/logic errors.** Always attempt Phase 0.7 before Phase 1.
-- **Hypothesis verification loop is bounded.** Maximum 3 rounds. If no high-confidence hypothesis after 3 rounds, write root_cause.md with `Confidence: Unknown`.
+- **Hypothesis verification loop is bounded.** Maximum 3 rounds (quick); the deep cross-verifier's adversarial audit is bounded at 2 rounds. If no high-confidence hypothesis survives, write root_cause.md with `Confidence: Unknown`.
 - **Fix phase: never auto-chain to /harness.** Only suggest. The user must explicitly invoke `/harness`.
-- **Deep mode: analysts are isolated.** Code Archaeologist must NOT read Error Analyst output (anchoring prevention). Each sub-agent runs independently.
+- **Deep mode: analysts are isolated.** Code Archaeologist must NOT see Error Analyst output (anchoring prevention) — the Analyze segment's `parallel()` enforces this.
+- **Workflow args are a JSON object;** the segment script defensively parses (`args` may arrive as a JSON string — engine behavior). Keep the SKILL args block and the script's `// contract` comment in 1:1 sync. Never put user-gate decisions into args.
+- **Graceful engine fallback.** Any Workflow failure degrades to the inline quick path with a notice — never a hard error. Gates live ONLY in this orchestrator, never in a segment script.
 - **All permanent artifacts go to docs/harness/.** Temporary files (.harness/debug/) are ephemeral and cleaned up at session end.
 - **Build errors get the fast path.** Skip reproduction and hypothesis loop for build/compile errors. Compiler output is direct evidence.
 - **Confirmation gates are non-negotiable.** No implicit approval. The Fix Decision HARD-GATE requires explicit user choice before any code modification.
