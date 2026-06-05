@@ -397,7 +397,7 @@ Preset table + rules: see `templates/_shared/model_config.md`.
 
 **Role-map:** deep analysts (Structure & Dependency Analyst, Pattern & Quality Analyst) and thorough analysts (Structure Analyst, Dependency Analyst, Pattern Analyst) → executor; Cross-Critique (per analyst) → advisor. (No evaluator role is used.)
 
-**Applying model config:** When launching any sub-agent, if `model_config.preset` is not `"default"`, pass the `model` parameter according to the table above for that sub-agent. Sub-agents must NOT directly access `.harness/model_config.json` — the orchestrator passes the model parameter at launch time.
+**Applying model config:** When launching any sub-agent, if `model_config.preset` is not `"default"`, pass the `model` parameter per the role-map above combined with the preset table in `templates/_shared/model_config.md`. Sub-agents must NOT directly access `.harness/model_config.json` — the orchestrator passes the model parameter at launch time.
 
 ## User Interaction Rules
 

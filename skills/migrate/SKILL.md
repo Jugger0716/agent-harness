@@ -159,7 +159,7 @@ When the user provides a migration target (via $ARGUMENTS or in conversation), e
 
 1. **Detect user language** from the task description. Store as `user_lang`.
 2. **Slugify the target:** lowercase, transliterate non-ASCII to ASCII, remove non-word chars except hyphens, replace spaces with hyphens, truncate to 50 chars. For replacements, use format `<from>-to-<to>`. Store as `<slug>`.
-3. **Auto-detect project language and commands.** Scan the repo root. Language/test/build/lint/typecheck detection: see `templates/_shared/detection_table.md`.
+3. **Auto-detect project language and commands.** Scan the repo root. Language/test/build detection: see `templates/_shared/detection_table.md`.
 
 4. **Detect current version** of the target using the Version Auto-Detection table above. Store as `from_version`.
 5. **Determine target version** from `--to` argument or via WebSearch for latest stable. Store as `to_version`.
@@ -463,30 +463,9 @@ If user asks for status, print status in the standard format defined above.
 
 Preset table + rules: see `templates/_shared/model_config.md`.
 
-**migrate role-map:** External Research Analyst → executor, Codebase Impact Analyst → executor, Migration Advisor → advisor, Evaluator → evaluator.
+**migrate role-map:** External Research Analyst → executor; Codebase Impact Analyst → executor; Migration Advisor → advisor; Evaluator → evaluator.
 
-Each sub-agent is assigned a role. The following table defines the concrete model for every sub-agent under each preset:
-
-### Analysis Phase Sub-agents
-
-| Sub-agent | Role | default | all-opus | balanced | economy |
-|-----------|------|---------|----------|----------|---------|
-| External Research Analyst | executor | (no override) | opus | sonnet | haiku |
-| Codebase Impact Analyst | executor | (no override) | opus | sonnet | haiku |
-
-### Execution Phase Sub-agents
-
-| Sub-agent | Role | default | all-opus | balanced | economy |
-|-----------|------|---------|----------|----------|---------|
-| Migration Advisor | advisor | (no override) | opus | opus | sonnet |
-
-### Evaluator Phase Sub-agents
-
-| Sub-agent | Role | default | all-opus | balanced | economy |
-|-----------|------|---------|----------|----------|---------|
-| Evaluator | evaluator | (no override) | opus | opus | sonnet |
-
-**Applying model config:** When launching any sub-agent, if `model_config.preset` is not `"default"`, pass the `model` parameter according to the table above for that sub-agent. Sub-agents must NOT directly access state.json to read model_config — the orchestrator passes the model parameter at launch time.
+**Applying model config:** When launching any sub-agent, if `model_config.preset` is not `"default"`, pass the `model` parameter per the role-map above combined with the preset table in `templates/_shared/model_config.md`. Sub-agents must NOT directly access state.json to read model_config — the orchestrator passes the model parameter at launch time.
 
 ## User Interaction Rules
 

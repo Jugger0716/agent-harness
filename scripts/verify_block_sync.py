@@ -24,11 +24,10 @@ Exit codes:
 Usage:
   python scripts/verify_block_sync.py
 
-Intended invocation: pre-commit hook OR CI job.
+Intended invocation: run manually (pre-commit/CI wiring is a later-phase TODO).
 
-Defined contract: see skills/spec/SKILL.md §M5 BLOCK sync mechanism +
-templates/planner/*.md `<!-- BLOCK-START:<tag> v1 ... -->` header comments +
-templates/_shared/{spec_context_block,input_trust_model}.md.
+Defined contract: see the templates/planner/*.md `<!-- BLOCK-START:<tag> v1 ... -->`
+header comments + templates/_shared/{spec_context_block,input_trust_model}.md.
 """
 
 from __future__ import annotations
