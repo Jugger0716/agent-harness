@@ -1,7 +1,7 @@
 ---
 name: refactor
 disallowed-tools: NotebookEdit, WebSearch, WebFetch
-description: Safe, behavior-preserving code structure improvement with 3-tier mode (single/multi/comprehensive). Atomic changes, test after each step, stop on failure. Use when improving code structure without changing behavior.
+description: Safe, behavior-preserving code structure improvement with 3-tier mode — single (inline) or multi/comprehensive (2-3 analysts + cross-critique + synthesis via plugin-shipped native Workflow segments, opt-in gated). Atomic changes, test after each step, stop on failure. Use when improving code structure without changing behavior.
 ---
 
 # Agent Harness Refactor
@@ -20,7 +20,28 @@ Detect the user's language from their **most recent message**. Store as `user_la
 
 **Re-detection:** On every user message, check if the language has changed. If so, update `user_lang` and switch all subsequent communication.
 
-**What stays in English:** Template instructions (this file and templates/*.md), state.json field names, file names (refactor_plan.md, changes.md, qa_report.md), git branch names.
+**What stays in English:** Template instructions (this file and templates/*.md), state.json field names, file names (refactor_plan.md, changes.md, qa_report.md), git branch names, Workflow `args` field names.
+
+## Mode Gate — path & mode resolution (single source: `templates/_shared/mode_gate.md`)
+
+Apply the shared opt-in convention in `templates/_shared/mode_gate.md`. /refactor-specific resolution (replaces the old Step 1.8 scope-aware mode-selection AskUserQuestion roundtrip):
+
+| Signal (first match wins) | `mode` | `path_resolved` |
+|---|---|---|
+| `has_git == false` | single | **inline** (engine isolation requires git) |
+| `--mode single` (or `quick`) | single | **inline** |
+| `Workflow` tool NOT available this session | single | **inline** (notify only if an explicit `--mode multi/comprehensive` was requested) |
+| `--mode multi` | multi | **workflow** |
+| `--mode comprehensive` (or `thorough`/`deep`) | comprehensive | **workflow** |
+| no `--mode` AND session is in ultracode mode | comprehensive | **workflow** |
+| no `--mode`, no opt-in | single | **inline** |
+
+- **Multi/comprehensive exist ONLY on the workflow path** — the engine's `parallel()` fan-out replaces the old hand-rolled 2/3-analyst dispatch prose (Steps 2-M/2-C). The inline path is the preserved single mode.
+- The `thorough`/`deep` aliases are deliberate cross-skill deepest-tier synonyms (every reframed skill accepts the others' deepest mode names and collapses them onto its own deepest tier); canonical mode names stay per-skill.
+- **Scope-aware advisory (print only, no roundtrip):** print the recommendation — < 3 files → single, 3-10 → multi, 10+ or architecture-level → comprehensive — so a non-opted user knows which `--mode` to pass on re-invoke.
+- **Workflow-path scope:** ONLY Step 2 (plan synthesis) and Step 5 (evaluation) run as segments. **Step 4 execution stays in this orchestrator on every path** — atomic step apply, test-after-each-step, the regression gates, the Safety Advisor, and the auto-fix flow are never scripted.
+- **Graceful fallback:** if the Plan segment errors, print `[harness] ⚠ Workflow engine unavailable — falling back to the inline single path.` (in `user_lang`), set `path_resolved → "inline"`, `mode → "single"`, and continue via Step 2-S. If the Eval segment errors, fall back LOCALLY to the Step 5 inline evaluator dispatch (do not downgrade the rest of the session). Never error out.
+- Record `path_resolved` in state.json and show `Path` in the status format.
 
 ## Standard Status Format
 
@@ -30,6 +51,7 @@ Status block shape + label rules: see `templates/_shared/status_format.md`. refa
   Skill  : refactor
   Target : <target>
   Mode   : <single | multi | comprehensive>
+  Path   : <inline | workflow>
   Model  : <model_config preset name>
   Phase  : <phase label>
   Branch : <branch>          ← omit if has_git == false
@@ -42,7 +64,8 @@ Phase labels: plan_ready → "Analyzer — writing refactor plan", gen_ready →
 Before starting a new task, check if `.harness/state.json` already exists **and** `state.json.skill` equals `"refactor"`:
 
 1. If it exists and matches, print status in the standard format (including Model line from `model_config`), prefixed with `[harness] Previous refactor session detected.`
-2. Restore `model_config` from state.json. Apply it to all subsequent sub-agent launches.
+2. Restore `model_config` from state.json. Apply it to all subsequent sub-agent launches and Workflow `args.models`.
+2.5. **Re-resolve §Mode Gate** (the new session may lack the Workflow tool or the opt-in) and update `path_resolved` — a session that started on the workflow path may legitimately resume on the inline path. Cross-session resume re-RUNS segments; `state.runs.*.runId` values are audit-only (`resumeFromRunId` is same-session only — never attempt it across sessions).
 3. Ask the user using AskUserQuestion (in `user_lang`):
      header: "Session"
      question: "[harness] Previous refactor session detected. [print status in standard format]. Resume, restart, or stop?"
@@ -52,10 +75,11 @@ Before starting a new task, check if `.harness/state.json` already exists **and*
        - label: "Stop" / description: "Delete .harness/ and halt"
 
    Actions per selection:
-   - **Resume**: Jump to the step matching state.json phase:
-     `plan_ready` → if refactor_plan.md exists go to Step 3, else Step 2 |
-     `gen_ready` → Step 4 | `eval_ready` → Step 5 |
-     `completed` → no active session, proceed to Step 1
+   - **Resume**: Jump to the step matching state.json phase (completion-artifact checks come FIRST, before any path branching — a deep session resumed without the engine must never overwrite completed work):
+     - `plan_ready` → **FIRST, on BOTH paths**: if `{docs_path}refactor_plan.md` exists, go to Step 3 (the plan is complete — do not re-run any analysis). Else: inline path → Step 2-S; workflow path → Step 2-W (re-RUN the Plan segment; re-create `.harness/context.md` per Step 1.10 if missing).
+     - `gen_ready` → Step 4 (always orchestrator-inline on every path).
+     - `eval_ready` → **FIRST, on BOTH paths**: if `{docs_path}qa_report.md` already exists for the current round, skip to Step 6 and reconstruct the verdict from its `### Verdict:` line (sanctioned read — segment returns are in-context only). Else: Step 5 on the re-resolved path.
+     - `completed` → no active session, proceed to Step 1
    - **Restart**: Delete `.harness/` directory and proceed to Step 1
    - **Stop**: Delete `.harness/` directory and halt
 
@@ -126,19 +150,7 @@ When the user provides a refactoring target (via $ARGUMENTS or in conversation),
          - label: "Abort" / description: "Halt refactoring until tests are available"
      If user selects "Abort": halt. If "Proceed": set `test_available` to false and continue (verification will rely on code review only).
 
-8. **Mode selection:** If `--mode single`, `--mode multi`, or `--mode comprehensive` was passed, set mode and skip prompt. Otherwise:
-   - **Scope-aware recommendation:** Count files affected by the refactoring target.
-     - < 3 files → recommend `single`
-     - 3-10 files → recommend `multi`
-     - 10+ files or architecture-level → recommend `comprehensive`
-   - Ask the user using AskUserQuestion (in `user_lang`):
-       header: "Mode"
-       question: "Select refactoring mode: (scope: {N} files)"
-       options:
-         - label: "single (Recommended)" / description: "1 agent, fast (~1x tokens)" ← add "(Recommended)" to the auto-recommended mode's label instead
-         - label: "multi" / description: "2 analysts + safety advisor (~1.7x tokens)"
-         - label: "comprehensive" / description: "3 analysts + cross-verification + safety advisor (~2.5x tokens)"
-     Add "(Recommended)" to whichever mode the scope-aware recommendation selects; omit it from the others.
+8. **Mode Gate resolution:** apply §Mode Gate (no AskUserQuestion roundtrip — mode is derived from `--mode` flags / ultracode opt-in / tool availability / `has_git`). Store `mode` and `path_resolved` in state.json. Print the scope-aware advisory (< 3 files → single, 3-10 → multi, 10+ or architecture-level → comprehensive). If the user explicitly requested `--mode multi/comprehensive` but the gate resolved to inline (Workflow tool unavailable or `has_git == false`), notify (in `user_lang`): "multi/comprehensive mode requires the native Workflow engine and git — proceeding on the inline single path."
 
 9. **Model configuration selection:**
    If `--model-config <preset>` was passed, use it directly. Otherwise, use AskUserQuestion to ask the user (in `user_lang`):
@@ -158,7 +170,7 @@ When the user provides a refactoring target (via $ARGUMENTS or in conversation),
 
    Store result as `model_config` object: `{ "preset": "<name>", "executor": "<model|null>", "advisor": "<model|null>", "evaluator": "<model|null>", "verifier": "<haiku|sonnet|opus>" }`. For the `default` preset, store `{ "preset": "default", "verifier": "<resolved>" }`.
 
-10. **Shared context collection (multi/comprehensive only):**
+10. **Shared context collection (multi/comprehensive only — i.e. the workflow path):**
    Collect project context once and save to `.harness/context.md`:
    - Directory structure (top 3 levels)
    - Dependency info (package files content)
@@ -166,7 +178,7 @@ When the user provides a refactoring target (via $ARGUMENTS or in conversation),
    - Files in scope (list with brief descriptions)
    This avoids duplicate codebase scans by sub-agents.
 
-11. **Write `.harness/state.json`** with fields: `skill` ("refactor"), `target`, `mode` ("single"/"multi"/"comprehensive"), `model_config` (from step 9 — includes `verifier` field), `user_lang`, `repo_name`, `repo_path`, `phase` ("plan_ready"), `round` (1), `max_rounds` (3), `scope` (user-provided or "(no limit)"), `branch` ("harness/refactor-<slug>"), `lang`, `test_cmd`, `build_cmd`, `test_available` (true/false), `baseline_test_results` (summary string), `baseline_failures` (list of known-failing tests, or []), `docs_path` ("docs/harness/<slug>/"), `verify: { autofix_attempted: false }`, `autofix` (null), `created_at` (ISO8601).
+11. **Write `.harness/state.json`** with fields: `skill` ("refactor"), `target`, `mode` ("single"/"multi"/"comprehensive"), `path_resolved` ("inline"/"workflow" — from §Mode Gate; re-resolved on resume), `runs` (`{ "plan": null, "eval": null }`; each records `{ "runId": "<wf_...>" }` after a segment launch — audit + same-session iteration only, cross-session resume re-RUNS segments per §Session Recovery 2.5), `model_config` (from step 9 — includes `verifier` field), `user_lang`, `repo_name`, `repo_path`, `phase` ("plan_ready"), `round` (1), `max_rounds` (3), `scope` (user-provided or "(no limit)"), `branch` ("harness/refactor-<slug>"), `lang`, `test_cmd`, `build_cmd`, `test_available` (true/false), `baseline_test_results` (summary string), `baseline_failures` (list of known-failing tests, or []), `docs_path` ("docs/harness/<slug>/"), `verify: { autofix_attempted: false }`, `autofix` (null), `created_at` (ISO8601).
 
 > `verify.autofix_attempted`: nested field (aligned with `/harness` schema — not a flat top-level field). Session-wide once-only limit — applies across all steps, not reset on round increment. `/harness` Layer 1/2 fields are absent from `/refactor` `verify` object.
 > `autofix` transitions to `{ "last_patch_path": ".harness/refactor/auto_fix_patch.md", "applied": "proposed"|"applied"|"rejected"|"stopped", "triggered_at": "<ISO8601>" }` during H2 flow.
@@ -179,6 +191,7 @@ When the user provides a refactoring target (via $ARGUMENTS or in conversation),
       Repo     : <path>
       Branch   : harness/refactor-<slug>
       Mode     : <single | multi | comprehensive>
+      Path     : <inline | workflow>
       Model    : <preset name>
       Verifier : N/A (test_cmd direct — future extension)
       Language : <lang>
@@ -190,7 +203,7 @@ When the user provides a refactoring target (via $ARGUMENTS or in conversation),
 
 ### Step 2: Phase 1 — Impact Analysis
 
-Read `mode` from state.json and branch accordingly.
+Read `mode` and `path_resolved` from state.json and branch accordingly.
 
 #### If mode == "single": Step 2-S
 
@@ -229,68 +242,51 @@ Read `mode` from state.json and branch accordingly.
 4. Update state.json: phase → `"plan_ready"`.
 5. Print status in the standard format, prefixed with `[harness] Analysis complete.`
 
-#### If mode == "multi": Step 2-M
+#### If mode == "multi" or "comprehensive": Step 2-W (WORKFLOW path)
 
-##### Step 2a-M: Shared Context
+> Multi/comprehensive exist ONLY on the workflow path (§Mode Gate). The engine's `parallel()` fan-out replaces the old hand-rolled 2/3-analyst dispatch, the `.harness/refactor/analysis_*.md` / `critique_*.md` intermediate files, and the file re-reads. The Plan Confirmation HARD GATE (Step 3) is rendered by THIS orchestrator AFTER the segment returns — never inside the script.
 
-If `.harness/context.md` was not created in Setup (e.g., resuming from session recovery), create it now following the same collection procedure as Step 1.9.
+1. **Ensure `.harness/context.md` exists** — if it was not created in Setup (e.g., resuming from session recovery), create it now following the same collection procedure as Step 1.10.
 
-##### Step 2b-M: Independent Analysis (Parallel)
+2. **Run the Plan segment** via the Workflow tool (pass `args` as a JSON object — the script defensively parses; the field set below is the 1:1 contract with the script's `// contract` comment — a field missing on either side silently renders as ''):
+   ```
+   Workflow {
+     scriptPath: "${CLAUDE_PLUGIN_ROOT}/workflows/refactor.plan.workflow.js",
+     args: {
+       target: <target>, repoPath: <repo_path>, lang: <lang>, scope: <scope>,
+       userLang: <user_lang>,
+       context: <content of .harness/context.md>,
+       testCmd: <test_cmd or "">, baselineTestResults: <baseline_test_results>,
+       mode: <"multi"|"comprehensive">,
+       models: { executor: <model_config.executor or null>,
+                 advisor: <model_config.advisor or null> }
+     }
+   }
+   ```
+   Record `runs.plan → { "runId": "<id>" }`.
+   The script runs the analysts in parallel (anchoring-free — none sees another's output), cross-critiques them in comprehensive mode, and synthesizes one structured plan.
 
-1. Read two analyst templates from `{CLAUDE_PLUGIN_ROOT}/templates/refactor/`: `structural_analyst.md`, `risk_analyst.md`
-2. For each analyst, fill template variables: `{target_description}`, `{repo_path}`, `{lang}`, `{scope}`, `{user_lang}`, `{context}` (from .harness/context.md), `{test_cmd}`, `{baseline_test_results}` from state.json; `{output_path}`: `.harness/refactor/analysis_<analyst>.md`
-3. **Launch 2 subagents in parallel** using the Agent tool. Each receives its analyst template and context.md, has no knowledge of the other subagent (anchoring prevention), and writes to its output_path. If `model_config.preset` is not `"default"`, pass `model` parameter per the preset table in `templates/_shared/model_config.md` (Structural Analyst, Risk Analyst → executor role).
-4. Wait for both to complete. Verify both analysis files exist.
+3. The segment returns `{ plan: RefactorPlan, stats }` — schema-validated; NO analysis-file re-reads, NO 1-line parsing. Print (in `user_lang`): `  ✓ Plan segment: {stats.analystsSucceeded}/{stats.analystsRequested} analyses → {stats.critiquesSucceeded} critiques → synthesis`
+   - If `stats.analystsSucceeded < stats.analystsRequested`, warn (in `user_lang`): `[harness] ⚠ {N} analyst(s) unavailable — synthesis proceeded from the remaining analyses.`
 
-##### Step 2c-M: Synthesis
+4. **Orchestrator writes `{docs_path}refactor_plan.md` from the RefactorPlan object** (headings in `user_lang`):
+   - `### Goal` ← `goal` ; `### Current State Analysis` ← `currentState`
+   - `### Impact Scope` ← `impactScope.direct` / `impactScope.indirect` bullet lists
+   - `### Refactoring Steps` ← `steps[]` as GFM checkboxes `- [ ] Step {n}: {description} — files: {files} — test: {testImpact} — risk: {risk}`
+   - `### Test Coverage Assessment` ← `testCoverage[]` as `- {target}: {coverage} — {gapAction}` (empty array → "N/A — no coverage data")
+   - `### Completion Criteria` ← `acceptanceCriteria[]` as GFM checkboxes `- [ ] {id}: {text}`
+   - `### Risks` ← `risks[]` as `- {risk} — Likelihood: {likelihood} — Mitigation: {mitigation}` (append `(source)` when present)
+   Verify the file exists after writing (rendering is orchestrator-owned and deterministic).
 
-1. Read the synthesis template: `{CLAUDE_PLUGIN_ROOT}/templates/refactor/synthesis.md`
-2. Read both analysis files from Step 2b-M.
-3. Interpret the synthesis template with: `{target_description}`, `{user_lang}`, `{all_analyses}` (concatenated with author labels), `{plan_path}`: `{docs_path}refactor_plan.md`, `{test_cmd}`, `{baseline_test_results}`
-4. Follow the synthesis rules to write `refactor_plan.md`.
 5. Update state.json: phase → `"plan_ready"`.
 6. Inform the user (in `user_lang`):
    ```
    [harness] Analysis complete.
-     Analyses   : 2 specialists analyzed independently
-     Output     : refactor_plan.md synthesized
-   ```
-
-#### If mode == "comprehensive": Step 2-C
-
-##### Step 2a-C: Shared Context
-
-Same as Step 2a-M.
-
-##### Step 2b-C: Independent Analysis (Parallel)
-
-1. Read three analyst templates from `{CLAUDE_PLUGIN_ROOT}/templates/refactor/`: `structural_analyst.md`, `risk_analyst.md`, `feasibility_analyst.md`
-2. For each analyst, fill template variables: same as Step 2b-M, plus `{output_path}`: `.harness/refactor/analysis_<analyst>.md`
-3. **Launch 3 subagents in parallel.** Each receives its analyst template and context.md, has no knowledge of other subagents, and writes to its output_path. If `model_config.preset` is not `"default"`, pass `model` parameter per the preset table in `templates/_shared/model_config.md` (Structural Analyst, Risk Analyst, Feasibility Analyst → executor role).
-4. Wait for all 3 to complete. Verify all 3 analysis files exist.
-
-##### Step 2c-C: Cross-Verification (Parallel)
-
-1. Read the cross-critique template: `{CLAUDE_PLUGIN_ROOT}/templates/refactor/cross_critique.md`
-2. Read all 3 analysis files from Step 2b-C.
-3. For each analyst, prepare the cross-critique prompt with: `{analyst_name}`, `{target_description}`, `{user_lang}`, `{analysis_1_author}`, `{analysis_1_content}`, `{analysis_2_author}`, `{analysis_2_content}` (the OTHER two analyses), `{output_path}`: `.harness/refactor/critique_<analyst>.md`
-4. **Launch 3 subagents in parallel.** Each writes to `.harness/refactor/critique_<analyst>.md`. If `model_config.preset` is not `"default"`, pass `model` parameter per the preset table in `templates/_shared/model_config.md` (advisor role — cross-critique requires critical judgment).
-5. Wait for all 3 to complete. Verify all 3 critique files exist.
-
-##### Step 2d-C: Synthesis
-
-1. Read the synthesis template: `{CLAUDE_PLUGIN_ROOT}/templates/refactor/synthesis.md`
-2. Read all 6 intermediate files (3 analyses + 3 critiques).
-3. Interpret the synthesis template with: `{target_description}`, `{user_lang}`, `{all_analyses}` (concatenated with author labels), `{all_critiques}` (concatenated with author labels — pass empty string `""` if multi mode), `{plan_path}`: `{docs_path}refactor_plan.md`, `{test_cmd}`, `{baseline_test_results}`
-4. Follow the synthesis rules to write `refactor_plan.md`.
-5. Update state.json: phase → `"plan_ready"`.
-6. Inform the user (in `user_lang`):
-   ```
-   [harness] Analysis complete.
-     Analyses        : 3 specialists analyzed independently
-     Cross-reviews   : 3 cross-verifications completed
+     Analyses        : {stats.analystsSucceeded} specialists analyzed independently
+     Cross-reviews   : {stats.critiquesSucceeded} cross-critiques    ← omit if multi mode
      Output          : refactor_plan.md synthesized
    ```
+7. **On Workflow error** (launch failure, script error, schema-invalid result): apply §Mode Gate graceful fallback → notify, set `path_resolved → "inline"`, `mode → "single"`, and re-run this step via Step 2-S.
 
 ### Step 3: HARD GATE — Plan Confirmation
 
@@ -426,18 +422,44 @@ Read `mode` from state.json and branch accordingly.
      Output   : changes.md written
    ```
 
-### Step 5: Phase 3 — Verification (Isolated Subagent)
+### Step 5: Phase 3 — Verification (Isolated Evaluator)
 
 1. Update state.json: phase → `"eval_ready"`.
-2. Read the evaluator template: `{CLAUDE_PLUGIN_ROOT}/templates/refactor/evaluator.md`
-3. **Prepare the subagent prompt.** Fill in: `{refactor_plan_content}` (structural goals only — strip implementation details), `{changed_files_list}` (file paths only from changes.md — **strip all reasoning** to prevent anchoring), `{test_available}`, `{build_cmd}`, `{test_cmd}`, `{baseline_test_results}`, `{baseline_failures}` (pre-existing failures to ignore), `{round_num}`, `{scope}`, `{user_lang}` from state.json, `{qa_report_path}`: `{docs_path}qa_report.md`.
+2. **Prepare the anchor-free inputs (both paths):** `{refactor_plan_content}` (structural goals only — strip implementation details), `{changed_files_list}` (file paths only from changes.md — **strip all reasoning** to prevent anchoring), `{test_available}`, `{build_cmd}`, `{test_cmd}`, `{baseline_test_results}`, `{baseline_failures}` (pre-existing failures to ignore), `{round_num}`, `{scope}`, `{user_lang}` from state.json, `{qa_report_path}`: `{docs_path}qa_report.md`.
    **Do NOT include:** Execution reasoning, safety advisor assessments, why files were changed, or references to "Generator"/"AI"/"agent" as code author.
-4. **Launch the Evaluator subagent** using the Agent tool. If `model_config.preset` is not `"default"`, pass `model` parameter per the preset table in `templates/_shared/model_config.md` (Evaluator → evaluator role). Instruct it to write the QA report to `{docs_path}qa_report.md`.
-5. When the subagent returns, read `{docs_path}qa_report.md` to get the verdict.
+
+#### Step 5 — INLINE path (mode: single)
+
+3. Read the evaluator template: `{CLAUDE_PLUGIN_ROOT}/templates/refactor/evaluator.md` and fill the variables above.
+4. **Launch the Evaluator subagent** using the Agent tool. If `model_config.preset` is not `"default"`, pass `model` parameter per the preset table in `templates/_shared/model_config.md` (Evaluator → evaluator role). It writes the QA report to `{qa_report_path}`.
+5. When the subagent returns, read `{docs_path}qa_report.md` to get the verdict (the on-disk template's `### Verdict:` regex contract — inline path only).
+
+#### Step 5 — WORKFLOW path (mode: multi | comprehensive)
+
+3. **Run the Eval segment** via the Workflow tool (field set = 1:1 contract with the script's `// contract` comment):
+   ```
+   Workflow {
+     scriptPath: "${CLAUDE_PLUGIN_ROOT}/workflows/refactor.eval.workflow.js",
+     args: {
+       planGoals: <refactor_plan_content (structural goals only)>,
+       changedFilesList: <file paths only, reasons stripped>,
+       testAvailable: <bool>, buildCmd: <build_cmd or "">, testCmd: <test_cmd or "">,
+       baselineTestResults: <baseline_test_results>, baselineFailures: <baseline_failures>,
+       roundNum: <round>, scope: <scope>, userLang: <user_lang>,
+       qaReportPath: "{docs_path}qa_report.md",
+       models: { evaluator: <model_config.evaluator or null> }
+     }
+   }
+   ```
+   Record `runs.eval → { "runId": "<id>" }`.
+4. The segment returns a **VerifyVerdict** (schema-validated — NO regex parse on this path). The evaluator agent has also WRITTEN `{docs_path}qa_report.md` (user-facing artifact + the cross-session verdict-reconstruction source). **Verify the file exists**; if missing, derive it yourself from the verdict object (orchestrator-derived fallback — one Write, no re-dispatch).
+5. **On Workflow error**: fall back LOCALLY to the Step 5 INLINE evaluator dispatch above (do NOT downgrade the rest of the session — the session stays on the workflow path for any later round's Plan segment).
 
 ### Step 6: Verdict & Loop
 
-Read qa_report.md and determine verdict (look for "Verdict: PASS" or "Verdict: FAIL").
+Determine the verdict:
+- **INLINE path:** Read qa_report.md and look for `### Verdict: PASS` or `### Verdict: FAIL`.
+- **WORKFLOW path:** use the `VerifyVerdict` object from the Eval segment — branch on **(layer, verdict)**, never verdict alone. Refactor mapping (see `workflows/_reference/schemas.md` consumer note): `(L1, FAIL_L2)` = mechanical test regression / build failure; `(L3, FAIL_L3)` = behavior-preservation judgment failure; `(L3, PASS)` = pass. ANY non-PASS verdict is treated as FAIL for the gate below; build the failure summary from `verdict.summary` + top `failures[].fix` lines. **On resume with no in-context VerifyVerdict:** read qa_report.md's `### Verdict:` line — mirrors the INLINE procedure (sanctioned read).
 
 **If PASS:** Update state.json: phase → `"completed"`. Inform user: refactoring complete, behavior preserved. Proceed to Step 7.
 
@@ -480,6 +502,8 @@ Preset table + rules: see `templates/_shared/model_config.md`.
 
 Role-map: Structural / Risk / Feasibility Analyst -> executor; Cross-Critique / Safety Advisor -> advisor; Evaluator -> evaluator.
 
+**WORKFLOW path:** pass the resolved models once per segment run as `args.models` — Plan segment `{ executor, advisor }`, Eval segment `{ evaluator }` (null = inherit parent model, i.e. the `default` preset) — the segment scripts apply them per agent. The Safety Advisor and Auto-fix Proposer are always dispatched inline by the orchestrator (Step 4 is never scripted) and take their `model` parameter at launch as before. Sub-agents must NOT access state.json for model config.
+
 > **Verifier defaults to haiku; override with `--verifier-model sonnet|opus`** (stored in `model_config.verifier`). `/refactor` currently does not dispatch a separate Verify sub-agent — test regression uses `test_cmd` directly. The verifier field is stored for future extension. Auto-fix Proposer uses `model_config.advisor ?? "opus"` instead.
 
 ## User Interaction Rules
@@ -496,7 +520,11 @@ See `templates/_shared/askuserquestion.md`.
 - **Analyst proposals must be independent.** Never share one analyst's findings with another during the analysis phase.
 - **Safety Advisor reviews before execution, not after.** Advisory input happens before each step is applied.
 - **Use whatever skills are available.** Search by capability keyword, not plugin name. If no match, proceed without it.
-- **User language.** All user-facing output must be in `user_lang`. Re-detect on every user message.
-- **Intermediate outputs are ephemeral.** Only final artifacts (refactor_plan.md, changes.md, qa_report.md) are preserved in `docs/`.
-- **Mode selection.** If `--mode` provided, use it. Otherwise recommend based on scope and ask. Store in state.json; preserve across session recovery.
+- **User language.** All user-facing output must be in `user_lang`. Re-detect on every user message. WORKFLOW path: pass `userLang` in `args` — the segment scripts build schema descriptions from it, which forces sub-agent free-text output language; ids/enums stay English raw.
+- **Intermediate outputs are ephemeral.** Only final artifacts (refactor_plan.md, changes.md, qa_report.md) are preserved in `docs/`. On the workflow path there are no intermediate analysis/critique files at all — segments return schema-validated objects.
+- **Mode Gate replaces the mode roundtrip.** `--mode` flag / ultracode opt-in / tool availability / `has_git` derive the mode (§Mode Gate); the scope advisory is print-only. Store `mode` + `path_resolved` in state.json; re-resolve on session recovery.
+- **Fan-out exists only on the workflow path.** Multi/comprehensive analysis runs as plugin-shipped segment scripts; without the engine or opt-in, the session runs single inline (with a notice on explicit requests).
+- **Execution is never scripted.** Step 4 (atomic apply + test-after-each + regression gates + Safety Advisor + auto-fix) stays in this orchestrator on every path.
+- **Workflow args are a JSON object;** segment scripts defensively parse (`args` may arrive as a JSON string — engine behavior). Keep the SKILL args blocks and the scripts' `// contract` comments in 1:1 sync. Never put user-gate decisions into args.
+- **Graceful engine fallback.** Plan-segment failure degrades the session to the inline single path; Eval-segment failure falls back locally to the inline evaluator dispatch — never a hard error. Gates live ONLY in this orchestrator, never in a segment script.
 - **No auto-fix on test failure.** Report the failure, give the user options. Never attempt to fix a regression automatically.
