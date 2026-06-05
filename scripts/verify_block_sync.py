@@ -26,6 +26,7 @@ Exit codes:
 
 Usage:
   python scripts/verify_block_sync.py
+  python scripts/verify_block_sync.py --version
 
 Intended invocation: run manually (pre-commit/CI wiring is a later-phase TODO).
 
@@ -35,10 +36,14 @@ header comments + templates/_shared/{spec_context_block,input_trust_model}.md.
 
 from __future__ import annotations
 
+import argparse
 import hashlib
 import re
 import sys
 from pathlib import Path
+
+# 이 스크립트 자체의 버전. GROUPS 내 블록 버전(v1/v2)과는 무관하며 독립 관리된다.
+SCRIPT_VERSION = "1.0.0"
 
 PLANNERS = [
     "templates/planner/architect.md",
@@ -127,6 +132,11 @@ def check_group(
 
 
 def main() -> int:
+    parser = argparse.ArgumentParser(description="Verify byte-identical BLOCK content sync.")
+    parser.add_argument(
+        "--version", action="version", version=f"verify_block_sync {SCRIPT_VERSION}"
+    )
+    args = parser.parse_args()  # noqa: F841 — no positional args yet; reserved for future use
     repo_root = Path(__file__).resolve().parent.parent
     rc = 0
     for tag, version, files, source in GROUPS:
