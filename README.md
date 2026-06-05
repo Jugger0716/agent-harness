@@ -67,14 +67,14 @@ Higher modes cost more per run but save total cost by reducing retry rounds. Sta
 | Skill | Command | Description |
 |-------|---------|-------------|
 | **Harness** | `/harness <task>` | 3-Phase (Planner -> Generator -> Evaluator) orchestrator. Inline single path by default; opt-in workflow path (ultracode or `--mode standard/multi`) runs plugin-shipped native Workflow segment scripts with schema-validated returns. Works with or without git. _(formerly `/workflow` — old name kept as a deprecation alias)_ |
-| **Refactor** | `/refactor <target>` | Safe, behavior-preserving code structure improvement. Single, multi, or comprehensive mode. |
+| **Refactor** | `/refactor <target>` | Safe, behavior-preserving code structure improvement. Single (inline) or multi/comprehensive (2-3 analysts + cross-critique, native Workflow path). Execution stays gated and step-tested in the orchestrator. |
 | **Migrate** | `/migrate <target> [--from v4 --to v5]` | Staged migration of frameworks, libraries, and dependencies. Single or multi-agent mode with WebSearch research. |
 | **Debug** | `/debug <error>` | Hypothesis-driven debugging with mandatory executable verification. Quick (inline) or deep (2 analysts + adversarial cross-verify, native Workflow path). |
 | **Spec** | `/spec <requirement>` | Multi-round Q&A requirements specification. Output directly compatible with `/harness` input. Quick (inline) or deep (4 analysts + Critic, native Workflow path). |
 | **Test Gen** | `/test-gen <target>` | Automated test generation with mutation-based quality verification. Supports coverage-gap and regression modes. |
 | **Memory** | `/memory <cmd>` | Team knowledge base (save/show/clean/search). Git-committed, team-shared decisions, patterns, and conventions. |
 | **Codebase Audit** | `/codebase-audit` | Systematic codebase analysis with 3-tier mode (quick/deep/thorough) for team onboarding. |
-| **Code Review** | `/code-review <target>` | Systematic, bias-free code review. Quick (1 agent), deep (2 specialists), or thorough (3 specialists + cross-verification). |
+| **Deep Review** | `/deep-review <target>` | Systematic, bias-free code review. Quick (inline checklist) or deep/thorough (2-3 specialists + adversarial cross-verification, native Workflow path). Optional `--comment` (inline PR comments) / `--fix` (gated apply). _(formerly `/code-review` — old name kept as a deprecation alias)_ |
 | **MD Optimize** | `/md-optimize` | Optimize CLAUDE.md and project `.md` files for token efficiency. |
 | **MD Generate** | `/md-generate` | Analyze project and generate/enhance CLAUDE.md for effective Claude Code development. |
 | **Ship** | `/ship` | Q&A release pipeline: version bump, CHANGELOG (Conventional Commits), build/test verify, git ops (commit/tag/`merge_to_base`/push), GitHub release — HARD-GATE before every irreversible action. Auto-detects environment, skips unavailable stages. Stage 6.5 (`merge_to_base`, v8.4+) merges release branch into base branch BEFORE tag push so the tag is reachable from the base branch. |
@@ -121,13 +121,15 @@ claude plugin install agent-harness@agent-harness-marketplace
 /codebase-audit --mode thorough                    # comprehensive multi-agent analysis
 /codebase-audit --scope "src/**" --incremental     # analyze only changes in src/
 
-/code-review #123                                  # review PR, asks for mode
-/code-review feature/auth --mode deep              # review branch diff, deep mode
-/code-review --staged --mode quick                 # review staged changes, quick
+/deep-review #123                                  # review PR (quick inline by default; ultracode -> thorough)
+/deep-review feature/auth --mode deep              # workflow path: 2 specialists + synthesis
+/deep-review --staged --mode quick                 # review staged changes, quick inline
+/deep-review #123 --comment                        # post critical/major findings as inline PR comments (confirmed)
+/deep-review --staged --fix                        # apply suggested fixes behind an explicit gate
 
-/refactor extract auth logic from UserController    # asks for mode
+/refactor extract auth logic from UserController    # single inline by default; ultracode -> comprehensive
 /refactor reduce coupling in src/services/ --mode single
-/refactor restructure data layer --mode comprehensive
+/refactor restructure data layer --mode comprehensive   # workflow path: 3 analysts + cross-critique
 
 /migrate react --from 17 --to 18                   # staged React migration
 /migrate replace moment with dayjs                 # library replacement
@@ -155,7 +157,7 @@ Inspired by Anthropic's [Advisor Strategy](https://claude.com/blog/the-advisor-s
 - **Advisor**: high-level judgment — plan review, safety checks (quality model needed)
 - **Evaluator**: independent verification — always protected (never haiku)
 
-Works with: workflow, refactor, migrate, debug, spec, test-gen, code-review, codebase-audit. Presets are selected via numbered UI (AskUserQuestion) with `Other` for custom role mapping.
+Works with: harness, refactor, migrate, debug, spec, test-gen, deep-review, codebase-audit. Presets are selected via numbered UI (AskUserQuestion) with `Other` for custom role mapping.
 
 ## Interactive UX
 
@@ -403,31 +405,35 @@ If no matching skill is found, the harness proceeds without it. No specific plug
 Safe, behavior-preserving code structure improvement. Separates impact analysis, atomic execution with safety checks, and isolated verification into distinct phases. "Same behavior, better structure."
 
 ```
-/refactor  -> [Setup] Auto-detect + git safety + baseline tests + mode selection
+/refactor  -> [Setup] Auto-detect + git safety + baseline tests + Mode Gate (derived, no roundtrip)
                         -> [Phase 1] Impact Analysis
-                           single:        1 agent analyzes + writes refactor_plan.md
-                           multi:         2 specialists analyze independently
-                                          -> Synthesis: merge into refactor_plan.md
-                           comprehensive: 3 specialists analyze independently
-                                          -> Cross-verification: each reviews others
-                                          -> Synthesis: merge into refactor_plan.md
-                        -> Confirmation Gate: user approves plan
-                        -> [Phase 2] Execution (atomic steps)
-                           single:              1 agent applies changes step-by-step
+                           single (inline):  1 agent analyzes + writes refactor_plan.md
+                           multi/comprehensive (workflow path):
+                                          refactor.plan.workflow.js — 2-3 analysts in parallel
+                                          -> cross-critique (comprehensive only)
+                                          -> synthesis -> schema-validated RefactorPlan
+                                          -> orchestrator renders refactor_plan.md
+                        -> Confirmation Gate: user approves plan (orchestrator)
+                        -> [Phase 2] Execution (atomic steps — ALWAYS orchestrator-run)
+                           single:              applies changes step-by-step
                            multi/comprehensive:  Safety Advisor reviews each step
                                                  -> Execute + test after each
                            On test failure: STOP immediately (no auto-fix)
-                        -> [Phase 3] Verification (isolated subagent)
+                        -> [Phase 3] Verification (isolated evaluator)
+                           inline: evaluator sub-agent + qa_report verdict line
+                           workflow: refactor.eval.workflow.js -> VerifyVerdict object
                            Compare tests with baseline -> PASS/FAIL
 ```
 
 ### Modes
 
-| Mode | Best for | Analysis | Execution | Token cost |
-|------|----------|----------|-----------|------------|
-| **single** | File/function level (< 3 files) | 1 agent | 1 agent, step-by-step | 1x |
-| **multi** | Module level (3-10 files) | 2 analysts + synthesis | Lead Dev + Safety Advisor | ~1.7x |
-| **comprehensive** | Architecture level (10+ files) | 3 analysts + cross-verify + synthesis | Lead Dev + Safety Advisor | ~2.5x |
+| Mode | Path | Best for | Analysis | Execution | Token cost |
+|------|------|----------|----------|-----------|------------|
+| **single** | inline | File/function level (< 3 files) | 1 agent | 1 agent, step-by-step | 1x |
+| **multi** | workflow | Module level (3-10 files) | 2 analysts + synthesis | orchestrator + Safety Advisor | ~1.7x |
+| **comprehensive** | workflow | Architecture level (10+ files) | 3 analysts + cross-critique + synthesis | orchestrator + Safety Advisor | ~2.5x |
+
+With no `--mode`: ultracode sessions resolve **comprehensive**; non-opted sessions resolve **single** (the old mode-selection roundtrip is removed — a scope advisory is printed, and the Plan Confirmation gate keeps its "Switch to single" exit). Multi/comprehensive require the native Workflow engine + git; otherwise the session falls back to single with a notice.
 
 ### Core Principles
 
@@ -912,77 +918,64 @@ After analysis, suggests relevant next steps based on findings:
 
 ---
 
-## code-review
+## deep-review
 
-A standalone review skill that performs systematic, bias-free code reviews on PRs, branches, commits, or file diffs.
+A standalone review skill that performs systematic, bias-free code reviews on PRs, branches, commits, or file diffs. *(formerly `/code-review` — renamed to end the literal collision with Claude Code's built-in `/code-review`; the old name remains as a deprecation alias that forwards here.)*
 
 ```
-/code-review #123                    # review a PR
-/code-review feature/auth            # review branch diff vs main
-/code-review abc1234..def5678        # review commit range
-/code-review --staged                # review staged changes
-/code-review #123 --mode thorough    # force thorough mode
+/deep-review #123                    # review a PR (quick inline; ultracode -> thorough)
+/deep-review feature/auth            # review branch diff vs main
+/deep-review abc1234..def5678        # review commit range
+/deep-review --staged                # review staged changes
+/deep-review #123 --mode thorough    # force thorough mode (workflow path)
+/deep-review #123 --comment          # post critical/major findings as inline PR comments (confirmed first)
+/deep-review --staged --fix          # apply suggested fixes behind an explicit gate
 ```
 
 **What it does:**
-- **3-tier depth control**: quick (1 agent, 5-perspective checklist), deep (2 specialist sub-agents + synthesis), thorough (3 specialists + cross-verification + synthesis)
-- **Bias reduction**: context isolation, anchor-free input (no PR descriptions/commit messages), defect-assumption framing, author neutralization
-- **Smart scope routing**: recommends review depth based on diff size (< 100 lines -> quick, 100-500 -> deep, 500+ -> thorough)
-- **Structured findings**: each finding has severity (Critical/Major/Minor/Suggestion), category, file:line, description, and concrete fix suggestion
+- **3-tier depth control**: quick (inline, 5-perspective checklist), deep (2 specialist reviewers + synthesis), thorough (3 specialists + adversarial cross-verification + synthesis). Deep/thorough run as a plugin-shipped native Workflow segment (`deep-review.review.workflow.js`) — opt-in via ultracode or `--mode`; otherwise quick inline.
+- **Schema-validated returns**: reviewers, cross-verifiers, and synthesis return `FindingSet`/`CrossVerifyReport` objects — no intermediate review files, no table re-parsing. The orchestrator writes `review_report.md` from the returned object.
+- **Bias reduction**: context isolation, anchor-free input (no PR descriptions/commit messages), defect-assumption framing, author neutralization, input-trust fencing (the diff AND reviewer-authored digests are declared DATA).
+- **Scope advisory**: prints the recommended depth based on diff size (< 100 lines -> quick, 100-500 -> deep, 500+ -> thorough) — pass `--mode` to take it.
+- **Built-in parity, gated**: `--comment` posts inline PR comments (after an explicit confirm); `--fix` applies critical/major suggestions to the working tree only behind a hard gate with per-path validation — never automatically, never committed.
 - **Smart routing**: suggests next actions based on findings (e.g., `/harness` for critical fixes)
 
 ### Modes
 
-| Mode | Sub-agents | Process | Token cost |
-|------|-----------|---------|------------|
-| **quick** | 0 (inline) | 5-perspective checklist | ~1x |
-| **deep** | 2 | Security & Correctness + Architecture & Maintainability -> synthesis | ~1.5x |
-| **thorough** | 3 + 3 | Security & Correctness + Architecture & Design + DX & Maintainability -> cross-verification -> synthesis | ~2.5x |
+| Mode | Path | Sub-agents | Process | Token cost |
+|------|------|-----------|---------|------------|
+| **quick** | inline | 0 | 5-perspective checklist | ~1x |
+| **deep** | workflow | 2 + 1 | Security & Correctness + Architecture & Maintainability -> synthesis | ~1.5x |
+| **thorough** | workflow | 3 + 3 + 1 | Security & Correctness + Architecture & Design + DX & Maintainability -> adversarial cross-verification -> synthesis | ~2.5x |
 
-### Deep Mode
-
-Two specialist reviewers analyze the diff independently and in parallel:
-
-| Reviewer | Focus |
-|----------|-------|
-| **Security & Correctness** | Vulnerabilities, logic errors, input validation, error handling |
-| **Architecture & Maintainability** | Design patterns, code organization, testing, performance, naming |
-
-The main agent synthesizes both reviews into a unified report, deduplicating findings and resolving severity disagreements.
-
-### Thorough Mode
-
-Three specialist reviewers analyze independently and in parallel, then cross-verify each other's findings:
-
-| Reviewer | Focus |
-|----------|-------|
-| **Security & Correctness** | Vulnerabilities, logic errors, input validation, error handling |
-| **Architecture & Design** | System structure, abstractions, coupling, API design, scalability |
-| **DX & Maintainability** | Readability, naming, testing, performance, conventions |
-
-After initial review, three cross-verification sub-agents validate each other's findings against the actual diff -- confirming real issues, flagging false positives, and catching missed problems. The main agent then synthesizes all 6 documents.
+With no `--mode`: ultracode sessions resolve **thorough**; non-opted sessions resolve **quick** (the old mode-selection roundtrip is removed — the confirmation gate before fan-out remains).
 
 ### Bias Reduction Techniques
 
 | Technique | Applies to | Purpose |
 |-----------|-----------|---------|
-| Context isolation (separate sub-agents) | deep, thorough | Each reviewer forms independent judgment |
+| Context isolation (parallel segment agents) | deep, thorough | Each reviewer forms independent judgment |
 | Anchor-free input (no PR description/commit messages) | all modes | Prevents framing bias from author's narrative |
 | Defect-assumption framing | all modes | "Assume defects, find them" vs. "confirm correctness" |
 | Author neutralization | all modes | No author identity -> merit-based review |
-| Cross-verification | thorough | Catches false positives and missed issues |
+| Adversarial cross-verification | thorough | Catches false positives and missed issues |
+| Input-trust fencing (diff + reviewer digests as DATA) | all modes | Blocks prompt-injection via code comments and laundered finding text |
 
 ### Output
 
 Review report saved to `docs/harness/<slug>/review_report.md` with:
 - **Assessment**: APPROVE / REQUEST_CHANGES / COMMENT (deterministic from findings)
 - **Findings table**: severity, category, file:line, description, suggestion
-- **Statistics**: finding counts by severity
+- **Statistics**: finding counts by severity; **Files Reviewed** incl. no-issue files
 - **Smart routing**: suggests next actions based on finding patterns
 
 ### Language Support
 
 Communicates in the user's language. Report content is in the detected language. Assessment line (`## Assessment: APPROVE/REQUEST_CHANGES/COMMENT`) stays in English for programmatic parsing.
+
+### Deprecation
+
+`/code-review` (agent-harness) is now a ~30-line alias stub: it prints a deprecation notice and forwards to `/deep-review` with the same arguments after a confirmation.
 
 ---
 
