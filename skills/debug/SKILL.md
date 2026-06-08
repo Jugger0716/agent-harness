@@ -443,7 +443,7 @@ Inform the user (in `user_lang`):
 
    | Signal | Suggested Action |
    |--------|-----------------|
-   | Root cause is a recurring anti-pattern | `/memory save "Anti-pattern: <description> — see docs/harness/<slug>/debug_report.md"`  |
+   | Root cause is a recurring anti-pattern | `/team-memory save "Anti-pattern: <description> — see docs/harness/<slug>/debug_report.md"`  |
    | Fix involved adding a new code path | `/test-gen --regression docs/harness/<slug>/debug_report.md` |
    | Root cause is a known risk area | Add a note to the project CLAUDE.md |
 

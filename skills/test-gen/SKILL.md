@@ -512,7 +512,7 @@ If the user asks for status at any point, print status in the standard format de
 ## Smart Routing (after completion)
 
 After successful completion, suggest related actions (in `user_lang`):
-- **`/memory save`** — record testing decisions and patterns for future sessions.
+- **`/team-memory save`** — record testing decisions and patterns for future sessions.
 - **If weak tests were found** (uncaught mutations): they are surfaced in test_report.md Recommendations with a `suggestedAssertion` for follow-up.
 - **If a production bug was uncovered during testing** (a test exposes a real source defect — never auto-fixed here): suggest **`/deep-review --fix`** to review and gate-apply the fix, and **`/debug`** to investigate the root cause.
 

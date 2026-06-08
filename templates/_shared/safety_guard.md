@@ -13,6 +13,6 @@ Before deleting any output directory:
 
 **Full output base cleanup** (only on explicit user request):
 1. List all subdirectories with file counts.
-2. If `docs/harness/memory/` exists, warn separately: "Contains team knowledge from /memory skill."
+2. If `docs/harness/memory/` exists, warn separately: "Contains team knowledge from /team-memory skill."
 3. Warn: "`docs/` is git-ignored — all artifacts permanently deleted."
 4. Confirm via AskUserQuestion (yes/no).
