@@ -6,7 +6,7 @@
   },
   "metadata": {
     "description": "Multi-agent workflow harness with 3-layer quality gates (mechanical + structural + LLM review). Thin orchestrator enforces Plan → Generate → Verify → Evaluate phases with model-tiered sub-agents. For teams that want reviewable AI automation without custom infrastructure — no dependencies required.",
-    "version": "8.4.0"
+    "version": "8.5.0"
   },
   "plugins": [
     {
@@ -15,12 +15,12 @@
         "source": "github",
         "repo": "Jugger0716/agent-harness"
       },
-      "description": "Multi-agent workflow harness with 3-layer quality gates (mechanical + structural + LLM review). Thin orchestrator enforces Plan → Generate → Verify → Evaluate phases with model-tiered sub-agents. Includes safe refactoring, staged migration, hypothesis-driven debugging, automated test generation, team knowledge base, and code review for Claude Code. For teams that want reviewable AI automation without custom infrastructure.",
-      "version": "8.4.0",
+      "description": "Multi-agent workflow harness with 3-layer quality gates (mechanical + structural + LLM review). Thin orchestrator enforces Plan → Generate → Verify → Evaluate phases with model-tiered sub-agents. Includes safe refactoring, staged migration, hypothesis-driven debugging, automated test generation, team knowledge base (/team-memory), deep code review (/deep-review), and codebase auditing for Claude Code. Each multi-agent skill runs an opt-in native Workflow path (single/quick stays inline). For teams that want reviewable AI automation without custom infrastructure.",
+      "version": "8.5.0",
       "author": {
         "name": "Jugger"
       },
-      "keywords": ["workflow", "refactor", "migrate", "codebase-audit", "code-review", "md-optimize", "md-generate", "debug", "memory", "test-gen", "spec", "planner", "generator", "evaluator", "multi-agent", "token-efficiency", "hypothesis", "knowledge-base", "test-generation", "requirements"]
+      "keywords": ["workflow", "refactor", "migrate", "codebase-audit", "deep-review", "code-review", "md-optimize", "md-generate", "debug", "memory", "team-memory", "test-gen", "spec", "planner", "generator", "evaluator", "multi-agent", "token-efficiency", "hypothesis", "knowledge-base", "test-generation", "requirements"]
     }
   ]
 }

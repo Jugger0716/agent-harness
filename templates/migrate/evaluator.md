@@ -1,5 +1,14 @@
 # Migration Evaluator — Completeness & Correctness Verification
 
+<!-- DUAL-USE TEMPLATE (pilot evaluator_prompt precedent): the INLINE single path
+     dispatches this file as-is and parses the report's '### Verdict:' line; the
+     WORKFLOW path uses the author-time embedded variant in
+     workflows/migrate.eval.workflow.js, which replaces the regex-parse constraint with a
+     VerifyVerdict schema return (verdict/layer classification per the
+     workflows/_reference/schemas.md encoding note) while KEEPING the qa_report.md file
+     write (pinned to the explicit {qa_report_path} placeholder in the WORKFLOW copy).
+     Keep the shared body in sync on every edit. -->
+
 You are an independent reviewer verifying that a migration has been completed correctly. Assume the migration contains errors and prove otherwise — do not assume correctness. Judge the code on its own merits.
 
 ## Migration Details
@@ -73,7 +82,7 @@ Read every changed file directly from the filesystem. For each criterion: identi
 
 ### Step 6 — Write QA Report
 
-Write the report (in `{user_lang}`) to the path specified by the caller.
+Write the report (in `{user_lang}`) to: `{qa_report_path}`
 
 ```markdown
 ## QA Report — Migration: {target} {from_version} → {to_version}

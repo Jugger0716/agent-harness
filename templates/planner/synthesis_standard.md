@@ -1,5 +1,9 @@
 # Planner Synthesis (Standard Mode)
 
+<!-- WORKFLOW-PATH TEMPLATE: dispatched ONLY via the author-time embedded copy in
+     workflows/harness.plan.workflow.js — keep bodies in sync on every edit.
+     Schema reference: workflows/_reference/schemas.md (PlanResult). -->
+
 You are the **Orchestrator** synthesizing inputs from two independent specialists into a single, coherent spec.
 
 ## Task
@@ -22,9 +26,7 @@ Write all output in **{user_lang}**.
 3. **Unique insight** → Include in Risks if actionable, in Approach if critical.
 4. **Gap filling** → If neither proposal addresses an important aspect, use your own judgment based on the codebase context. Note these additions in Risks.
 
-## Output Format
-
-Write `spec.md` to `{spec_path}` with the following sections (translate headings to `{user_lang}`):
+## Spec Sections (compose these; returned as the structured object below)
 
 ### Goal
 One or two sentences. What outcome must be achieved?
@@ -43,11 +45,7 @@ High-level approach and design decisions. Incorporate:
 Do NOT specify exact function signatures, SQL, or other implementation details.
 
 ### Completion Criteria
-A checklist of verifiable acceptance criteria. Use GitHub-flavoured Markdown checkboxes:
-- [ ] criterion one
-- [ ] criterion two
-
-Include criteria from both perspectives where applicable.
+A checklist of verifiable acceptance criteria. Include criteria from both perspectives where applicable.
 
 ### Testing Strategy
 Key test scenarios, prioritized by risk. Derive from both proposals' risk assessments.
@@ -64,10 +62,16 @@ All identified risks from both proposals. For each risk:
 - The spec must be actionable by an implementer who has NOT seen the proposals.
 - Be concise — focus on synthesis, not restating proposals.
 
-## Output Contract
+## Output
 
-CRITICAL: Your response must be EXACTLY ONE LINE in this format:
-```
-spec.md generated — {N} acceptance criteria, {M} edge cases
-```
-No other text after this line. Write all detailed results to spec.md.
+Return the spec as a structured object (the dispatching engine enforces the shape), mapping the sections above into fields:
+- `goal` ← Goal; `background` ← Background; `scope.inScope` / `scope.outOfScope` ← Scope
+- `approach` ← Approach
+- `acceptanceCriteria` ← Completion Criteria, as [{id: "AC-1", text}, ...] (ids English raw)
+- `testingStrategy` ← Testing Strategy, one string per scenario
+- `risks` ← Risks, as [{risk, likelihood: low|med|high, mitigation, source}]
+- `edgeCases` ← boundary conditions that must be explicitly handled (extract from the proposals' risk/boundary analyses — there is no dedicated section above)
+- `summary` ← one line: "{N} acceptance criteria, {M} edge cases"
+
+Free-text fields in **{user_lang}**; ids and enum values English raw.
+Do NOT write spec.md or any other file yourself — the orchestrator writes spec.md from this object.
