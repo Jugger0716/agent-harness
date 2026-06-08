@@ -65,9 +65,7 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
 - **`--mode standard` opt-in made explicit in `templates/_shared/mode_gate.md`** (the single source listed only multi/comprehensive/thorough/deep; /harness's own prose said "deep --mode") — standard is a first-class engine-path mode, as the live dry-run exercised.
 - Hardening from optional findings: render() substitution order fixed structural-first/user-payload-last in all three scripts (mechanical placeholder-hijack guard); auto-fix re-verify runs ONE full eval (no duplicate L1); `_reference/schemas.md` now mandates the `LANG` fallback const; synthesis `edgeCases` mapping cites its source; dead `round_num` removed from build implVars; evaluator embed wording realigned to its .md.
 
-### Engine facts verified by the Phase-1 spike (5/5 PASS)
-
-plugin-cache-rooted `{scriptPath}` resolves and runs; `agent({schema})` returns validated objects (and plain text without a schema — fallback preserved); schema-description language directives (`render in <userLang>`) control output language (ko/en verified); `args` arrives as a JSON string; `export default`/`import` are launch-time SyntaxErrors (top-level body + global hooks only); unregistered `agentType` values fail the call (all `agentType` usage dropped); resume caching is sequential-prefix (editing the first `agent()` call re-runs everything after it).
+> **Engine facts verified by the Phase-1 spike (5/5 PASS):** plugin-cache-rooted `{scriptPath}` resolves and runs; `agent({schema})` returns validated objects (and plain text without a schema — fallback preserved); schema-description language directives (`render in <userLang>`) control output language (ko/en verified); `args` arrives as a JSON string; `export default`/`import` are launch-time SyntaxErrors (top-level body + global hooks only); unregistered `agentType` values fail the call (all `agentType` usage dropped); resume caching is sequential-prefix (editing the first `agent()` call re-runs everything after it).
 
 ## [8.4.0] — 2026-05-06
 
