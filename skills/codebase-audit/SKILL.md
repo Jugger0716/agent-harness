@@ -1,7 +1,7 @@
 ---
 name: codebase-audit
 disallowed-tools: NotebookEdit, WebSearch, WebFetch
-description: Systematically analyze project structure, dependencies, and patterns for team onboarding and codebase understanding. 3-tier mode (quick/deep/thorough) with incremental analysis support. Use when joining a new project or generating reproducible codebase documentation.
+description: Systematically analyze project structure, dependencies, and patterns for team onboarding and codebase understanding. 3-tier mode — quick (inline) or deep/thorough (parameterized lens analysts + a completeness-critic pass + synthesis via a plugin-shipped native Workflow segment, opt-in gated), with incremental analysis support. Use when joining a new project or generating reproducible codebase documentation.
 ---
 
 # Codebase Audit
@@ -10,7 +10,7 @@ You are a **Codebase Auditor**. You systematically analyze a project's structure
 
 ## User Language Detection
 
-Detect the user's language from their **most recent message**. Store as `user_lang`. All user-facing output (confirmations, reports, status messages, error messages) must be in `user_lang`. Template instructions (this file and templates/*.md) stay in English.
+Detect the user's language from their **most recent message**. Store as `user_lang`. All user-facing output (confirmations, reports, status messages, error messages) must be in `user_lang`. Template instructions (this file and templates/*.md), file names (audit_report.md), and Workflow `args` field names stay in English.
 
 **Re-detection:** On every user message, check if the language has changed. If so, update `user_lang` and switch all subsequent communication.
 
@@ -20,18 +20,39 @@ Never scan inside: `.git/`, `node_modules/`, `vendor/`, `dist/`, `build/`, `__py
 
 ## Standard Status Format
 
-When displaying status, print (in `user_lang`):
+Status block shape + label rules: see `templates/_shared/status_format.md`. codebase-audit uses the `[harness]` prefix with a `Skill : codebase-audit` identity line:
 ```
 [harness]
   Skill  : codebase-audit
   Target : <project name or path>
   Mode   : <quick | deep | thorough>
+  Path   : <inline | workflow>
   Model  : <model_config preset name>
   Phase  : <current phase>
   Scope  : <scope or "(full project)">
 ```
 
-Phase labels: `setup` -> "Setup", `context` -> "Context Collection", `analysis` -> "Analysis", `synthesis` -> "Synthesis", `report` -> "Report Generation", `complete` -> "Complete"
+Phase labels: `setup` -> "Setup", `context` -> "Context Collection", `analyze` -> "Analysis", `critique` -> "Critique", `synthesize` -> "Synthesis", `report` -> "Report Generation", `complete` -> "Complete"
+
+## Mode Gate — path & mode resolution (single source: `templates/_shared/mode_gate.md`)
+
+Apply the shared opt-in convention in `templates/_shared/mode_gate.md`. /codebase-audit-specific resolution:
+
+| Signal (first match wins) | `mode` | `path_resolved` |
+|---|---|---|
+| `--mode quick` | quick | **inline** |
+| `Workflow` tool NOT available this session | quick | **inline** (notify only if an explicit `--mode deep/thorough` was requested) |
+| `--mode deep` | deep | **workflow** |
+| `--mode thorough` (or `comprehensive`/`multi`) | thorough | **workflow** |
+| no `--mode` AND session is in ultracode mode | thorough | **workflow** |
+| no `--mode`, no opt-in | quick | **inline** (an interactive session may still pick a deeper mode — see the Step 1.7 fallback) |
+
+- **deep/thorough exist ONLY on the workflow path** — the engine's `parallel()` fan-out replaces the old hand-rolled 2/3-analyst dispatch (Steps 3-D/3-T), the cross-critique dispatch, the `.harness/analysis_*.md` / `critique_*.md` intermediate files, and the file re-reads + merge. The inline path is the preserved quick mode (single-pass, no sub-agents).
+- The `comprehensive`/`multi` aliases are deliberate cross-skill deepest-tier synonyms (every reframed skill accepts the others' deepest mode names and collapses them onto its own deepest tier); canonical mode names stay per-skill (quick/deep/thorough).
+- **Read-only / report-write resolution (2b deep-review pattern):** the analysis segment (analysts / completeness-critic / synthesis) is read-only and writes NO files — it returns an `AuditResult`. **The ORCHESTRATOR writes `audit_report.md` from that object** (and `.harness/context.md` during context collection). "Read-only" in the Key Rules applies to the *segment / sub-agents*; the orchestrator's `audit_report.md` + `.harness/context.md` writes are the sanctioned exception. **Asymmetry vs 2b:** deep-review removed ALL intermediate files, but 2f still has the orchestrator write `.harness/context.md` — do NOT drop the context.md write by reading "read-only" literally.
+- **Scope-aware advisory (print only):** < 30 files → quick, 30–200 → deep, 200+/monorepo → thorough — so a non-opted user knows which `--mode` to pass.
+- **Graceful fallback:** if the analysis segment errors (launch failure, script error, schema-invalid result), print `[harness] ⚠ Workflow engine unavailable — falling back to the inline quick analysis.` (in `user_lang`), set `mode → quick`, `path_resolved → inline`, and run Step 3-Q. Never error out.
+- codebase-audit is **stateless** (no state.json, no session recovery — read-only idempotent). Record `{ mode, path_resolved }` (and any segment `runId`, audit-only) in `.harness/model_config.json`.
 
 ## Workflow
 
@@ -76,24 +97,18 @@ When the user invokes `/codebase-audit`, execute this workflow:
 
    If user selects "Use suggested scope", apply the suggested scope. If user selects "Full scan", continue with full project. If user provides a custom scope via "Other", apply it.
 
-7. **Scope-aware mode recommendation.** If `--mode` was not provided, use AskUserQuestion (in `user_lang`):
-     header: "Audit Mode"
-     question: "Select audit mode: ({N} files in scope)"
-     options:
-       - label: "quick" / description: "Overview: structure, tech stack, entry points (~1x tokens)"
-       - label: "deep" / description: "Detailed: + dependency graph, patterns, hotspots (~1.5x tokens)"
-       - label: "thorough" / description: "Comprehensive: + cross-verification, deep graph traversal (~2.5x tokens)"
+7. **Mode resolution (§Mode Gate).** Resolve `mode` + `path_resolved` per §Mode Gate (from `--mode` flags / ultracode opt-in / Workflow availability). Print the scope-aware advisory (< 30 → quick, 30–200 → deep, 200+/monorepo → thorough). Persist `{ mode, path_resolved }` to `.harness/model_config.json`.
 
-   Auto-recommend based on file count by appending "(Recommended)" to the matching label:
-   | File count | Recommended mode |
-   |-----------|-----------------|
-   | < 30 | `quick` |
-   | 30 - 200 | `deep` |
-   | 200+ or monorepo detected | `thorough` |
-
-   Example: if 150 files in scope, the "deep" option label becomes `"deep (Recommended)"`.
-
-   If `--mode` was provided, use it directly and skip the prompt.
+   - If `--mode` was provided, or the session is in ultracode mode, use the gate result and **skip the prompt below**.
+   - **Boundary / explicit-override fallback (no `--mode`, no opt-in, interactive session only):** the gate defaults to quick; offer a one-time choice so an interactive user can opt into a deeper mode, using AskUserQuestion (in `user_lang`):
+       header: "Audit Mode"
+       question: "Select audit mode: ({N} files in scope)"
+       options:
+         - label: "quick" / description: "Overview: structure, tech stack, entry points (~1x tokens) — inline"
+         - label: "deep" / description: "Detailed: + dependency graph, patterns, hotspots (~1.5x tokens) — workflow"
+         - label: "thorough" / description: "Comprehensive: + completeness critique, deep graph traversal (~2.5x tokens) — workflow"
+     Auto-recommend by appending "(Recommended)" to the matching label by file count (< 30 → quick, 30-200 → deep, 200+/monorepo → thorough). On a deep/thorough choice, set `path_resolved → workflow`.
+   - **If the Workflow tool is unavailable,** only quick/inline is available — skip the fallback prompt and notify only if an explicit `--mode deep/thorough` was requested (per §Mode Gate graceful fallback).
 
 8. **Incremental check.** If `--incremental` was passed:
    a. Search for existing `docs/harness/*/audit_report.md` files for this project.
@@ -145,7 +160,7 @@ When the user invokes `/codebase-audit`, execute this workflow:
 
    Store result as `model_config` object: `{ "preset": "<name>", "executor": "<model|null>", "advisor": "<model|null>", "evaluator": "<model|null>" }`. For the `default` preset, store `{ "preset": "default" }`.
 
-   **Persist to `.harness/model_config.json`** (codebase-audit is stateless — no state.json). Create `.harness/` directory if needed.
+   **Persist to `.harness/model_config.json`** (codebase-audit is stateless — no state.json) together with `{ "mode": "<mode>", "path_resolved": "<inline|workflow>" }` and (after a segment launch) `{ "runId": "<wf_...>" }` — all audit-only, session-scoped. Create `.harness/` directory if needed. Because the audit is read-only and idempotent there is no partial resume: a re-invocation is a full clean re-run (the cost gate is re-shown, justified by re-paying tokens).
 
 11. **Slugify the target:** Use project name or directory name. Lowercase, transliterate non-ASCII to ASCII, remove non-word chars except hyphens, replace spaces with hyphens, truncate to 50 chars. Store as `<slug>`.
 
@@ -177,7 +192,7 @@ For deep/thorough modes, the main agent collects shared context before dispatchi
 4. **Entry points:** Identify main entry files (main.*, index.*, app.*, server.*, etc.)
 5. **Configuration files:** List config files and their purpose (tsconfig.json, .eslintrc, pytest.ini, etc.)
 
-Write all collected context to `.harness/context.md` with clear section headers. This file is passed to all sub-agents.
+Write all collected context to `.harness/context.md` with clear section headers (this write is orchestrator-owned — the sanctioned read-only exception per §Mode Gate). Its CONTENT is passed to the analysis segment as `args.sharedContext`; the segment never reads a path.
 
 If `--incremental`, append a section to context.md:
 ```
@@ -218,81 +233,41 @@ Perform the analysis directly (no sub-agents). Analyze the codebase to gather:
 
 Proceed to Step 4 with findings.
 
-#### If mode == "deep": Step 3-D
+#### Mode: deep | thorough — Step 3-W (WORKFLOW path)
 
-1. Read shared context from `.harness/context.md`.
-2. Read two sub-agent templates from `{CLAUDE_PLUGIN_ROOT}/templates/codebase-audit/`:
-   - `structure_dependency_analyst.md`
-   - `pattern_quality_analyst.md`
-3. For each sub-agent, fill template variables:
-   - `{project_path}`: repository path
-   - `{scope}`: scope pattern or "(full project)"
-   - `{user_lang}`: detected user language
-   - `{shared_context}`: contents of `.harness/context.md`
-   - `{incremental_context}`: incremental info if applicable, else "(Full analysis — no prior audit)"
-   - `{output_path}`: `.harness/analysis_<agent_name>.md`
-4. **Launch 2 sub-agents in parallel** using the Agent tool. Each receives its template and shared context. If `model_config.preset` is not `"default"`, pass `model` parameter per the preset table in `templates/_shared/model_config.md` (Structure & Dependency Analyst, Pattern & Quality Analyst → executor role).
-5. Wait for both to complete. Verify both analysis files exist.
-6. Proceed to Step 3-D Synthesis.
+> deep/thorough exist ONLY on the workflow path (§Mode Gate). The engine's `parallel()` fan-out replaces the old hand-rolled 2/3-analyst dispatch, the cross-critique dispatch, the `.harness/analysis_*.md` / `critique_*.md` intermediate files, and the file re-reads + merge. The cost HARD-GATE (Step 1.9) is rendered by THIS orchestrator BEFORE this dispatch — never inside the script.
 
-##### Step 3-D Synthesis
+1. **Run the Analysis segment** via the Workflow tool (pass `args` as a JSON object — the script defensively parses; the field set below is the 1:1 contract with the script's `// contract` comment — a field missing on either side silently renders as ''):
+   ```
+   Workflow {
+     scriptPath: "${CLAUDE_PLUGIN_ROOT}/workflows/codebase-audit.analysis.workflow.js",
+     args: {
+       mode: <"deep"|"thorough">,
+       projectPath: <repo path>, scope: <scope or "(full project)">,
+       userLang: <user_lang>,
+       sharedContext: <content of .harness/context.md>,
+       incrementalContext: <incremental info, else "(Full analysis — no prior audit)">,
+       models: { executor: <model_config.executor or null>,
+                 advisor: <model_config.advisor or null> }
+     }
+   }
+   ```
+   Record the segment `runId` in `.harness/model_config.json` (audit-only — read-only idempotent, no resume-by-id). The script runs the lens analysts in parallel (anchor-free — deep: 2 lenses [structure+dependency, pattern+quality]; thorough: 3 lenses [structure, dependency, pattern]), runs a completeness-critic pass in thorough mode (variable-survivor single payload), and synthesizes one structured AuditResult.
 
-1. Read both analysis files:
-   - `.harness/analysis_structure_dependency.md`
-   - `.harness/analysis_pattern_quality.md`
-2. **Synthesize findings** by merging the two analyses:
-   - **Consensus**: Where both agents agree, adopt directly.
-   - **Unique findings**: Include from whichever agent found them.
-   - **Contradictions**: Note both perspectives; favor the finding with more specific evidence.
-3. Produce the unified analysis. Proceed to Step 4.
+2. The segment returns `{ auditResult: AuditResult, stats }` — schema-validated; NO analysis/critique-file re-reads, NO table parsing. Print (in `user_lang`): `  ✓ Analysis segment: {stats.analystsSucceeded}/{stats.analystsRequested} lens analyses → {stats.critiquesSucceeded} critiques → synthesis`
+   - If `stats.analystsSucceeded < stats.analystsRequested`, warn (in `user_lang`): `[harness] ⚠ {N} lens(es) unavailable — synthesis proceeded from the remaining analyses.`
 
-#### If mode == "thorough": Step 3-T
+3. **On Workflow error** (launch failure, script error, schema-invalid result): apply §Mode Gate graceful fallback → notify, set `mode → quick`, `path_resolved → inline`, and run Step 3-Q.
 
-##### Step 3a-T: Independent Analysis (Parallel)
-
-1. Read shared context from `.harness/context.md`.
-2. Read three sub-agent templates from `{CLAUDE_PLUGIN_ROOT}/templates/codebase-audit/`:
-   - `structure_analyst.md`
-   - `dependency_analyst.md`
-   - `pattern_analyst.md`
-3. For each sub-agent, fill template variables:
-   - `{project_path}`: repository path
-   - `{scope}`: scope pattern or "(full project)"
-   - `{user_lang}`: detected user language
-   - `{shared_context}`: contents of `.harness/context.md`
-   - `{incremental_context}`: incremental info if applicable, else "(Full analysis — no prior audit)"
-   - `{output_path}`: `.harness/analysis_<agent_name>.md`
-4. **Launch 3 sub-agents in parallel** using the Agent tool. Each receives its template and shared context. No agent has knowledge of the others. If `model_config.preset` is not `"default"`, pass `model` parameter per the preset table in `templates/_shared/model_config.md` (Structure Analyst, Dependency Analyst, Pattern Analyst → executor role).
-5. Wait for all 3 to complete. Verify all 3 analysis files exist.
-
-##### Step 3b-T: Cross-Verification (Parallel)
-
-1. Read the cross-critique template: `{CLAUDE_PLUGIN_ROOT}/templates/codebase-audit/cross_critique.md`
-2. Read all 3 analysis files from Step 3a-T.
-3. For each agent, prepare the cross-critique prompt with:
-   - `{agent_name}`: the reviewing agent's name
-   - `{project_path}`: repository path
-   - `{user_lang}`: detected user language
-   - `{analysis_1_author}` / `{analysis_1_content}`: first OTHER agent's analysis
-   - `{analysis_2_author}` / `{analysis_2_content}`: second OTHER agent's analysis
-   - `{output_path}`: `.harness/critique_<agent_name>.md`
-4. **Launch 3 sub-agents in parallel.** Each reviews the other two agents' analyses. If `model_config.preset` is not `"default"`, pass `model` parameter per the preset table in `templates/_shared/model_config.md` (Cross-Critique → advisor role).
-5. Wait for all 3 to complete. Verify all 3 critique files exist.
-
-##### Step 3c-T: Synthesis
-
-1. Read all 6 files (3 analyses + 3 critiques).
-2. **Synthesize findings** using these rules:
-   - **Consensus (2+ agree)**: Adopt directly.
-   - **Disputed**: Favor the position with stronger codebase evidence. Note alternatives.
-   - **Unique insight validated by cross-critique**: Include.
-   - **Unique insight challenged by cross-critique**: Include with caveat.
-   - **Cross-critique corrections**: Apply corrections supported by specific file/code references.
-3. Produce the unified analysis. Proceed to Step 4.
+Proceed to Step 4 with the returned `AuditResult`.
 
 ### Step 4: Report Generation
 
-Generate `docs/harness/<slug>/audit_report.md` with the following structure. Include only sections with actual findings — never generate empty sections or placeholder content. All content in `user_lang`.
+**The ORCHESTRATOR writes `docs/harness/<slug>/audit_report.md`** (the sanctioned read-only exception — the segment/sub-agents never write it):
+- **deep/thorough (workflow path):** from the returned `AuditResult` object — `overview` → Project Overview; `moduleMap` → Module Map; `dependencyGraph.{internal,circular,external}` → Dependency Graph; `patterns.{design,conventions,antiPatterns}` → Pattern Analysis; `hotspots` → Complexity Hotspots; `nextSteps` → Recommended Next Steps; `summary` informs the prose. (No file re-reads — the object is the source.)
+- **quick (inline path):** from the inline Step 3-Q findings directly.
+
+Use the following structure. Include only sections with actual findings — **omit any section whose `AuditResult` array is empty** (never generate empty sections or placeholder content). All content in `user_lang`.
 
 ```markdown
 # Codebase Audit Report: <project_name>
@@ -366,7 +341,7 @@ For incremental mode: merge new findings with prior report. Mark sections that a
 
 ### Step 5: Smart Routing
 
-After generating the report, evaluate findings and suggest next steps (in `user_lang`). Only suggest skills that are relevant based on actual findings:
+After generating the report, suggest next steps (in `user_lang`). On the workflow path, render these from the structured `AuditResult.nextSteps[]` (`{ finding, suggestion }`); on the quick path, derive them from the inline findings. Only suggest skills relevant to actual findings:
 
 | Finding | Suggestion |
 |---------|-----------|
@@ -379,7 +354,7 @@ Present as recommendations, not commands. User decides.
 
 ### Step 6: Completion
 
-1. Clean up `.harness/` directory (delete context.md, analysis files, critique files, model_config.json). Remove `.harness/` if empty.
+1. Clean up `.harness/` directory (delete `context.md` and `model_config.json`; on the workflow path there are no `analysis_*.md` / `critique_*.md` intermediate files — the segment returns objects). Remove `.harness/` if empty. **codebase-audit never deletes `docs/harness/<slug>/`** in the normal flow — the `audit_report.md` is preserved. If the user explicitly requests artifact cleanup, apply the cleanup safety rules in `templates/_shared/safety_guard.md` (slug validation + `Path(docs_path).resolve()` ⊆ cwd) before any delete.
 2. Print final status (in `user_lang`):
    ```
    [harness] Codebase audit complete.
@@ -393,11 +368,11 @@ Present as recommendations, not commands. User decides.
 
 ## Model Selection
 
-Preset table + rules: see `templates/_shared/model_config.md`.
+Sub-agents exist only in **deep and thorough modes** (WORKFLOW path — the segment script spawns them). Preset table + rules: see `templates/_shared/model_config.md`.
 
-**Role-map:** deep analysts (Structure & Dependency Analyst, Pattern & Quality Analyst) and thorough analysts (Structure Analyst, Dependency Analyst, Pattern Analyst) → executor; Cross-Critique (per analyst) → advisor. (No evaluator role is used.)
+**Role map (codebase-audit):** lens analysts (deep: structure+dependency, pattern+quality; thorough: structure, dependency, pattern) → `executor`; Completeness Critic (thorough) + Synthesis → `advisor`. (No evaluator role is used.)
 
-**Applying model config:** When launching any sub-agent, if `model_config.preset` is not `"default"`, pass the `model` parameter per the role-map above combined with the preset table in `templates/_shared/model_config.md`. Sub-agents must NOT directly access `.harness/model_config.json` — the orchestrator passes the model parameter at launch time.
+**Applying model config (WORKFLOW path):** pass the resolved models once per segment run as `args.models` (`{ executor, advisor }`; null = inherit parent model, i.e. the `default` preset) — the segment script applies them per agent. Sub-agents must NOT access `.harness/model_config.json` — the orchestrator passes the resolved values at segment launch.
 
 ## User Interaction Rules
 
@@ -405,13 +380,16 @@ See `templates/_shared/askuserquestion.md`.
 
 ## Key Rules
 
-- **Read-only.** This skill never modifies source code, config files, or any project file other than audit_report.md. No git branches created.
+- **Read-only (segment / sub-agents).** The analysis segment and its lens analysts / completeness-critic / synthesis NEVER modify or write any file — they return an `AuditResult`. **The ORCHESTRATOR's writes are the sanctioned exception, and ONLY these three: `audit_report.md`, `.harness/context.md`, and `.harness/model_config.json` (the setup-time config/audit record).** No source/config files modified; no git branches created. (Do NOT drop any of these three by reading "read-only" literally — they are the orchestrator's job, not the segment's.)
 - **No speculation.** Only report what is detected with evidence. "Unknown" is better than a guess.
-- **Shared context reduces cost.** Context collection happens once; sub-agents receive it pre-collected.
-- **Sub-agent isolation.** In thorough mode, each analyst works independently before cross-verification. No sharing during the analysis phase.
-- **Incremental is additive.** Incremental mode merges new findings with prior report; it never deletes prior findings without replacement.
-- **Confirmation gates for expensive modes.** deep and thorough require explicit user confirmation.
-- **Scope-aware recommendations.** Always suggest appropriate mode based on project size.
-- **User language.** All user-facing output in `user_lang`. Templates in English.
-- **Artifact preservation.** Only `audit_report.md` in `docs/harness/<slug>/` is preserved. All intermediate files in `.harness/` are cleaned up.
-- **Error handling.** Large projects without scope get a suggestion. Missing source files halt. Incremental without prior falls back to full.
+- **Fan-out exists only on the workflow path.** deep/thorough run as the plugin-shipped analysis segment; without the engine or opt-in, the audit runs quick inline (with a notice on explicit `--mode deep/thorough` requests).
+- **Mode Gate + cost gate.** `--mode` flag / ultracode opt-in / tool availability derive the mode (§Mode Gate); the scope advisory is print-only; the cost HARD-GATE (Step 1.9) stays for deep/thorough and is rendered by the orchestrator BEFORE the segment dispatch.
+- **Schema returns.** The segment returns a schema-validated `AuditResult` — no intermediate `analysis_*.md` / `critique_*.md` files, no table parsing. Every rendered report section is backed by a schema-required field; empty arrays are omitted from the report.
+- **Lens collapse is lossless.** The single parameterized analyst (the `LENS{}` constant in the segment script) preserves the analysis items from the six former lens templates — former prose-only deliverables (e.g. an overall quality grade) are folded into the analyst's `summary`/`recommendations` rather than dropped; per-lens `sections.required` promotion forces each lens to fill the section keys it owns.
+- **Shared context reduces cost.** Context collection happens once (orchestrator); its content is passed to the segment via `args.sharedContext` — the segment never re-scans for it.
+- **Sub-agent isolation.** Lens analysts run in parallel and anchor-free (the segment's `parallel()` enforces it); the completeness-critic (thorough) runs only after the analyses complete.
+- **Stateless re-run.** No state.json, no partial resume — a re-invocation is a full clean re-run (read-only idempotent); the cost gate is re-shown, justified by re-paying tokens. Any segment `runId` in `.harness/model_config.json` is audit-only (no cross-session resume-by-id).
+- **Incremental is additive.** Incremental mode merges new findings with the prior report; it never deletes prior findings without replacement.
+- **User language.** All user-facing output in `user_lang`; templates/identifiers/enums English raw. WORKFLOW path: pass `userLang` in `args` — the segment builds schema descriptions from it, forcing sub-agent free-text output language.
+- **Artifact preservation.** Only `audit_report.md` in `docs/harness/<slug>/` is preserved; `.harness/` intermediate files are cleaned up.
+- **Error handling.** Large projects without scope get a suggestion. Missing source files halt. Incremental without prior falls back to full. Any Workflow failure degrades to quick inline — never a hard error.
