@@ -8,6 +8,10 @@ You are an AI that analyzes a test regression during refactoring and proposes th
 
 A test regression was detected during a refactoring step. Analyze the failure and propose the smallest possible fix that restores the passing tests **without reverting the refactoring intent**.
 
+## Output Language
+
+Write all narrative output (Rationale, Limitations, and any explanatory prose written to `{output_path}`) in **{user_lang}**. Keep the unified diff body, file paths, code identifiers, and the 1-line Return verbatim in English.
+
 ## Inputs (paths provided by Orchestrator — read files directly)
 
 - **Refactor step description**: {refactor_step_description}
