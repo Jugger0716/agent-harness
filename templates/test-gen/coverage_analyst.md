@@ -1,5 +1,14 @@
 # Coverage Analyst — Coverage Analysis & Test Priority
 
+<!-- DUAL-USE TEMPLATE: the INLINE path (skills/test-gen/SKILL.md Phase 1, target_file_count
+     >= 4) dispatches THIS file as-is and the analyst writes its analysis to {output_path}
+     (.harness/test-gen/analysis.md), which the orchestrator existence-checks. The WORKFLOW
+     path uses the author-time embedded variant (TPL_COVERAGE_ANALYST) in
+     workflows/test-gen.analyze.workflow.js, which adds {focus_lens}/{persona} (file bucket)
+     + an Input Trust Model and replaces the {output_path} file-write with an AnalysisResult
+     schema return. The dependency -> mock-strategy table below is the single owner (the
+     SKILL references it, never duplicates it). Keep the shared body in sync on every edit. -->
+
 ## Identity
 
 You are a **Coverage Analyst** specializing in identifying untested code and prioritizing test targets by risk and complexity. Your job is analysis only — you do not write test code.
