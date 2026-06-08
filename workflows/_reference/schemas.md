@@ -471,21 +471,27 @@ synthesis consumes structured data, NOT prose parsing of `keyPoints`.
 > keys that lens owns, so an upstream lens cannot silently omit its core output (DebugAnalysis
 > pinned `hypotheses` required+minItems:1 by the same reasoning; §3.4 downstream required
 > promotion is hollow without it):
-> - **structure** lens → `sections.required = ['architecture', 'moduleMap']`
->   (deep-mode merged structure lens adds `'internalDeps', 'circularDeps', 'externalDeps'`)
-> - **dependency** lens → `sections.required = ['internalDeps', 'circularDeps', 'externalDeps']`
-> - **pattern** lens → `sections.required = ['designPatterns', 'conventions', 'antiPatterns', 'hotspots']`
+> The lenses are **independent `LENS{}` entries** (not a shared base with deep-merge additions):
+> - deep-mode **`structure_dependency`** (merged) → `sections.required = ['architecture', 'moduleMap', 'internalDeps', 'circularDeps', 'externalDeps']`
+> - deep-mode **`pattern_quality`** → `sections.required = ['designPatterns', 'conventions', 'antiPatterns', 'hotspots']`
+> - thorough-mode **`structure`** → `sections.required = ['architecture', 'moduleMap']`
+> - thorough-mode **`dependency`** → `sections.required = ['internalDeps', 'circularDeps', 'externalDeps']`
+> - thorough-mode **`pattern`** → `sections.required = ['designPatterns', 'conventions', 'antiPatterns', 'hotspots']`
 >
-> The synthesis reads structured `sections` only and does not depend on prose `keyPoints`.
+> The synthesis reads the structured `sections` AND the correlation-keyed `keyPoints`; it
+> does not depend on free-prose parsing.
 
 ```js
 const AuditAnalysisSchema = {
   type: 'object',
-  required: ['persona', 'summary', 'sections'],
+  // keyPoints REQUIRED + minItems:1 — it is the SOLE source of the [#N] correlation keys the
+  // CompletenessCritique anchors to (DebugAnalysis hypotheses minItems:1 precedent); without
+  // it the required critique-side correlation contract is hollow on the target side.
+  required: ['persona', 'summary', 'keyPoints', 'sections'],
   properties: {
     persona: { type: 'string', description: 'lens identifier, English raw' },
     summary: { type: 'string', description: `overall analysis from this lens, render in ${A.userLang}` },
-    keyPoints: { type: 'array', items: { type: 'string', description: `render in ${A.userLang}` } },
+    keyPoints: { type: 'array', minItems: 1, items: { type: 'string', description: `correlation-keyed finding ([#N] anchor), render in ${A.userLang}` } },
     risks: { type: 'array', items: { type: 'string', description: `render in ${A.userLang}` } },
     recommendations: { type: 'array', items: { type: 'string', description: `render in ${A.userLang}` } },
     sections: {
