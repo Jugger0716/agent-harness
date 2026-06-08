@@ -403,17 +403,351 @@ const CrossVerifyReportSchema = {
 }
 ```
 
+## MigrationPlan
+
+Returned by the `migrate.analyze.workflow.js` synthesis step (in-script name
+`MigrationPlanSchema`; owning phase 2d). The ORCHESTRATOR writes `migration_plan.md`
+from this object, then renders the Plan Confirmation HARD GATE and sets
+`total_steps = steps.length`. Migrate consumer-delta vs the canonical `PlanResult`
+(required: goal/acceptanceCriteria/risks): every rendered migration_plan.md section
+(Summary / Breaking Changes / Dependency Updates / Configuration Changes / Execution
+Order / Risks) is schema-REQUIRED — prose-only "populate all sections" gets skipped for
+schema-optional fields (Phase 2a lesson, wf_75de1836). `steps[]` IS the breaking-changes
+list. Arrays may be empty — required means present, not non-empty; the orchestrator
+renders "None" for an empty `dependencyUpdates`/`configurationChanges`. RefactorPlan
+precedent (rendered sections → required). The header `## Migration Plan: <target>
+<from> → <to>` is rendered from state.json, not carried in the schema.
+
+```js
+const MigrationPlanSchema = {
+  type: 'object',
+  required: ['summary', 'steps', 'dependencyUpdates', 'configurationChanges', 'executionOrder', 'risks'],
+  properties: {
+    summary: { type: 'string', description: `1-3 sentence migration overview (### Summary), render in ${A.userLang}` },
+    steps: { type: 'array', items: {
+      type: 'object', required: ['n', 'description', 'whatChanged', 'files', 'requiredAction', 'verification', 'risk'],
+      properties: {
+        n: { type: 'integer' },
+        description: { type: 'string', description: `breaking-change title, render in ${A.userLang}` },
+        whatChanged: { type: 'string', description: `what changed and why, render in ${A.userLang}` },
+        files: { type: 'array', items: { type: 'string' }, description: 'affected files, raw paths (may be empty)' },
+        requiredAction: { type: 'string', description: `concrete action to apply this step, render in ${A.userLang}` },
+        verification: { type: 'string', description: `how to verify this step (build/test expectation), render in ${A.userLang}` },
+        risk: { enum: ['low', 'med', 'high'] } } } },
+    dependencyUpdates: { type: 'array', items: {
+      type: 'object', required: ['name', 'from', 'to'],
+      properties: { name: { type: 'string', description: 'dependency name, raw' },
+        from: { type: 'string', description: 'current version, raw' },
+        to: { type: 'string', description: 'target version, raw' } } } },
+    configurationChanges: { type: 'array', items: {
+      type: 'object', required: ['file', 'change'],
+      properties: { file: { type: 'string', description: 'config file path, raw' },
+        change: { type: 'string', description: `key added/removed/renamed/changed and the new value, render in ${A.userLang}` } } } },
+    executionOrder: { type: 'array', items: { type: 'string', description: `ordered step reference with dependency notes, e.g. "Step 1 (config) → Step 2 (depends on Step 1)", render in ${A.userLang}` } },
+    risks: { type: 'array', items: {
+      type: 'object', required: ['risk', 'likelihood', 'mitigation'],
+      properties: { risk: { type: 'string', description: `render in ${A.userLang}` },
+        likelihood: { enum: ['low', 'med', 'high'] },
+        mitigation: { type: 'string', description: `render in ${A.userLang}` },
+        source: { type: 'string', description: 'which analyst raised it (external/internal), English raw' } } } },
+    notApplicable: { type: 'array', items: {
+      type: 'object', required: ['title', 'reason'],
+      properties: { title: { type: 'string', description: `breaking change skipped, render in ${A.userLang}` },
+        reason: { type: 'string', description: `why it does not affect this codebase, render in ${A.userLang}` } } },
+      description: 'optional — guide breaking changes whose pattern is not used here' }
+  }
+}
+```
+
+## AuditAnalysis
+
+Returned by each parameterized lens analyst in `codebase-audit.analysis.workflow.js`
+(in-script name `AuditAnalysisSchema`; owning phase 2f). Extends `AnalysisResult`
+(persona/summary/keyPoints/risks/recommendations) with a structured `sections{}` so the
+synthesis consumes structured data, NOT prose parsing of `keyPoints`.
+
+> **Per-lens required promotion (not sparse-optional).** `sections.*` keys are NOT all
+> optional — the SCRIPT clones this schema per lens and sets `sections.required` to the
+> keys that lens owns, so an upstream lens cannot silently omit its core output (DebugAnalysis
+> pinned `hypotheses` required+minItems:1 by the same reasoning; §3.4 downstream required
+> promotion is hollow without it):
+> - **structure** lens → `sections.required = ['architecture', 'moduleMap']`
+>   (deep-mode merged structure lens adds `'internalDeps', 'circularDeps', 'externalDeps'`)
+> - **dependency** lens → `sections.required = ['internalDeps', 'circularDeps', 'externalDeps']`
+> - **pattern** lens → `sections.required = ['designPatterns', 'conventions', 'antiPatterns', 'hotspots']`
+>
+> The synthesis reads structured `sections` only and does not depend on prose `keyPoints`.
+
+```js
+const AuditAnalysisSchema = {
+  type: 'object',
+  required: ['persona', 'summary', 'sections'],
+  properties: {
+    persona: { type: 'string', description: 'lens identifier, English raw' },
+    summary: { type: 'string', description: `overall analysis from this lens, render in ${A.userLang}` },
+    keyPoints: { type: 'array', items: { type: 'string', description: `render in ${A.userLang}` } },
+    risks: { type: 'array', items: { type: 'string', description: `render in ${A.userLang}` } },
+    recommendations: { type: 'array', items: { type: 'string', description: `render in ${A.userLang}` } },
+    sections: {
+      type: 'object',
+      // `required` is set per-lens by the script (see note above).
+      properties: {
+        architecture: { type: 'object', properties: {
+          language: { type: 'string', description: 'primary language + version, raw' },
+          framework: { type: 'string', description: 'framework + version, raw' },
+          pattern: { type: 'string', description: 'monorepo|SPA|API|full-stack|library|CLI|other, raw' },
+          buildSystem: { type: 'string', description: 'build tool + package manager, raw' },
+          testFramework: { type: 'string', description: 'test framework if detected, raw' },
+          cicd: { type: 'string', description: 'CI system if detected, raw' } } },
+        moduleMap: { type: 'array', items: {
+          type: 'object', required: ['module', 'role'],
+          properties: { module: { type: 'string', description: 'module name, raw' },
+            path: { type: 'string', description: 'module path, raw' },
+            role: { type: 'string', description: `responsibility, render in ${A.userLang}` },
+            entryPoint: { type: 'string', description: 'entry file, raw' } } } },
+        internalDeps: { type: 'array', items: { type: 'string', description: `inter-module dependency relationship, render in ${A.userLang} with paths raw` } },
+        circularDeps: { type: 'array', items: { type: 'string', description: 'circular dependency chain, e.g. "a → b → a", raw' } },
+        externalDeps: { type: 'array', items: {
+          type: 'object', required: ['package', 'purpose'],
+          properties: { category: { type: 'string', description: 'short token, English raw' },
+            package: { type: 'string', description: 'package name, raw' },
+            version: { type: 'string', description: 'version constraint, raw' },
+            purpose: { type: 'string', description: `what it is used for, render in ${A.userLang}` } } } },
+        designPatterns: { type: 'array', items: {
+          type: 'object', required: ['pattern'],
+          properties: { pattern: { type: 'string', description: 'pattern name, English raw' },
+            evidence: { type: 'string', description: `file example + note, render in ${A.userLang} with paths raw` } } } },
+        conventions: { type: 'array', items: {
+          type: 'object', required: ['convention', 'value'],
+          properties: { convention: { type: 'string', description: 'Naming/Exports/Testing/..., English raw' },
+            value: { type: 'string', description: `observed style, render in ${A.userLang}` },
+            consistency: { enum: ['high', 'medium', 'low'] } } } },
+        antiPatterns: { type: 'array', items: {
+          type: 'object', required: ['issue', 'severity'],
+          properties: { issue: { type: 'string', description: `anti-pattern description, render in ${A.userLang}` },
+            location: { type: 'string', description: 'file path(s), raw' },
+            severity: { enum: ['high', 'medium', 'low'] } } } },
+        hotspots: { type: 'array', items: {
+          type: 'object', required: ['file', 'reason'],
+          properties: { file: { type: 'string', description: 'file path, raw' },
+            indicator: { type: 'string', description: 'complexity indicator (function count/nesting/length/cyclomatic), English raw' },
+            reason: { type: 'string', description: `why it is a hotspot, render in ${A.userLang}` } } } }
+      }
+    }
+  }
+}
+```
+
+## CompletenessCritique
+
+Returned by the thorough-mode completeness-critic in
+`codebase-audit.analysis.workflow.js` (in-script name `CompletenessCritiqueSchema`;
+owning phase 2f). Mirrors `CrossVerifyReport`'s correlation contract.
+
+> Correlation contract (required): `accuracy[].targetLens` + `accuracy[].targetIndex` is
+> the `(lens, 1-based [#N])` key in the script-composed analyst digest;
+> `contradictions[].between` references the same `lens [#N]` key space. The script
+> composes each lens's digest ONCE and reuses it for BOTH the critique prompts and the
+> synthesis prompt (deep-review digest precedent), so the references dereference
+> deterministically against a single key space — without it, synthesis falls back to
+> nondeterministic prose matching.
+
+```js
+const CompletenessCritiqueSchema = {
+  type: 'object',
+  required: ['reviewer', 'accuracy', 'gaps', 'synthesisRecommendations'],
+  properties: {
+    reviewer: { type: 'string', description: 'identifier, English raw' },
+    accuracy: { type: 'array', items: {
+      type: 'object', required: ['targetLens', 'targetIndex', 'claim', 'verdict'],
+      properties: {
+        targetLens: { type: 'string', description: 'lens identifier as shown in the digest header (structure/dependency/pattern), raw' },
+        targetIndex: { type: 'integer', description: '1-based [#N] index in that lens digest (correlation key)' },
+        claim: { type: 'string', description: `the analyst claim assessed, render in ${A.userLang}` },
+        verdict: { enum: ['confirmed', 'incorrect', 'unsupported'] },
+        evidence: { type: 'string', description: `code-level evidence for the verdict, render in ${A.userLang}` } } } },
+    gaps: { type: 'array', items: { type: 'string', description: `analysis the lenses missed, render in ${A.userLang}` } },
+    contradictions: { type: 'array', items: {
+      type: 'object', required: ['between', 'resolution'],
+      properties: {
+        between: { type: 'array', items: { type: 'string' }, description: 'the conflicting (lens, [#N]) references, raw — e.g. ["structure [#2]", "dependency [#1]"]' },
+        resolution: { type: 'string', description: `which position is correct and why, render in ${A.userLang}` } } } },
+    crossDomainInsights: { type: 'array', items: { type: 'string', description: `insights spanning multiple lenses, render in ${A.userLang}` } },
+    synthesisRecommendations: { type: 'array', items: { type: 'string', description: `recommendations for the final audit, render in ${A.userLang}` } }
+  }
+}
+```
+
+## AuditResult
+
+Returned by the `codebase-audit.analysis.workflow.js` synthesis step (in-script name
+`AuditResultSchema`; owning phase 2f). The ORCHESTRATOR writes `audit_report.md` from
+this object (read-only segments never write files — 2b deep-review pattern). Every
+rendered section is schema-REQUIRED; arrays may be empty (the orchestrator omits empty
+sections from the report — empty-section normalization is orchestrator/synthesis side).
+
+```js
+const AuditResultSchema = {
+  type: 'object',
+  required: ['overview', 'moduleMap', 'dependencyGraph', 'patterns', 'hotspots', 'nextSteps', 'summary'],
+  properties: {
+    overview: { type: 'object', required: ['language', 'framework', 'architecture'],
+      properties: {
+        language: { type: 'string', description: 'primary language + version, raw' },
+        framework: { type: 'string', description: 'framework + version, raw' },
+        architecture: { type: 'string', description: 'architecture pattern, raw' },
+        buildSystem: { type: 'string', description: 'build tool + package manager, raw' },
+        testFramework: { type: 'string', description: 'test framework, raw' },
+        cicd: { type: 'string', description: 'CI system, raw' } } },
+    moduleMap: { type: 'array', items: {
+      type: 'object', required: ['module', 'role'],
+      properties: { module: { type: 'string', description: 'module name, raw' },
+        path: { type: 'string', description: 'module path, raw' },
+        role: { type: 'string', description: `module responsibility, render in ${A.userLang}` },
+        entryPoint: { type: 'string', description: 'entry file, raw' } } } },
+    dependencyGraph: { type: 'object', required: ['internal', 'circular', 'external'],
+      properties: {
+        internal: { type: 'array', items: { type: 'string', description: `inter-module relationship, render in ${A.userLang} with paths raw` } },
+        circular: { type: 'array', items: { type: 'string', description: 'circular dependency chain, raw' } },
+        external: { type: 'array', items: {
+          type: 'object', required: ['package', 'purpose'],
+          properties: { category: { type: 'string', description: 'short token, English raw' },
+            package: { type: 'string', description: 'package name, raw' },
+            version: { type: 'string', description: 'version constraint, raw' },
+            purpose: { type: 'string', description: `what it is used for, render in ${A.userLang}` } } } } } },
+    patterns: { type: 'object', required: ['design', 'conventions', 'antiPatterns'],
+      properties: {
+        design: { type: 'array', items: {
+          type: 'object', required: ['pattern'],
+          properties: { pattern: { type: 'string', description: 'pattern name, English raw' },
+            evidence: { type: 'string', description: `file example + note, render in ${A.userLang} with paths raw` } } } },
+        conventions: { type: 'array', items: {
+          type: 'object', required: ['convention', 'value'],
+          properties: { convention: { type: 'string', description: 'Naming/Exports/Testing/..., English raw' },
+            value: { type: 'string', description: `observed style, render in ${A.userLang}` },
+            consistency: { enum: ['high', 'medium', 'low'] } } } },
+        antiPatterns: { type: 'array', items: {
+          type: 'object', required: ['issue', 'severity'],
+          properties: { issue: { type: 'string', description: `anti-pattern description, render in ${A.userLang}` },
+            location: { type: 'string', description: 'file path(s), raw' },
+            severity: { enum: ['high', 'medium', 'low'] } } } } } },
+    hotspots: { type: 'array', items: {
+      type: 'object', required: ['file', 'reason'],
+      properties: { file: { type: 'string', description: 'file path, raw' },
+        indicator: { type: 'string', description: 'complexity indicator, English raw' },
+        reason: { type: 'string', description: `why it is a hotspot, render in ${A.userLang}` } } } },
+    nextSteps: { type: 'array', items: {
+      type: 'object', required: ['finding', 'suggestion'],
+      properties: { finding: { type: 'string', description: `the finding that motivates the step, render in ${A.userLang}` },
+        suggestion: { type: 'string', description: `recommended next action (may reference /refactor, /migrate, /md-generate, /harness), render in ${A.userLang}` } } } },
+    summary: { type: 'string', description: `one-line, render in ${A.userLang}` }
+  }
+}
+```
+
+## SkepticVote
+
+Returned (one per skeptic) by the `test-gen.judge.workflow.js` Propose phase (in-script
+name `SkepticVoteSchema`; owning phase 2g). The judge segment is **propose-only and
+read-only** — it never applies or runs a mutation; it proposes the single most lethal
+mutation per target and names the test that SHOULD catch it. **The orchestrator's inline
+in-place run produces the authoritative `caught` measurement** — `predictedCaught` is an
+optional reference field only, never the aggregation authority.
+
+```js
+const SkepticVoteSchema = {
+  type: 'object',
+  required: ['skepticId', 'targetFunction', 'file', 'mutationKind', 'mutationDescription', 'expectedCatcherTest', 'rationale'],
+  properties: {
+    skepticId: { type: 'string', description: 'identifier, English raw' },
+    targetFunction: { type: 'string', description: 'production function to mutate, raw' },
+    file: { type: 'string', description: 'source file path of the target function, raw' },
+    mutationKind: { enum: ['condition-inversion', 'return-value', 'arithmetic-operator', 'boundary-off-by-one', 'boolean-constant', 'not-applicable'] },
+    mutationDescription: { type: 'string', description: `the single most lethal mutation (concrete: which line/expression, before → after), render in ${A.userLang}` },
+    expectedCatcherTest: { type: 'object', required: ['testFile', 'testName'],
+      properties: {
+        testFile: { type: 'string', description: 'test file that SHOULD catch the mutation, raw path (scopes the orchestrator run, e.g. npx jest <testFile>)' },
+        testName: { type: 'string', description: 'test case name that should fail under the mutation, raw' } } },
+    rationale: { type: 'string', description: `why this mutation is most lethal and why the named test should catch it, render in ${A.userLang}` },
+    predictedCaught: { type: 'boolean', description: 'OPTIONAL prediction only — NOT aggregation authority; the orchestrator inline run measures the real caught/not-caught' }
+  }
+}
+```
+
+## MutationVerdict / ExecutedMutation
+
+`MutationVerdict` is **orchestrator-built** (owning phase 2g) — NOT a segment
+schema-return. The `test-gen.judge` segment returns `SkepticVote[]`; the orchestrator
+then applies each proposal inline (in-place mutate → scoped test run → immediate revert →
+`git diff --quiet` clean guard) and assembles this object for the test_report.md render
+and the INLINE↔WORKFLOW equivalence contract. It is documented here as canonical (so both
+paths render the same shape), but no script inlines it via `agent({schema})`.
+
+> **Determinism locks (§6.4):**
+> - **verdict reduction:** `weak>0 → WEAK`; `weak==0 ∧ meaningful>0 → MEANINGFUL`;
+>   `totalScored==0` (everything skipped/not-applicable) `→ TRIVIAL`; boundary
+>   `meaningful==0 ∧ weak==0 ∧ skipped>0 → TRIVIAL`.
+> - `score`/`weakTests` are derived ONLY from `executions[]` (the measured runs) —
+>   `SkepticVote.predictedCaught` is never tallied (VerifyVerdict encoding-note discipline).
+> - `totalScored = count(executions where applied) = meaningful + weak`.
+
+`ExecutedMutation` is the `MutationVerdict.executions[]` item shape (orchestrator-built
+inline; defined as a child of MutationVerdict — required: `targetFunction, applied,
+caught, testRun`).
+
+```js
+const ExecutedMutationSchema = {
+  type: 'object',
+  required: ['targetFunction', 'applied', 'caught', 'testRun'],
+  properties: {
+    targetFunction: { type: 'string', description: 'mutated production function, raw' },
+    file: { type: 'string', description: 'source file path, raw' },
+    mutationKind: { type: 'string', description: 'mutation kind applied, English raw' },
+    mutationDescription: { type: 'string', description: `the mutation that was applied, render in ${A.userLang}` },
+    applied: { type: 'boolean', description: 'true if the mutation was actually applied in-place (false = skipped / not-applicable / apply-failed)' },
+    caught: { type: 'boolean', description: 'true if the scoped test run FAILED under the mutation (measured); false if it still passed' },
+    testRun: { type: 'string', description: 'the scoped test command actually run, raw' },
+    evidence: { type: 'string', description: `pass/fail counts or error excerpt from the measured run, render in ${A.userLang}` }
+  }
+}
+
+const MutationVerdictSchema = {
+  type: 'object',
+  required: ['verdict', 'executions', 'weakTests', 'score', 'summary'],
+  properties: {
+    verdict: { enum: ['MEANINGFUL', 'WEAK', 'TRIVIAL'] },
+    proposals: { type: 'array', items: SkepticVoteSchema },
+    executions: { type: 'array', items: ExecutedMutationSchema },
+    weakTests: { type: 'array', items: {
+      type: 'object', required: ['test', 'targetFunction', 'reason'],
+      properties: {
+        test: { type: 'string', description: 'the test that failed to catch the mutation, raw' },
+        targetFunction: { type: 'string', description: 'the function whose mutation went uncaught, raw' },
+        reason: { type: 'string', description: `why the test is weak, render in ${A.userLang}` },
+        suggestedAssertion: { type: 'string', description: `a stronger assertion to add (WORKFLOW path surfaces this instead of auto-strengthening), render in ${A.userLang}` } } } },
+    score: { type: 'object', required: ['meaningful', 'weak', 'skipped', 'totalScored'],
+      properties: {
+        meaningful: { type: 'integer', description: 'executions where applied && caught' },
+        weak: { type: 'integer', description: 'executions where applied && !caught' },
+        skipped: { type: 'integer', description: 'proposals not applied (not-applicable / apply-failed)' },
+        totalScored: { type: 'integer', description: 'count of applied executions (meaningful + weak)' } } },
+    summary: { type: 'string', description: `one-line, counts English raw, render in ${A.userLang}` }
+  }
+}
+```
+
 ## Reserved (added by their owning phases — do not define here yet)
 
 | Schema | Owning phase |
 |---|---|
 | AutoFixProposal | auto-fix-focused phase (Proposer stays inline-1-line in the pilot — deliberate carve-out) |
-| MutationVerdict / SkepticVote | Phase 2g test-gen |
 | MdEvalVerdict | Phase 3 polish |
 
 > Landed from this queue: `CriticReport` (Phase 2a spec), `Hypothesis`/`RootCause`
-> (Phase 2c debug, plus the unplanned-but-needed `DebugAnalysis` analyst shape), and
+> (Phase 2c debug, plus the unplanned-but-needed `DebugAnalysis` analyst shape),
 > `Finding`/`FindingSet` (Phase 2b deep-review, plus the unplanned-but-needed
-> `CrossVerifyReport` cross-verification shape) — defined above. Debug no longer waits
-> on `FindingSet`; the earlier "(also debug)" note on the Finding/FindingSet row is
+> `CrossVerifyReport` cross-verification shape), and — Phase 2 session C —
+> `MigrationPlan` (2d), `AuditAnalysis`/`CompletenessCritique`/`AuditResult` (2f), and
+> `SkepticVote`/`MutationVerdict`/`ExecutedMutation` (2g) — defined above. Debug no longer
+> waits on `FindingSet`; the earlier "(also debug)" note on the Finding/FindingSet row is
 > superseded.
