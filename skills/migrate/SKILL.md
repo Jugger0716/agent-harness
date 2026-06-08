@@ -1,6 +1,7 @@
 ---
 name: migrate
-description: Execute framework/library version upgrades, language transitions, and dependency replacements with staged execution and verification. Supports single-agent and multi-agent modes with WebSearch-based migration guide research, per-step test verification, and session recovery.
+disallowed-tools: NotebookEdit
+description: Execute framework/library version upgrades, language transitions, and dependency replacements with staged, verified execution — single (inline) or multi (parallel external-research + codebase-impact analysts + synthesis and an isolated evaluator via plugin-shipped native Workflow segments, opt-in gated). WebSearch-based migration guide research, per-step test verification, and session recovery.
 ---
 
 # Agent Harness Migrate
@@ -17,21 +18,42 @@ Detect the user's language from their **most recent message**. Store as `user_la
 
 **Re-detection:** On every user message, check if the language has changed. If so, update `user_lang` and switch all subsequent communication.
 
-**What stays in English:** Template instructions (this file and templates/*.md), state.json field names, file names (migration_plan.md, changes.md, qa_report.md), git branch names.
+**What stays in English:** Template instructions (this file and templates/*.md), state.json field names, file names (migration_plan.md, changes.md, qa_report.md), git branch names, Workflow `args` field names.
 
 ## Standard Status Format
 
-When displaying status, read `.harness/state.json` and print (in `user_lang`):
+Status block shape + label rules: see `templates/_shared/status_format.md`. migrate uses the `[harness:migrate]` prefix and its own block:
 ```
 [harness:migrate]
   Target : <target> <from_version> → <to_version>
   Mode   : <single | multi>
+  Path   : <inline | workflow>
   Model  : <model_config preset name>
   Phase  : <phase label>
   Step   : <current_step> / <total_steps> (if in execution phase)
-  Branch : <branch>
+  Branch : <branch>          ← omit if has_git == false
 ```
 Phase labels: setup → "Setup", analyze_ready → "Analysis — researching migration", plan_ready → "Planning — building migration plan", exec_ready → "Execution — applying changes", eval_ready → "Evaluator — verifying migration", completed → "Completed"
+
+## Mode Gate — path & mode resolution (single source: `templates/_shared/mode_gate.md`)
+
+Apply the shared opt-in convention in `templates/_shared/mode_gate.md`. /migrate-specific resolution (replaces the old §Scope-Aware Mode Selection AskUserQuestion roundtrip and the Step 1 mode prompt):
+
+| Signal (first match wins) | `mode` | `path_resolved` |
+|---|---|---|
+| `has_git == false` | single | **inline** (engine isolation requires git) |
+| `--mode single` | single | **inline** |
+| `Workflow` tool NOT available this session | single | **inline** (notify only if an explicit `--mode multi` was requested) |
+| `--mode multi` (or `deep`/`thorough`/`comprehensive`) | multi | **workflow** |
+| no `--mode` AND session is in ultracode mode | multi | **workflow** |
+| no `--mode`, no opt-in | single | **inline** |
+
+- **multi exists ONLY on the workflow path** — the engine's `parallel()` fan-out replaces the old hand-rolled 2-analyst dispatch (Step 2-M). The inline path is the preserved single mode.
+- The `deep`/`thorough`/`comprehensive` aliases are deliberate cross-skill deepest-tier synonyms (every reframed skill accepts the others' deepest mode names and collapses them onto its own deepest tier); canonical mode names stay per-skill (single/multi).
+- **Scope-aware advisory (print only, no roundtrip):** before analysis the exact breaking-change count is unknown, so advise from heuristics — a simple single-version bump → single; a major version jump, a library replacement, or a wide dependency footprint → multi. (Print so a non-opted user knows which `--mode` to pass on re-invoke.)
+- **Workflow-path scope:** ONLY Step 2 (analyze → MigrationPlan) and Step 5 (evaluation) run as segments. **Step 4 staged execution stays in this orchestrator on every path** — the per-step apply, build/test verification, the failure gates, and the Migration Advisor are never scripted.
+- **Graceful fallback:** if the Analyze segment errors, print `[harness:migrate] ⚠ Workflow engine unavailable — falling back to the inline single path.` (in `user_lang`), set `path_resolved → "inline"`, `mode → "single"`, and continue via Step 2-S. If the Eval segment errors, fall back LOCALLY to the Step 5 inline evaluator dispatch (do not downgrade the rest of the session). Never error out.
+- Record `path_resolved` in state.json and show `Path` in the status format.
 
 ## Argument Parsing
 
@@ -96,10 +118,11 @@ Detect the current version of `target` from project files:
 
 ## Session Recovery
 
-Before starting a new task, check if `.harness/state.json` already exists:
+Before starting a new task, check if `.harness/state.json` already exists **and** `state.json.skill` equals `"migrate"`:
 
-1. If it exists, print status in the standard format (including Model line from `model_config`), prefixed with `[harness:migrate] Previous session detected.`
-2. Restore `model_config` from state.json. Apply it to all subsequent sub-agent launches.
+1. If it exists and matches, print status in the standard format (including Model line from `model_config`), prefixed with `[harness:migrate] Previous session detected.`
+2. Restore `model_config` from state.json. Apply it to all subsequent sub-agent launches and Workflow `args.models`.
+2.5. **Re-resolve §Mode Gate** (the new session may lack the Workflow tool or the opt-in) and update `path_resolved` — a session that started on the workflow path may legitimately resume on the inline path. Cross-session resume re-RUNS segments; `state.runs.*.runId` values are audit-only (`resumeFromRunId` is same-session only — never attempt it across sessions).
 3. Ask the user using AskUserQuestion (in `user_lang`):
      header: "Session"
      question: "[harness:migrate] Previous session detected. [print status in standard format]. Resume, restart, or stop?"
@@ -109,17 +132,17 @@ Before starting a new task, check if `.harness/state.json` already exists:
        - label: "Stop" / description: "Delete .harness/ and halt"
 
    Actions per selection:
-   - **Resume**: Jump to the step matching state.json phase:
-     `setup` → Step 1 |
-     `analyze_ready` → Step 2 |
-     `plan_ready` → if migration_plan.md exists go to Step 3, else Step 2 |
-     `exec_ready` → Step 4 (resume from `current_step` in state.json) |
-     `eval_ready` → Step 5 |
-     `completed` → no active session, proceed to Step 1
+   - **Resume**: Jump to the step matching state.json phase (completion-artifact checks come FIRST, before any path branching — a multi session resumed without the engine must never overwrite completed work):
+     - `setup` → Step 1
+     - `analyze_ready` → inline path → Step 2-S; workflow path → Step 2-W (re-RUN the Analyze segment)
+     - `plan_ready` → **FIRST, on BOTH paths**: if `{docs_path}migration_plan.md` exists, go to Step 3 (the plan is complete — do not re-run analysis). Else: Step 2 on the re-resolved path.
+     - `exec_ready` → Step 4 (always orchestrator-inline on every path; resume from `current_step`).
+     - `eval_ready` → **FIRST, on BOTH paths**: if `{docs_path}qa_report.md` already exists, skip to Step 6 and reconstruct the verdict from its `### Verdict:` line (sanctioned read — segment returns are in-context only). Else: Step 5 on the re-resolved path.
+     - `completed` → no active session, proceed to Step 1
    - **Restart**: Delete `.harness/` directory and proceed to Step 1
    - **Stop**: Delete `.harness/` directory and halt
 
-If `.harness/state.json` does not exist, proceed to Step 1 normally.
+If `.harness/state.json` does not exist (or belongs to a different skill), proceed to Step 1 normally.
 
 ## Smart Routing
 
@@ -127,9 +150,9 @@ Before proceeding, assess whether this skill is the right tool:
 
 | User Intent | Better Skill | Action |
 |-------------|-------------|--------|
-| Deprecated patterns cleanup without version change | `/workflow` with refactoring task | Suggest switching to `/workflow` |
-| Code state unclear, needs audit first | `/workflow` with audit task | Suggest running audit first |
-| Wants to adopt new API features (not upgrading) | `/workflow` with feature task | Suggest switching to `/workflow` |
+| Deprecated patterns cleanup without version change | `/harness` with refactoring task | Suggest switching to `/harness` |
+| Code state unclear, needs audit first | `/harness` with audit task | Suggest running audit first |
+| Wants to adopt new API features (not upgrading) | `/harness` with feature task | Suggest switching to `/harness` |
 
 When a better skill is identified, ask the user using AskUserQuestion (in `user_lang`):
   header: "Routing"
@@ -140,16 +163,6 @@ When a better skill is identified, ask the user using AskUserQuestion (in `user_
 
 If the user selects "Switch", halt this skill.
 
-## Scope-Aware Mode Selection
-
-If `--mode` is not provided, auto-select based on migration complexity:
-
-1. If only 1 breaking change detected → default to `single`
-2. If 2+ breaking changes detected → default to `multi`
-3. Always inform the user of the auto-selected mode and allow override
-
-If `--mode single` or `--mode multi` was passed, use it directly.
-
 ## Workflow
 
 When the user provides a migration target (via $ARGUMENTS or in conversation), execute this workflow:
@@ -158,19 +171,7 @@ When the user provides a migration target (via $ARGUMENTS or in conversation), e
 
 1. **Detect user language** from the task description. Store as `user_lang`.
 2. **Slugify the target:** lowercase, transliterate non-ASCII to ASCII, remove non-word chars except hyphens, replace spaces with hyphens, truncate to 50 chars. For replacements, use format `<from>-to-<to>`. Store as `<slug>`.
-3. **Auto-detect project language and commands.** Scan the repo root:
-
-   | File | Language | Test Command | Build Command |
-   |------|----------|-------------|---------------|
-   | `build.gradle(.kts)` | java | `./gradlew test` | `./gradlew build` |
-   | `pom.xml` | java | `mvn test` | `mvn compile` |
-   | `pyproject.toml` / `setup.py` | python | `pytest` | (none) |
-   | `package.json` | typescript | `npm test` | `npm run build` |
-   | `*.csproj` | csharp | `dotnet test` | `dotnet build` |
-   | `go.mod` | go | `go test ./...` | `go build ./...` |
-   | `Cargo.toml` | rust | `cargo test` | `cargo build` |
-
-   If none match, set language to "unknown", test/build commands to null.
+3. **Auto-detect project language and commands.** Scan the repo root. Language/test/build detection: see `templates/_shared/detection_table.md`.
 
 4. **Detect current version** of the target using the Version Auto-Detection table above. Store as `from_version`.
 5. **Determine target version** from `--to` argument or via WebSearch for latest stable. Store as `to_version`.
@@ -188,12 +189,7 @@ When the user provides a migration target (via $ARGUMENTS or in conversation), e
 9. **Capture original branch and create migration branch:**
    - Run `git rev-parse --abbrev-ref HEAD` and store result as `original_branch`. If the result is `HEAD` (detached HEAD state), use `git rev-parse HEAD` instead to store the full commit hash.
    - `git checkout -b harness/migrate-<slug>`
-10. **Mode selection:** If `--mode single` or `--mode multi` was passed, use it directly and skip prompt. Otherwise, apply Scope-Aware Mode Selection rules above and ask the user using AskUserQuestion (in `user_lang`):
-     header: "Mode"
-     question: "Auto-detected mode: {auto_selected}. Select workflow mode:"
-     options:
-       - label: "single" / description: "1 agent handles analysis + execution. Fast, best for simple migrations"
-       - label: "multi" / description: "Parallel analysts + advisor review per step. Deeper analysis for complex migrations"
+10. **Mode Gate resolution:** apply §Mode Gate (no AskUserQuestion roundtrip — mode is derived from `--mode` flags / ultracode opt-in / tool availability / `has_git`). Store `mode` and `path_resolved` in state.json. Print the scope-aware advisory. If the user explicitly requested `--mode multi` but the gate resolved to inline (Workflow tool unavailable or `has_git == false`), notify (in `user_lang`): "multi mode requires the native Workflow engine and git — proceeding on the inline single path."
 11. **Model configuration selection:**
    If `--model-config <preset>` was passed, use it directly. Otherwise, use AskUserQuestion to ask the user (in `user_lang`):
      header: "Model"
@@ -210,7 +206,7 @@ When the user provides a migration target (via $ARGUMENTS or in conversation), e
 
    Store result as `model_config` object: `{ "preset": "<name>", "executor": "<model|null>", "advisor": "<model|null>", "evaluator": "<model|null>" }`. For the `default` preset, store `{ "preset": "default" }`.
 
-12. **Write `.harness/state.json`** with fields: `skill` ("migrate"), `target`, `migration_type` ("upgrade"/"replacement"), `from_version`, `to_version`, `mode` ("single"/"multi"), `model_config` (from step 11), `user_lang`, `repo_name`, `repo_path`, `phase` ("setup"), `current_step` (0), `total_steps` (0), `original_branch` (captured in step 9), `branch` ("harness/migrate-<slug>"), `lang`, `test_cmd`, `build_cmd`, `baseline_test_pass_count`, `baseline_test_fail_count`, `docs_path` ("docs/harness/<slug>/"), `created_at` (ISO8601).
+12. **Write `.harness/state.json`** with fields: `skill` ("migrate"), `target`, `migration_type` ("upgrade"/"replacement"), `from_version`, `to_version`, `mode` ("single"/"multi"), `path_resolved` ("inline"/"workflow" — from §Mode Gate; re-resolved on resume), `runs` (`{ "analyze": null, "eval": null }`; each records `{ "runId": "<wf_...>" }` after a segment launch — audit + same-session iteration only, cross-session resume re-RUNS segments per §Session Recovery 2.5), `model_config` (from step 11), `user_lang`, `repo_name`, `repo_path`, `phase` ("setup"), `current_step` (0), `total_steps` (0), `original_branch` (captured in step 9), `branch` ("harness/migrate-<slug>"), `lang`, `test_cmd`, `build_cmd`, `baseline_test_pass_count`, `baseline_test_fail_count`, `docs_path` ("docs/harness/<slug>/"), `created_at` (ISO8601).
 13. **Print setup summary** (in `user_lang`):
     ```
     [harness:migrate] Migration started!
@@ -219,6 +215,7 @@ When the user provides a migration target (via $ARGUMENTS or in conversation), e
       Repo     : <path>
       Branch   : harness/migrate-<slug>
       Mode     : <single | multi>
+      Path     : <inline | workflow>
       Model    : <preset name>
       Language : <lang>
       Test     : <test_cmd or "none">
@@ -228,9 +225,9 @@ When the user provides a migration target (via $ARGUMENTS or in conversation), e
 
 ### Step 2: Analysis Phase
 
-Read `mode` from state.json and branch accordingly.
+Read `mode` and `path_resolved` from state.json and branch accordingly.
 
-#### If mode == "single": Step 2-S
+#### INLINE path (mode: single) — Step 2-S
 
 1. Update state.json: phase → `"analyze_ready"`.
 2. **Research the migration guide.** Use WebSearch to find the official migration guide for `target` from `from_version` to `to_version`. Search queries:
@@ -284,39 +281,50 @@ Read `mode` from state.json and branch accordingly.
 8. Write research notes to `.harness/migrate/research_external.md` and `.harness/migrate/research_internal.md`.
 9. Print status in the standard format, prefixed with `[harness:migrate] Analysis complete.`
 
-#### If mode == "multi": Step 2-M
+#### WORKFLOW path (mode: multi) — Step 2-W
 
-##### Step 2a: External Research Analyst (Subagent)
+> multi exists ONLY on the workflow path (§Mode Gate). The engine's `parallel()` fan-out replaces the old hand-rolled 2-analyst dispatch (Steps 2a/2b), the `.harness/migrate/research_*.md` intermediate files, and the file re-reads + synthesis. The Plan Confirmation HARD GATE (Step 3) is rendered by THIS orchestrator AFTER the segment returns — never inside the script.
 
 1. Update state.json: phase → `"analyze_ready"`.
-2. Read the external research template: `{CLAUDE_PLUGIN_ROOT}/templates/migrate/external_research_analyst.md`
-3. Fill template variables: `{target}`, `{from_version}`, `{to_version}`, `{migration_type}`, `{lang}`, `{user_lang}`, `{output_path}`: `.harness/migrate/research_external.md`
-4. **Launch 1 subagent** (External Research Analyst) using the Agent tool. If `model_config.preset` is not `"default"`, pass `model` parameter per the Model Selection table (External Research Analyst → executor role). This subagent uses WebSearch/WebFetch to research the migration guide and extract breaking changes, deprecated APIs, and version requirements.
-5. Wait for completion. Verify `.harness/migrate/research_external.md` exists.
 
-##### Step 2b: Codebase Impact Analyst (Subagent — parallel with 2a)
+2. **Run the Analyze segment** via the Workflow tool (pass `args` as a JSON object — the script defensively parses; the field set below is the 1:1 contract with the script's `// contract` comment — a field missing on either side silently renders as ''):
+   ```
+   Workflow {
+     scriptPath: "${CLAUDE_PLUGIN_ROOT}/workflows/migrate.analyze.workflow.js",
+     args: {
+       target: <target>, fromVersion: <from_version>, toVersion: <to_version>,
+       migrationType: <migration_type>, repoPath: <repo_path>, lang: <lang>,
+       userLang: <user_lang>,
+       models: { executor: <model_config.executor or null>,
+                 advisor: <model_config.advisor or null> }
+     }
+   }
+   ```
+   Record `runs.analyze → { "runId": "<id>" }`.
+   The script runs the external-research and codebase-impact analysts in parallel (anchoring-free — neither sees the other's output; external uses WebSearch/WebFetch) and synthesizes one structured MigrationPlan.
 
-1. Read the codebase impact template: `{CLAUDE_PLUGIN_ROOT}/templates/migrate/codebase_impact_analyst.md`
-2. Fill template variables: `{target}`, `{from_version}`, `{to_version}`, `{migration_type}`, `{repo_path}`, `{lang}`, `{user_lang}`, `{output_path}`: `.harness/migrate/research_internal.md`
-3. **Launch 1 subagent** (Codebase Impact Analyst) in parallel with Step 2a. If `model_config.preset` is not `"default"`, pass `model` parameter per the Model Selection table (Codebase Impact Analyst → executor role). This subagent scans the codebase for all usages of the target library, identifies affected files, and assesses impact.
-4. Wait for completion. Verify `.harness/migrate/research_internal.md` exists.
+3. The segment returns `{ plan: MigrationPlan, stats }` — schema-validated; NO research-file re-reads, NO 1-line parsing. Print (in `user_lang`): `  ✓ Analyze segment: {stats.analystsSucceeded}/{stats.analystsRequested} analyses → synthesis`
+   - If `stats.analystsSucceeded < stats.analystsRequested`, warn (in `user_lang`): `[harness:migrate] ⚠ {N} analyst(s) unavailable — synthesis proceeded from the remaining analysis (external={stats.externalResearchOk}, impact={stats.impactAnalysisOk}).`
 
-**Launch Steps 2a and 2b in parallel.** Wait for both to complete before proceeding.
+4. **Orchestrator writes `{docs_path}migration_plan.md` from the MigrationPlan object** (headings in `user_lang`; the title `## Migration Plan: <target> <from_version> → <to_version>` from state.json):
+   - `### Summary` ← `summary`
+   - `### Breaking Changes` ← `steps[]` as `#### {n}. {description}` with `- **What changed:** {whatChanged}` / `- **Affected files:** {files joined, or "(none specified)" when the array is empty}` / `- **Required action:** {requiredAction}` / `- **Verification:** {verification}` / `- **Risk:** {risk}` (all five step sub-fields are schema-required, so none render as "undefined")
+   - `### Dependency Updates` ← `dependencyUpdates[]` as `- {name}: {from} → {to}` (empty array → "None")
+   - `### Configuration Changes` ← `configurationChanges[]` as `- {file}: {change}` (empty array → "None")
+   - `### Execution Order` ← `executionOrder[]` as an ordered list
+   - `### Risks` ← `risks[]` as `- {risk} — Likelihood: {likelihood} — Mitigation: {mitigation}` (append `(source)` when present)
+   - `### Not Applicable (Skipped)` ← `notApplicable[]` as `- {title} — {reason}` (omit the whole section when the array is empty)
+   Verify the file exists after writing (rendering is orchestrator-owned and deterministic).
 
-##### Step 2c: Synthesis → Migration Plan
-
-1. Read the synthesis template: `{CLAUDE_PLUGIN_ROOT}/templates/migrate/synthesis.md`
-2. Read both research outputs from `.harness/migrate/`.
-3. Fill template variables: `{target}`, `{from_version}`, `{to_version}`, `{migration_type}`, `{user_lang}`, `{external_research}` (from research_external.md), `{internal_research}` (from research_internal.md), `{plan_path}`: `docs/harness/<slug>/migration_plan.md`
-4. Follow the synthesis rules to produce `migration_plan.md` — merge external breaking changes with internal impact analysis, order by dependency, and assign step numbers.
-5. Update state.json: phase → `"plan_ready"`, `total_steps` → number of breaking changes.
+5. Update state.json: phase → `"plan_ready"`, `total_steps` → `plan.steps.length`.
 6. Inform the user (in `user_lang`):
    ```
    [harness:migrate] Analysis complete.
-     External : Migration guide researched, <N> breaking changes found
-     Internal : <M> affected files identified across codebase
+     Analyses : <stats.analystsSucceeded> specialists analyzed independently
      Plan     : <total_steps> migration steps ordered by dependency
+     Output   : migration_plan.md synthesized
    ```
+7. **On Workflow error** (launch failure, script error, schema-invalid result): apply §Mode Gate graceful fallback → notify, set `path_resolved → "inline"`, `mode → "single"`, and re-run this step via Step 2-S.
 
 ### Step 3: HARD GATE — Migration Plan Confirmation
 
@@ -391,7 +399,7 @@ If `mode == "multi"`:
 
 1. Read the migration advisor template: `{CLAUDE_PLUGIN_ROOT}/templates/migrate/migration_advisor.md`
 2. Fill template variables: `{step_number}` (N), `{step_title}`, `{step_changes}` (changes made in this step only), `{build_result}`, `{test_result}`, `{previous_steps_summary}` (one-line summary of each completed step — NOT full details), `{remaining_steps}` (titles only), `{user_lang}`, `{output_path}`: `.harness/migrate/advisor_step_<N>.md`
-3. **Launch 1 subagent** (Migration Advisor) to review this step. If `model_config.preset` is not `"default"`, pass `model` parameter per the Model Selection table (Migration Advisor → advisor role). Lightweight review — only current step context + previous results summary.
+3. **Launch 1 subagent** (Migration Advisor) to review this step. If `model_config.preset` is not `"default"`, pass `model` parameter per the preset table in `templates/_shared/model_config.md` (Migration Advisor → advisor role). Lightweight review — only current step context + previous results summary.
 4. Read advisor output. If advisor flags issues:
    - **Critical:** Stop and fix before proceeding
    - **Warning:** Log and continue, address in next step or during evaluation
@@ -411,15 +419,43 @@ If `mode == "multi"`:
 ### Step 5: Evaluator Phase (Isolated Subagent)
 
 1. Update state.json: phase → `"eval_ready"`.
-2. Read the evaluator template: `{CLAUDE_PLUGIN_ROOT}/templates/migrate/evaluator.md`
-3. **Prepare the subagent prompt.** Fill in: `{target}`, `{from_version}`, `{to_version}`, `{migration_type}`, `{migration_plan_content}` (from migration_plan.md — breaking changes list only, no research reasoning), `{changed_files_list}` (file paths only from changes.md — strip all "reason" descriptions), `{test_available}`, `{build_cmd}`, `{test_cmd}`, `{baseline_test_pass_count}`, `{baseline_test_fail_count}`, `{user_lang}`, `{qa_report_path}`: `docs/harness/<slug>/qa_report.md`.
+2. **Prepare the anchor-free inputs (both paths):** `{migration_plan_content}` (from migration_plan.md — breaking changes list only, no research reasoning), `{changed_files_list}` (file paths only from changes.md — **strip all "reason" descriptions** to prevent anchoring), `{target}`, `{from_version}`, `{to_version}`, `{migration_type}`, `{test_available}`, `{build_cmd}`, `{test_cmd}`, `{baseline_test_pass_count}`, `{baseline_test_fail_count}`, `{user_lang}`, `{qa_report_path}`: `{docs_path}qa_report.md`.
    **Do NOT include:** Research notes, analyst reasoning, advisor reviews, why files were changed, or references to "Generator"/"AI"/"agent" as code author.
-4. **Launch the Evaluator subagent** using the Agent tool. If `model_config.preset` is not `"default"`, pass `model` parameter per the Model Selection table (Evaluator → evaluator role). Instruct it to write the QA report to `docs/harness/<slug>/qa_report.md`.
-5. When the subagent returns, read `docs/harness/<slug>/qa_report.md` to get the verdict.
+
+#### Step 5 — INLINE path (mode: single)
+
+3. Read the evaluator template: `{CLAUDE_PLUGIN_ROOT}/templates/migrate/evaluator.md` and fill the variables above.
+4. **Launch the Evaluator subagent** using the Agent tool. If `model_config.preset` is not `"default"`, pass `model` parameter per the preset table in `templates/_shared/model_config.md` (Evaluator → evaluator role). Instruct it to write the QA report to `{qa_report_path}`.
+5. When the subagent returns, read `{docs_path}qa_report.md` to get the verdict (the on-disk template's `### Verdict:` regex contract — inline path only).
+
+#### Step 5 — WORKFLOW path (mode: multi)
+
+3. **Run the Eval segment** via the Workflow tool (field set = 1:1 contract with the script's `// contract` comment):
+   ```
+   Workflow {
+     scriptPath: "${CLAUDE_PLUGIN_ROOT}/workflows/migrate.eval.workflow.js",
+     args: {
+       target: <target>, fromVersion: <from_version>, toVersion: <to_version>,
+       migrationType: <migration_type>,
+       planContent: <migration_plan_content (breaking changes only)>,
+       changedFilesList: <file paths only, reasons stripped>,
+       testAvailable: <bool>, buildCmd: <build_cmd or "">, testCmd: <test_cmd or "">,
+       baselineTestPassCount: <baseline_test_pass_count>, baselineTestFailCount: <baseline_test_fail_count>,
+       userLang: <user_lang>,
+       qaReportPath: "{docs_path}qa_report.md",
+       models: { evaluator: <model_config.evaluator or null> }
+     }
+   }
+   ```
+   Record `runs.eval → { "runId": "<id>" }`.
+4. The segment returns a **VerifyVerdict** (schema-validated — NO regex parse on this path). The evaluator agent has also WRITTEN `{docs_path}qa_report.md` (user-facing artifact + the cross-session verdict-reconstruction source). **Verify the file exists**; if missing, derive it yourself from the verdict object (orchestrator-derived fallback — one Write, no re-dispatch).
+5. **On Workflow error**: fall back LOCALLY to the Step 5 INLINE evaluator dispatch above (do NOT downgrade the rest of the session — the session stays on the workflow path for any later Plan segment).
 
 ### Step 6: Verdict & Resolution
 
-Read qa_report.md and determine verdict (look for "Verdict: PASS" or "Verdict: FAIL").
+Determine the verdict:
+- **INLINE path:** Read qa_report.md and look for `### Verdict: PASS` or `### Verdict: FAIL`.
+- **WORKFLOW path:** use the `VerifyVerdict` object from the Eval segment — branch on **(layer, verdict)**, never verdict alone. Migrate mapping (see `workflows/_reference/schemas.md` encoding note): `(L1, FAIL_L2)` = mechanical test regression / build failure; `(L3, FAIL_L3)` = completeness/correctness judgment failure; `(L3, PASS)` = pass. ANY non-PASS verdict is treated as FAIL for the gate below; build the failure summary from `verdict.summary` + top `failures[].fix` lines. **On resume with no in-context VerifyVerdict:** read qa_report.md's `### Verdict:` line (sanctioned read).
 
 **If PASS:** Update state.json: phase → `"completed"`. Inform user: migration complete. Proceed to Step 7.
 
@@ -440,18 +476,7 @@ Actions per selection:
 
 #### Artifact Cleanup Safety Guard
 
-Before deleting any `docs/harness/` subdirectory, these checks are **mandatory**:
-
-1. **Validate slug**: Read `docs_path` from `.harness/state.json`, extract `<slug>` (last path segment). If `<slug>` is empty, null, or whitespace → **ABORT** cleanup and warn user (in `user_lang`): "Cannot determine delete target — slug is empty."
-2. **Path depth check**: Delete target must match pattern `docs/harness/<non-empty-slug>/` — exactly one level below `docs/harness/`. **NEVER** delete `docs/harness/` itself during normal cleanup. Additionally: slug must **NOT** be `memory` (reserved for `/memory` skill), must **NOT** contain `..` or `/`, and must **NOT** be a single dot `.`. If any of these conditions fail → **ABORT** and warn user.
-3. **Display before delete**: Print the exact delete target path (e.g., `docs/harness/my-task/`) to the user before executing. Do not silently delete.
-
-**Full `docs/harness/` cleanup (only when user explicitly requests):**
-If the user explicitly asks to delete the **entire** `docs/harness/` directory:
-1. List all subdirectories with their file counts
-2. If `docs/harness/memory/` exists, list it **separately** with warning: "This directory contains team knowledge managed by `/memory` skill."
-3. Warn (in `user_lang`): "`docs/` is git-ignored — all session artifacts will be permanently deleted and **cannot be recovered**."
-4. Ask confirmation via AskUserQuestion (yes/no) — only proceed on explicit "Yes, delete all"
+Cleanup safety rules: see `templates/_shared/safety_guard.md`.
 
 Ask the user using AskUserQuestion (in `user_lang`):
   header: "Commit"
@@ -472,46 +497,17 @@ If user asks for status, print status in the standard format defined above.
 
 ## Model Selection
 
-Sub-agents can run on different models depending on the selected `model_config` preset. The presets map each role (executor, advisor, evaluator) to a model:
+Preset table + rules: see `templates/_shared/model_config.md`.
 
-| Preset | executor | advisor | evaluator |
-|--------|----------|---------|-----------|
-| default | (parent inherit) | (parent inherit) | (parent inherit) |
-| all-opus | opus | opus | opus |
-| balanced | sonnet | opus | opus |
-| economy | haiku | sonnet | sonnet |
+**migrate role-map:** External Research Analyst → executor; Codebase Impact Analyst → executor; Synthesis → advisor; Migration Advisor → advisor; Evaluator → evaluator.
 
-Each sub-agent is assigned a role. The following table defines the concrete model for every sub-agent under each preset:
+**WORKFLOW path:** pass the resolved models once per segment run as `args.models` — Analyze segment `{ executor, advisor }` (executor → the two research analysts; advisor → synthesis), Eval segment `{ evaluator }` (null = inherit parent model, i.e. the `default` preset) — the segment scripts apply them per agent. The Migration Advisor is always dispatched inline by the orchestrator (Step 4 is never scripted) and takes its `model` parameter (advisor role) at launch as before.
 
-### Analysis Phase Sub-agents
-
-| Sub-agent | Role | default | all-opus | balanced | economy |
-|-----------|------|---------|----------|----------|---------|
-| External Research Analyst | executor | (no override) | opus | sonnet | haiku |
-| Codebase Impact Analyst | executor | (no override) | opus | sonnet | haiku |
-
-### Execution Phase Sub-agents
-
-| Sub-agent | Role | default | all-opus | balanced | economy |
-|-----------|------|---------|----------|----------|---------|
-| Migration Advisor | advisor | (no override) | opus | opus | sonnet |
-
-### Evaluator Phase Sub-agents
-
-| Sub-agent | Role | default | all-opus | balanced | economy |
-|-----------|------|---------|----------|----------|---------|
-| Evaluator | evaluator | (no override) | opus | opus | sonnet |
-
-**Applying model config:** When launching any sub-agent, if `model_config.preset` is not `"default"`, pass the `model` parameter according to the table above for that sub-agent. Sub-agents must NOT directly access state.json to read model_config — the orchestrator passes the model parameter at launch time.
+**Applying model config (INLINE path):** When launching any sub-agent, if `model_config.preset` is not `"default"`, pass the `model` parameter per the role-map above combined with the preset table in `templates/_shared/model_config.md`. Sub-agents must NOT directly access state.json to read model_config — the orchestrator passes the model parameter at launch time.
 
 ## User Interaction Rules
 
-All user-facing questions MUST use AskUserQuestion tool when available.
-- If AskUserQuestion is available → use it (provides numbered selection UI)
-- If AskUserQuestion is NOT available or fails → present the same options as text and accept number/keyword responses (case-insensitive)
-- Every option must include a `label` (short name) and `description` (specific explanation)
-- "Other" (free text input) is automatically appended by the framework
-- Translate all question text, labels, and descriptions to `user_lang`
+See `templates/_shared/askuserquestion.md`.
 
 ## Key Rules
 
@@ -524,6 +520,11 @@ All user-facing questions MUST use AskUserQuestion tool when available.
 - **Baseline tests are the regression benchmark.** Only test failures that are NOT in the baseline count as migration regressions.
 - **Stop on unrecoverable failure.** If a step cannot be fixed in 2 attempts, stop and report rather than continuing blindly.
 - **Use whatever skills are available.** Search by capability keyword, not plugin name. If no match, proceed without it.
-- **User language.** All user-facing output must be in `user_lang`. Re-detect on every user message.
-- **Intermediate outputs are ephemeral.** Only final artifacts (migration_plan.md, changes.md, qa_report.md) are preserved in `docs/`.
+- **User language.** All user-facing output must be in `user_lang`. Re-detect on every user message. WORKFLOW path: pass `userLang` in `args` — the segment scripts build schema descriptions from it, which forces sub-agent free-text output language; ids/enums/paths stay English raw.
+- **Intermediate outputs are ephemeral.** Only final artifacts (migration_plan.md, changes.md, qa_report.md) are preserved in `docs/`. On the workflow path there are no intermediate research files at all — the Analyze segment returns a schema-validated MigrationPlan.
 - **WebSearch fallback.** If WebSearch/WebFetch fail, always fall back to local CHANGELOG/MIGRATION files before asking the user.
+- **Mode Gate replaces the mode roundtrip.** `--mode` flag / ultracode opt-in / tool availability / `has_git` derive the mode (§Mode Gate); the scope advisory is print-only. Store `mode` + `path_resolved` in state.json; re-resolve on session recovery.
+- **Fan-out exists only on the workflow path.** Multi-mode analysis runs as plugin-shipped segment scripts; without the engine or opt-in, the session runs single inline (with a notice on explicit `--mode multi` requests).
+- **Execution is never scripted.** Step 4 (staged apply + per-step build/test + failure gates + Migration Advisor) stays in this orchestrator on every path — the segments cover only Step 2 (analyze) and Step 5 (eval).
+- **Workflow args are a JSON object;** segment scripts defensively parse (`args` may arrive as a JSON string — engine behavior). Keep the SKILL args blocks and the scripts' `// contract` comments in 1:1 sync. Never put user-gate decisions into args.
+- **Graceful engine fallback.** Analyze-segment failure degrades the session to the inline single path; Eval-segment failure falls back locally to the inline evaluator dispatch — never a hard error. Gates live ONLY in this orchestrator, never in a segment script.

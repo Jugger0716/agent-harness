@@ -6,7 +6,7 @@ No dependencies required. No Python, no pip, no build steps — just install the
 
 Inspired by Anthropic's [Harness Design for Long-Running Application Development](https://www.anthropic.com/engineering/harness-design-long-running-apps).
 
-> Demo GIF coming soon — see [ROADMAP.md](ROADMAP.md) for the v8.5+ planned items.
+> Demo GIF coming soon — see [ROADMAP.md](ROADMAP.md) for the v8.6+ planned items.
 
 ## At a Glance
 
@@ -16,9 +16,9 @@ Inspired by Anthropic's [Harness Design for Long-Running Application Development
 
 **With agent-harness:**
 ```
-/workflow "add rate limiting to the API"
+/harness --mode standard "add rate limiting to the API"
 ```
-→ Two specialists (Architect + Senior Dev) propose plans independently  
+→ Two specialists (Architect + Senior Dev) propose plans independently (native Workflow fan-out)  
 → Synthesis produces `spec.md` — you review and approve  
 → Lead Dev + Advisor implement code, write `changes.md`  
 → Layer 1: build ✓ test 42/42 ✓ lint 0e/2w ✓ (auto-retry on fail, up to 3x)  
@@ -60,24 +60,38 @@ Inspired by Anthropic's [Harness Design for Long-Running Application Development
 
 Higher modes cost more per run but save total cost by reducing retry rounds. Standard is recommended for most tasks.
 
-> *(estimated)*: Figures are estimates based on internal dogfooding. A measurement benchmark harness is planned for v8.2+.
+> *(estimated)*: Figures are estimates based on internal dogfooding. A measurement benchmark harness is planned for a future release.
 
 ## Skills
 
 | Skill | Command | Description |
 |-------|---------|-------------|
-| **Workflow** | `/workflow <task>` | 3-Phase (Planner -> Generator -> Evaluator) workflow. Single or multi-agent mode. Works with or without git. |
-| **Refactor** | `/refactor <target>` | Safe, behavior-preserving code structure improvement. Single, multi, or comprehensive mode. |
-| **Migrate** | `/migrate <target> [--from v4 --to v5]` | Staged migration of frameworks, libraries, and dependencies. Single or multi-agent mode with WebSearch research. |
-| **Debug** | `/debug <error>` | Hypothesis-driven debugging with mandatory executable verification. Quick or deep (2-agent cross-verification) mode. |
-| **Spec** | `/spec <requirement>` | Multi-round Q&A requirements specification. Output directly compatible with `/workflow` input. Quick or deep mode. |
-| **Test Gen** | `/test-gen <target>` | Automated test generation with mutation-based quality verification. Supports coverage-gap and regression modes. |
-| **Memory** | `/memory <cmd>` | Team knowledge base (save/show/clean/search). Git-committed, team-shared decisions, patterns, and conventions. |
-| **Codebase Audit** | `/codebase-audit` | Systematic codebase analysis with 3-tier mode (quick/deep/thorough) for team onboarding. |
-| **Code Review** | `/code-review <target>` | Systematic, bias-free code review. Quick (1 agent), deep (2 specialists), or thorough (3 specialists + cross-verification). |
+| **Harness** | `/harness <task>` | 3-Phase (Planner -> Generator -> Evaluator) orchestrator. Inline single path by default; opt-in workflow path (ultracode or `--mode standard/multi`) runs plugin-shipped native Workflow segment scripts with schema-validated returns. Works with or without git. _(formerly `/workflow` — old name kept as a deprecation alias)_ |
+| **Refactor** | `/refactor <target>` | Safe, behavior-preserving code structure improvement. Single (inline) or multi/comprehensive (2-3 analysts + cross-critique, native Workflow path). Execution stays gated and step-tested in the orchestrator. |
+| **Migrate** | `/migrate <target> [--from v4 --to v5]` | Staged migration of frameworks, libraries, and dependencies. Single (inline) or multi (parallel external-research + codebase-impact analysts + synthesis, native Workflow path) with WebSearch research. Staged execution stays gated and step-tested in the orchestrator. |
+| **Debug** | `/debug <error>` | Hypothesis-driven debugging with mandatory executable verification. Quick (inline) or deep (2 analysts + adversarial cross-verify, native Workflow path). |
+| **Spec** | `/spec <requirement>` | Multi-round Q&A requirements specification. Output directly compatible with `/harness` input. Quick (inline) or deep (4 analysts + Critic, native Workflow path). |
+| **Test Gen** | `/test-gen <target>` | Automated test generation with mutation-based quality verification. Single (inline) or multi (parallel coverage analysts + propose-only mutation skeptics, native Workflow path; test generation + mutation execution stay orchestrator-inline). Supports coverage-gap and regression modes. |
+| **Team Memory** | `/team-memory <cmd>` | Team knowledge base (save/show/clean/search). Git-committed, team-shared decisions, patterns, and conventions. Human-gated CRUD — never escalates to sub-agents or the Workflow engine. _(formerly `/memory` — old name kept as a deprecation alias)_ |
+| **Codebase Audit** | `/codebase-audit` | Systematic codebase analysis for team onboarding. Quick (inline) or deep/thorough (parameterized lens analysts + completeness critique + synthesis, native Workflow path; orchestrator writes the report). Incremental analysis support. |
+| **Deep Review** | `/deep-review <target>` | Systematic, bias-free code review. Quick (inline checklist) or deep/thorough (2-3 specialists + adversarial cross-verification, native Workflow path). Optional `--comment` (inline PR comments) / `--fix` (gated apply). _(formerly `/code-review` — old name kept as a deprecation alias)_ |
 | **MD Optimize** | `/md-optimize` | Optimize CLAUDE.md and project `.md` files for token efficiency. |
 | **MD Generate** | `/md-generate` | Analyze project and generate/enhance CLAUDE.md for effective Claude Code development. |
 | **Ship** | `/ship` | Q&A release pipeline: version bump, CHANGELOG (Conventional Commits), build/test verify, git ops (commit/tag/`merge_to_base`/push), GitHub release — HARD-GATE before every irreversible action. Auto-detects environment, skips unavailable stages. Stage 6.5 (`merge_to_base`, v8.4+) merges release branch into base branch BEFORE tag push so the tag is reachable from the base branch. |
+
+### Skill Naming & Built-in Command Relationship
+
+Three skills were renamed into the plugin namespace to remove collisions with Claude Code built-ins, **keeping the old names as deprecation aliases** (no hard break — invoking an old name prints a localized notice and redirects):
+
+| New (canonical) | Old (alias, deprecated) | Why renamed |
+|-----------------|-------------------------|-------------|
+| `/deep-review` | `/code-review` | Literal collision with the built-in `/code-review` (2.1.147+, `--comment`/`--fix`). |
+| `/team-memory` | `/memory` | Trigger ambiguity with built-in personal auto-memory / the `#` shortcut / CLAUDE.md. |
+| `/harness` | `/workflow` | Conceptual collision with the native Workflow engine (`/ultracode`, formerly `/workflow`, renamed in 2.1.160). |
+
+Old names are scheduled for removal no earlier than the next MAJOR release.
+
+**Relationship to the native Workflow engine (`/ultracode`):** agent-harness does **not** compete with the engine — at opt-in depth (an ultracode session, or an explicit `--mode`) the multi-agent skills *author and run* native Workflow segment scripts (`${CLAUDE_PLUGIN_ROOT}/workflows/<skill>.<segment>.workflow.js`), layering their opinionated phased methodology, auto-detection, and human-in-the-loop HARD-GATEs on top of the engine's `parallel()` / `phase()` / `runId`-resume primitives. The HARD-GATEs (spec-confirm, verify-fail, auto-fix-apply) always stay in the orchestrator and are never delegated to a background Workflow agent.
 
 ## Install
 
@@ -89,45 +103,47 @@ claude plugin install agent-harness@agent-harness-marketplace
 ## Quick Start
 
 ```
-/workflow fix login timeout bug                    # asks for mode + model config
-/workflow fix login timeout bug --mode single      # fast, token-saving
-/workflow fix login timeout bug --mode standard    # balanced analysis, ~1.5x tokens
-/workflow fix login timeout bug --mode multi       # deep multi-agent analysis, ~2-2.5x tokens
-/workflow fix bug --model-config balanced          # Sonnet executor + Opus advisor (cost-efficient)
+/harness fix login timeout bug                    # default: inline single path (no mode roundtrip); asks model config
+/harness fix login timeout bug --mode single      # fast, token-saving (inline, forced)
+/harness fix login timeout bug --mode standard    # workflow path: 2-specialist fan-out via native Workflow scripts
+/harness fix login timeout bug --mode multi       # workflow path: 3-specialist fan-out, deepest analysis
+/harness fix bug --model-config balanced          # Sonnet executor + Opus advisor (cost-efficient)
 
-/workflow plan "add user auth"                     # phase mode: plan only, end session
-/workflow generate                                 # phase mode: resume from plan, generate only
-/workflow verify                                   # step mode: mechanical verification only
-/workflow evaluate                                 # step mode: evaluation only
+/harness plan "add user auth"                     # phase mode: plan only, end session
+/harness generate                                 # phase mode: resume from plan, generate only
+/harness verify                                   # step mode: mechanical verification only
+/harness evaluate                                 # step mode: evaluation only
 
-/workflow draft product requirements spec           # works without git too (non-dev tasks)
+/harness draft product requirements spec           # works without git too (non-dev tasks)
 
 /debug "NullPointerException in UserController"    # hypothesis-driven debugging
-/debug --mode deep --attach error.log              # 2-agent cross-verification
+/debug --mode deep --attach error.log              # workflow path: 2 analysts + adversarial cross-verify
 
 /spec "Add payment retry on failure"               # multi-round Q&A -> structured spec
-/spec --mode deep                                  # 2 analysts (requirements + user scenario)
+/spec --mode deep                                  # workflow path: 4 analysts + Critic cold review
 
 /test-gen src/auth/                                # generate tests for directory
 /test-gen --coverage-gap                           # auto-find low-coverage areas
 /test-gen --regression docs/harness/slug/debug_report.md  # regression tests from debug
 
-/memory save                                       # save team-valuable decisions from session
-/memory show                                       # list all team knowledge records
-/memory clean                                      # remove stale/completed records
-/memory search authentication                      # search across knowledge base
+/team-memory save                                       # save team-valuable decisions from session
+/team-memory show                                       # list all team knowledge records
+/team-memory clean                                      # remove stale/completed records
+/team-memory search authentication                      # search across knowledge base
 
 /codebase-audit                                    # auto-recommends mode based on project size
 /codebase-audit --mode thorough                    # comprehensive multi-agent analysis
 /codebase-audit --scope "src/**" --incremental     # analyze only changes in src/
 
-/code-review #123                                  # review PR, asks for mode
-/code-review feature/auth --mode deep              # review branch diff, deep mode
-/code-review --staged --mode quick                 # review staged changes, quick
+/deep-review #123                                  # review PR (quick inline by default; ultracode -> thorough)
+/deep-review feature/auth --mode deep              # workflow path: 2 specialists + synthesis
+/deep-review --staged --mode quick                 # review staged changes, quick inline
+/deep-review #123 --comment                        # post critical/major findings as inline PR comments (confirmed)
+/deep-review --staged --fix                        # apply suggested fixes behind an explicit gate
 
-/refactor extract auth logic from UserController    # asks for mode
+/refactor extract auth logic from UserController    # single inline by default; ultracode -> comprehensive
 /refactor reduce coupling in src/services/ --mode single
-/refactor restructure data layer --mode comprehensive
+/refactor restructure data layer --mode comprehensive   # workflow path: 3 analysts + cross-critique
 
 /migrate react --from 17 --to 18                   # staged React migration
 /migrate replace moment with dayjs                 # library replacement
@@ -155,14 +171,14 @@ Inspired by Anthropic's [Advisor Strategy](https://claude.com/blog/the-advisor-s
 - **Advisor**: high-level judgment — plan review, safety checks (quality model needed)
 - **Evaluator**: independent verification — always protected (never haiku)
 
-Works with: workflow, refactor, migrate, debug, spec, test-gen, code-review, codebase-audit. Presets are selected via numbered UI (AskUserQuestion) with `Other` for custom role mapping.
+Works with: harness, refactor, migrate, debug, spec, test-gen, deep-review, codebase-audit. Presets are selected via numbered UI (AskUserQuestion) with `Other` for custom role mapping.
 
 ## Interactive UX
 
 All user-facing prompts use **AskUserQuestion** — a numbered selection UI where you pick by number instead of typing keywords. Every prompt includes descriptive options and an automatic `Other` option for free text input.
 
 Key interaction points:
-- **Mode selection**: numbered options with token cost hints and auto-recommendation
+- **Mode selection** (refactor/migrate/debug/spec — `/harness` derives mode via its Mode Gate, no roundtrip): numbered options with token cost hints and auto-recommendation
 - **Confirmation gates**: Proceed / Modify / Stop (replaces freeform text approval)
 - **QA retry**: Fix / Accept as-is
 - **Commit**: 3 options — "Commit code only" (recommended) / "Commit all with artifacts" / "No commit" (git environments only; non-git environments skip commit)
@@ -177,19 +193,19 @@ Falls back to text-based input when AskUserQuestion is unavailable.
 **Thin Orchestrator** architecture — the orchestrator manages state transitions and dispatches sub-agents with minimal context (~8-15K tokens). Sub-agents return 1-line summaries; detailed results are written to files. This achieves **40-60% token savings** compared to fat orchestrator designs while maintaining quality through **3-layer mechanical quality gates**.
 
 ```
-/workflow  -> [Setup] Auto-detect + mode/style selection
-                        -> [Plan] Planner sub-agent
-                           single:   1 agent explores + writes spec.md
-                           standard: 2 specialists propose -> Synthesis
-                           multi:    3 specialists -> Cross-critique -> Synthesis
+/harness  -> [Setup] Auto-detect + Mode Gate (inline vs workflow path) + style
+                        -> [Plan] Planner
+                           single (inline):     1 agent explores + writes spec.md
+                           standard (workflow): harness.plan script — 2 specialists propose -> Synthesis
+                           multi (workflow):    harness.plan script — 3 specialists propose -> Synthesis
                         -> Confirmation Gate: user approves spec
-                        -> [Generate] Generator sub-agent
-                           single:   1 agent implements code
-                           standard: Lead Dev plan -> Combined Advisor -> Implementation
-                           multi:    Lead Dev plan -> 2 Advisors parallel -> Implementation
+                        -> [Generate] Generator
+                           single (inline):     1 agent implements code
+                           standard (workflow): harness.build script — Lead Dev plan -> Combined Advisor -> Implementation
+                           multi (workflow):    harness.build script — Lead Dev plan -> 2 Advisors parallel -> Implementation
                         -> [Verify] Layer 1 Mechanical (build/test/lint/type-check/TODO scan)
                            FAIL -> auto-retry Generator (max 3x)
-                        -> [Evaluate] Layer 2 Structural + Layer 3 LLM Judgment
+                        -> [Evaluate] Layer 2 Structural + Layer 3 LLM Judgment (workflow: harness.eval script runs Verify+Evaluate in one segment)
                            L2 FAIL -> auto-retry (max 2x)
                            L3 FAIL -> user Fix/Accept (max N rounds)
                         -> PASS -> Cleanup & Commit
@@ -316,15 +332,15 @@ Higher modes use more tokens per run but have higher first-pass success rates, o
 
 | Style | Usage | Behavior |
 |-------|-------|----------|
-| **auto** (default) | `/workflow "task"` | Full pipeline, user gates at spec approval and FAIL only |
-| **phase** | `/workflow plan "task"` then `/workflow generate` | Each phase ends session; resume in next session for max token savings |
-| **step** | `/workflow verify` or `/workflow evaluate` | Execute single step only |
+| **auto** (default) | `/harness "task"` | Full pipeline, user gates at spec approval and FAIL only |
+| **phase** | `/harness plan "task"` then `/harness generate` | Each phase ends session; resume in next session for max token savings |
+| **step** | `/harness verify` or `/harness evaluate` | Execute single step only |
 
 ### Options
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| mode | (ask user) | `single` for fast/token-saving, `standard` for balanced analysis, `multi` for deep multi-agent analysis |
+| mode | Mode Gate (no roundtrip) | `single` (inline, default without opt-in), `standard` / `multi` (workflow path via native Workflow segment scripts). Opt-in = ultracode session or explicit `--mode`; `has_git == false` or missing Workflow tool forces inline single. |
 | model-config | (ask user) | `default` / `all-opus` / `balanced` / `economy` — see Model Configuration section |
 | scope | auto-detected | Restrict file modifications to a pattern |
 | max rounds | 3 | Maximum Generator/Evaluator retry cycles |
@@ -334,8 +350,8 @@ Higher modes use more tokens per run but have higher first-pass success rates, o
 | `--verifier-model <model>` | `haiku` | Override Layer 1 Verifier model. Allowed: `haiku`, `sonnet`, `opus`. Cost warning shown for sonnet/opus. |
 | `--output-dir <path>` | `docs/harness` | Override output directory base for spec, changes, verify, and QA reports. Relative path from repo root. Disallows: absolute paths, `..`, reserved names (`memory`, `spec`, `planner`, `generator`). |
 
-Example: `/workflow fix auth bug --mode single --model-config balanced --scope "src/auth/**"`
-Example: `/workflow add caching --output-dir build/harness --verifier-model sonnet`
+Example: `/harness fix auth bug --mode single --model-config balanced --scope "src/auth/**"`
+Example: `/harness add caching --output-dir build/harness --verifier-model sonnet`
 
 ### Git-Free Mode
 
@@ -403,31 +419,35 @@ If no matching skill is found, the harness proceeds without it. No specific plug
 Safe, behavior-preserving code structure improvement. Separates impact analysis, atomic execution with safety checks, and isolated verification into distinct phases. "Same behavior, better structure."
 
 ```
-/refactor  -> [Setup] Auto-detect + git safety + baseline tests + mode selection
+/refactor  -> [Setup] Auto-detect + git safety + baseline tests + Mode Gate (derived, no roundtrip)
                         -> [Phase 1] Impact Analysis
-                           single:        1 agent analyzes + writes refactor_plan.md
-                           multi:         2 specialists analyze independently
-                                          -> Synthesis: merge into refactor_plan.md
-                           comprehensive: 3 specialists analyze independently
-                                          -> Cross-verification: each reviews others
-                                          -> Synthesis: merge into refactor_plan.md
-                        -> Confirmation Gate: user approves plan
-                        -> [Phase 2] Execution (atomic steps)
-                           single:              1 agent applies changes step-by-step
+                           single (inline):  1 agent analyzes + writes refactor_plan.md
+                           multi/comprehensive (workflow path):
+                                          refactor.plan.workflow.js — 2-3 analysts in parallel
+                                          -> cross-critique (comprehensive only)
+                                          -> synthesis -> schema-validated RefactorPlan
+                                          -> orchestrator renders refactor_plan.md
+                        -> Confirmation Gate: user approves plan (orchestrator)
+                        -> [Phase 2] Execution (atomic steps — ALWAYS orchestrator-run)
+                           single:              applies changes step-by-step
                            multi/comprehensive:  Safety Advisor reviews each step
                                                  -> Execute + test after each
                            On test failure: STOP immediately (no auto-fix)
-                        -> [Phase 3] Verification (isolated subagent)
+                        -> [Phase 3] Verification (isolated evaluator)
+                           inline: evaluator sub-agent + qa_report verdict line
+                           workflow: refactor.eval.workflow.js -> VerifyVerdict object
                            Compare tests with baseline -> PASS/FAIL
 ```
 
 ### Modes
 
-| Mode | Best for | Analysis | Execution | Token cost |
-|------|----------|----------|-----------|------------|
-| **single** | File/function level (< 3 files) | 1 agent | 1 agent, step-by-step | 1x |
-| **multi** | Module level (3-10 files) | 2 analysts + synthesis | Lead Dev + Safety Advisor | ~1.7x |
-| **comprehensive** | Architecture level (10+ files) | 3 analysts + cross-verify + synthesis | Lead Dev + Safety Advisor | ~2.5x |
+| Mode | Path | Best for | Analysis | Execution | Token cost |
+|------|------|----------|----------|-----------|------------|
+| **single** | inline | File/function level (< 3 files) | 1 agent | 1 agent, step-by-step | 1x |
+| **multi** | workflow | Module level (3-10 files) | 2 analysts + synthesis | orchestrator + Safety Advisor | ~1.7x |
+| **comprehensive** | workflow | Architecture level (10+ files) | 3 analysts + cross-critique + synthesis | orchestrator + Safety Advisor | ~2.5x |
+
+With no `--mode`: ultracode sessions resolve **comprehensive**; non-opted sessions resolve **single** (the old mode-selection roundtrip is removed — a scope advisory is printed, and the Plan Confirmation gate keeps its "Switch to single" exit). Multi/comprehensive require the native Workflow engine + git; otherwise the session falls back to single with a notice.
 
 ### Core Principles
 
@@ -480,7 +500,7 @@ Runs as an isolated sub-agent with the same bias-reduction techniques as workflo
 
 | Finding | Suggestion |
 |---------|-----------|
-| User wants new features | `/workflow` |
+| User wants new features | `/harness` |
 | Version/dependency issues | `/migrate` |
 | Needs codebase understanding first | `/codebase-audit` |
 
@@ -516,12 +536,12 @@ docs/harness/<slug>/
 Executes framework/library version upgrades, language transitions, and dependency replacements using a staged approach — one breaking change at a time with build/test verification at every step.
 
 ```
-/migrate <target>  -> [Setup] Auto-detect versions + mode selection
+/migrate <target>  -> [Setup] Auto-detect versions + Mode Gate (derived; opt-in)
                        -> [Phase 1] Analysis
-                          single: 1 agent researches guide + scans codebase
-                          multi:  External Research Analyst (WebSearch)
-                                  + Codebase Impact Analyst (parallel)
-                                  -> Synthesis: merge into migration_plan.md
+                          single (inline): 1 agent researches guide + scans codebase
+                          multi (Workflow): External Research Analyst (WebSearch)
+                                  + Codebase Impact Analyst (parallel, anchor-free)
+                                  -> Synthesis -> MigrationPlan (orchestrator writes migration_plan.md)
                        -> Confirmation Gate: user approves plan
                        -> [Phase 2] Staged Execution
                           Per breaking change:
@@ -628,7 +648,7 @@ If a session is interrupted, the harness detects the existing `.harness/state.js
 Hypothesis-driven debugger with mandatory executable verification actions. Classifies error types, attempts reproduction, generates falsifiable hypotheses, and verifies them through code search, git history, and test execution.
 
 ```
-/debug  -> [Setup] Error info collection + error type classification + mode selection
+/debug  -> [Setup] Error info collection + error type classification + mode gate (derived, no roundtrip)
                     -> [Phase 0.5] Error Type Classification
                        build/compile: fast path -> simplified HARD-GATE -> Fix
                        runtime/logic: -> Phase 0.7
@@ -636,11 +656,12 @@ Hypothesis-driven debugger with mandatory executable verification actions. Class
                        success: record conditions, proceed
                        failure: switch to log/environment analysis
                     -> [Phase 1] Root Cause Analysis (Hypothesis Loop)
-                       quick: orchestrator generates 3 hypotheses
+                       quick (inline): orchestrator generates 3 hypotheses
                               -> falsification (executable actions only)
                               -> loop until High confidence or max 3 rounds
-                       deep:  Error Analyst + Code Archaeologist (parallel)
-                              -> Cross Verification (synthesize)
+                       deep (workflow): debug.analyze script — Error Analyst + Code
+                              Archaeologist (parallel) -> ADVERSARIAL cross-verify
+                              -> schema-validated RootCause return
                     -> HARD-GATE: Fix it / Record only / Stop
                     -> [Phase 2] Fix (optional, simple fixes only)
                     -> [Phase 3] Prevention (optional, pattern scan + smart routing)
@@ -648,17 +669,17 @@ Hypothesis-driven debugger with mandatory executable verification actions. Class
 
 ### Core: Falsification Rules
 
-Every hypothesis must be tested with **executable verification actions** -- pure reasoning-only falsification is prohibited:
+Every hypothesis must be tested with **executable verification actions** -- pure reasoning-only falsification is prohibited (canonical source: `templates/_shared/falsification_rules.md`):
 
-1. **Physical separation**: Write hypotheses to `.harness/debug/hypotheses.md` before verification
+1. **Record first**: hypotheses land in `.harness/debug/hypotheses.md` (inline) or the `hypotheses[]` schema field (workflow) before verification
 2. **Falsification question**: "If this hypothesis is WRONG, what evidence should exist in the code?"
-3. **Executable actions required** (at least 1 per hypothesis):
+3. **Executable actions required** (at least 1 per hypothesis; schema-enforced `minItems: 1` on the workflow path):
    - Code search (Grep/Glob) -- check for specific patterns
    - `git blame`/`git log` -- check change history
    - Test execution -- verify expected behavior
    - File read -- check configs, env vars
 4. **Confidence adjusted only from evidence**, not reasoning
-5. **Refuted hypotheses marked `[REFUTED]`** with evidence in hypotheses.md
+5. **Refuted hypotheses marked `[REFUTED]`** with the evidence that refuted them
 
 ### Error Type Fast Path
 
@@ -670,18 +691,18 @@ Every hypothesis must be tested with **executable verification actions** -- pure
 
 ### Modes
 
-| Mode | Agents | Process | Token cost |
-|------|--------|---------|------------|
-| **quick** | Orchestrator only | Direct hypothesis loop | ~1x |
-| **deep** | Error Analyst + Code Archaeologist + Cross Verifier | Independent parallel analysis -> cross-verification | ~1.7x |
+| Mode | Path | Agents | Process | Token cost |
+|------|------|--------|---------|------------|
+| **quick** | inline | Orchestrator only | Direct hypothesis loop | ~1x |
+| **deep** | workflow (opt-in: ultracode or `--mode deep`; requires git + Workflow tool) | Error Analyst + Code Archaeologist + Cross Verifier | Independent parallel analysis -> adversarial cross-verify (refute the survivor) | ~1.7x |
 
 ### Smart Routing (after completion)
 
 | Signal | Suggested next step |
 |--------|-------------------|
-| Complex fix needed | `/workflow "Fix based on docs/harness/<slug>/root_cause.md"` |
+| Complex fix needed | `/harness "Fix based on docs/harness/<slug>/root_cause.md"` |
 | Regression test needed | `/test-gen --regression docs/harness/<slug>/debug_report.md` |
-| Pattern to record | `/memory save` |
+| Pattern to record | `/team-memory save` |
 
 ### Output
 
@@ -696,31 +717,33 @@ docs/harness/<slug>/
 
 ## spec
 
-Transforms vague or incomplete requirements into structured, actionable specifications through **multi-round Q&A discovery**. Output is directly compatible with `/workflow` input via section mapping.
+Transforms vague or incomplete requirements into structured, actionable specifications through **multi-round Q&A discovery**. Output is directly compatible with `/harness` input via section mapping.
 
 ```
-/spec  -> [Setup] mode selection (quick / deep)
+/spec  -> [Setup] mode gate (derived, no roundtrip: quick=inline / deep=workflow)
                   -> [Phase 1] Requirements Discovery (Multi-round Q&A)
                      Round 1: parse vague requirements -> generate up to 5 questions
                      Round 2-3: follow-up questions from new ambiguities (conditional)
                      Max 3 rounds. "Don't know" -> [unconfirmed]
                   -> [Phase 2] Spec Generation
-                     quick: orchestrator writes spec directly
-                     deep:  Requirements Analyst + User Scenario Analyst (parallel)
-                            -> Synthesis
+                     quick (inline): orchestrator writes spec directly
+                     deep (workflow): spec.plan script — 4 analysts (requirements /
+                            user-scenario / risk / tech-constraint, parallel) -> Synthesis
+                            -> spec.eval script — Critic cold review -> Critic Gate
+                            (Auto-revise / Modify / Approve; max 1 re-synthesis round)
                   -> HARD-GATE: Approve / Modify (re-generate) / Stop
-                  -> [Phase 3] Handoff: suggest /workflow with spec path
+                  -> [Phase 3] Handoff: suggest /harness with spec path
 ```
 
 ### Core: Multi-round Q&A
 
-The key differentiator from `/workflow`'s Planner phase:
+The key differentiator from `/harness`'s Planner phase:
 
-| Feature | /workflow Planner | /spec |
+| Feature | /harness Planner | /spec |
 |---------|------------------|-------|
 | Input | Clear requirements | Vague/incomplete requirements |
 | Q&A | None | **Up to 3 rounds** with follow-up questions |
-| Approach section | Included (implementation-focused) | Not included (implementation is /workflow's job) |
+| Approach section | Included (implementation-focused) | Not included (implementation is /harness's job) |
 | Acceptance criteria | Brief checklist | **Given/When/Then format** |
 | Out of Scope | Brief in Scope section | **Dedicated section** |
 | Refinement | One-shot | **Modify -> regenerate loop** |
@@ -734,14 +757,14 @@ Goal -> Background & Decisions -> Scope -> Out of Scope ->
 Edge Cases -> Acceptance Criteria (Given/When/Then) -> Risks
 ```
 
-Maps directly to `/workflow` input: Goal->Goal, Background->Background, Scope->Scope, Acceptance Criteria->Completion Criteria, Risks->Risks, Edge Cases->Testing Strategy.
+Maps directly to `/harness` input: Goal->Goal, Background->Background, Scope->Scope, Acceptance Criteria->Completion Criteria, Risks->Risks, Edge Cases->Testing Strategy.
 
 ### Modes
 
-| Mode | Agents | Token cost |
-|------|--------|------------|
-| **quick** | Orchestrator only | ~0.5x |
-| **deep** | Requirements Analyst + User Scenario Analyst + Synthesis | ~1.3x |
+| Mode | Path | Agents | Token cost |
+|------|------|--------|------------|
+| **quick** | inline | Orchestrator only | ~0.5x |
+| **deep** | workflow (opt-in: ultracode or `--mode deep`; requires git + Workflow tool) | Requirements + User Scenario + Risk Auditor + Tech Constraint analysts -> Synthesis -> Critic | ~1.9x (estimated, TBD per smoke test) |
 
 ---
 
@@ -750,20 +773,19 @@ Maps directly to `/workflow` input: Goal->Goal, Background->Background, Scope->S
 Automated test generator that writes real test code, executes it, and validates meaningfulness through **simplified mutation testing**. Supports framework auto-detection, dependency-aware mocking, and regression test generation from debug reports.
 
 ```
-/test-gen  -> [Setup] Framework detection + model config
+/test-gen  -> [Setup] Framework detection + Mode Gate (derived; opt-in) + model config
                       -> [Phase 1] Analysis
-                         Coverage scan (tool or static fallback)
-                         + dependency analysis + mocking strategy
-                         + edge case/boundary value enumeration
+                         single (inline): coverage scan + dependency analysis + mocking + edge cases
+                         multi (Workflow): coverage analysts over file buckets (parallel) -> AnalysisResult
                       -> HARD-GATE: confirm scope + mocking strategy
-                      -> [Phase 2] Generation
-                         Unit tests (happy path + edge cases)
-                         + integration tests (if needed)
-                         + regression tests (if --regression)
+                      -> [Phase 2] Generation (orchestrator-inline on both paths)
+                         Unit tests (happy path + edge cases) + integration + regression (if --regression)
                       -> [Phase 3] Verification
                          Step 1: Execute tests (up to 2 fix retries, test code only)
-                         Step 2: Mutation testing (condition inversion, return change)
-                                 -> trivial tests flagged + strengthen attempt
+                         Step 2: Mutation testing
+                                 single (inline): single-mutation heuristic + strengthen attempt
+                                 multi (Workflow): propose-only skeptics -> ORCHESTRATOR-INLINE
+                                   mutate/run/revert + clean guard -> MutationVerdict (no worktree)
 ```
 
 ### Framework Auto-Detection
@@ -813,20 +835,22 @@ After tests pass, each test is verified for meaningfulness:
 
 ---
 
-## memory
+## team-memory
+
+> Formerly `/memory`. The `/memory` alias still resolves (deprecated → redirects here).
 
 Team knowledge base manager. Saves, searches, and maintains **git-committed, team-shared** records of decisions, patterns, bugs, and conventions. Completely separate from Claude Code's built-in personal auto-memory.
 
 ```
-/memory save     -> analyze session -> extract team-valuable items -> per-item HARD-GATE -> save
-/memory show     -> scan docs/harness/memory/ -> categorized list
-/memory clean    -> identify stale records -> backup -> per-item HARD-GATE -> delete
-/memory search   -> grep keyword across all records
+/team-memory save     -> analyze session -> extract team-valuable items -> per-item HARD-GATE -> save
+/team-memory show     -> scan docs/harness/memory/ -> categorized list
+/team-memory clean    -> identify stale records -> backup -> per-item HARD-GATE -> delete
+/team-memory search   -> grep keyword across all records
 ```
 
 ### How it differs from built-in auto-memory
 
-| | Built-in auto-memory | /memory |
+| | Built-in auto-memory | /team-memory |
 |-|---------------------|---------|
 | **Location** | `~/.claude/projects/` | `docs/harness/memory/` |
 | **Scope** | Personal, per-user | **Team-shared, git-committed** |
@@ -879,7 +903,7 @@ A standalone utility skill that systematically analyzes project structure, depen
 | **deep** | 2 parallel + synthesis | Mid-size projects, general analysis | ~1.5x |
 | **thorough** | 3 parallel + cross-verification + synthesis | Large/legacy projects, team onboarding | ~2.5x |
 
-Mode is auto-recommended based on file count (< 30: quick, 30-200: deep, 200+: thorough) but can be overridden with `--mode`.
+Mode follows the **Mode Gate** — auto-recommended by file count (< 30: quick, 30-200: deep, 200+: thorough). **deep/thorough run on the native Workflow path** (opt-in via `--mode` or an ultracode session; the analysis segment returns a structured `AuditResult` and the orchestrator writes the report); **quick is inline**. A non-opted interactive session may still pick a deeper mode at the boundary prompt.
 
 ### Options
 
@@ -909,77 +933,64 @@ After analysis, suggests relevant next steps based on findings:
 
 ---
 
-## code-review
+## deep-review
 
-A standalone review skill that performs systematic, bias-free code reviews on PRs, branches, commits, or file diffs.
+A standalone review skill that performs systematic, bias-free code reviews on PRs, branches, commits, or file diffs. *(formerly `/code-review` — renamed to end the literal collision with Claude Code's built-in `/code-review`; the old name remains as a deprecation alias that forwards here.)*
 
 ```
-/code-review #123                    # review a PR
-/code-review feature/auth            # review branch diff vs main
-/code-review abc1234..def5678        # review commit range
-/code-review --staged                # review staged changes
-/code-review #123 --mode thorough    # force thorough mode
+/deep-review #123                    # review a PR (quick inline; ultracode -> thorough)
+/deep-review feature/auth            # review branch diff vs main
+/deep-review abc1234..def5678        # review commit range
+/deep-review --staged                # review staged changes
+/deep-review #123 --mode thorough    # force thorough mode (workflow path)
+/deep-review #123 --comment          # post critical/major findings as inline PR comments (confirmed first)
+/deep-review --staged --fix          # apply suggested fixes behind an explicit gate
 ```
 
 **What it does:**
-- **3-tier depth control**: quick (1 agent, 5-perspective checklist), deep (2 specialist sub-agents + synthesis), thorough (3 specialists + cross-verification + synthesis)
-- **Bias reduction**: context isolation, anchor-free input (no PR descriptions/commit messages), defect-assumption framing, author neutralization
-- **Smart scope routing**: recommends review depth based on diff size (< 100 lines -> quick, 100-500 -> deep, 500+ -> thorough)
-- **Structured findings**: each finding has severity (Critical/Major/Minor/Suggestion), category, file:line, description, and concrete fix suggestion
-- **Smart routing**: suggests next actions based on findings (e.g., `/workflow` for critical fixes)
+- **3-tier depth control**: quick (inline, 5-perspective checklist), deep (2 specialist reviewers + synthesis), thorough (3 specialists + adversarial cross-verification + synthesis). Deep/thorough run as a plugin-shipped native Workflow segment (`deep-review.review.workflow.js`) — opt-in via ultracode or `--mode`; otherwise quick inline.
+- **Schema-validated returns**: reviewers, cross-verifiers, and synthesis return `FindingSet`/`CrossVerifyReport` objects — no intermediate review files, no table re-parsing. The orchestrator writes `review_report.md` from the returned object.
+- **Bias reduction**: context isolation, anchor-free input (no PR descriptions/commit messages), defect-assumption framing, author neutralization, input-trust fencing (the diff AND reviewer-authored digests are declared DATA).
+- **Scope advisory**: prints the recommended depth based on diff size (< 100 lines -> quick, 100-500 -> deep, 500+ -> thorough) — pass `--mode` to take it.
+- **Built-in parity, gated**: `--comment` posts inline PR comments (after an explicit confirm); `--fix` applies critical/major suggestions to the working tree only behind a hard gate with per-path validation — never automatically, never committed.
+- **Smart routing**: suggests next actions based on findings (e.g., `/harness` for critical fixes)
 
 ### Modes
 
-| Mode | Sub-agents | Process | Token cost |
-|------|-----------|---------|------------|
-| **quick** | 0 (inline) | 5-perspective checklist | ~1x |
-| **deep** | 2 | Security & Correctness + Architecture & Maintainability -> synthesis | ~1.5x |
-| **thorough** | 3 + 3 | Security & Correctness + Architecture & Design + DX & Maintainability -> cross-verification -> synthesis | ~2.5x |
+| Mode | Path | Sub-agents | Process | Token cost |
+|------|------|-----------|---------|------------|
+| **quick** | inline | 0 | 5-perspective checklist | ~1x |
+| **deep** | workflow | 2 + 1 | Security & Correctness + Architecture & Maintainability -> synthesis | ~1.5x |
+| **thorough** | workflow | 3 + 3 + 1 | Security & Correctness + Architecture & Design + DX & Maintainability -> adversarial cross-verification -> synthesis | ~2.5x |
 
-### Deep Mode
-
-Two specialist reviewers analyze the diff independently and in parallel:
-
-| Reviewer | Focus |
-|----------|-------|
-| **Security & Correctness** | Vulnerabilities, logic errors, input validation, error handling |
-| **Architecture & Maintainability** | Design patterns, code organization, testing, performance, naming |
-
-The main agent synthesizes both reviews into a unified report, deduplicating findings and resolving severity disagreements.
-
-### Thorough Mode
-
-Three specialist reviewers analyze independently and in parallel, then cross-verify each other's findings:
-
-| Reviewer | Focus |
-|----------|-------|
-| **Security & Correctness** | Vulnerabilities, logic errors, input validation, error handling |
-| **Architecture & Design** | System structure, abstractions, coupling, API design, scalability |
-| **DX & Maintainability** | Readability, naming, testing, performance, conventions |
-
-After initial review, three cross-verification sub-agents validate each other's findings against the actual diff -- confirming real issues, flagging false positives, and catching missed problems. The main agent then synthesizes all 6 documents.
+With no `--mode`: ultracode sessions resolve **thorough**; non-opted sessions resolve **quick** (the old mode-selection roundtrip is removed — the confirmation gate before fan-out remains).
 
 ### Bias Reduction Techniques
 
 | Technique | Applies to | Purpose |
 |-----------|-----------|---------|
-| Context isolation (separate sub-agents) | deep, thorough | Each reviewer forms independent judgment |
+| Context isolation (parallel segment agents) | deep, thorough | Each reviewer forms independent judgment |
 | Anchor-free input (no PR description/commit messages) | all modes | Prevents framing bias from author's narrative |
 | Defect-assumption framing | all modes | "Assume defects, find them" vs. "confirm correctness" |
 | Author neutralization | all modes | No author identity -> merit-based review |
-| Cross-verification | thorough | Catches false positives and missed issues |
+| Adversarial cross-verification | thorough | Catches false positives and missed issues |
+| Input-trust fencing (diff + reviewer digests as DATA) | all modes | Blocks prompt-injection via code comments and laundered finding text |
 
 ### Output
 
 Review report saved to `docs/harness/<slug>/review_report.md` with:
 - **Assessment**: APPROVE / REQUEST_CHANGES / COMMENT (deterministic from findings)
 - **Findings table**: severity, category, file:line, description, suggestion
-- **Statistics**: finding counts by severity
+- **Statistics**: finding counts by severity; **Files Reviewed** incl. no-issue files
 - **Smart routing**: suggests next actions based on finding patterns
 
 ### Language Support
 
 Communicates in the user's language. Report content is in the detected language. Assessment line (`## Assessment: APPROVE/REQUEST_CHANGES/COMMENT`) stays in English for programmatic parsing.
+
+### Deprecation
+
+`/code-review` (agent-harness) is now a ~30-line alias stub: it prints a deprecation notice and forwards to `/deep-review` with the same arguments after a confirmation.
 
 ---
 
@@ -1045,7 +1056,7 @@ A Q&A-driven release pipeline orchestrator. Guides version bump, changelog gener
 | 2 | **version_bump** | Pass 1 detects version refs across package manifests, `.claude-plugin/{plugin,marketplace}.json`, and source constants; Pass 2 dispatches by file kind (JSON-aware path for plugin manifests preserves CRLF/LF, BOM, and trailing-newline; string-replace path for standard manifests) | Pass 1 confirm |
 | 3 | **changelog** | Parses git log → Conventional Commits categorization → drafts entry → prepends to `CHANGELOG.md` | Edit gate before write |
 | 4 | **build_verify** | Runs auto-detected build/test commands; writes `docs/harness/ship-<slug>/changes.md` | None (read-only verify) |
-| 5 | **code_review** | Optional summary review of staged changes (delegates to `/code-review`) | (delegates) |
+| 5 | **code_review** | Optional release-readiness diff summary of staged changes (paths exist, no conflict markers, no secrets, version-string consistency). Self-contained sub-agent summary — NOT a delegation; for a line-level review run the built-in `/code-review` or the plugin's `/deep-review` separately | WARN/FAIL → Continue / Fix-retry / Stop |
 | 6 | **git_ops** | Commits via `-F` (no shell injection), creates annotated tag, splits branch push (6c-i), runs Stage 6.5 (merge_to_base), then tag push (6c-ii) | Commit + branch-push gates |
 | 6.5 | **merge_to_base** (v8.4+) | Merges release branch → base branch BEFORE tag push so the tag is reachable from base branch. Two execution paths: Path A (protected base → `gh pr create` fallback, 3-way gate) / Path B (standard merge — FF / Non-FF resolution / rebase-then-ff with force-push). Substep-level recovery via `merge_base_pending` / `merge_base_done` / `merge_base_pushed`. Persistent `push_retry_count` (state.json) caps retry loops across Stop/Resume cycles. | Pre-merge HARD-GATE + post-merge / pre-push HARD-GATE + 5-way push-rejection gate (Retry / Manual / Create PR / Skip / Stop) |
 | 7 | **gh_release** | Extracts `CHANGELOG.md`'s `## [{version}]` section → `gh release create --notes-file` | Release-create gate |
@@ -1104,11 +1115,12 @@ Communicates in the user's language for progress, questions, confirmations, erro
 
 See [ROADMAP.md](ROADMAP.md) for the full roadmap with rationale.
 
+- **v8.5** (Shipped): native Workflow reframe — 8 high-overlap skills (`/harness`, `/spec`, `/debug`, `/deep-review`, `/codebase-audit`, `/migrate`, `/refactor`, `/test-gen`) author & run shipped segment scripts (`workflows/*.workflow.js`, schema-validated `agent()` fan-out) at opt-in depth; skill renames `/workflow`→`/harness`, `/code-review`→`/deep-review`, `/memory`→`/team-memory` (deprecation aliases preserved); derived **Mode Gate** (`templates/_shared/mode_gate.md`) replaces the mode-selection roundtrip; `/deep-review --comment`/`--fix` parity; `disallowed-tools` frontmatter enforced on every skill
 - **v8.4** (Shipped): `/spec` deep-mode 4-analyst pipeline (Requirements + UserScenario + RiskAuditor + TechConstraint) with cold Critic stage and 3-way revise gate; `/spec` Convention Scan (Step 1.5) with `--reference` flag; `/spec` Phase 3 persists `qa_notes.md`/`critic_findings.md`/`conventions.md` with `/workflow` Step 1.5/Step 2 reuse; `/ship` Stage 6.5 (`merge_to_base`) closes develop→main lag — Path A (protected base, PR fallback) vs Path B (local merge with FF / Non-FF / rebase-then-ff + force-with-lease), substep-level recovery, persistent retry-count cap, branch-protected rollback documentation
 - **v8.3** (Shipped): `/ship` version_bump auto-detection for `.claude-plugin/plugin.json` (`$.version`) and `.claude-plugin/marketplace.json` (`$.metadata.version` + `$.plugins[*].version`) — JSON-aware Pass 2 preserves CRLF/LF, BOM, trailing-newline, and avoids the naive-string-replace regression on coincidentally-equal version strings in other fields
 - **v8.2** (Shipped): `/ship` Safety Guard parity with `/workflow` (unconditional symlink-escape check, display-before-delete, symlink-aware deletion), strict 254-char tag-name regex hard cap
 - **v8.1** (Shipped): Path Validator single source, Auto-fix State Transition Table (invariants I1–I4), `--verifier-model` flexibility, `--output-dir` flag, Auto-fix proposal for Layer 1 failures (both `/workflow` and `/refactor`), `.github/` contribution templates
-- **v8.5+** (Planned): Custom persona override (`templates/user-override/`), external CLI wrapper, demo GIF
+- **v8.6+** (Planned): Custom persona override (`templates/user-override/`), template compression, external CLI wrapper, demo GIF
 
 ---
 

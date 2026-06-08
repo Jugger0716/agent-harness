@@ -1,5 +1,9 @@
 # Mechanical Verification — Layer 1
 
+<!-- DUAL-USE TEMPLATE: dispatched directly on the INLINE path (this file, 1-line Output
+     Contract below) AND via an author-time embedded copy with a schema-return Output in
+     workflows/harness.eval.workflow.js (WORKFLOW path) — keep bodies in sync on every edit. -->
+
 You are executing Mechanical Verification (Layer 1) for a workflow. Your job is to run commands and report results. Do NOT simulate, predict, or skip any command — execute each one via the Bash tool and capture real output.
 
 ## Commands to Execute (in order)

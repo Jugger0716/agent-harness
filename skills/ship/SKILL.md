@@ -1,6 +1,7 @@
 ---
 name: ship
-description: Q&A-based universal release pipeline orchestrator. Guides version bump (2-pass), changelog generation (Conventional Commits), build/test verification, code review summary, git operations (commit/tag/push), and GitHub release — with HARD-GATEs before every irreversible action. Auto-detects environment, skips unavailable stages. Session recovery with substep tracking.
+disallowed-tools: NotebookEdit
+description: Q&A-based universal release pipeline orchestrator. Guides version bump (2-pass), changelog generation (Conventional Commits), build/test verification, code review summary, git operations (commit/tag/push), and GitHub release — with HARD-GATEs before every irreversible action. Auto-detects environment, skips unavailable stages. Session recovery with substep tracking. Distinct from built-in /code-review — /ship orchestrates the whole release; its Stage 5 is a release-readiness diff summary, not a line-by-line review.
 ---
 
 # Agent Harness Ship — Release Pipeline Orchestrator
@@ -32,6 +33,8 @@ Detect the user's language from their **most recent message**. Store as `user_la
 **Re-detection:** On every user message, check if language changed. If so, update `user_lang`.
 
 ## Standard Status Format
+
+Status block shape + label rules: see `templates/_shared/status_format.md`. Ship uses the `[harness:ship]` prefix and its own ship-specific block shown below.
 
 Read `.harness/state.json` and print (in `user_lang`):
 ```
@@ -69,34 +72,7 @@ Store `has_git`, `has_gh`, `has_gh_auth` in state.json.
 
 ## Project Language Detection
 
-Scan working directory:
-
-| File | Language | Build Command | Test Command |
-|------|----------|---------------|--------------|
-| `build.gradle(.kts)` | java | `./gradlew build` | `./gradlew test` |
-| `pom.xml` | java | `mvn compile` | `mvn test` |
-| `pyproject.toml` / `setup.py` | python | (none) | `pytest` |
-| `package.json` | typescript | `npm run build` | `npm test` |
-| `*.csproj` | csharp | `dotnet build` | `dotnet test` |
-| `go.mod` | go | `go build ./...` | `go test ./...` |
-| `Cargo.toml` | rust | `cargo build` | `cargo test` |
-
-If none match → `lang = "unknown"`, commands null.
-
-Lint detection (first match):
-1. `package.json` has `scripts.lint` → `npm run lint`
-2. `.eslintrc*` / `eslint.config.*` → `npx eslint .`
-3. `pyproject.toml` has `[tool.ruff]` → `ruff check .`
-4. `.pylintrc` / `pyproject.toml` has `[tool.pylint]` → `pylint {scope}`
-5. `.golangci.yml` / `.golangci.yaml` → `golangci-lint run`
-6. `Cargo.toml` → `cargo clippy`
-If none → `null`.
-
-Type-check detection (first match):
-1. `tsconfig.json` → `npx tsc --noEmit`
-2. `mypy.ini` / `pyproject.toml` has `[tool.mypy]` → `mypy .`
-3. `pyrightconfig.json` / `pyproject.toml` has `[tool.pyright]` → `pyright`
-If none → `null`.
+Language/test/build/lint/typecheck detection: see `templates/_shared/detection_table.md`.
 
 ## Version Detection
 
@@ -158,7 +134,7 @@ Stage resume map (with substep details):
 
 If `.harness/state.json` does not exist, proceed to Step 1.
 
-**State consistency check (closes m12)**: on resume, before applying the jump-table mapping, verify that `current_stage` and `substep` are mutually consistent. The 6.5-substep group (`merge_base_pending` / `merge_base_done` / `merge_base_pushed`) is valid ONLY when `current_stage == "git_ops"`. If a corrupted or hand-edited state.json presents an inconsistent pairing (e.g., `current_stage == "gh_release"` with `substep == "merge_base_done"`) → halt with a clear error: `state.json is inconsistent: current_stage='{current_stage}' but substep='{substep}'. Inspect .harness/state.json manually, or Restart from Stage 1.` Do NOT auto-recover; the safest path is to surface the inconsistency to the user.
+**State consistency check**: on resume, before applying the jump-table mapping, verify that `current_stage` and `substep` are mutually consistent. The 6.5-substep group (`merge_base_pending` / `merge_base_done` / `merge_base_pushed`) is valid ONLY when `current_stage == "git_ops"`. If a corrupted or hand-edited state.json presents an inconsistent pairing (e.g., `current_stage == "gh_release"` with `substep == "merge_base_done"`) → halt with a clear error: `state.json is inconsistent: current_stage='{current_stage}' but substep='{substep}'. Inspect .harness/state.json manually, or Restart from Stage 1.` Do NOT auto-recover; the safest path is to surface the inconsistency to the user.
 
 ---
 
@@ -189,10 +165,10 @@ If `.harness/state.json` does not exist, proceed to Step 1.
   "substep": null,
   "stage_results": {
     "version_bump_files": [],
-    "merge_to_base": {                  // initialized at Setup; populated by Stage 6.5 (closes m3)
+    "merge_to_base": {                  // initialized at Setup; populated by Stage 6.5
       "pre_merge_sha": null,            // null on Path A (no local merge); 40-char hex on Path B after step 1 capture
       "path_a_pr_url": null,            // populated by Path A on Create PR success or existing-PR reuse
-      "push_retry_count": 0             // persisted retry counter for Stage 6.5 step 7 (closes M4)
+      "push_retry_count": 0             // persisted retry counter for Stage 6.5 step 7
     }
   },
   "docs_path": "docs/harness/ship-<slug>/",  // ship uses "ship-" prefix to namespace artifacts separately from workflow's "docs/harness/<slug>/"
@@ -201,7 +177,7 @@ If `.harness/state.json` does not exist, proceed to Step 1.
 }
 ```
 
-**substep** tracks intra-stage progress for recovery. Valid values (exhaustive enum, grouped by stage — closes s1):
+**substep** tracks intra-stage progress for recovery. Valid values (exhaustive enum, grouped by stage):
 
 `null` — no substep active
 
@@ -474,6 +450,12 @@ Update state.json: `current_stage → "code_review"`.
 
 Print: `[harness:ship] Stage: Code Review Summary`
 
+> **Disambiguation:** This stage is a *release-readiness diff summary* (paths exist, no
+> conflict markers, no secrets, version-string consistency) — NOT the built-in `/code-review`
+> (line-by-line correctness with `--comment`/`--fix`). For a deep line-level review of the
+> release diff, run built-in `/code-review` or the plugin's `/deep-review` separately; this
+> stage stays a fast go/no-go gate.
+
 1. Read `base_branch` from state.json (detected in Step 1 Setup).
 2. Read template: `{CLAUDE_PLUGIN_ROOT}/templates/ship/code_review_summary.md`
 3. Fill variables: `{release_version}`, `{release_branch}` = current branch, `{base_branch}`, `{repo_path}`, `{lang}`, `{output_path}` = `docs/harness/ship-<slug>/code_review.md`.
@@ -597,7 +579,7 @@ Update state.json: `substep → "git_push_pending"`.
 - Check if tag already pushed: `git ls-remote origin refs/tags/{tag_name}` — if non-empty, tag exists on remote → skip tag push.
 - Skip already-completed operations and update substep accordingly.
 
-> **Note on Recovery check vs jump table interaction (closes M1)**: this Recovery check runs at Step 6c entry. The jump table at the top of this file routes `substep == "git_branch_pushed"` to "Stage 6.5 entry" — that mapping is consistent with the bullet above (which also routes to Stage 6.5 entry). The earlier 8.4 draft of this Recovery check routed `git_branch_pushed` directly to tag push, which conflicted with the jump table; that direct-to-tag route has been removed.
+> **Note on Recovery check vs jump table interaction**: this Recovery check runs at Step 6c entry. The jump table at the top of this file routes `substep == "git_branch_pushed"` to "Stage 6.5 entry" — that mapping is consistent with the bullet above (which also routes to Stage 6.5 entry). The earlier 8.4 draft of this Recovery check routed `git_branch_pushed` directly to tag push, which conflicted with the jump table; that direct-to-tag route has been removed.
 
 <HARD-GATE>
 Ask via AskUserQuestion (in `user_lang`):
@@ -630,19 +612,21 @@ On success → update substep → `"git_branch_pushed"`. Proceed to Stage 6.5 en
 
 #### 6.5: Stage — merge_to_base
 
+> Bug-fix audit IDs for this stage (formerly inline) now live in CHANGELOG.md.
+
 > Introduced in v8.4.0 (N2). Closes m14 — header version tag removed to avoid stale `(NEW in 8.4 / N2)` text in future versions; refer to CHANGELOG / ROADMAP for version history.
 
 This sub-stage merges the current release branch into `base_branch` BEFORE tag push, so the tag points to a commit reachable from `base_branch`. Closes the develop→main lag that occurred in 8.1.0/8.2.0/8.3.0 releases.
 
 **Variable conventions (Stage 6.5 scope):**
-- `release_branch` ≡ `state.branch` — the branch ship was invoked on (single source of truth — both names refer to the persisted state). **This is the same value that 6c-i refers to as `{branch}`** (e.g., `git push origin {branch}` at line 598); the rename to `release_branch` inside Stage 6.5 is purely for clarity when the prose discusses both branches simultaneously, not a different variable.
+- `release_branch` ≡ `state.branch` — the branch ship was invoked on (single source of truth — both names refer to the persisted state). **This is the same value that 6c-i refers to as `{branch}`** (e.g., the 6c-i `git push origin {branch}` step); the rename to `release_branch` inside Stage 6.5 is purely for clarity when the prose discusses both branches simultaneously, not a different variable.
 - `base_branch` ≡ `state.base_branch` — auto-detected (or user-supplied) merge target (e.g., `main`).
 - `current_branch` is used ONLY inside the entry guard below (live `git` query result, compared against `state.branch` to detect mid-session branch switches).
 
 **i18n policy (applies to all AskUserQuestion gates in this section):** `header`, `question`, and option `description` strings translate to `{user_lang}` per [Communicate in user's language] policy. Option `label` strings (the canonical action keys quoted below — e.g., `"Proceed"`, `"Skip Stage 6.5"`, `"Retry"`) stay English so downstream substep transitions can match on stable identifiers.
 
 **Skip conditions** (evaluated at entry — both bypass Stage 6.5 entirely and proceed directly to 6c-ii tag push):
-- `state.branch == base_branch` (already on base — nothing to merge). **Comparison is exact-string** (git refs are case-sensitive on Linux/macOS, and even on case-insensitive filesystems the recorded value is the canonical form returned by `git rev-parse --abbrev-ref` at Setup, so `Main` vs `main` would only diverge if the user manually overrode the value with mismatched casing). If you suspect the user typed a divergent-case branch name during Setup's `base_branch` input prompt, an additional defensive check is `git rev-parse refs/heads/{state.branch}` vs `git rev-parse refs/heads/{base_branch}` — equal SHAs imply the same branch tip regardless of name casing (closes s2). The string-equality check below is the primary; the SHA-equality check is optional defensive.
+- `state.branch == base_branch` (already on base — nothing to merge). **Comparison is exact-string** (git refs are case-sensitive on Linux/macOS, and even on case-insensitive filesystems the recorded value is the canonical form returned by `git rev-parse --abbrev-ref` at Setup, so `Main` vs `main` would only diverge if the user manually overrode the value with mismatched casing). If you suspect the user typed a divergent-case branch name during Setup's `base_branch` input prompt, an additional defensive check is `git rev-parse refs/heads/{state.branch}` vs `git rev-parse refs/heads/{base_branch}` — equal SHAs imply the same branch tip regardless of name casing. The string-equality check below is the primary; the SHA-equality check is optional defensive.
 - `base_branch == null` (auto-detect failed at Setup, no user-supplied value)
 
 **On either skip-condition match**: set `substep → "merge_base_pushed"` (so the jump table maps a resumed session consistently to 6c-ii rather than re-entering Stage 6.5), keep `current_stage == "git_ops"` unchanged, and proceed to 6c-ii. This makes the entry-skip path symmetric with Path A and the HARD-GATE Skip path (both of which also land on `merge_base_pushed`).
@@ -657,11 +641,11 @@ git rev-parse --abbrev-ref HEAD
 
 Compare result (`current_branch`) to `state.branch`. On mismatch → halt with error: `Current branch changed mid-session ({state.branch} → {current_branch}). Switch back to {state.branch} and re-invoke /ship, OR Restart from Stage 1.`
 
-**Halt behavior** (closes M10): `state.json` is preserved as-is — `substep` retains its current value (typically `"git_branch_pushed"` since the entry guard runs before any 6.5-internal substep transition; could be `"merge_base_pending"` or `"merge_base_done"` if the session is being resumed mid-6.5). When the user later switches back to `{state.branch}` and re-invokes /ship, the jump table re-routes to Stage 6.5 entry (or to step 2 / step 5 if a 6.5-internal substep is active) and **this entry guard is re-executed**, so the branch-equality check is re-evaluated; if the user is now on the correct branch the guard passes and execution continues. The guard is therefore safe to re-run any number of times.
+**Halt behavior**: `state.json` is preserved as-is — `substep` retains its current value (typically `"git_branch_pushed"` since the entry guard runs before any 6.5-internal substep transition; could be `"merge_base_pending"` or `"merge_base_done"` if the session is being resumed mid-6.5). When the user later switches back to `{state.branch}` and re-invokes /ship, the jump table re-routes to Stage 6.5 entry (or to step 2 / step 5 if a 6.5-internal substep is active) and **this entry guard is re-executed**, so the branch-equality check is re-evaluated; if the user is now on the correct branch the guard passes and execution continues. The guard is therefore safe to re-run any number of times.
 
-**Branch protection pre-check** (CC5):
+**Branch protection pre-check**:
 
-Before running the API call, **re-validate `{base_branch}`** against the strict pattern `^[a-zA-Z0-9/_.-]+$` (the same pattern used for `branch` at line 577). The original `base_branch` value comes from auto-detection (`main`/`master`) or from a free-text user input at Step 1, and the user-input path does not enforce the pattern at the source. Re-validating here closes a URL-injection vector: a value containing `..`, spaces, `?`, `#`, or path separators outside the allowed set could traverse or rewrite the API request URL. On pattern mismatch → halt with error: `Invalid base_branch '{base_branch}' — must match ^[a-zA-Z0-9/_.-]+$. Restart /ship and provide a valid branch name.` (closes m1 / Sec N3)
+Before running the API call, **re-validate `{base_branch}`** against the strict pattern `^[a-zA-Z0-9/_.-]+$` (the same pattern the Stage 6 entry input validation uses for `branch`). The original `base_branch` value comes from auto-detection (`main`/`master`) or from a free-text user input at Step 1, and the user-input path does not enforce the pattern at the source. Re-validating here closes a URL-injection vector: a value containing `..`, spaces, `?`, `#`, or path separators outside the allowed set could traverse or rewrite the API request URL. On pattern mismatch → halt with error: `Invalid base_branch '{base_branch}' — must match ^[a-zA-Z0-9/_.-]+$. Restart /ship and provide a valid branch name.`
 
 ```bash
 gh api repos/:owner/:repo/branches/{base_branch}/protection
@@ -686,14 +670,14 @@ All `unknown` and `unprotected` cases converge on Path B. Path B step 7's push-r
 
 **A. Protected branch path** — direct push known to be rejected; do not attempt local merge:
 
-**A.1. Pre-check existing PR (idempotency guard, closes M2)**: before showing the gate, run:
+**A.1. Pre-check existing PR (idempotency guard)**: before showing the gate, run:
 ```bash
 gh pr list --base {base_branch} --head {release_branch} --state open --json url,number --jq '.[0]'
 ```
-- If output is non-empty (an open PR for this base/head pair already exists from a prior interrupted session) → inform the user `[ship] An open PR for {release_branch} → {base_branch} already exists: <url>. Reusing it.`, set `state.stage_results.merge_to_base.pre_merge_sha = null` (Path A does not capture a SHA — closes M3), set `state.stage_results.merge_to_base.path_a_pr_url = "<url>"`, transition `substep → "merge_base_pushed"`, run `git checkout {release_branch}` to ensure HEAD context for 6c-ii (closes M11; halt on checkout failure with explicit error), and continue to 6c-ii.
+- If output is non-empty (an open PR for this base/head pair already exists from a prior interrupted session) → inform the user `[ship] An open PR for {release_branch} → {base_branch} already exists: <url>. Reusing it.`, set `state.stage_results.merge_to_base.pre_merge_sha = null` (Path A does not capture a SHA), set `state.stage_results.merge_to_base.path_a_pr_url = "<url>"`, transition `substep → "merge_base_pushed"`, run `git checkout {release_branch}` to ensure HEAD context for 6c-ii (halt on checkout failure with explicit error), and continue to 6c-ii.
 - If output is empty → proceed to A.2.
 
-**A.2. Path A entry transition**: set `substep → "merge_base_pending"` BEFORE displaying the gate (closes M2 — without this, an interrupted session resuming at `git_branch_pushed` would re-enter Stage 6.5 from scratch and the `gh pr list` pre-check above is what makes that re-entry safe; setting `merge_base_pending` makes resume jump to step 2 instead, where this very same Path A logic runs again, gh-list-guarded). Also set `state.stage_results.merge_to_base.pre_merge_sha = null` explicitly so downstream consumers (Rollback documentation, future readers of state.json) can distinguish Path A (no local merge → no rollback SHA) from Path B (SHA captured) — closes M3.
+**A.2. Path A entry transition**: set `substep → "merge_base_pending"` BEFORE displaying the gate (without this, an interrupted session resuming at `git_branch_pushed` would re-enter Stage 6.5 from scratch and the `gh pr list` pre-check above is what makes that re-entry safe; setting `merge_base_pending` makes resume jump to step 2 instead, where this very same Path A logic runs again, gh-list-guarded). Also set `state.stage_results.merge_to_base.pre_merge_sha = null` explicitly so downstream consumers (Rollback documentation, future readers of state.json) can distinguish Path A (no local merge → no rollback SHA) from Path B (SHA captured).
 
 **A.3. AskUserQuestion**:
 ```
@@ -705,8 +689,8 @@ options:                      (translate description to user_lang; keep label En
   - "Skip Stage 6.5" / "Skip merge — base_branch will lag this release. Tag still pushes."
   - "Stop" / "Halt for manual intervention"
 ```
-- **Create PR** → execute `gh pr create --base {base_branch} --head {release_branch} --title "Release {release_version}"`. On success: parse the printed PR URL, store `state.stage_results.merge_to_base.path_a_pr_url = "<url>"`, set `substep → "merge_base_pushed"` (treating PR creation as the "push" equivalent — the tag still pushes to release_branch lineage at 6c-ii), execute `git checkout {release_branch}` to guarantee HEAD context for 6c-ii (closes M11; halt on checkout failure), continue to 6c-ii. On failure: if stderr indicates "a pull request for branch ... already exists" (race condition where a PR was created between A.1's check and now) → re-run A.1's `gh pr list` to fetch the URL and proceed via the "existing PR" branch above; otherwise → re-display this gate (the user can choose Skip or Stop to escape).
-- **Skip Stage 6.5** → `substep → "merge_base_pushed"`, run `git checkout {release_branch}` (defensive — Path A has not changed branches but ensures HEAD context for 6c-ii regardless of any prior state; closes M11; halt on failure), warn user that base_branch will lag this release, continue to 6c-ii.
+- **Create PR** → execute `gh pr create --base {base_branch} --head {release_branch} --title "Release {release_version}"`. On success: parse the printed PR URL, store `state.stage_results.merge_to_base.path_a_pr_url = "<url>"`, set `substep → "merge_base_pushed"` (treating PR creation as the "push" equivalent — the tag still pushes to release_branch lineage at 6c-ii), execute `git checkout {release_branch}` to guarantee HEAD context for 6c-ii (halt on checkout failure), continue to 6c-ii. On failure: if stderr indicates "a pull request for branch ... already exists" (race condition where a PR was created between A.1's check and now) → re-run A.1's `gh pr list` to fetch the URL and proceed via the "existing PR" branch above; otherwise → re-display this gate (the user can choose Skip or Stop to escape).
+- **Skip Stage 6.5** → `substep → "merge_base_pushed"`, run `git checkout {release_branch}` (defensive — Path A has not changed branches but ensures HEAD context for 6c-ii regardless of any prior state; halt on failure), warn user that base_branch will lag this release, continue to 6c-ii.
 - **Stop** → halt session (state.json preserved — `substep == "merge_base_pending"` enables resume from A.1's idempotency check).
 
 **B. Standard merge path** (no detected protection or status unknown):
@@ -754,7 +738,7 @@ options:                      (translate description to user_lang; keep label En
      - "Skip Stage 6.5" / "Abort merge, base_branch lags release"
      - "Stop" / "Halt for manual intervention"
    ```
-   - **no-ff merge** → `git merge --no-ff {release_branch} -m "Merge release {release_version}"`. On conflict → execute `git merge --abort` (revert the in-progress merge so the working tree returns to clean state) then `git checkout {release_branch}` (HEAD is currently on `{base_branch}` from step 3 — return to release_branch so subsequent ad-hoc git commands by the user operate on the expected branch; halt on checkout failure with explicit error directing the user to `git checkout {release_branch}` manually) and halt with recovery instructions: "no-ff merge had conflicts. Resolve manually (e.g., merge `{base_branch}` into `{release_branch}` first, fix conflicts on `{release_branch}`, then re-invoke /ship from Stage 6.5; substep == `merge_base_pending` triggers re-execution from step 2 HARD-GATE)." `substep` retains `merge_base_pending` for resume. On success → HEAD remains on `{base_branch}` (from step 3's checkout, with the new no-ff merge commit on top), proceed to step 5 (closes NF3).
+   - **no-ff merge** → `git merge --no-ff {release_branch} -m "Merge release {release_version}"`. On conflict → execute `git merge --abort` (revert the in-progress merge so the working tree returns to clean state) then `git checkout {release_branch}` (HEAD is currently on `{base_branch}` from step 3 — return to release_branch so subsequent ad-hoc git commands by the user operate on the expected branch; halt on checkout failure with explicit error directing the user to `git checkout {release_branch}` manually) and halt with recovery instructions: "no-ff merge had conflicts. Resolve manually (e.g., merge `{base_branch}` into `{release_branch}` first, fix conflicts on `{release_branch}`, then re-invoke /ship from Stage 6.5; substep == `merge_base_pending` triggers re-execution from step 2 HARD-GATE)." `substep` retains `merge_base_pending` for resume. On success → HEAD remains on `{base_branch}` (from step 3's checkout, with the new no-ff merge commit on top), proceed to step 5.
    - **rebase-then-ff** → AskUserQuestion sub-gate. **Note on current branch state**: at the moment this sub-gate is displayed, no git command has yet been executed for the rebase-then-ff path, so HEAD is still on `{base_branch}` (from step 3's checkout). Cancel preserves that state; Yes proceeds to the rebase pipeline below.
      ```
      header: "Confirm Rebase"   (translate to user_lang)
@@ -769,7 +753,7 @@ options:                      (translate description to user_lang; keep label En
      2. `git rebase {base_branch}` — rebase release_branch onto base_branch. On rebase conflict → execute `git rebase --abort` + `git checkout {release_branch}` (to ensure HEAD is on release_branch; `--abort` typically restores it but verify) + halt with recovery instructions: "Rebase aborted. Resolve conflicts manually on `{release_branch}` against `{base_branch}`, then re-invoke /ship from Stage 6.5 (substep == `merge_base_pending`)." `substep` retains `merge_base_pending` for resume.
      3. `git checkout {base_branch}` — switch back to base_branch for FF merge. On failure → halt with error and instruct user to manually `git checkout {base_branch}`.
      4. `git merge --ff-only {release_branch}` — should now succeed since release_branch was rebased onto base_branch. On failure (extremely unusual after a clean rebase) → halt with error.
-     5. **Force-push release_branch to remote (REQUIRED — closes C3 tag-integrity gap)**: `git push --force-with-lease origin {release_branch}`. The `--force-with-lease` variant refuses to overwrite the remote if it has been updated by another party since the last fetch — safer than plain `--force`. On rejection (lease check failed → another commit was pushed to remote since 6c-i) → halt with error: "Remote `{release_branch}` was updated externally between 6c-i and Stage 6.5. Investigate the foreign commit (`git fetch origin {release_branch} && git log {release_branch}..origin/{release_branch}`), reconcile manually, then re-invoke /ship from Stage 6.5." On other failure → halt. On success → at this point HEAD is on `{base_branch}` (from rebase pipeline sub-step 3) and the FF merge from sub-step 4 has already populated base_branch with the rebased release commits, so the OUTER Stage 6.5 step 5 (post-merge HARD-GATE / Push Base) is the next logical action: **proceed to OUTER step 5** (do NOT re-execute this rebase-pipeline list — the OUTER step 5 sets `substep → "merge_base_done"` and asks the user to confirm pushing base_branch to remote; the rebase-then-ff path therefore lands at the same post-merge gate as the no-ff and FF paths). Closes NF2.
+     5. **Force-push release_branch to remote (REQUIRED)**: `git push --force-with-lease origin {release_branch}`. The `--force-with-lease` variant refuses to overwrite the remote if it has been updated by another party since the last fetch — safer than plain `--force`. On rejection (lease check failed → another commit was pushed to remote since 6c-i) → halt with error: "Remote `{release_branch}` was updated externally between 6c-i and Stage 6.5. Investigate the foreign commit (`git fetch origin {release_branch} && git log {release_branch}..origin/{release_branch}`), reconcile manually, then re-invoke /ship from Stage 6.5." On other failure → halt. On success → at this point HEAD is on `{base_branch}` (from rebase pipeline sub-step 3) and the FF merge from sub-step 4 has already populated base_branch with the rebased release commits, so the OUTER Stage 6.5 step 5 (post-merge HARD-GATE / Push Base) is the next logical action: **proceed to OUTER step 5** (do NOT re-execute this rebase-pipeline list — the OUTER step 5 sets `substep → "merge_base_done"` and asks the user to confirm pushing base_branch to remote; the rebase-then-ff path therefore lands at the same post-merge gate as the no-ff and FF paths).
    - **Skip Stage 6.5** → `git checkout {release_branch}` (return to release branch — HEAD is currently on `{base_branch}` from step 3; halt with explicit error if checkout fails so the user can manually correct branch state before any tag operation runs at 6c-ii). Then issue the same skip-warn as step 2 HARD-GATE Skip, set `substep → "merge_base_pushed"`, continue to 6c-ii.
    - **Stop** → `git checkout {release_branch}` (return to release branch; halt with explicit error if checkout fails, instructing the user to run `git checkout {release_branch}` manually before any further /ship invocation), then halt session. `substep` retains `merge_base_pending` for resume.
 
@@ -802,9 +786,9 @@ options:                      (translate description to user_lang; keep label En
        - "Skip Stage 6.5" / "Reset local merge, base_branch lags release"
        - "Stop" / "Halt for manual intervention"
      ```
-     - **Retry** → re-run step 6. Track a `retry_count` **persisted in state.json at `state.stage_results.merge_to_base.push_retry_count`** (closes M4 / DX #8 / Sec N1 — without persistence, a Stop-then-resume would reset the counter to 0 and bypass the cap, allowing unbounded retries across sessions). The counter is initialized to 0 the first time this gate is displayed for the current Stage 6.5 attempt, read from state.json on every gate display (so resumed sessions see the cumulative count), and incremented and re-persisted on every Retry click before re-running step 6. When `push_retry_count >= 2`, on the next gate display **disable the Retry option** (omit it from `options`) and the user must choose Manual / Create PR / Skip / Stop. Rationale: 2 transient failures in a row strongly signal a non-transient cause (auth, protection, etc.); forcing a different choice prevents infinite retry loops, and persistence ensures the cap survives Stop/Resume cycles. Reset to 0 only when Stage 6.5 transitions to `merge_base_pushed` (i.e., this attempt is done) or when the user explicitly Restarts /ship from Stage 1.
+     - **Retry** → re-run step 6. Track a `retry_count` **persisted in state.json at `state.stage_results.merge_to_base.push_retry_count`** (without persistence, a Stop-then-resume would reset the counter to 0 and bypass the cap, allowing unbounded retries across sessions). The counter is initialized to 0 the first time this gate is displayed for the current Stage 6.5 attempt, read from state.json on every gate display (so resumed sessions see the cumulative count), and incremented and re-persisted on every Retry click before re-running step 6. When `push_retry_count >= 2`, on the next gate display **disable the Retry option** (omit it from `options`) and the user must choose Manual / Create PR / Skip / Stop. Rationale: 2 transient failures in a row strongly signal a non-transient cause (auth, protection, etc.); forcing a different choice prevents infinite retry loops, and persistence ensures the cap survives Stop/Resume cycles. Reset to 0 only when Stage 6.5 transitions to `merge_base_pushed` (i.e., this attempt is done) or when the user explicitly Restarts /ship from Stage 1.
      - **Manual** → `substep → "merge_base_pushed"`, `git checkout {release_branch}`, continue to 6c-ii.
-     - **Create PR** → execute `gh pr create --base {base_branch} --head {release_branch} --title "Release {release_version}"`. On success: parse PR URL, store `state.stage_results.merge_to_base.path_a_pr_url = "<url>"` (reuses Path A's field even though we are on Path B — this is a deliberate cross-path field reuse since both paths converge on PR-as-substitute-for-direct-push semantics), `substep → "merge_base_pushed"`, `git checkout {release_branch}`, continue to 6c-ii. On failure: if stderr indicates "a pull request for branch ... already exists" (race condition: a PR was created externally between gate display and now — same idempotency case Path A.A.3 handles) → run `gh pr list --base {base_branch} --head {release_branch} --state open --json url --jq '.[0].url'` to fetch the existing URL, store it in `path_a_pr_url`, set `substep → "merge_base_pushed"`, `git checkout {release_branch}`, continue to 6c-ii (closes NF5). For any other failure → return to gate.
+     - **Create PR** → execute `gh pr create --base {base_branch} --head {release_branch} --title "Release {release_version}"`. On success: parse PR URL, store `state.stage_results.merge_to_base.path_a_pr_url = "<url>"` (reuses Path A's field even though we are on Path B — this is a deliberate cross-path field reuse since both paths converge on PR-as-substitute-for-direct-push semantics), `substep → "merge_base_pushed"`, `git checkout {release_branch}`, continue to 6c-ii. On failure: if stderr indicates "a pull request for branch ... already exists" (race condition: a PR was created externally between gate display and now — same idempotency case Path A.A.3 handles) → run `gh pr list --base {base_branch} --head {release_branch} --state open --json url --jq '.[0].url'` to fetch the existing URL, store it in `path_a_pr_url`, set `substep → "merge_base_pushed"`, `git checkout {release_branch}`, continue to 6c-ii. For any other failure → return to gate.
      - **Skip Stage 6.5** → rollback the local merge by executing the explicit chain `git checkout {base_branch} && git reset --hard {pre_merge_sha} && git checkout {release_branch}` (do NOT issue `git reset --hard` without an explicit `git checkout {base_branch}` prepend — without it, if HEAD is currently on release_branch the reset would destroy release commits by jumping release_branch backwards to the base_branch pre-merge tip; `pre_merge_sha` refers to `{base_branch}`'s pre-merge tip per step 1's capture, NOT the release_branch HEAD). On any step failure (checkout to base_branch, reset, or checkout back to release_branch) → halt with error and leave `substep == "merge_base_done"` so user can resume from step 5 HARD-GATE. On success → `substep → "merge_base_pushed"`, warn user, continue to 6c-ii.
      - **Stop** → halt session (state.json preserved — `substep == "merge_base_done"` enables resume from step 5 HARD-GATE).
 
@@ -820,7 +804,7 @@ For all other gates (Path A protected-base gate, sub-gates, entry-level Skip war
 > `git checkout {base_branch} && git reset --hard {pre_merge_sha}`
 > on `{base_branch}` to revert to pre-merge state. The `{pre_merge_sha}` value is the actual SHA captured in step 1 and stored in `state.json` at `stage_results.merge_to_base.pre_merge_sha`; it refers to the base_branch tip BEFORE the merge. After the reset, run `git checkout {release_branch}` to return to the release branch."
 
-After Stage 6.5 completes (success path or skip path) — `substep == "merge_base_pushed"` and HEAD on `{release_branch}` — proceed to 6c-ii tag push. **6c-ii processes both entry routes identically**: (i) sessions that ran 6c-i and traversed Stage 6.5 (this section), (ii) legacy/skip sessions that reached 6c-ii directly via the entry-level Skip conditions. In both cases 6c-ii executes `git push origin {tag_name}` against the release_branch lineage and on success transitions `substep → "git_push_done"` (closes m9 / Arch N3).
+After Stage 6.5 completes (success path or skip path) — `substep == "merge_base_pushed"` and HEAD on `{release_branch}` — proceed to 6c-ii tag push. **6c-ii processes both entry routes identically**: (i) sessions that ran 6c-i and traversed Stage 6.5 (this section), (ii) legacy/skip sessions that reached 6c-ii directly via the entry-level Skip conditions. In both cases 6c-ii executes `git push origin {tag_name}` against the release_branch lineage and on success transitions `substep → "git_push_done"`.
 
 **6c-ii: Push tag** (only if `tag_name` is not null):
 Execute: `git push origin {tag_name}`
@@ -900,7 +884,7 @@ Before deleting `.harness/` (in `user_lang`). `Path(...)` expressions below are 
 
 1. **Skill identity check**: Verify `.harness/state.json` exists and `skill` field is `"ship"`. If missing, unreadable, or `skill` field is not `"ship"` → **ABORT**, warn user: `[harness:ship] Safety Guard: state.json missing or skill field mismatch — .harness/ not deleted.`
 2. **Path depth check (resolved)**: Verify `Path('.harness').resolve().parent == Path.cwd().resolve()` — the resolved parent of `.harness/` must equal the resolved cwd (ensures `.harness/` after symlink resolution is exactly one level below cwd, blocking symlinks that redirect 2+ levels deeper inside cwd). If not → **ABORT**, warn user: `[harness:ship] Safety Guard: .harness/ is not a direct child of cwd — refusing to delete.`
-3. **Symlink escape prevention**: **Always** verify `Path('.harness').resolve()` ⊆ `Path.cwd().resolve()` (no `has_git` condition, no skip path; defense-in-depth duplication retained for `/workflow` parity per `skills/workflow/SKILL.md:937` — Item 2 already implies this, but Item 3 stays for explicit escape-rejection symmetry). If the resolved real path escapes the working directory → **ABORT**, warn user: `[harness:ship] Safety Guard: .harness/ resolves outside cwd — refusing to delete.`
+3. **Symlink escape prevention**: **Always** verify `Path('.harness').resolve()` ⊆ `Path.cwd().resolve()` (no `has_git` condition, no skip path; Item 2 already implies this, but Item 3 stays for explicit escape-rejection symmetry). If the resolved real path escapes the working directory → **ABORT**, warn user: `[harness:ship] Safety Guard: .harness/ resolves outside cwd — refusing to delete.`
 4. **Display before delete**: Print exact absolute target path: `[harness:ship] Deleting: {Path('.harness').resolve()}`.
 5. Delete `.harness/` directory. **If `Path('.harness').is_symlink()` is true: remove the symlink itself (e.g. `Path('.harness').unlink()` or `rm .harness`), do NOT follow the link to delete the resolved target.** Otherwise (regular directory): recursively remove the directory contents (e.g. `shutil.rmtree('.harness', follow_symlinks=False)` or `rm -rf .harness`).
 6. Inform user artifacts are in `docs/harness/ship-<slug>/` if any were created.
@@ -909,12 +893,7 @@ Before deleting `.harness/` (in `user_lang`). `Path(...)` expressions below are 
 
 ## User Interaction Rules
 
-All user-facing questions MUST use AskUserQuestion tool when available.
-- If AskUserQuestion available → use it
-- If not available or fails → present as text with numbered options
-- Every option: `label` (short) + `description` (specific)
-- "Other" (free text) is automatically appended
-- Translate all text to `user_lang`
+See `templates/_shared/askuserquestion.md`.
 
 ## Key Rules
 
