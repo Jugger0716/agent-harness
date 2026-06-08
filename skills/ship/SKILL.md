@@ -1,7 +1,7 @@
 ---
 name: ship
 disallowed-tools: NotebookEdit
-description: Q&A-based universal release pipeline orchestrator. Guides version bump (2-pass), changelog generation (Conventional Commits), build/test verification, code review summary, git operations (commit/tag/push), and GitHub release — with HARD-GATEs before every irreversible action. Auto-detects environment, skips unavailable stages. Session recovery with substep tracking.
+description: Q&A-based universal release pipeline orchestrator. Guides version bump (2-pass), changelog generation (Conventional Commits), build/test verification, code review summary, git operations (commit/tag/push), and GitHub release — with HARD-GATEs before every irreversible action. Auto-detects environment, skips unavailable stages. Session recovery with substep tracking. Distinct from built-in /code-review — /ship orchestrates the whole release; its Stage 5 is a release-readiness diff summary, not a line-by-line review.
 ---
 
 # Agent Harness Ship — Release Pipeline Orchestrator
@@ -449,6 +449,12 @@ Proceed to next stage.
 Update state.json: `current_stage → "code_review"`.
 
 Print: `[harness:ship] Stage: Code Review Summary`
+
+> **Disambiguation:** This stage is a *release-readiness diff summary* (paths exist, no
+> conflict markers, no secrets, version-string consistency) — NOT the built-in `/code-review`
+> (line-by-line correctness with `--comment`/`--fix`). For a deep line-level review of the
+> release diff, run built-in `/code-review` or the plugin's `/deep-review` separately; this
+> stage stays a fast go/no-go gate.
 
 1. Read `base_branch` from state.json (detected in Step 1 Setup).
 2. Read template: `{CLAUDE_PLUGIN_ROOT}/templates/ship/code_review_summary.md`
