@@ -25,7 +25,11 @@ export const meta = {
 // contract — keep 1:1 with skills/test-gen/SKILL.md Phase 1 WORKFLOW dispatch (a field
 // missing on either side silently renders as ''):
 //   { target, framework, mockLibrary, repoPath, userLang, targetFiles: [paths],
-//     modeFlag: 'coverage-gap'|'regression'|null, regressionContext, models: {executor, advisor} }
+//     regressionContext, models: {executor, advisor} }
+// NOTE: coverage-gap scoping is applied orchestrator-side (SKILL Phase 1 step 3, before
+// dispatch — it filters targetFiles); regression intent reaches the analysts via
+// regressionContext (empty for non-regression runs). There is no separate modeFlag arg —
+// the segment analyzes the files it is given.
 const A = typeof args === 'string' ? JSON.parse(args) : (args || {})
 const LANG = A.userLang || 'the language of the test-generation request'
 const MODELS = A.models || {}

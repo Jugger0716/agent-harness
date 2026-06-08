@@ -257,8 +257,7 @@ Update state.json: `phase` → `"analyzing"`.
      args: {
        target: <target>, framework: <framework>, mockLibrary: <mock_library>,
        repoPath: <repo_path>, userLang: <user_lang>,
-       targetFiles: <list of identified target file paths from step 1>,
-       modeFlag: <"coverage-gap"|"regression"|null>,
+       targetFiles: <list of identified target file paths from step 1, after any coverage-gap filtering>,
        regressionContext: <root cause + repro + affected fns from step 4, else "">,
        models: { executor: <model_config.executor or null>,
                  advisor: <model_config.advisor or null> }
