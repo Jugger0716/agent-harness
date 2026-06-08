@@ -68,12 +68,12 @@ Higher modes cost more per run but save total cost by reducing retry rounds. Sta
 |-------|---------|-------------|
 | **Harness** | `/harness <task>` | 3-Phase (Planner -> Generator -> Evaluator) orchestrator. Inline single path by default; opt-in workflow path (ultracode or `--mode standard/multi`) runs plugin-shipped native Workflow segment scripts with schema-validated returns. Works with or without git. _(formerly `/workflow` — old name kept as a deprecation alias)_ |
 | **Refactor** | `/refactor <target>` | Safe, behavior-preserving code structure improvement. Single (inline) or multi/comprehensive (2-3 analysts + cross-critique, native Workflow path). Execution stays gated and step-tested in the orchestrator. |
-| **Migrate** | `/migrate <target> [--from v4 --to v5]` | Staged migration of frameworks, libraries, and dependencies. Single or multi-agent mode with WebSearch research. |
+| **Migrate** | `/migrate <target> [--from v4 --to v5]` | Staged migration of frameworks, libraries, and dependencies. Single (inline) or multi (parallel external-research + codebase-impact analysts + synthesis, native Workflow path) with WebSearch research. Staged execution stays gated and step-tested in the orchestrator. |
 | **Debug** | `/debug <error>` | Hypothesis-driven debugging with mandatory executable verification. Quick (inline) or deep (2 analysts + adversarial cross-verify, native Workflow path). |
 | **Spec** | `/spec <requirement>` | Multi-round Q&A requirements specification. Output directly compatible with `/harness` input. Quick (inline) or deep (4 analysts + Critic, native Workflow path). |
-| **Test Gen** | `/test-gen <target>` | Automated test generation with mutation-based quality verification. Supports coverage-gap and regression modes. |
+| **Test Gen** | `/test-gen <target>` | Automated test generation with mutation-based quality verification. Single (inline) or multi (parallel coverage analysts + propose-only mutation skeptics, native Workflow path; test generation + mutation execution stay orchestrator-inline). Supports coverage-gap and regression modes. |
 | **Memory** | `/memory <cmd>` | Team knowledge base (save/show/clean/search). Git-committed, team-shared decisions, patterns, and conventions. |
-| **Codebase Audit** | `/codebase-audit` | Systematic codebase analysis with 3-tier mode (quick/deep/thorough) for team onboarding. |
+| **Codebase Audit** | `/codebase-audit` | Systematic codebase analysis for team onboarding. Quick (inline) or deep/thorough (parameterized lens analysts + completeness critique + synthesis, native Workflow path; orchestrator writes the report). Incremental analysis support. |
 | **Deep Review** | `/deep-review <target>` | Systematic, bias-free code review. Quick (inline checklist) or deep/thorough (2-3 specialists + adversarial cross-verification, native Workflow path). Optional `--comment` (inline PR comments) / `--fix` (gated apply). _(formerly `/code-review` — old name kept as a deprecation alias)_ |
 | **MD Optimize** | `/md-optimize` | Optimize CLAUDE.md and project `.md` files for token efficiency. |
 | **MD Generate** | `/md-generate` | Analyze project and generate/enhance CLAUDE.md for effective Claude Code development. |
@@ -522,12 +522,12 @@ docs/harness/<slug>/
 Executes framework/library version upgrades, language transitions, and dependency replacements using a staged approach — one breaking change at a time with build/test verification at every step.
 
 ```
-/migrate <target>  -> [Setup] Auto-detect versions + mode selection
+/migrate <target>  -> [Setup] Auto-detect versions + Mode Gate (derived; opt-in)
                        -> [Phase 1] Analysis
-                          single: 1 agent researches guide + scans codebase
-                          multi:  External Research Analyst (WebSearch)
-                                  + Codebase Impact Analyst (parallel)
-                                  -> Synthesis: merge into migration_plan.md
+                          single (inline): 1 agent researches guide + scans codebase
+                          multi (Workflow): External Research Analyst (WebSearch)
+                                  + Codebase Impact Analyst (parallel, anchor-free)
+                                  -> Synthesis -> MigrationPlan (orchestrator writes migration_plan.md)
                        -> Confirmation Gate: user approves plan
                        -> [Phase 2] Staged Execution
                           Per breaking change:
@@ -759,20 +759,19 @@ Maps directly to `/harness` input: Goal->Goal, Background->Background, Scope->Sc
 Automated test generator that writes real test code, executes it, and validates meaningfulness through **simplified mutation testing**. Supports framework auto-detection, dependency-aware mocking, and regression test generation from debug reports.
 
 ```
-/test-gen  -> [Setup] Framework detection + model config
+/test-gen  -> [Setup] Framework detection + Mode Gate (derived; opt-in) + model config
                       -> [Phase 1] Analysis
-                         Coverage scan (tool or static fallback)
-                         + dependency analysis + mocking strategy
-                         + edge case/boundary value enumeration
+                         single (inline): coverage scan + dependency analysis + mocking + edge cases
+                         multi (Workflow): coverage analysts over file buckets (parallel) -> AnalysisResult
                       -> HARD-GATE: confirm scope + mocking strategy
-                      -> [Phase 2] Generation
-                         Unit tests (happy path + edge cases)
-                         + integration tests (if needed)
-                         + regression tests (if --regression)
+                      -> [Phase 2] Generation (orchestrator-inline on both paths)
+                         Unit tests (happy path + edge cases) + integration + regression (if --regression)
                       -> [Phase 3] Verification
                          Step 1: Execute tests (up to 2 fix retries, test code only)
-                         Step 2: Mutation testing (condition inversion, return change)
-                                 -> trivial tests flagged + strengthen attempt
+                         Step 2: Mutation testing
+                                 single (inline): single-mutation heuristic + strengthen attempt
+                                 multi (Workflow): propose-only skeptics -> ORCHESTRATOR-INLINE
+                                   mutate/run/revert + clean guard -> MutationVerdict (no worktree)
 ```
 
 ### Framework Auto-Detection
@@ -888,7 +887,7 @@ A standalone utility skill that systematically analyzes project structure, depen
 | **deep** | 2 parallel + synthesis | Mid-size projects, general analysis | ~1.5x |
 | **thorough** | 3 parallel + cross-verification + synthesis | Large/legacy projects, team onboarding | ~2.5x |
 
-Mode is auto-recommended based on file count (< 30: quick, 30-200: deep, 200+: thorough) but can be overridden with `--mode`.
+Mode follows the **Mode Gate** — auto-recommended by file count (< 30: quick, 30-200: deep, 200+: thorough). **deep/thorough run on the native Workflow path** (opt-in via `--mode` or an ultracode session; the analysis segment returns a structured `AuditResult` and the orchestrator writes the report); **quick is inline**. A non-opted interactive session may still pick a deeper mode at the boundary prompt.
 
 ### Options
 
