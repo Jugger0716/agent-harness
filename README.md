@@ -6,7 +6,7 @@ No dependencies required. No Python, no pip, no build steps — just install the
 
 Inspired by Anthropic's [Harness Design for Long-Running Application Development](https://www.anthropic.com/engineering/harness-design-long-running-apps).
 
-> Demo GIF coming soon — see [ROADMAP.md](ROADMAP.md) for the v8.5+ planned items.
+> Demo GIF coming soon — see [ROADMAP.md](ROADMAP.md) for the v8.6+ planned items.
 
 ## At a Glance
 
@@ -60,7 +60,7 @@ Inspired by Anthropic's [Harness Design for Long-Running Application Development
 
 Higher modes cost more per run but save total cost by reducing retry rounds. Standard is recommended for most tasks.
 
-> *(estimated)*: Figures are estimates based on internal dogfooding. A measurement benchmark harness is planned for v8.2+.
+> *(estimated)*: Figures are estimates based on internal dogfooding. A measurement benchmark harness is planned for a future release.
 
 ## Skills
 
@@ -1115,11 +1115,12 @@ Communicates in the user's language for progress, questions, confirmations, erro
 
 See [ROADMAP.md](ROADMAP.md) for the full roadmap with rationale.
 
+- **v8.5** (Shipped): native Workflow reframe — 8 high-overlap skills (`/harness`, `/spec`, `/debug`, `/deep-review`, `/codebase-audit`, `/migrate`, `/refactor`, `/test-gen`) author & run shipped segment scripts (`workflows/*.workflow.js`, schema-validated `agent()` fan-out) at opt-in depth; skill renames `/workflow`→`/harness`, `/code-review`→`/deep-review`, `/memory`→`/team-memory` (deprecation aliases preserved); derived **Mode Gate** (`templates/_shared/mode_gate.md`) replaces the mode-selection roundtrip; `/deep-review --comment`/`--fix` parity; `disallowed-tools` frontmatter enforced on every skill
 - **v8.4** (Shipped): `/spec` deep-mode 4-analyst pipeline (Requirements + UserScenario + RiskAuditor + TechConstraint) with cold Critic stage and 3-way revise gate; `/spec` Convention Scan (Step 1.5) with `--reference` flag; `/spec` Phase 3 persists `qa_notes.md`/`critic_findings.md`/`conventions.md` with `/workflow` Step 1.5/Step 2 reuse; `/ship` Stage 6.5 (`merge_to_base`) closes develop→main lag — Path A (protected base, PR fallback) vs Path B (local merge with FF / Non-FF / rebase-then-ff + force-with-lease), substep-level recovery, persistent retry-count cap, branch-protected rollback documentation
 - **v8.3** (Shipped): `/ship` version_bump auto-detection for `.claude-plugin/plugin.json` (`$.version`) and `.claude-plugin/marketplace.json` (`$.metadata.version` + `$.plugins[*].version`) — JSON-aware Pass 2 preserves CRLF/LF, BOM, trailing-newline, and avoids the naive-string-replace regression on coincidentally-equal version strings in other fields
 - **v8.2** (Shipped): `/ship` Safety Guard parity with `/workflow` (unconditional symlink-escape check, display-before-delete, symlink-aware deletion), strict 254-char tag-name regex hard cap
 - **v8.1** (Shipped): Path Validator single source, Auto-fix State Transition Table (invariants I1–I4), `--verifier-model` flexibility, `--output-dir` flag, Auto-fix proposal for Layer 1 failures (both `/workflow` and `/refactor`), `.github/` contribution templates
-- **v8.5+** (Planned): Custom persona override (`templates/user-override/`), external CLI wrapper, demo GIF
+- **v8.6+** (Planned): Custom persona override (`templates/user-override/`), template compression, external CLI wrapper, demo GIF
 
 ---
 

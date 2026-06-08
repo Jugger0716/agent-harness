@@ -22,7 +22,7 @@ monospace alignment; **values** follow the Preserved-English Glossary.
   **English raw** regardless of `user_lang`, for monospace alignment.
 - **Omit the `Branch` line if `has_git == false`.**
 - **Prefix is per-skill.** Most skills use `[harness]`; others use their own token (e.g.
-  `[debug]`, `[memory save]`). Document the prefix token in the consuming skill — only the
+  `[debug]`, `[team-memory save]`). Document the prefix token in the consuming skill — only the
   block shape + label rules are shared here.
 - **Phase-label → human-string maps stay in each skill** (they differ per skill, e.g.
   `plan_ready → "Plan — ready"`). Do not centralize them here.

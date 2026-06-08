@@ -348,6 +348,7 @@ Read `mode` from state.json and branch accordingly.
          - `{test_output_path}` = path where test output was written (or inline if short)
          - `{changed_files_list}` = list of files modified in this step
          - `{output_path}` = `.harness/refactor/auto_fix_patch.md`
+         - `{user_lang}` = from state.json
       4. **Dispatch Auto-fix Proposer sub-agent** with `model: model_config.advisor ?? "opus"`.
       5. Parse return 1-line. Extract `confidence` level.
       6. Verify `.harness/refactor/auto_fix_patch.md` exists.
