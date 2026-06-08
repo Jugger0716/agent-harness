@@ -17,7 +17,7 @@ body:
       label: Steps to reproduce
       description: How can we reproduce this bug?
       placeholder: |
-        1. Run `/workflow "..." --mode standard`
+        1. Run `/harness "..." --mode standard`
         2. Select mode: ...
         3. Observe error at step ...
     validations:
@@ -44,7 +44,7 @@ body:
     attributes:
       label: Skill
       description: Which skill triggered the bug?
-      placeholder: "e.g. /workflow, /refactor, /debug"
+      placeholder: "e.g. /harness, /refactor, /debug"
     validations:
       required: false
 

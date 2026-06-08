@@ -1,33 +1,49 @@
 #!/usr/bin/env python3
 """
-Verify byte-identical BLOCK content sync across the 4 planner templates.
+Verify byte-identical BLOCK content sync across marker-delimited template copies
+and their canonical single-source file under templates/_shared/.
 
-Reads `templates/planner/{architect,planner_single,qa_specialist,senior_developer}.md`
-and extracts the content between `<!-- BLOCK-START:spec-context-block v1` and
-`<!-- BLOCK-END:spec-context-block v1 -->` markers (exclusive of the marker
-comments themselves). Computes SHA256 of each. All 4 hashes MUST match.
+Each group is `(tag, version, [marker-delimited files], shared-source-file | None)`:
+  - Every file in `[marker-delimited files]` must carry
+    `<!-- BLOCK-START:<tag> <version> ... -->` / `<!-- BLOCK-END:<tag> <version> -->`
+    markers. The content BETWEEN the markers (exclusive of the marker comments) is
+    hashed. The version is per-group (bumped on intentional content change — e.g.
+    input-trust-model went v1 -> v2 in Phase 1 when the literal {placeholder} mentions
+    and the dangling '## Output Contract' section name were removed).
+  - The shared-source file has NO markers; its WHOLE content is hashed.
+  - Both sides are `.strip()`-normalized before hashing so a leading/trailing
+    newline difference (marker-delimited vs whole-file) is not false drift.
+  - All hashes in a group MUST match.
+
+Groups:
+  - spec-context-block (v1) : 4 planner templates + templates/_shared/spec_context_block.md
+  - input-trust-model  (v2) : 4 planner templates + templates/_shared/input_trust_model.md
 
 Exit codes:
-  0  All 4 BLOCK contents are byte-identical.
-  1  Hash mismatch detected (drift).
-  2  A planner template is missing or its BLOCK markers are absent/malformed.
+  0  All groups' BLOCK contents are byte-identical (after strip-normalization).
+  1  Hash mismatch detected (drift) in at least one group.
+  2  A file is missing or its BLOCK markers are absent/malformed.
 
 Usage:
   python scripts/verify_block_sync.py
+  python scripts/verify_block_sync.py --version
 
-Intended invocation: pre-commit hook OR CI job.
+Intended invocation: run manually (pre-commit/CI wiring is a later-phase TODO).
 
-Defined contract: see skills/spec/SKILL.md §M5 BLOCK sync mechanism +
-templates/planner/*.md `<!-- BLOCK-START:spec-context-block v1 ... -->`
-header comments.
+Defined contract: see the templates/planner/*.md `<!-- BLOCK-START:<tag> v1 ... -->`
+header comments + templates/_shared/{spec_context_block,input_trust_model}.md.
 """
 
 from __future__ import annotations
 
+import argparse
 import hashlib
 import re
 import sys
 from pathlib import Path
+
+# 이 스크립트 자체의 버전. GROUPS 내 블록 버전(v1/v2)과는 무관하며 독립 관리된다.
+SCRIPT_VERSION = "1.0.0"
 
 PLANNERS = [
     "templates/planner/architect.md",
@@ -36,43 +52,100 @@ PLANNERS = [
     "templates/planner/senior_developer.md",
 ]
 
-BLOCK_START_RE = re.compile(r"<!--\s*BLOCK-START:spec-context-block\s+v1.*?-->", re.DOTALL)
-BLOCK_END_RE = re.compile(r"<!--\s*BLOCK-END:spec-context-block\s+v1\s*-->")
+# (tag, version, marker-delimited files, shared-source file without markers or None)
+GROUPS: list[tuple[str, str, list[str], str | None]] = [
+    ("spec-context-block", "v1", PLANNERS, "templates/_shared/spec_context_block.md"),
+    ("input-trust-model", "v2", PLANNERS, "templates/_shared/input_trust_model.md"),
+]
 
 
-def extract_block(path: Path) -> str:
+def markers(tag: str, version: str) -> tuple[re.Pattern[str], re.Pattern[str]]:
+    start = re.compile(
+        rf"<!--\s*BLOCK-START:{re.escape(tag)}\s+{re.escape(version)}.*?-->", re.DOTALL
+    )
+    end = re.compile(rf"<!--\s*BLOCK-END:{re.escape(tag)}\s+{re.escape(version)}\s*-->")
+    return start, end
+
+
+def extract_block(path: Path, tag: str, version: str) -> str:
+    start_re, end_re = markers(tag, version)
     text = path.read_text(encoding="utf-8")
-    start_match = BLOCK_START_RE.search(text)
-    end_match = BLOCK_END_RE.search(text)
+    start_match = start_re.search(text)
+    end_match = end_re.search(text)
     if not start_match or not end_match:
-        print(f"[verify_block_sync] {path}: BLOCK-START or BLOCK-END marker missing", file=sys.stderr)
+        print(
+            f"[verify_block_sync] {path} [{tag} {version}]: "
+            "BLOCK-START or BLOCK-END marker missing (check the version tag)",
+            file=sys.stderr,
+        )
         sys.exit(2)
     if end_match.start() <= start_match.end():
-        print(f"[verify_block_sync] {path}: BLOCK-END appears before BLOCK-START", file=sys.stderr)
+        print(
+            f"[verify_block_sync] {path} [{tag} {version}]: BLOCK-END appears before BLOCK-START",
+            file=sys.stderr,
+        )
         sys.exit(2)
-    return text[start_match.end():end_match.start()]
+    return text[start_match.end() : end_match.start()]
 
 
-def main() -> int:
-    repo_root = Path(__file__).resolve().parent.parent
+def sha(content: str) -> str:
+    # strip-normalize both ends so marker-delimited vs whole-file newlines don't drift.
+    return hashlib.sha256(content.strip().encode("utf-8")).hexdigest()
+
+
+def check_group(
+    repo_root: Path, tag: str, version: str, files: list[str], source: str | None
+) -> int:
     hashes: dict[str, str] = {}
-    for rel in PLANNERS:
+    for rel in files:
         path = repo_root / rel
         if not path.exists():
             print(f"[verify_block_sync] {rel}: file does not exist", file=sys.stderr)
             return 2
-        block = extract_block(path)
-        hashes[rel] = hashlib.sha256(block.encode("utf-8")).hexdigest()
+        hashes[rel] = sha(extract_block(path, tag, version))
 
-    unique_hashes = set(hashes.values())
-    if len(unique_hashes) == 1:
-        print(f"[verify_block_sync] OK: all 4 planner BLOCKs match (sha256={next(iter(unique_hashes))[:16]}...)")
+    if source is not None:
+        spath = repo_root / source
+        if not spath.exists():
+            print(
+                f"[verify_block_sync] {source}: shared source file does not exist",
+                file=sys.stderr,
+            )
+            return 2
+        hashes[f"{source} (shared source)"] = sha(spath.read_text(encoding="utf-8"))
+
+    unique = set(hashes.values())
+    if len(unique) == 1:
+        print(
+            f"[verify_block_sync] OK [{tag} {version}]: {len(hashes)} copies match "
+            f"(sha256={next(iter(unique))[:16]}...)"
+        )
         return 0
 
-    print("[verify_block_sync] FAIL: planner BLOCK content drift detected", file=sys.stderr)
+    print(
+        f"[verify_block_sync] FAIL [{tag} {version}]: content drift detected",
+        file=sys.stderr,
+    )
     for rel, h in hashes.items():
         print(f"  {h[:16]}...  {rel}", file=sys.stderr)
     return 1
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Verify byte-identical BLOCK content sync.")
+    parser.add_argument(
+        "--version", action="version", version=f"verify_block_sync {SCRIPT_VERSION}"
+    )
+    args = parser.parse_args()  # noqa: F841 — no positional args yet; reserved for future use
+    repo_root = Path(__file__).resolve().parent.parent
+    rc = 0
+    for tag, version, files, source in GROUPS:
+        result = check_group(repo_root, tag, version, files, source)
+        if result == 2:
+            return 2
+        if result == 1:
+            rc = 1
+    return rc
 
 
 if __name__ == "__main__":

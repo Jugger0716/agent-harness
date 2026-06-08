@@ -1,6 +1,7 @@
 ---
 name: md-generate
-description: Analyze project source code and generate/enhance CLAUDE.md for effective Claude Code development. Detects conventions, dependencies, build/test commands, architecture patterns, and produces actionable documentation. Use on new projects or when existing CLAUDE.md is thin.
+disallowed-tools: NotebookEdit, WebSearch, WebFetch
+description: Analyze project source code and generate/enhance CLAUDE.md for effective Claude Code development. Detects conventions, dependencies, build/test commands, architecture patterns, and produces actionable documentation. Use on new projects or when existing CLAUDE.md is thin. Richer superset of built-in /init — adds Smart Routing, a confirmation gate, an isolated bias-free evaluator pass, monorepo sub-CLAUDE.md generation, and enhancement (not just first-time creation).
 ---
 
 # MD Generate
@@ -47,6 +48,12 @@ Never scan inside: `.git/`, `node_modules/`, `vendor/`, `dist/`, `build/`, `__py
    On "Abort": halt.
 
 ### 1b. Smart Routing
+
+> **vs built-in `/init`:** `/init` does a one-shot first-time CLAUDE.md write. `/md-generate`
+> routes (Generate / Enhance / Optimize-instead), gates on a confirmation summary, runs an
+> isolated evaluator that re-analyzes the project fresh to catch hallucinations, and handles
+> monorepos + enhancement of existing files. Use `/init` for a quick bootstrap; use
+> `/md-generate` for verified, maintainable docs.
 
 Before proceeding with generation, assess whether this skill is the right tool:
 
@@ -306,12 +313,7 @@ Print final report (in `user_lang`):
 
 ## User Interaction Rules
 
-All user-facing questions MUST use AskUserQuestion tool when available.
-- If AskUserQuestion is available → use it (provides numbered selection UI)
-- If AskUserQuestion is NOT available or fails → present the same options as text and accept number/keyword responses (case-insensitive)
-- Every option must include a `label` (short name) and `description` (specific explanation)
-- "Other" (free text input) is automatically appended by the framework
-- Translate all question text, labels, and descriptions to `user_lang`
+See `templates/_shared/askuserquestion.md`.
 
 ## Safety Rules
 

@@ -10,7 +10,7 @@ Closes #
 
 <!-- How did you verify that this works? Include the exact command(s) you ran. -->
 
-- [ ] Dry-run with `/workflow "test task"` (or relevant skill) — session reached expected phase
+- [ ] Dry-run with `/harness "test task"` (or relevant skill) — session reached expected phase
 - [ ] Tested edge case: ____________
 
 ## Checklist

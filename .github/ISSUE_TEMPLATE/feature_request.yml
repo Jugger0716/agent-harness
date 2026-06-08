@@ -7,7 +7,7 @@ body:
     attributes:
       label: Problem / motivation
       description: What problem does this feature solve? What is the current limitation?
-      placeholder: "When I run /workflow on X, I find myself wanting Y because..."
+      placeholder: "When I run /harness on X, I find myself wanting Y because..."
     validations:
       required: true
 
@@ -23,7 +23,7 @@ body:
     id: skill
     attributes:
       label: Affected skill(s)
-      placeholder: "e.g. /workflow, /refactor, all skills"
+      placeholder: "e.g. /harness, /refactor, all skills"
     validations:
       required: false
 
