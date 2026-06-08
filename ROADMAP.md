@@ -2,6 +2,21 @@
 
 ## v8.x — Shipped
 
+**v8.5.0** — Native Workflow Reframe + Skill Renames (alias-preserved) + Mode Gate
+
+- **Skill renames (alias-preserved, NOT a hard break)**: `/code-review`→`/deep-review`, `/memory`→`/team-memory`, `/workflow`→`/harness`. Old names retained as deprecation-stub skills (frontmatter `name:` kept for discovery) that resolve, print a localized notice, and redirect. Removal no earlier than the next MAJOR.
+  See: `skills/{deep-review,team-memory,harness}/SKILL.md`, stubs in `skills/{code-review,memory,workflow}/SKILL.md`, README "Skill Naming & Built-in Command Relationship".
+- **Mode Gate (derived; opt-in)** — `templates/_shared/mode_gate.md`: default = inline path; the native Workflow path runs only when the Workflow tool is available AND the session opts in (ultracode OR explicit `--mode`); `has_git == false` or a missing/erroring engine falls back to inline. Replaces the previous raw-effort gating idea and the mode-selection AskUserQuestion roundtrip.
+- **`disallowed-tools` frontmatter** on every skill — runtime enforcement of read-only / no-escalation contracts (verified-safe subset; e.g. `/team-memory` blocks Task/Agent/Workflow/WebSearch/WebFetch; read-only review skills block Edit/Write).
+- **Native Workflow authoring (8 high-overlap skills)**: at opt-in depth, `harness`/`spec`/`debug`/`deep-review`/`codebase-audit`/`migrate`/`refactor`/`test-gen` author & run shipped segment scripts (`${CLAUDE_PLUGIN_ROOT}/workflows/<skill>.<segment>.workflow.js`) that fan out via `parallel()`/`pipeline()`, return schema-validated objects, and resume via `runId`. Canonical schemas (`workflows/_reference/schemas.md`, 16 `##` headings = 18 names): AnalysisResult, PlanResult, ChangeSet, VerifyVerdict, CriticReport, Hypothesis, DebugAnalysis, RootCause, Finding, FindingSet, CrossVerifyReport, MigrationPlan, AuditAnalysis, CompletenessCritique, AuditResult, SkepticVote, MutationVerdict, ExecutedMutation. (RefactorPlan is an in-script extension of PlanResult, not a canonical heading.) The 3 HARD-GATEs (spec-confirm / verify-fail / auto-fix-apply) stay in the orchestrator BETWEEN segments — `scripts/verify_meta_literal.py` rejects any gate token inside a script.
+  See: `workflows/*.workflow.js`, `workflows/_reference/schemas.md`, `scripts/{verify_meta_literal.py,check_workflow_syntax.mjs,verify_block_sync.py}`.
+- **`/deep-review --comment` / `--fix` parity**: `--comment` posts inline PR comments (after an explicit confirm); `--fix` applies critical/major suggestions to the working tree behind a HARD-GATE (never commits/pushes).
+- **`templates/_shared/` single-source extraction** (Mode Gate, Input Trust Model, model_config, Safety Guard, detection table, status format, spec-context, falsification rules, AskUserQuestion) + `scripts/verify_block_sync.py` simplified to single-source + SHA256 reference checks.
+
+**Breaking changes (alias-mitigated)**: command names change to `/harness`, `/deep-review`, `/team-memory` — old names still resolve via deprecation stubs (no invocation breaks), but muscle-memory and docs should migrate. Opt-in Workflow-path runs execute a segment script rather than inline prose orchestration; that path's resume key is the engine `runId` (same-session) with the `state.json` phase machine for cross-session — pre-8.5 interrupted sessions should Restart rather than Resume.
+
+---
+
 **v8.4.0** — Spec Skill Hardening + /ship merge-to-base
 
 - **A+B+C+D — /spec Hardening**: Risk Auditor + Tech Constraint Analyst added to deep mode (4-analyst parallel synthesis), Spec Critic stage with 3-way gate + 1-round auto-revise, Convention Scan with `--reference` flag and has_git=false candidate file detection, qa_notes / critic_findings / conventions persistence to `{docs_path}` for slug-safe /spec → /workflow handoff (workflow Step 1.5 reuse, Step 2 variable injection into 4 planner templates, Step 8 cleanup protection).
@@ -65,7 +80,8 @@ Items deferred from v8.1 / v8.2 with rationale:
 | **M4 — Custom persona override** (`templates/user-override/`) | Variable contract definition required first; ROI analysis pending real usage data | Architect/Senior split: Senior recommended deferral. Minimum viable: `.harness/templates/` project-level override only |
 | **M3 — Template compression** | Senior measured actual templates: avg 46 lines, max 185 lines (~2–3k tokens). Feedback premise of "8–12k tokens" did not match measurements | Re-evaluate after v8.1 usage data |
 | **L1 — External CLI wrapper** | Claude Code's `/skill` invocation already functions as CLI; separate repo adds maintenance burden disproportionate to value | Reconsider if community demand emerges |
-| **N2 — `/ship` merge-to-base-branch step** | Discovered during v8.3.0 release: `/ship` Setup auto-detects `base_branch` (`main`/`master`) but Stage 6 (`git_ops`) only commits/tags/pushes on the current branch. There is no step that merges the release branch into `base_branch`, leaving `main` lag in develop→main GitFlow setups (v8.1.0/v8.2.0/v8.3.0 all initially shipped without `main` reflecting the release). Tag points to the release branch's commit, so a pure tag-based release still works, but consumers tracking `main` see no update. | Add Stage 6.5 `merge_to_base` (skipped if `current_branch == base_branch` or `base_branch` not detected): try `git merge --ff-only` first; on non-ff, prompt user with merge-style options (no-ff merge / rebase-then-ff / skip / stop). HARD-GATE before any merge. Push `base_branch` after success. Should run BEFORE tag push so the tag includes the merge commit when applicable, OR after — needs design decision (current pattern = tag on release branch, `main` no-ff merge after, both pushed; tag remains on release branch lineage). |
+
+> **Re-deferred to v8.6+:** the v8.5.0 native-Workflow reframe (skill renames + Mode Gate + native authoring) was prioritized over the items above per the 2026-06-02 optimization review (ROI reversed once the native engine landed). M4 (persona override), M3 (template compression), and L1 (external CLI wrapper) remain planned for v8.6+. N2 (`merge_to_base`) shipped in v8.4.0 and has been removed from this table.
 
 ### Residual review gaps (post-v8.1 verification)
 

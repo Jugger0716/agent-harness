@@ -72,12 +72,26 @@ Higher modes cost more per run but save total cost by reducing retry rounds. Sta
 | **Debug** | `/debug <error>` | Hypothesis-driven debugging with mandatory executable verification. Quick (inline) or deep (2 analysts + adversarial cross-verify, native Workflow path). |
 | **Spec** | `/spec <requirement>` | Multi-round Q&A requirements specification. Output directly compatible with `/harness` input. Quick (inline) or deep (4 analysts + Critic, native Workflow path). |
 | **Test Gen** | `/test-gen <target>` | Automated test generation with mutation-based quality verification. Single (inline) or multi (parallel coverage analysts + propose-only mutation skeptics, native Workflow path; test generation + mutation execution stay orchestrator-inline). Supports coverage-gap and regression modes. |
-| **Memory** | `/memory <cmd>` | Team knowledge base (save/show/clean/search). Git-committed, team-shared decisions, patterns, and conventions. |
+| **Team Memory** | `/team-memory <cmd>` | Team knowledge base (save/show/clean/search). Git-committed, team-shared decisions, patterns, and conventions. Human-gated CRUD — never escalates to sub-agents or the Workflow engine. _(formerly `/memory` — old name kept as a deprecation alias)_ |
 | **Codebase Audit** | `/codebase-audit` | Systematic codebase analysis for team onboarding. Quick (inline) or deep/thorough (parameterized lens analysts + completeness critique + synthesis, native Workflow path; orchestrator writes the report). Incremental analysis support. |
 | **Deep Review** | `/deep-review <target>` | Systematic, bias-free code review. Quick (inline checklist) or deep/thorough (2-3 specialists + adversarial cross-verification, native Workflow path). Optional `--comment` (inline PR comments) / `--fix` (gated apply). _(formerly `/code-review` — old name kept as a deprecation alias)_ |
 | **MD Optimize** | `/md-optimize` | Optimize CLAUDE.md and project `.md` files for token efficiency. |
 | **MD Generate** | `/md-generate` | Analyze project and generate/enhance CLAUDE.md for effective Claude Code development. |
 | **Ship** | `/ship` | Q&A release pipeline: version bump, CHANGELOG (Conventional Commits), build/test verify, git ops (commit/tag/`merge_to_base`/push), GitHub release — HARD-GATE before every irreversible action. Auto-detects environment, skips unavailable stages. Stage 6.5 (`merge_to_base`, v8.4+) merges release branch into base branch BEFORE tag push so the tag is reachable from the base branch. |
+
+### Skill Naming & Built-in Command Relationship
+
+Three skills were renamed into the plugin namespace to remove collisions with Claude Code built-ins, **keeping the old names as deprecation aliases** (no hard break — invoking an old name prints a localized notice and redirects):
+
+| New (canonical) | Old (alias, deprecated) | Why renamed |
+|-----------------|-------------------------|-------------|
+| `/deep-review` | `/code-review` | Literal collision with the built-in `/code-review` (2.1.147+, `--comment`/`--fix`). |
+| `/team-memory` | `/memory` | Trigger ambiguity with built-in personal auto-memory / the `#` shortcut / CLAUDE.md. |
+| `/harness` | `/workflow` | Conceptual collision with the native Workflow engine (`/ultracode`, formerly `/workflow`, renamed in 2.1.160). |
+
+Old names are scheduled for removal no earlier than the next MAJOR release.
+
+**Relationship to the native Workflow engine (`/ultracode`):** agent-harness does **not** compete with the engine — at opt-in depth (an ultracode session, or an explicit `--mode`) the multi-agent skills *author and run* native Workflow segment scripts (`${CLAUDE_PLUGIN_ROOT}/workflows/<skill>.<segment>.workflow.js`), layering their opinionated phased methodology, auto-detection, and human-in-the-loop HARD-GATEs on top of the engine's `parallel()` / `phase()` / `runId`-resume primitives. The HARD-GATEs (spec-confirm, verify-fail, auto-fix-apply) always stay in the orchestrator and are never delegated to a background Workflow agent.
 
 ## Install
 
@@ -112,10 +126,10 @@ claude plugin install agent-harness@agent-harness-marketplace
 /test-gen --coverage-gap                           # auto-find low-coverage areas
 /test-gen --regression docs/harness/slug/debug_report.md  # regression tests from debug
 
-/memory save                                       # save team-valuable decisions from session
-/memory show                                       # list all team knowledge records
-/memory clean                                      # remove stale/completed records
-/memory search authentication                      # search across knowledge base
+/team-memory save                                       # save team-valuable decisions from session
+/team-memory show                                       # list all team knowledge records
+/team-memory clean                                      # remove stale/completed records
+/team-memory search authentication                      # search across knowledge base
 
 /codebase-audit                                    # auto-recommends mode based on project size
 /codebase-audit --mode thorough                    # comprehensive multi-agent analysis
@@ -688,7 +702,7 @@ Every hypothesis must be tested with **executable verification actions** -- pure
 |--------|-------------------|
 | Complex fix needed | `/harness "Fix based on docs/harness/<slug>/root_cause.md"` |
 | Regression test needed | `/test-gen --regression docs/harness/<slug>/debug_report.md` |
-| Pattern to record | `/memory save` |
+| Pattern to record | `/team-memory save` |
 
 ### Output
 
@@ -821,20 +835,22 @@ After tests pass, each test is verified for meaningfulness:
 
 ---
 
-## memory
+## team-memory
+
+> Formerly `/memory`. The `/memory` alias still resolves (deprecated → redirects here).
 
 Team knowledge base manager. Saves, searches, and maintains **git-committed, team-shared** records of decisions, patterns, bugs, and conventions. Completely separate from Claude Code's built-in personal auto-memory.
 
 ```
-/memory save     -> analyze session -> extract team-valuable items -> per-item HARD-GATE -> save
-/memory show     -> scan docs/harness/memory/ -> categorized list
-/memory clean    -> identify stale records -> backup -> per-item HARD-GATE -> delete
-/memory search   -> grep keyword across all records
+/team-memory save     -> analyze session -> extract team-valuable items -> per-item HARD-GATE -> save
+/team-memory show     -> scan docs/harness/memory/ -> categorized list
+/team-memory clean    -> identify stale records -> backup -> per-item HARD-GATE -> delete
+/team-memory search   -> grep keyword across all records
 ```
 
 ### How it differs from built-in auto-memory
 
-| | Built-in auto-memory | /memory |
+| | Built-in auto-memory | /team-memory |
 |-|---------------------|---------|
 | **Location** | `~/.claude/projects/` | `docs/harness/memory/` |
 | **Scope** | Personal, per-user | **Team-shared, git-committed** |
