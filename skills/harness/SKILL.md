@@ -176,7 +176,8 @@ Before starting a new task, check if `.harness/state.json` exists:
      - `generating` / `generate_done` → Step 5 (Verify) — do NOT re-run the build segment (edits may already be applied)
      - `verify_ready` / `verifying` → Step 5 (Verify), reset retries to 0
      - `verify_done`:
-       - if `state.autofix == null` → Step 5 (Verify), reset `layer1_retries` to 0 (existing behavior)
+       - if `state.autofix == null` AND `verify.layer1_result == "FAIL"` AND `verify.layer1_retries >= 3` → user halted at the max-retry 1st HARD-GATE (Step 5 "Stop"). Re-enter Step 5 "1st HARD-GATE" directly (Auto-fix visibility per I2 / `autofix_attempted`); do NOT reset `layer1_retries` and do NOT replay verify — the code was not regenerated, so resetting the retry budget would deterministically re-run the whole retry loop straight back to this same gate (wasted tokens). Let the user re-decide (Auto-fix / Continue to Evaluator / Stop).
+       - else if `state.autofix == null` → Step 5 (Verify), reset `layer1_retries` to 0 (existing behavior)
        - if `autofix.applied == "proposed"` → Step 5 "2nd HARD-GATE" direct re-entry (I3; do NOT reset retries)
        - if `autofix.applied == "applied"` → Step 5 re-verify from Layer 1 (retries from state.json, no reset)
        - if `autofix.applied` is `"stopped"` or `"rejected"` → Step 5 "1st HARD-GATE" (Auto-fix HIDE per I2; `layer1_retries` unchanged — I4 clamp applies to "stopped")
@@ -621,7 +622,7 @@ Print: `[harness] Phase: Generate`
 1. Update phase → `"generating"`, `updated_at → now`.
 2. Read template: `generator_single.md`
 3. Prepare prompt: `{spec_content}` from spec.md, `{qa_feedback}` from qa_report.md if round > 1 else "(First round)", `{round_num}`, `{scope}`, `{max_files}`, `{user_lang}`, `{changes_path}` = `{docs_path}changes.md`.
-   - **If retry** (from verify/evaluate failure): add `{verify_failure}` = 1-line FAIL summary, `{verify_report_path}` = `{docs_path}verify_report.md`.
+   - **If retry** (from verify/evaluate failure): add `{verify_failure}` = 1-line FAIL summary, `{verify_report_path}` = `{docs_path}verify_report.md`. **Exception — Layer 2 retries** (from Step 7): override `{verify_report_path}` = `{docs_path}qa_report.md` (Layer 2 findings live in qa_report.md, not the Layer-1 report).
    - Model: if preset ≠ "default", use `model_config.executor`.
 4. **Dispatch 1 sub-agent.**
 5. Parse return. Print: `  ✓ {first line}`
@@ -893,7 +894,7 @@ Print per OLC:
   {failure summary}
 ```
 
-Single implementation pass (retry, no re-plan/re-review) — INLINE per Step 4 retry rules; WORKFLOW `harness.build {retry: true}` with `verifyFailure` = the verdict's `summary` + top `failures[].fix` lines, `verifyReportPath` = `{docs_path}qa_report.md`.
+Single implementation pass (retry, no re-plan/re-review) — INLINE per Step 4 retry rules **but override `{verify_report_path}` = `{docs_path}qa_report.md`** (a Layer 2 failure is structural — its findings live in `qa_report.md`, NOT the Layer-1 `verify_report.md`, which PASSED this pass) with `{verify_failure}` = the 1-line L2 FAIL summary; WORKFLOW `harness.build {retry: true}` with `verifyFailure` = the verdict's `summary` + top `failures[].fix` lines, `verifyReportPath` = `{docs_path}qa_report.md`.
 
 Update phase → `"generating"`, `updated_at → now` (skip `generate_ready`).
 After retry completes: phase → `"generate_done"`, `updated_at → now`, then **run the full Verify → Evaluate pipeline** (INLINE: Step 5 → 6 → 7; WORKFLOW: `harness.eval` full → Step 7).
@@ -959,20 +960,20 @@ Ask via AskUserQuestion (in `user_lang`):
   - "No commit" / "Clean .harness/ only, keep changes in working tree"
 
 Actions (apply Safety Guard before each delete):
-- "Commit code only": (protect persisted spec artifacts) Apply this exact 5-step sequence:
+- "Commit code only": (protect persisted spec artifacts) Apply this exact **commit-first** 5-step sequence:
   1. **(M8) Safety Guard validation** on `{docs_path}` — apply the full Artifact Cleanup Safety Guard per `templates/_shared/safety_guard.md` (slug check + path depth + `Path.cwd()` containment) BEFORE any staging or deletion. If validation fails, **ABORT**: do NOT stage, do NOT delete. Surface the failed check to the user. Both `.harness/` and `{docs_path}` remain intact for manual recovery.
-  2. **Stage spec-persistence files** for commit (only if the source file exists — silently skip missing files):
+  2. **Stage** the code changes plus the spec-persistence files (only if the source file exists — silently skip missing files):
      - `{docs_path}qa_notes.md`
      - `{docs_path}critic_findings.md`
      - `{docs_path}conventions.md`
 
-     **(s4) Per-file staging failure handling**: if `git add <file>` fails for a specific file (permission, .gitignore conflict, etc.), warn the user (in `user_lang`): "Failed to stage `<file>`: <error>. Spec artifact may not be in git history." Continue with remaining files — do NOT abort the whole sequence on a single staging failure. The code commit (step 5) is more critical than any individual artifact preservation.
-  3. **Delete `.harness/`** (the Safety Guard already validated the parent context).
-  4. **Delete `{docs_path}`** working-directory contents.
-  5. **Commit** code changes plus the staged spec artifacts.
+     **(s4) Per-file staging failure handling**: if `git add <file>` fails for a specific spec-artifact file (permission, .gitignore conflict, etc.), warn the user (in `user_lang`): "Failed to stage `<file>`: <error>. Spec artifact may not be in git history." Continue with remaining files — do NOT abort the whole sequence on a single staging failure. The code commit (step 3) is more critical than any individual artifact preservation.
+  3. **Commit** the staged code changes plus spec artifacts, then **confirm the commit succeeded** (git exit 0 / a new commit object exists). **If the commit FAILS** (pre-commit hook rejection, signing failure, locked index, disk error, nothing-to-commit): **STOP without deleting anything** — `.harness/` and `{docs_path}` stay intact so the session is resumable and all artifacts recoverable. Surface the git error (in `user_lang`) and tell the user to resolve it and re-run, or commit manually. Do NOT proceed to steps 4–5.
+  4. **Delete `.harness/`** — only after a confirmed-successful commit (the Safety Guard already validated the parent context).
+  5. **Delete `{docs_path}`** working-directory contents — only after a confirmed-successful commit.
 
-  **(m2) git index vs working directory note**: between step 2 (stage) and step 4 (delete working dir), the spec artifact files are staged in the git index but then removed from the working directory. This is correct behavior — `git add` captures a snapshot to the index at stage-time; a subsequent working-directory `rm` does NOT mark the staged files as deleted in the index (a working-tree-only delete after index-stage is a no-op for the index — it only changes the working tree, not the staged content). The final commit (step 5) therefore includes the 3 staged artifacts as additions even though they no longer exist on disk; they remain recoverable from git history.
-- "Commit all": delete `.harness/`, stage + commit `{docs_path}` + code
+  **(m2) commit-first ordering note**: the commit (step 3) now precedes both deletes (steps 4–5), so the spec artifacts physically exist on disk at commit time and are captured normally; the subsequent working-tree deletion is intentional cleanup (the 3 artifacts remain in git history, recoverable). Critically, because nothing is deleted until the commit is confirmed, a commit failure can never strand the session: `state.json` (`.harness/`) and `{docs_path}` survive for resume/manual recovery. (This supersedes the prior stage→delete→commit order, in which a final-step commit failure left state and docs already deleted.)
+- "Commit all": **stage + commit** `{docs_path}` + code, **confirm the commit succeeded**, then delete `.harness/` (on commit failure, keep `.harness/` intact and surface the error — same recovery rule as "Commit code only" step 3).
 - "No commit": delete `.harness/` only
 
 #### If has_git == false:
