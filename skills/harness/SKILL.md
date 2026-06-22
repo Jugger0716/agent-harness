@@ -707,7 +707,7 @@ Print: `[harness] Phase: Verify (Layer 1 — Mechanical)`
        changesMdPath: "{docs_path}changes.md", verifyReportPath: "{docs_path}verify_report.md",
        todoBlocking: <verify.todo_blocking>,
        specContent: <spec.md content>,
-       changedFilesList: <repo-relative paths only from the in-context ChangeSet.modifiedFiles+createdFiles — strip all "reason" text (anchoring prevention); on resume with no in-context ChangeSet, use state.workflow_ctx.changedFiles>,
+       changedFilesList: <repo-relative paths only, reasons stripped (anchoring prevention). Source priority, first available wins: (1) the in-context ChangeSet.modifiedFiles+createdFiles when the build segment ran THIS session; (2) state.workflow_ctx.changedFiles on resume after a workflow-path build; (3) if workflow_ctx is null — the build ran INLINE via §Mode Gate graceful fallback, OR a cross-session resume dropped the in-context ChangeSet — extract paths from {docs_path}changes.md (### Modified Files / ### Created Files entries, taking the path before the " — reason" suffix). The changes.md read is a sanctioned path-only reconstruction per Architecture Principles #1 (paths only, no content analysis)>,
        testAvailable: <bool>, roundNum: <round>, scope, userLang,
        qaReportPath: "{docs_path}qa_report.md",
        models: { ... }, skipL1: false, onlyL1: false
@@ -1007,6 +1007,7 @@ The following principles are invariant constraints for the harness Orchestrator.
 1. **Orchestrator reads no intermediate files.** Exceptions:
    - spec.md at plan gate (and the orchestrator WRITES spec.md/changes.md from returned objects — writing final artifacts is not reading intermediates)
    - qa_report.md at verdict gate (INLINE path; WORKFLOW path on session resume — verdict reconstruction)
+   - changes.md path-extraction on WORKFLOW-path resume when `workflow_ctx` is null (changedFilesList reconstruction — repo-relative paths only, reasons stripped; no content analysis). See §Step 5 — WORKFLOW path `changedFilesList` source priority.
    - verify_report.md path for user message
    - **verify_report.md failing-file extraction for Auto-fix Proposer dispatch**:
      Orchestrator reads verify_report.md to extract failing file paths only (no content analysis).
