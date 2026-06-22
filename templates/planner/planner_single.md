@@ -83,6 +83,9 @@ Write all output in **{user_lang}**.
    - [ ] criterion one
    - [ ] criterion two
 
+   ### Edge Cases
+   Edge cases and boundary conditions the implementation must handle, one per bullet. If none apply, write "None identified." The `{M} edge cases` count in the 1-line return below reflects the number of bullets in this section.
+
    ### Risks
    Potential risks, unknowns, or areas requiring care during implementation.
 
