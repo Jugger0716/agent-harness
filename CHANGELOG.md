@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/).
 
+## [Unreleased]
+
+### Fixed (`/harness` adversarial skill audit — 3 medium state/data-safety issues)
+
+- **Session Recovery no longer replays a user-halted max-retry state** (`skills/harness/SKILL.md` §Session Recovery, `verify_done` branch): after Layer 1 fails 3× and the user picks **Stop** at the 1st HARD-GATE, `phase` stays `verify_done` and `autofix` stays `null`. The old resume logic matched only `state.autofix == null`, reset `layer1_retries → 0`, and replayed Step 5 — re-running the entire retry loop against un-regenerated code straight back to the same gate (wasted tokens, lost user decision). Resume now detects `autofix == null AND layer1_result == "FAIL" AND layer1_retries >= 3` and re-enters the 1st HARD-GATE directly without resetting the budget, letting the user re-decide.
+- **Artifact cleanup is now commit-first** (`skills/harness/SKILL.md` §Step 8, "Commit code only" + "Commit all"): the prior sequence deleted `.harness/` (state.json) and `{docs_path}` **before** committing, so a `git commit` failure (pre-commit hook, signing, locked index, disk) permanently lost the session state and spec artifacts. The commit now runs before either delete and is success-confirmed; on failure nothing is deleted, so the session stays resumable and artifacts recoverable.
+- **INLINE Layer 2 retry now receives the Layer-2 report** (`skills/harness/SKILL.md` §Step 7 Layer 2 retry + §Step 4 retry rules): the INLINE path passed `{verify_report_path}` = `verify_report.md` (the Layer-1 mechanical report, which PASSED) on a structural Layer 2 failure, so the Generator retried without seeing what actually failed (those findings live in `qa_report.md`). INLINE now overrides `{verify_report_path}` = `qa_report.md` for Layer 2 retries, matching the WORKFLOW path (`harness.eval`) which was already correct.
+
 ## [8.5.0] — 2026-06-08
 
 ### Added
