@@ -8,6 +8,8 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
 
 ## [Unreleased]
 
+## [8.5.1] — 2026-06-22
+
 ### Fixed (`/harness` adversarial skill audit — 3 medium state/data-safety issues)
 
 - **Session Recovery no longer replays a user-halted max-retry state** (`skills/harness/SKILL.md` §Session Recovery, `verify_done` branch): after Layer 1 fails 3× and the user picks **Stop** at the 1st HARD-GATE, `phase` stays `verify_done` and `autofix` stays `null`. The old resume logic matched only `state.autofix == null`, reset `layer1_retries → 0`, and replayed Step 5 — re-running the entire retry loop against un-regenerated code straight back to the same gate (wasted tokens, lost user decision). Resume now detects `autofix == null AND layer1_result == "FAIL" AND layer1_retries >= 3` and re-enters the 1st HARD-GATE directly without resetting the budget, letting the user re-decide.

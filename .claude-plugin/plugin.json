@@ -1,7 +1,7 @@
 {
   "name": "agent-harness",
   "description": "Multi-agent workflow harness with 3-layer quality gates (mechanical + structural + LLM review). Thin orchestrator enforces Plan → Generate → Verify → Evaluate phases with model-tiered sub-agents. Includes safe refactoring, staged migration, hypothesis-driven debugging, automated test generation, team knowledge base (/team-memory), deep code review (/deep-review), codebase auditing, and markdown optimization for Claude Code. Each multi-agent skill runs an opt-in native Workflow path (single/quick stays inline). For teams that want reviewable AI automation without custom infrastructure.",
-  "version": "8.5.0",
+  "version": "8.5.1",
   "author": {
     "name": "Jugger"
   },
