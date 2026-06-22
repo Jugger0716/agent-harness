@@ -176,7 +176,8 @@ Before starting a new task, check if `.harness/state.json` exists:
      - `generating` / `generate_done` → Step 5 (Verify) — do NOT re-run the build segment (edits may already be applied)
      - `verify_ready` / `verifying` → Step 5 (Verify), reset retries to 0
      - `verify_done`:
-       - if `state.autofix == null` → Step 5 (Verify), reset `layer1_retries` to 0 (existing behavior)
+       - if `state.autofix == null` AND `verify.layer1_result == "FAIL"` AND `verify.layer1_retries >= 3` → user halted at the max-retry 1st HARD-GATE (Step 5 "Stop"). Re-enter Step 5 "1st HARD-GATE" directly (Auto-fix visibility per I2 / `autofix_attempted`); do NOT reset `layer1_retries` and do NOT replay verify — the code was not regenerated, so resetting the retry budget would deterministically re-run the whole retry loop straight back to this same gate (wasted tokens). Let the user re-decide (Auto-fix / Continue to Evaluator / Stop).
+       - else if `state.autofix == null` → Step 5 (Verify), reset `layer1_retries` to 0 (existing behavior)
        - if `autofix.applied == "proposed"` → Step 5 "2nd HARD-GATE" direct re-entry (I3; do NOT reset retries)
        - if `autofix.applied == "applied"` → Step 5 re-verify from Layer 1 (retries from state.json, no reset)
        - if `autofix.applied` is `"stopped"` or `"rejected"` → Step 5 "1st HARD-GATE" (Auto-fix HIDE per I2; `layer1_retries` unchanged — I4 clamp applies to "stopped")
@@ -621,7 +622,7 @@ Print: `[harness] Phase: Generate`
 1. Update phase → `"generating"`, `updated_at → now`.
 2. Read template: `generator_single.md`
 3. Prepare prompt: `{spec_content}` from spec.md, `{qa_feedback}` from qa_report.md if round > 1 else "(First round)", `{round_num}`, `{scope}`, `{max_files}`, `{user_lang}`, `{changes_path}` = `{docs_path}changes.md`.
-   - **If retry** (from verify/evaluate failure): add `{verify_failure}` = 1-line FAIL summary, `{verify_report_path}` = `{docs_path}verify_report.md`.
+   - **If retry** (from verify/evaluate failure): add `{verify_failure}` = 1-line FAIL summary, `{verify_report_path}` = `{docs_path}verify_report.md`. **Exception — Layer 2 retries** (from Step 7): override `{verify_report_path}` = `{docs_path}qa_report.md` (Layer 2 findings live in qa_report.md, not the Layer-1 report).
    - Model: if preset ≠ "default", use `model_config.executor`.
 4. **Dispatch 1 sub-agent.**
 5. Parse return. Print: `  ✓ {first line}`
@@ -691,6 +692,7 @@ Print: `[harness] Phase: Verify (Layer 1 — Mechanical)`
 5. Parse return — first line (English raw — see §Output Language Contract — Preserved-English Glossary):
    - Contains `"PASS"` → `verify.layer1_result → "PASS"`
    - Contains `"FAIL"` → `verify.layer1_result → "FAIL"`
+   - Contains NEITHER `"PASS"` nor `"FAIL"` (malformed / non-conforming return) → **conservative FAIL fallback**: set `verify.layer1_result → "FAIL"` and print per OLC `[harness] ⚠ Verify (Layer 1) 1-line return had no PASS/FAIL keyword — treating as FAIL`. Never silent-pass an unparseable verify result.
 6. Update phase → `"verify_done"`, `updated_at → now`. Branch on result below.
 
 #### Step 5 — WORKFLOW path
@@ -705,7 +707,7 @@ Print: `[harness] Phase: Verify (Layer 1 — Mechanical)`
        changesMdPath: "{docs_path}changes.md", verifyReportPath: "{docs_path}verify_report.md",
        todoBlocking: <verify.todo_blocking>,
        specContent: <spec.md content>,
-       changedFilesList: <repo-relative paths only from the in-context ChangeSet.modifiedFiles+createdFiles — strip all "reason" text (anchoring prevention); on resume with no in-context ChangeSet, use state.workflow_ctx.changedFiles>,
+       changedFilesList: <repo-relative paths only, reasons stripped (anchoring prevention). Source priority, first available wins: (1) the in-context ChangeSet.modifiedFiles+createdFiles when the build segment ran THIS session; (2) state.workflow_ctx.changedFiles on resume after a workflow-path build; (3) if workflow_ctx is null — the build ran INLINE via §Mode Gate graceful fallback, OR a cross-session resume dropped the in-context ChangeSet — extract paths from {docs_path}changes.md (### Modified Files / ### Created Files entries, taking the path before the " — reason" suffix). The changes.md read is a sanctioned path-only reconstruction per Architecture Principles #1 (paths only, no content analysis)>,
        testAvailable: <bool>, roundNum: <round>, scope, userLang,
        qaReportPath: "{docs_path}qa_report.md",
        models: { ... }, skipL1: false, onlyL1: false
@@ -809,7 +811,7 @@ After 2nd HARD-GATE decision, set `verify.autofix_attempted = true` in state.jso
 
 **If "Apply patch":**
 1. Before applying: snapshot current state via `git stash` (if `has_git == true`) or copy changed files to `.harness/autofix_pre_apply/` (if `has_git == false`).
-2. **Pre-apply path validation**: parse all `--- a/<path>` and `+++ b/<path>` headers from `auto_fix_patch.md` (metadata only — 4 header lines per hunk; hunk body is not parsed). Apply `validate_path(path, kind=diff_target)` to each path.
+2. **Pre-apply path validation**: parse all `--- a/<path>` and `+++ b/<path>` headers from `auto_fix_patch.md` (metadata only — the `--- a/` / `+++ b/` pair is 2 header lines per file, not per hunk; hunk bodies are not parsed). Apply `validate_path(path, kind=diff_target)` to each path.
    - Print to user: `[harness] Applying patch to: <path list>`
    - If any path fails validation: reject Apply, print `[harness] ✗ Diff path validation failed: <path>`, return to HARD-GATE (Auto-fix hidden).
 3. Apply unified diff from `.harness/generator/auto_fix_patch.md` using Edit tool.
@@ -860,6 +862,7 @@ Print: `[harness] Phase: Evaluate (Layer 2+3)`
    - Contains `"FAIL L2"` → `verify.layer2_result → "FAIL"`. Print: `  ✗ {first line}`
    - Contains `"FAIL L3"` → `verify.layer2_result → "PASS"` (Layer 2 passed). Print: `  ✗ {first line}`
    - Contains `"FAIL"` (no layer indicator) → treat as L3 FAIL. `verify.layer2_result → "PASS"`.
+   - Contains NEITHER `"PASS"` nor `"FAIL"` (malformed / non-conforming return) → **conservative FAIL fallback** (never silent-pass): set `verify.layer2_result → "PASS"` so the failure routes to the Layer 3 user Fix/Accept gate (Step 7) rather than a silent auto-retry, and print per OLC `[harness] ⚠ Evaluate 1-line return had no PASS/FAIL keyword — conservative FAIL fallback`. Step 7 then reads `qa_report.md`'s `### Verdict:` line as the authoritative PASS/FAIL source (the evaluator writes it programmatically); if that line is also absent, treat the verdict as FAIL.
 6. Update phase → `"evaluate_done"`, `updated_at → now`.
 
 Print: `[harness] Evaluate complete.`
@@ -893,7 +896,7 @@ Print per OLC:
   {failure summary}
 ```
 
-Single implementation pass (retry, no re-plan/re-review) — INLINE per Step 4 retry rules; WORKFLOW `harness.build {retry: true}` with `verifyFailure` = the verdict's `summary` + top `failures[].fix` lines, `verifyReportPath` = `{docs_path}qa_report.md`.
+Single implementation pass (retry, no re-plan/re-review) — INLINE per Step 4 retry rules **but override `{verify_report_path}` = `{docs_path}qa_report.md`** (a Layer 2 failure is structural — its findings live in `qa_report.md`, NOT the Layer-1 `verify_report.md`, which PASSED this pass) with `{verify_failure}` = the 1-line L2 FAIL summary; WORKFLOW `harness.build {retry: true}` with `verifyFailure` = the verdict's `summary` + top `failures[].fix` lines, `verifyReportPath` = `{docs_path}qa_report.md`.
 
 Update phase → `"generating"`, `updated_at → now` (skip `generate_ready`).
 After retry completes: phase → `"generate_done"`, `updated_at → now`, then **run the full Verify → Evaluate pipeline** (INLINE: Step 5 → 6 → 7; WORKFLOW: `harness.eval` full → Step 7).
@@ -959,20 +962,20 @@ Ask via AskUserQuestion (in `user_lang`):
   - "No commit" / "Clean .harness/ only, keep changes in working tree"
 
 Actions (apply Safety Guard before each delete):
-- "Commit code only": (protect persisted spec artifacts) Apply this exact 5-step sequence:
+- "Commit code only": (protect persisted spec artifacts) Apply this exact **commit-first** 5-step sequence:
   1. **(M8) Safety Guard validation** on `{docs_path}` — apply the full Artifact Cleanup Safety Guard per `templates/_shared/safety_guard.md` (slug check + path depth + `Path.cwd()` containment) BEFORE any staging or deletion. If validation fails, **ABORT**: do NOT stage, do NOT delete. Surface the failed check to the user. Both `.harness/` and `{docs_path}` remain intact for manual recovery.
-  2. **Stage spec-persistence files** for commit (only if the source file exists — silently skip missing files):
+  2. **Stage** the code changes plus the spec-persistence files (only if the source file exists — silently skip missing files):
      - `{docs_path}qa_notes.md`
      - `{docs_path}critic_findings.md`
      - `{docs_path}conventions.md`
 
-     **(s4) Per-file staging failure handling**: if `git add <file>` fails for a specific file (permission, .gitignore conflict, etc.), warn the user (in `user_lang`): "Failed to stage `<file>`: <error>. Spec artifact may not be in git history." Continue with remaining files — do NOT abort the whole sequence on a single staging failure. The code commit (step 5) is more critical than any individual artifact preservation.
-  3. **Delete `.harness/`** (the Safety Guard already validated the parent context).
-  4. **Delete `{docs_path}`** working-directory contents.
-  5. **Commit** code changes plus the staged spec artifacts.
+     **(s4) Per-file staging failure handling**: if `git add <file>` fails for a specific spec-artifact file (permission, .gitignore conflict, etc.), warn the user (in `user_lang`): "Failed to stage `<file>`: <error>. Spec artifact may not be in git history." Continue with remaining files — do NOT abort the whole sequence on a single staging failure. The code commit (step 3) is more critical than any individual artifact preservation.
+  3. **Commit** the staged code changes plus spec artifacts, then **confirm the commit succeeded** (git exit 0 / a new commit object exists). **If the commit FAILS** (pre-commit hook rejection, signing failure, locked index, disk error, nothing-to-commit): **STOP without deleting anything** — `.harness/` and `{docs_path}` stay intact so the session is resumable and all artifacts recoverable. Surface the git error (in `user_lang`) and tell the user to resolve it and re-run, or commit manually. Do NOT proceed to steps 4–5.
+  4. **Delete `.harness/`** — only after a confirmed-successful commit (the Safety Guard already validated the parent context).
+  5. **Delete `{docs_path}`** working-directory contents — only after a confirmed-successful commit.
 
-  **(m2) git index vs working directory note**: between step 2 (stage) and step 4 (delete working dir), the spec artifact files are staged in the git index but then removed from the working directory. This is correct behavior — `git add` captures a snapshot to the index at stage-time; a subsequent working-directory `rm` does NOT mark the staged files as deleted in the index (a working-tree-only delete after index-stage is a no-op for the index — it only changes the working tree, not the staged content). The final commit (step 5) therefore includes the 3 staged artifacts as additions even though they no longer exist on disk; they remain recoverable from git history.
-- "Commit all": delete `.harness/`, stage + commit `{docs_path}` + code
+  **(m2) commit-first ordering note**: the commit (step 3) now precedes both deletes (steps 4–5), so the spec artifacts physically exist on disk at commit time and are captured normally; the subsequent working-tree deletion is intentional cleanup (the 3 artifacts remain in git history, recoverable). Critically, because nothing is deleted until the commit is confirmed, a commit failure can never strand the session: `state.json` (`.harness/`) and `{docs_path}` survive for resume/manual recovery. (This supersedes the prior stage→delete→commit order, in which a final-step commit failure left state and docs already deleted.)
+- "Commit all": **stage + commit** `{docs_path}` + code, **confirm the commit succeeded**, then delete `.harness/` (on commit failure, keep `.harness/` intact and surface the error — same recovery rule as "Commit code only" step 3).
 - "No commit": delete `.harness/` only
 
 #### If has_git == false:
@@ -1004,12 +1007,13 @@ The following principles are invariant constraints for the harness Orchestrator.
 1. **Orchestrator reads no intermediate files.** Exceptions:
    - spec.md at plan gate (and the orchestrator WRITES spec.md/changes.md from returned objects — writing final artifacts is not reading intermediates)
    - qa_report.md at verdict gate (INLINE path; WORKFLOW path on session resume — verdict reconstruction)
+   - changes.md path-extraction on WORKFLOW-path resume when `workflow_ctx` is null (changedFilesList reconstruction — repo-relative paths only, reasons stripped; no content analysis). See §Step 5 — WORKFLOW path `changedFilesList` source priority.
    - verify_report.md path for user message
    - **verify_report.md failing-file extraction for Auto-fix Proposer dispatch**:
      Orchestrator reads verify_report.md to extract failing file paths only (no content analysis).
      Extracted paths pass through Path Validator (kind=file_reference) and are capped at 5.
      See §Step 5 — Auto-fix dispatch for the exact procedure.
-   - Apply-before `--- a/` / `+++ b/` diff header lines (4 lines of metadata only — hunk body is delegated to Edit tool). This is NOT a violation of this principle.
+   - Apply-before `--- a/` / `+++ b/` diff header lines (2 metadata lines per file — hunk body is delegated to Edit tool). This is NOT a violation of this principle.
 
 2. **Auto-fix Proposer is the only sub-agent that directly Reads source files among orchestrator-dispatched agents.** (Segment-script agents explore the codebase themselves by design — they run inside the engine's autonomous span.) Other inline sub-agents receive content only through template variables.
 
@@ -1021,7 +1025,7 @@ The following principles are invariant constraints for the harness Orchestrator.
 
 5. **All external paths pass through Path Validator before use** (see §Path Validator below).
 
-6. **Gates never enter segment scripts.** The 3 HARD-GATEs (spec-confirm / verify-fail / auto-fix-apply) are rendered by this orchestrator between segment runs. `scripts/verify_meta_literal.py` enforces this at lint time.
+6. **Gates never enter segment scripts.** The 3 HARD-GATEs (spec-confirm / verify-fail / auto-fix-apply) are rendered by this orchestrator between segment runs. `scripts/verify_meta_literal.py` guards this at lint time by rejecting gate-marker tokens — the `<HARD-GATE>` tag form, `AskUserQuestion`, and the `Apply patch` option label — inside any segment script. This is a marker-based tripwire, not a proof of gate-freedom: it deliberately does NOT flag the spaced prose form `HARD GATE #N`, which segment scripts legitimately use in comments to note that gates live here in the orchestrator.
 
 ### Path Validator
 
@@ -1044,10 +1048,10 @@ validate_path(path, kind) where kind ∈ {output_dir, file_reference, diff_targe
          path docs/harness/<slug>/ while still blocking other docs/* overrides.)
      - file_reference (failing_files_list):
          (a) relative path, (b) no .. segment, (c) inside repo_path,
-         (d) outside .harness/, docs/harness/*, memory/.
+         (d) outside .harness/, docs/harness/*, memory/, .git/.
      - diff_target (unified diff --- a/ / +++ b/ headers):
          file_reference conditions + inside scope filter +
-         outside .harness/, docs/harness/, memory/, .git/.
+         outside .harness/, docs/harness/*, memory/, .git/.
   5. On failure: return specific halt message describing the violation.
 ```
 
