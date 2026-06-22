@@ -442,6 +442,24 @@ if (!A.retry) {
     { schema: AnalysisResultSchema, label: 'lead_developer', phase: 'Plan', ...mopt(MODELS.executor) },
   )
   planDigest = digest(implPlan)
+  // Fold the File-by-File plan's target paths into the digest as an explicit
+  // inventory, so advisors + the implementer (and retry passes, which reuse this
+  // digest verbatim) can open those files directly instead of each re-running
+  // broad codebase discovery. keyPoints format per TPL_LEAD_DEVELOPER:
+  // "path — action — what & why — depends on: ...", so the path is the first
+  // ' — '/' - '-delimited segment. Soft hint only — malformed entries are filtered.
+  const planFiles =
+    implPlan && Array.isArray(implPlan.keyPoints)
+      ? implPlan.keyPoints
+          .map((kp) => String(kp).split(/\s[—-]\s/)[0].trim())
+          .filter((p) => p && p.length <= 200)
+      : []
+  if (planFiles.length) {
+    planDigest +=
+      '\n\n**Files the plan targets** (read these directly to ground your work; ' +
+      'do not re-run broad codebase discovery to locate them):\n' +
+      planFiles.map((p) => `- ${p}`).join('\n')
+  }
   log('Plan: implementation plan ready')
 
   phase('Advise')
