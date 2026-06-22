@@ -19,8 +19,12 @@ docs/superpowers/specs/2026-06-05-ultracode-phase1-engine-spike.md SPIKE-F1/F2/F
      does NOT catch (false-green) -- so it is rejected here.
   3. non-deterministic-API ban: Date.now / new Date / Math.random break
      cached-prefix resume (engine throws at runtime; rejected at lint time).
-  4. HARD-GATE leak ban: AskUserQuestion / HARD-GATE / "Apply patch" tokens --
-     gates live only in the orchestrator (SKILL.md), never in a segment script.
+  4. HARD-GATE leak ban: the <HARD-GATE> tag form, AskUserQuestion, and the
+     "Apply patch" option label -- gates live only in the orchestrator
+     (SKILL.md), never in a segment script. The hyphenated/tag form is matched
+     deliberately; the spaced prose "HARD GATE #N" is NOT matched, because
+     segment scripts legitimately reference it in comments (e.g. "Runs AFTER
+     HARD GATE #1") to document that gates live in the orchestrator.
   5. defensive-args-parse (SPIKE-F1): `args` reaches the script as a JSON
      STRING, not an object. Every script must contain the canonical guard
      `typeof args === 'string'` before reading fields.
@@ -47,6 +51,12 @@ ROOT = Path(__file__).resolve().parent.parent
 WF = ROOT / "workflows"
 
 BANNED_NONDET = [r"\bDate\.now\b", r"\bnew\s+Date\b", r"\bMath\.random\b"]
+# Gate-marker tripwire tokens. "HARD-GATE" matches the <HARD-GATE> tag form (the
+# real gate-leak signature in SKILL.md). The spaced prose "HARD GATE #N" is
+# INTENTIONALLY not matched: segment-script comments legitimately reference the
+# gates that live in the orchestrator (e.g. "Runs AFTER HARD GATE #1"), so a
+# HARD[\s-]*GATE regex would false-positive on every such comment and break the
+# green baseline. Keep this hyphen/tag-targeted.
 BANNED_GATE = ["AskUserQuestion", "HARD-GATE", "Apply patch"]
 ARGS_GUARD = re.compile(r"typeof\s+args\s*===\s*['\"]string['\"]")
 
@@ -118,7 +128,7 @@ def check_meta(src: str) -> list[str]:
         if "{" not in chunk:
             errs.append("meta.phases entries must be object literals "
                         "[{title, detail?}] (SPIKE-F5), not strings")
-        if not re.search(r"title\s*:\s*['\"]", body):
+        if not re.search(r"title\s*:\s*['\"]", chunk):
             errs.append("meta.phases entries lack a title: string literal")
 
     if "..." in masked:
