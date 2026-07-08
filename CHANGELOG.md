@@ -18,9 +18,11 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
   silently. `--no-prompt` and non-interactive sessions keep the silent auto-resolution.
 - **Mode Gate §Path Transparency**: every skill now prints `Path : <inline|workflow> (<reason>)` so the
   chosen execution path and its cause are always visible — including on the auto-resolved and ultracode paths.
-- **`scripts/verify_sync_markers.py` §Ambiguity Prompt SYNC group**: the shared §Ambiguity Prompt / §Path
-  Transparency contract is now enforced as a SYNC group across the 8 skills, so drift between a skill's
-  Mode Gate wiring and the single source is caught mechanically.
+- **`scripts/verify_sync_markers.py` §Ambiguity Prompt SYNC group**: the §Ambiguity Prompt marker is now
+  tracked as a SYNC group — the linter checks that the single-source target exists and that the marker is
+  present across the wired skills (referential integrity + a minimum-site-count floor), so a skill dropping its
+  `SYNC-WITH` marker fails the lint. It does NOT diff each skill's wiring against the single-source prose, and
+  §Path Transparency has no marker group yet — both are candidate follow-ups.
 
 ### Changed
 - ultracode ON now prints its workflow reason instead of silently flipping the path (no behavior change to
