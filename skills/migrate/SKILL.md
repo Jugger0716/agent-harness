@@ -189,7 +189,8 @@ When the user provides a migration target (via $ARGUMENTS or in conversation), e
 9. **Capture original branch and create migration branch:**
    - Run `git rev-parse --abbrev-ref HEAD` and store result as `original_branch`. If the result is `HEAD` (detached HEAD state), use `git rev-parse HEAD` instead to store the full commit hash.
    - `git checkout -b harness/migrate-<slug>`
-10. **Mode Gate resolution:** apply §Mode Gate (no AskUserQuestion roundtrip — mode is derived from `--mode` flags / ultracode opt-in / tool availability / `has_git`). Store `mode` and `path_resolved` in state.json. Print the scope-aware advisory. If the user explicitly requested `--mode multi` but the gate resolved to inline (Workflow tool unavailable or `has_git == false`), notify (in `user_lang`): "multi mode requires the native Workflow engine and git — proceeding on the inline single path."
+10. **Mode Gate resolution:** apply §Mode Gate INCLUDING **§Ambiguity Prompt** (single source: `templates/_shared/mode_gate.md`) — the mode roundtrip is removed EXCEPT this prompt, which fires only when NO opt-in is present (no `--mode`, ultracode OFF, `Workflow` tool available, `has_git == true`, interactive, no `--no-prompt`). Skill modes: single(inline) / multi(workflow); ultracode-target: multi. Store `mode` and `path_resolved` in state.json. Then emit **§Path Transparency** — show `Path : <inline | workflow>  (<reason>)`. Print the scope-aware advisory. If the user explicitly requested `--mode multi` but the gate resolved to inline (Workflow tool unavailable or `has_git == false`), notify (in `user_lang`): "multi mode requires the native Workflow engine and git — proceeding on the inline single path."
+<!-- SYNC-WITH: templates/_shared/mode_gate.md §Ambiguity Prompt -->
 11. **Model configuration selection:**
    If `--model-config <preset>` was passed, use it directly. Otherwise, use AskUserQuestion to ask the user (in `user_lang`):
      header: "Model"
