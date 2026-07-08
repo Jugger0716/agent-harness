@@ -31,3 +31,48 @@ introduced per-skill in the reframe phases (Phase 1 pilot first, proven by dry-r
 replicate phases). Until a skill ships its scripts, that skill stays on the INLINE path even
 when opted in — the opt-in simply has no workflow target yet, and the graceful-fallback rule
 (3) keeps that non-breaking.
+
+## §Ambiguity Prompt (fires ONLY when opt-in is absent)
+
+Path resolution is silent EXCEPT one case. Resolve in this order (first match wins). This
+order matters: the engine/git check (2) precedes honoring a workflow-tier `--mode` (3) so an
+impossible request degrades correctly.
+
+1. `--mode <shallow>` (the skill's inline mode: single/quick) → **inline**. No prompt.
+2. `Workflow` tool absent **OR** `has_git == false` → **inline**. No prompt. If a workflow-tier
+   `--mode` was requested, print the downgrade notice.
+3. `--mode <workflow-tier>` → **workflow** (that tier). No prompt.
+4. **ultracode ON** (no `--mode`) → **workflow** at the skill's *current ultracode-target* tier
+   (the mode its §Mode Gate table already maps ultracode to — NOT necessarily the deepest).
+   No prompt — ultracode IS the opt-in. Emit §Path Transparency with reason "ultracode ON".
+5. `--no-prompt` flag **OR** the session cannot present an interactive prompt (headless / cron /
+   subagent) → **inline** (existing auto-resolution). No prompt. **Default bias: auto-resolve
+   UNLESS an interactive session is positively confirmed** — never block an automated run.
+6. else (no `--mode` **AND** ultracode OFF **AND** engine available **AND** interactive) → **ASK**
+   via AskUserQuestion (in `user_lang`):
+   - header: "Path"
+   - question: "No mode specified — choose how to run:"
+   - options = the skill's modes, each mapping to inline/workflow per its §Mode Gate table.
+     Append "(Recommended)" to the scope-advised tier for skills that print a scope advisory
+     (deep-review, codebase-audit); otherwise to the shallowest (inline) mode.
+   On answer: set `mode` + `path_resolved`, then emit §Path Transparency.
+
+This does NOT reintroduce effort gating. Opt-in signals (ultracode, `--mode`) still resolve
+silently; the prompt fires only when NO opt-in is present. Resume never re-fires this prompt —
+it reuses the stored `{ mode, path_resolved }` (only the workflow→inline downgrade may change it).
+
+A skill with no Workflow segment (e.g. `team-memory`) never reaches this prompt: step 2 always
+resolves it to inline because no workflow path exists for it.
+
+## §Path Transparency (always shown)
+
+In EVERY resolution branch, the Setup Summary / status format MUST show:
+
+    Path : <inline | workflow>  (<reason>)
+
+`<reason>` states WHY, and for inline-by-default also HOW to change it. Canonical reasons:
+  - `--mode <m>`                          → "--mode <m>"
+  - ultracode ON (step 4)                 → "ultracode ON"
+  - engine/git unavailable (step 2)       → "Workflow engine unavailable"
+  - no opt-in, resolved inline (step 5)   → "no opt-in — re-run with --mode <wf-tier> for workflow"
+  - chosen via §Ambiguity Prompt (step 6) → "you chose <mode>"
