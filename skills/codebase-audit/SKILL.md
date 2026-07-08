@@ -26,7 +26,7 @@ Status block shape + label rules: see `templates/_shared/status_format.md`. code
   Skill  : codebase-audit
   Target : <project name or path>
   Mode   : <quick | deep | thorough>
-  Path   : <inline | workflow>
+  Path   : <inline | workflow>  (<reason>)
   Model  : <model_config preset name>
   Phase  : <current phase>
   Scope  : <scope or "(full project)">
