@@ -24,7 +24,7 @@ Detect the user's language from their **most recent message**. Store as `user_la
 
 ## Mode Gate — path & mode resolution (single source: `templates/_shared/mode_gate.md`)
 
-Apply the shared opt-in convention in `templates/_shared/mode_gate.md`. /deep-review-specific resolution (replaces the old Step 2 mode-selection AskUserQuestion roundtrip):
+Apply the shared opt-in convention in `templates/_shared/mode_gate.md`. /deep-review-specific resolution (the mode-selection roundtrip is removed EXCEPT §Ambiguity Prompt, which fires only when opt-in is absent):
 
 | Signal (first match wins) | `mode` | `path_resolved` |
 |---|---|---|
@@ -34,7 +34,7 @@ Apply the shared opt-in convention in `templates/_shared/mode_gate.md`. /deep-re
 | `--mode deep` | deep | **workflow** |
 | `--mode thorough` (or `comprehensive`/`multi`) | thorough | **workflow** |
 | no `--mode` AND session is in ultracode mode | thorough | **workflow** |
-| no `--mode`, no opt-in | quick | **inline** |
+| no `--mode`, no opt-in | quick | **inline** (interactive + engine available → asks first, §Ambiguity Prompt) |
 
 - **Deep/thorough exist ONLY on the workflow path** — the engine's `parallel()` fan-out replaces the old hand-rolled 2/3-sub-agent dispatch prose (pilot precedent: /harness standard/multi). The inline path is the preserved quick mode (single-pass 5-perspective checklist).
 - The `comprehensive`/`multi` aliases are deliberate cross-skill deepest-tier synonyms (every reframed skill accepts the others' deepest mode names and collapses them onto its own deepest tier); canonical mode names stay per-skill.
@@ -49,7 +49,7 @@ Status block shape + label rules: see `templates/_shared/status_format.md`. deep
 [deep-review]
   Target : <PR#, branch, commit range, or file path>
   Mode   : <quick | deep | thorough>
-  Path   : <inline | workflow>
+  Path   : <inline | workflow>  (<reason per §Path Transparency>)
   Model  : <model_config preset name>
   Phase  : <phase label>
   Scope  : <N files, M lines>
@@ -105,7 +105,8 @@ When the user provides a review target (via $ARGUMENTS or in conversation), exec
 
 ### Step 2: Mode Gate & Model Configuration
 
-1. **Mode Gate resolution:** apply §Mode Gate (no mode-selection AskUserQuestion roundtrip — mode is derived from `--mode` flags / ultracode opt-in / tool availability / `has_git`). Print the scope-aware advisory. If the user explicitly requested `--mode deep/thorough` but the gate resolved to inline (Workflow tool unavailable or `has_git == false`), notify (in `user_lang`): "deep/thorough mode requires the native Workflow engine and git — proceeding on the inline quick path."
+1. **Mode Gate resolution:** apply §Mode Gate INCLUDING **§Ambiguity Prompt** (single source: `templates/_shared/mode_gate.md`) — the mode roundtrip is removed EXCEPT this prompt, which fires only when NO opt-in is present (no `--mode`, ultracode OFF, `Workflow` tool available, `has_git == true`, interactive, no `--no-prompt`). Skill modes: quick(inline) / deep(workflow) / thorough(workflow); ultracode-target: thorough. Store `mode` and `path_resolved` in `.harness/model_config.json`. Then emit **§Path Transparency** — show `Path : <inline | workflow>  (<reason>)`. Print the scope-aware advisory. For §Ambiguity Prompt, the `(Recommended)` option is the scope-advised tier already printed (< 100 lines → quick, 100–500 → deep, 500+ → thorough). If the user explicitly requested `--mode deep/thorough` but the gate resolved to inline (Workflow tool unavailable or `has_git == false`), notify (in `user_lang`): "deep/thorough mode requires the native Workflow engine and git — proceeding on the inline quick path."
+<!-- SYNC-WITH: templates/_shared/mode_gate.md §Ambiguity Prompt -->
 
 2. **Model configuration selection (deep and thorough modes only):**
    If mode is `quick`, skip this step (no sub-agents used).
@@ -380,7 +381,7 @@ These are suggestions only -- do not auto-invoke other skills.
    [deep-review] Review Complete
      Target     : <target>
      Mode       : <mode>
-     Path       : <inline | workflow>
+     Path       : <inline | workflow>  (<reason per §Path Transparency>)
      Assessment : <APPROVE / REQUEST_CHANGES / COMMENT>
      Findings   : N critical, N major, N minor, N suggestions
      Report     : docs/harness/<slug>/review_report.md

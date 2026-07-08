@@ -8,6 +8,17 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
 
 ## [Unreleased]
 
+### Added
+- Mode Gate §Ambiguity Prompt: when no `--mode` and ultracode is OFF (and the Workflow engine
+  is available in an interactive session), skills now explicitly ask inline-vs-workflow instead
+  of resolving silently. `--no-prompt` and non-interactive sessions keep the silent auto-resolution.
+- Mode Gate §Path Transparency: every skill now prints `Path : <inline|workflow> (<reason>)` so the
+  chosen execution path and its cause are always visible.
+
+### Changed
+- ultracode ON now prints its workflow reason instead of silently flipping the path (no behavior
+  change to the resolved path — transparency only).
+
 ## [8.5.1] — 2026-06-22
 
 ### Fixed (`/harness` adversarial skill audit — 3 medium state/data-safety issues)

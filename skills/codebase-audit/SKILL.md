@@ -26,7 +26,7 @@ Status block shape + label rules: see `templates/_shared/status_format.md`. code
   Skill  : codebase-audit
   Target : <project name or path>
   Mode   : <quick | deep | thorough>
-  Path   : <inline | workflow>
+  Path   : <inline | workflow>  (<reason>)
   Model  : <model_config preset name>
   Phase  : <current phase>
   Scope  : <scope or "(full project)">
@@ -100,6 +100,8 @@ When the user invokes `/codebase-audit`, execute this workflow:
 7. **Mode resolution (§Mode Gate).** Resolve `mode` + `path_resolved` per §Mode Gate (from `--mode` flags / ultracode opt-in / Workflow availability). Print the scope-aware advisory (< 30 → quick, 30–200 → deep, 200+/monorepo → thorough). Persist `{ mode, path_resolved }` to `.harness/model_config.json`.
 
    - If `--mode` was provided, or the session is in ultracode mode, use the gate result and **skip the prompt below**.
+   - If `--no-prompt` was passed, or the session is non-interactive (headless/cron/subagent), skip the prompt and use the gate default (per §Ambiguity Prompt step 5).
+   - **After resolution (every branch),** emit §Path Transparency: append `(<reason>)` to the `Path` line (reasons per `templates/_shared/mode_gate.md §Path Transparency`).
    - **Boundary / explicit-override fallback (no `--mode`, no opt-in, interactive session only):** the gate defaults to quick; offer a one-time choice so an interactive user can opt into a deeper mode, using AskUserQuestion (in `user_lang`):
        header: "Audit Mode"
        question: "Select audit mode: ({N} files in scope)"
@@ -129,7 +131,7 @@ When the user invokes `/codebase-audit`, execute this workflow:
 9. **Confirmation gate for deep/thorough modes:**
 
    <HARD-GATE>
-   If mode is `deep` or `thorough`, present confirmation using AskUserQuestion (in `user_lang`):
+   If mode is `deep` or `thorough` **AND** the mode was NOT just chosen via the Step 7 boundary prompt this session (i.e. it came from `--mode` or ultracode), present confirmation using AskUserQuestion (in `user_lang`):
      header: "Confirm"
      question: "{mode} mode uses ~{cost}x tokens compared to quick."
      options:
@@ -141,6 +143,8 @@ When the user invokes `/codebase-audit`, execute this workflow:
 
    On "Proceed": continue. On "Switch to {lower_mode}": update mode, skip re-confirmation. On "Abort": halt.
    </HARD-GATE>
+
+   > When the mode was selected via the Step 7 prompt, skip this gate — the prompt's option descriptions already displayed the cost multiplier.
 
 10. **Model configuration selection (deep and thorough modes only):**
    If mode is `quick`, skip this step (no sub-agents used).
@@ -172,6 +176,7 @@ When the user invokes `/codebase-audit`, execute this workflow:
       Skill  : codebase-audit
       Target : <project name or path>
       Mode   : <quick | deep | thorough>
+      Path   : <inline | workflow>  (<reason>)
       Model  : <preset name>
       Scope  : <scope or "(full project)">
       Files  : <count> source files
