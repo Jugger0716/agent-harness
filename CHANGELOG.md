@@ -8,6 +8,32 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
 
 ## [Unreleased]
 
+## [8.6.0] — 2026-07-08
+
+### Added
+- **Mode Gate §Ambiguity Prompt** (`templates/_shared/mode_gate.md` single source, wired into all 8
+  multi-path skills — `/harness`, `/spec`, `/debug`, `/deep-review`, `/codebase-audit`, `/migrate`,
+  `/refactor`, `/test-gen`): when no `--mode` is given and ultracode is OFF (and the Workflow engine is
+  available in an interactive session), skills now explicitly ask inline-vs-workflow instead of resolving
+  silently. `--no-prompt` and non-interactive sessions keep the silent auto-resolution.
+- **Mode Gate §Path Transparency**: every skill now prints `Path : <inline|workflow> (<reason>)` so the
+  chosen execution path and its cause are always visible — including on the auto-resolved and ultracode paths.
+- **`scripts/verify_sync_markers.py` §Ambiguity Prompt SYNC group**: the §Ambiguity Prompt marker is now
+  tracked as a SYNC group — the linter checks that the single-source target exists and that the marker is
+  present across the wired skills (referential integrity + a minimum-site-count floor), so a skill dropping its
+  `SYNC-WITH` marker fails the lint. It does NOT diff each skill's wiring against the single-source prose, and
+  §Path Transparency has no marker group yet — both are candidate follow-ups.
+
+### Changed
+- ultracode ON now prints its workflow reason instead of silently flipping the path (no behavior change to
+  the resolved path — transparency only).
+
+### Fixed
+- `/migrate` and `/refactor` Setup resolution step now wires §Ambiguity Prompt at the correct anchor (was
+  mis-anchored at the summary bullet).
+- `harness` / `codebase-audit` status-format Path row now includes the `<reason>` (§Path Transparency
+  completeness); `migrate`/`refactor` added to the §Ambiguity Prompt scope-advisory example list.
+
 ## [8.5.1] — 2026-06-22
 
 ### Fixed (`/harness` adversarial skill audit — 3 medium state/data-safety issues)
