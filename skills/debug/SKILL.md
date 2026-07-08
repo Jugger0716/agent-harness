@@ -35,7 +35,7 @@ Detect the user's language from their **most recent message**. Store as `user_la
 
 ## Mode Gate — path & mode resolution (single source: `templates/_shared/mode_gate.md`)
 
-Apply the shared opt-in convention in `templates/_shared/mode_gate.md`. /debug-specific resolution (replaces the old Step 1 mode-selection AskUserQuestion roundtrip):
+Apply the shared opt-in convention in `templates/_shared/mode_gate.md`. /debug-specific resolution (the mode-selection roundtrip is removed EXCEPT §Ambiguity Prompt, which fires only when opt-in is absent):
 
 | Signal (first match wins) | `mode` | `path_resolved` |
 |---|---|---|
@@ -58,7 +58,7 @@ When displaying status, read `.harness/state.json` and print (in `user_lang`):
 [debug]
   Error  : <error description, truncated to 60 chars>
   Mode   : <quick | deep>
-  Path   : <inline | workflow>
+  Path   : <inline | workflow>  (<reason per §Path Transparency>)
   Model  : <model_config preset name>
   Phase  : <phase label>
   Branch : <branch>    ← omit this line if has_git == false
@@ -72,7 +72,7 @@ Before starting a new debug session, check if `.harness/state.json` already exis
 1. If it exists and matches, print status in the standard format (including Model line from `model_config`), prefixed with `[debug] Previous debug session detected.`
 2. Restore `model_config` from state.json. Apply it to all subsequent sub-agent launches and Workflow `args.models`.
 3. If `has_git` is not present in state.json (pre-existing session from older version), re-detect using the Environment Detection command and store the result.
-3.5. **Re-resolve §Mode Gate** (the new session may lack the Workflow tool or the opt-in) and update `path_resolved` — a session that started on the workflow path may legitimately resume on the inline path. Cross-session resume re-RUNS the segment; `state.runs.analyze.runId` is audit-only (`resumeFromRunId` is same-session only — never attempt it across sessions).
+3.5. **Re-resolve §Mode Gate** (the new session may lack the Workflow tool or the opt-in) and update `path_resolved` — a session that started on the workflow path may legitimately resume on the inline path. On resume, do NOT re-fire §Ambiguity Prompt — reuse the stored `mode` + `path_resolved`; only the workflow→inline downgrade (engine now absent) may change `path_resolved`. Cross-session resume re-RUNS the segment; `state.runs.analyze.runId` is audit-only (`resumeFromRunId` is same-session only — never attempt it across sessions).
 4. Ask the user using AskUserQuestion (in `user_lang`):
      header: "Session"
      question: "[debug] Previous debug session detected. [print status in standard format]. Resume, restart, or stop?"
@@ -110,7 +110,8 @@ When the user describes a bug or error (via $ARGUMENTS or in conversation), exec
 3. **Slugify the error description:** lowercase, transliterate non-ASCII to ASCII, remove non-word chars except hyphens, replace spaces with hyphens, truncate to 40 chars. Store as `<slug>`.
 4. **Create directories:** `.harness/`, `.harness/debug/`, `docs/harness/<slug>/`
 5. **Create git branch (if has_git):** `git checkout -b harness/debug-<slug>`. If `has_git == false`, skip this step entirely.
-6. **Mode Gate resolution:** apply §Mode Gate (no AskUserQuestion roundtrip — mode is derived from `--mode` flags / ultracode opt-in / tool availability / `has_git`). Store `mode` and `path_resolved` in state.json. If the user explicitly requested `--mode deep` but the gate resolved to inline (Workflow tool unavailable or `has_git == false`), notify (in `user_lang`): "deep mode requires the native Workflow engine and git — proceeding on the inline quick path."
+6. **Mode Gate resolution:** apply §Mode Gate INCLUDING **§Ambiguity Prompt** (single source: `templates/_shared/mode_gate.md`). The mode roundtrip is removed EXCEPT this prompt, which fires only when NO opt-in is present (no `--mode`, ultracode OFF, `Workflow` tool available, `has_git == true`, interactive session, no `--no-prompt`). Skill modes: quick(inline) / deep(workflow). ultracode-target (step 4 default): deep. Store `mode` and `path_resolved` in state.json. Then emit **§Path Transparency** — show `Path : <inline | workflow>  (<reason>)`. If the user explicitly requested `--mode deep` but the gate resolved to inline (Workflow tool unavailable or `has_git == false`), notify (in `user_lang`): "deep mode requires the native Workflow engine and git — proceeding on the inline quick path."
+<!-- SYNC-WITH: templates/_shared/mode_gate.md §Ambiguity Prompt -->
 7. **Model configuration selection (deep mode only):**
    If mode is `quick`, skip this step entirely (no sub-agents in quick mode).
 
@@ -152,7 +153,7 @@ When the user describes a bug or error (via $ARGUMENTS or in conversation), exec
      Directory : <path>
      Branch    : harness/debug-<slug>     ← omit if has_git == false
      Mode      : <quick | deep>
-     Path      : <inline | workflow>
+     Path      : <inline | workflow>  (<reason per §Path Transparency>)
      Model     : <preset name>            ← omit if quick mode
    ```
 
