@@ -109,7 +109,7 @@ Apply the shared opt-in convention in `templates/_shared/mode_gate.md`. /harness
 | `--mode standard` | standard | **workflow** |
 | `--mode multi` (or `comprehensive`/`thorough`/`deep`) | multi | **workflow** |
 | no `--mode` AND session is in ultracode mode | multi | **workflow** |
-| no `--mode`, no opt-in | single | **inline** |
+| no `--mode`, no opt-in | single | **inline** (interactive + engine available → asks first, §Ambiguity Prompt) |
 
 - **Opt-in signals** (any one suffices, per mode_gate.md): ultracode mode is on for the session; the user passed an explicit `--mode standard/multi` (or a deeper alias: `comprehensive`/`thorough`/`deep`); or these skill instructions direct the Workflow call (valid documented opt-in — but /harness only exercises it when one of the first two holds).
 - **Graceful fallback:** if a `Workflow` invocation errors at any step, print `[harness] ⚠ Workflow engine unavailable — falling back to the inline single path.` (in `user_lang`), set `path_resolved → "inline"`, `mode → "single"`, and continue the CURRENT step on the inline path. Never error out.

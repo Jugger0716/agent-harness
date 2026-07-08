@@ -63,7 +63,7 @@ Apply the shared opt-in convention in `templates/_shared/mode_gate.md`. /spec-sp
 | `Workflow` tool NOT available this session | quick | **inline** (notify only if an explicit `--mode deep` was requested) |
 | `--mode deep` (or `comprehensive`/`thorough`/`multi`) | deep | **workflow** |
 | no `--mode` AND session is in ultracode mode | deep | **workflow** |
-| no `--mode`, no opt-in | quick | **inline** |
+| no `--mode`, no opt-in | quick | **inline** (interactive + engine available → asks first, §Ambiguity Prompt) |
 
 - **Deep mode exists ONLY on the workflow path** — the engine's `parallel()` fan-out replaces the old hand-rolled "Launch 4 sub-agents in parallel" prose (pilot precedent: /harness standard/multi). The inline path is the preserved quick mode (Phase 2-Q: orchestrator writes spec.md directly).
 - **Graceful fallback:** if a `Workflow` invocation errors at any step, print `[harness] ⚠ Workflow engine unavailable — falling back to the inline quick path.` (in `user_lang`), set `path_resolved → "inline"`, `mode → "quick"`, and continue the CURRENT step on the quick path (see Phase 2-D fallback rules). Never error out.

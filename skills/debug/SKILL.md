@@ -44,7 +44,7 @@ Apply the shared opt-in convention in `templates/_shared/mode_gate.md`. /debug-s
 | `Workflow` tool NOT available this session | quick | **inline** (notify only if an explicit `--mode deep` was requested) |
 | `--mode deep` (or `comprehensive`/`thorough`/`multi`) | deep | **workflow** |
 | no `--mode` AND session is in ultracode mode | deep | **workflow** |
-| no `--mode`, no opt-in | quick | **inline** |
+| no `--mode`, no opt-in | quick | **inline** (interactive + engine available → asks first, §Ambiguity Prompt) |
 
 - **Deep mode exists ONLY on the workflow path** — the engine's `parallel()` fan-out replaces the old hand-rolled "Launch 2 sub-agents in parallel" prose (pilot precedent: /harness standard/multi). The inline path is the preserved quick mode (Phase 1-Q: orchestrator runs the hypothesis loop directly).
 - **Mode Gate applies to runtime/logic errors only** — `error_type == "build"` takes the fast path (Phase 0.5) regardless of mode/path; no analysts are dispatched.
