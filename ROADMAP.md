@@ -2,6 +2,16 @@
 
 ## v8.x — Shipped
 
+**v8.6.0** — Mode Gate §Ambiguity Prompt + §Path Transparency
+
+- **§Ambiguity Prompt (single source `templates/_shared/mode_gate.md`, wired into all 8 multi-path skills)**: when no `--mode` is given and ultracode is OFF (Workflow engine available, interactive session), skills explicitly ask inline-vs-workflow instead of silently auto-resolving. `--no-prompt` / non-interactive sessions keep silent auto-resolution.
+  See: `templates/_shared/mode_gate.md`, `skills/{harness,spec,debug,deep-review,codebase-audit,migrate,refactor,test-gen}/SKILL.md`
+- **§Path Transparency**: every skill prints `Path : <inline|workflow> (<reason>)` — the chosen execution path and its cause are always visible, including on the auto-resolved and ultracode paths.
+- **SYNC-group enforcement (`scripts/verify_sync_markers.py`)**: the §Ambiguity Prompt / §Path Transparency contract is enforced as a SYNC group across the 8 skills, catching drift between a skill's Mode Gate wiring and the single source mechanically.
+  See: `scripts/verify_sync_markers.py`
+
+---
+
 **v8.5.0** — Native Workflow Reframe + Skill Renames (alias-preserved) + Mode Gate
 
 - **Skill renames (alias-preserved, NOT a hard break)**: `/code-review`→`/deep-review`, `/memory`→`/team-memory`, `/workflow`→`/harness`. Old names retained as deprecation-stub skills (frontmatter `name:` kept for discovery) that resolve, print a localized notice, and redirect. Removal no earlier than the next MAJOR.
@@ -81,7 +91,7 @@ Items deferred from v8.1 / v8.2 with rationale:
 | **M3 — Template compression** | Senior measured actual templates: avg 46 lines, max 185 lines (~2–3k tokens). Feedback premise of "8–12k tokens" did not match measurements | Re-evaluate after v8.1 usage data |
 | **L1 — External CLI wrapper** | Claude Code's `/skill` invocation already functions as CLI; separate repo adds maintenance burden disproportionate to value | Reconsider if community demand emerges |
 
-> **Re-deferred to v8.6+:** the v8.5.0 native-Workflow reframe (skill renames + Mode Gate + native authoring) was prioritized over the items above per the 2026-06-02 optimization review (ROI reversed once the native engine landed). M4 (persona override), M3 (template compression), and L1 (external CLI wrapper) remain planned for v8.6+. N2 (`merge_to_base`) shipped in v8.4.0 and has been removed from this table.
+> **Re-deferred to v8.7+:** the v8.5.0 native-Workflow reframe (skill renames + Mode Gate + native authoring) was prioritized over the items above per the 2026-06-02 optimization review (ROI reversed once the native engine landed). M4 (persona override), M3 (template compression), and L1 (external CLI wrapper) remain planned for v8.7+. N2 (`merge_to_base`) shipped in v8.4.0 and has been removed from this table.
 
 ### Residual review gaps (post-v8.1 verification)
 
