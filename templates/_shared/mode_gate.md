@@ -54,7 +54,7 @@ impossible request degrades correctly.
    - question: "No mode specified — choose how to run:"
    - options = the skill's modes, each mapping to inline/workflow per its §Mode Gate table.
      Append "(Recommended)" to the scope-advised tier for skills that print a scope advisory
-     (deep-review, codebase-audit); otherwise to the shallowest (inline) mode.
+     (deep-review, codebase-audit, migrate, refactor); otherwise to the shallowest (inline) mode.
    On answer: set `mode` + `path_resolved`, then emit §Path Transparency.
 
 This does NOT reintroduce effort gating. Opt-in signals (ultracode, `--mode`) still resolve
