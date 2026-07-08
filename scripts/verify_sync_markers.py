@@ -61,6 +61,14 @@ SYNC_GROUPS = [
         "tokens": ["`null`", '"skipped"', '"file:.harness/conventions.md"'],
         "min_sites": 2,
     },
+    {
+        "id": "ambiguity-prompt",
+        "target_file": "templates/_shared/mode_gate.md",
+        "section": "Ambiguity Prompt",        # NO leading § — MARKER_RE captures the text AFTER §
+        "target_anchor": "§Ambiguity Prompt",  # substring that must exist in target_file (§ kept)
+        "tokens": ["§Ambiguity Prompt"],       # every marked site must contain this token
+        "min_sites": 7,                        # 7 skills reference the SHARED §Ambiguity Prompt
+    },
 ]
 
 
