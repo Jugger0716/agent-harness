@@ -7,7 +7,7 @@
 - **§Ambiguity Prompt (single source `templates/_shared/mode_gate.md`, wired into all 8 multi-path skills)**: when no `--mode` is given and ultracode is OFF (Workflow engine available, interactive session), skills explicitly ask inline-vs-workflow instead of silently auto-resolving. `--no-prompt` / non-interactive sessions keep silent auto-resolution.
   See: `templates/_shared/mode_gate.md`, `skills/{harness,spec,debug,deep-review,codebase-audit,migrate,refactor,test-gen}/SKILL.md`
 - **§Path Transparency**: every skill prints `Path : <inline|workflow> (<reason>)` — the chosen execution path and its cause are always visible, including on the auto-resolved and ultracode paths.
-- **SYNC-group enforcement (`scripts/verify_sync_markers.py`)**: the §Ambiguity Prompt / §Path Transparency contract is enforced as a SYNC group across the 8 skills, catching drift between a skill's Mode Gate wiring and the single source mechanically.
+- **SYNC-group tracking (`scripts/verify_sync_markers.py`)**: the §Ambiguity Prompt marker is tracked as a SYNC group — referential integrity of the marker plus a minimum-site-count floor across the wired skills, so a dropped `SYNC-WITH` marker fails the lint. Content-level drift of each skill's wiring vs the single source, and a §Path Transparency marker group, are follow-ups (not yet enforced).
   See: `scripts/verify_sync_markers.py`
 
 ---
