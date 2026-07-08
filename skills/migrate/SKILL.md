@@ -27,7 +27,7 @@ Status block shape + label rules: see `templates/_shared/status_format.md`. migr
 [harness:migrate]
   Target : <target> <from_version> → <to_version>
   Mode   : <single | multi>
-  Path   : <inline | workflow>
+  Path   : <inline | workflow>  (<reason per §Path Transparency>)
   Model  : <model_config preset name>
   Phase  : <phase label>
   Step   : <current_step> / <total_steps> (if in execution phase)
@@ -37,7 +37,7 @@ Phase labels: setup → "Setup", analyze_ready → "Analysis — researching mig
 
 ## Mode Gate — path & mode resolution (single source: `templates/_shared/mode_gate.md`)
 
-Apply the shared opt-in convention in `templates/_shared/mode_gate.md`. /migrate-specific resolution (replaces the old §Scope-Aware Mode Selection AskUserQuestion roundtrip and the Step 1 mode prompt):
+Apply the shared opt-in convention in `templates/_shared/mode_gate.md`. /migrate-specific resolution (the mode-selection roundtrip is removed EXCEPT §Ambiguity Prompt, which fires only when opt-in is absent):
 
 | Signal (first match wins) | `mode` | `path_resolved` |
 |---|---|---|
@@ -46,7 +46,7 @@ Apply the shared opt-in convention in `templates/_shared/mode_gate.md`. /migrate
 | `Workflow` tool NOT available this session | single | **inline** (notify only if an explicit `--mode multi` was requested) |
 | `--mode multi` (or `deep`/`thorough`/`comprehensive`) | multi | **workflow** |
 | no `--mode` AND session is in ultracode mode | multi | **workflow** |
-| no `--mode`, no opt-in | single | **inline** |
+| no `--mode`, no opt-in | single | **inline** (interactive + engine available → asks first, §Ambiguity Prompt) |
 
 - **multi exists ONLY on the workflow path** — the engine's `parallel()` fan-out replaces the old hand-rolled 2-analyst dispatch (Step 2-M). The inline path is the preserved single mode.
 - The `deep`/`thorough`/`comprehensive` aliases are deliberate cross-skill deepest-tier synonyms (every reframed skill accepts the others' deepest mode names and collapses them onto its own deepest tier); canonical mode names stay per-skill (single/multi).
@@ -122,7 +122,7 @@ Before starting a new task, check if `.harness/state.json` already exists **and*
 
 1. If it exists and matches, print status in the standard format (including Model line from `model_config`), prefixed with `[harness:migrate] Previous session detected.`
 2. Restore `model_config` from state.json. Apply it to all subsequent sub-agent launches and Workflow `args.models`.
-2.5. **Re-resolve §Mode Gate** (the new session may lack the Workflow tool or the opt-in) and update `path_resolved` — a session that started on the workflow path may legitimately resume on the inline path. Cross-session resume re-RUNS segments; `state.runs.*.runId` values are audit-only (`resumeFromRunId` is same-session only — never attempt it across sessions).
+2.5. **Re-resolve §Mode Gate** (the new session may lack the Workflow tool or the opt-in) and update `path_resolved` — a session that started on the workflow path may legitimately resume on the inline path. Cross-session resume re-RUNS segments; `state.runs.*.runId` values are audit-only (`resumeFromRunId` is same-session only — never attempt it across sessions). This re-resolution reuses the stored `{ mode, path_resolved }` and MUST NOT re-fire **§Ambiguity Prompt** — only the existing workflow→inline downgrade (engine or git now absent) may change the stored path.
 3. Ask the user using AskUserQuestion (in `user_lang`):
      header: "Session"
      question: "[harness:migrate] Previous session detected. [print status in standard format]. Resume, restart, or stop?"
@@ -189,7 +189,8 @@ When the user provides a migration target (via $ARGUMENTS or in conversation), e
 9. **Capture original branch and create migration branch:**
    - Run `git rev-parse --abbrev-ref HEAD` and store result as `original_branch`. If the result is `HEAD` (detached HEAD state), use `git rev-parse HEAD` instead to store the full commit hash.
    - `git checkout -b harness/migrate-<slug>`
-10. **Mode Gate resolution:** apply §Mode Gate (no AskUserQuestion roundtrip — mode is derived from `--mode` flags / ultracode opt-in / tool availability / `has_git`). Store `mode` and `path_resolved` in state.json. Print the scope-aware advisory. If the user explicitly requested `--mode multi` but the gate resolved to inline (Workflow tool unavailable or `has_git == false`), notify (in `user_lang`): "multi mode requires the native Workflow engine and git — proceeding on the inline single path."
+10. **Mode Gate resolution:** apply §Mode Gate INCLUDING **§Ambiguity Prompt** (single source: `templates/_shared/mode_gate.md`) — the mode roundtrip is removed EXCEPT this prompt, which fires only when NO opt-in is present (no `--mode`, ultracode OFF, `Workflow` tool available, `has_git == true`, interactive, no `--no-prompt`). Skill modes: single(inline) / multi(workflow); ultracode-target: multi. Store `mode` and `path_resolved` in state.json. Then emit **§Path Transparency** — show `Path : <inline | workflow>  (<reason>)`. Print the scope-aware advisory. If the user explicitly requested `--mode multi` but the gate resolved to inline (Workflow tool unavailable or `has_git == false`), notify (in `user_lang`): "multi mode requires the native Workflow engine and git — proceeding on the inline single path."
+<!-- SYNC-WITH: templates/_shared/mode_gate.md §Ambiguity Prompt -->
 11. **Model configuration selection:**
    If `--model-config <preset>` was passed, use it directly. Otherwise, use AskUserQuestion to ask the user (in `user_lang`):
      header: "Model"
@@ -215,7 +216,7 @@ When the user provides a migration target (via $ARGUMENTS or in conversation), e
       Repo     : <path>
       Branch   : harness/migrate-<slug>
       Mode     : <single | multi>
-      Path     : <inline | workflow>
+      Path     : <inline | workflow>  (<reason per §Path Transparency>)
       Model    : <preset name>
       Language : <lang>
       Test     : <test_cmd or "none">
@@ -523,7 +524,8 @@ See `templates/_shared/askuserquestion.md`.
 - **User language.** All user-facing output must be in `user_lang`. Re-detect on every user message. WORKFLOW path: pass `userLang` in `args` — the segment scripts build schema descriptions from it, which forces sub-agent free-text output language; ids/enums/paths stay English raw.
 - **Intermediate outputs are ephemeral.** Only final artifacts (migration_plan.md, changes.md, qa_report.md) are preserved in `docs/`. On the workflow path there are no intermediate research files at all — the Analyze segment returns a schema-validated MigrationPlan.
 - **WebSearch fallback.** If WebSearch/WebFetch fail, always fall back to local CHANGELOG/MIGRATION files before asking the user.
-- **Mode Gate replaces the mode roundtrip.** `--mode` flag / ultracode opt-in / tool availability / `has_git` derive the mode (§Mode Gate); the scope advisory is print-only. Store `mode` + `path_resolved` in state.json; re-resolve on session recovery.
+- **Mode Gate + §Ambiguity Prompt.** The mode roundtrip is removed EXCEPT §Ambiguity Prompt (fires only when opt-in absent: no `--mode`, ultracode OFF, engine available, interactive, no `--no-prompt`). Modes: single(inline) / multi(workflow); ultracode-target: multi. The scope advisory stays print-only. Store `mode` + `path_resolved` in state.json; emit §Path Transparency. On session recovery, re-resolve WITHOUT re-firing §Ambiguity Prompt (reuse stored mode/path_resolved; only workflow→inline downgrade may change it).
+<!-- SYNC-WITH: templates/_shared/mode_gate.md §Ambiguity Prompt -->
 - **Fan-out exists only on the workflow path.** Multi-mode analysis runs as plugin-shipped segment scripts; without the engine or opt-in, the session runs single inline (with a notice on explicit `--mode multi` requests).
 - **Execution is never scripted.** Step 4 (staged apply + per-step build/test + failure gates + Migration Advisor) stays in this orchestrator on every path — the segments cover only Step 2 (analyze) and Step 5 (eval).
 - **Workflow args are a JSON object;** segment scripts defensively parse (`args` may arrive as a JSON string — engine behavior). Keep the SKILL args blocks and the scripts' `// contract` comments in 1:1 sync. Never put user-gate decisions into args.

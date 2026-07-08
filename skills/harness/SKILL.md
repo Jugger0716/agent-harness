@@ -99,7 +99,7 @@ Inline sub-agent 1-line return (`<keyword> — <summary>`) processing:
 
 ## Mode Gate — path & mode resolution (single source: `templates/_shared/mode_gate.md`)
 
-Apply the shared opt-in convention in `templates/_shared/mode_gate.md`. /harness-specific resolution (replaces the old mode-selection AskUserQuestion roundtrip):
+Apply the shared opt-in convention in `templates/_shared/mode_gate.md`. /harness-specific resolution (the mode-selection roundtrip is removed EXCEPT §Ambiguity Prompt, which fires only when opt-in is absent):
 
 | Signal (first match wins) | `mode` | `path_resolved` |
 |---|---|---|
@@ -109,7 +109,7 @@ Apply the shared opt-in convention in `templates/_shared/mode_gate.md`. /harness
 | `--mode standard` | standard | **workflow** |
 | `--mode multi` (or `comprehensive`/`thorough`/`deep`) | multi | **workflow** |
 | no `--mode` AND session is in ultracode mode | multi | **workflow** |
-| no `--mode`, no opt-in | single | **inline** |
+| no `--mode`, no opt-in | single | **inline** (interactive + engine available → asks first, §Ambiguity Prompt) |
 
 - **Opt-in signals** (any one suffices, per mode_gate.md): ultracode mode is on for the session; the user passed an explicit `--mode standard/multi` (or a deeper alias: `comprehensive`/`thorough`/`deep`); or these skill instructions direct the Workflow call (valid documented opt-in — but /harness only exercises it when one of the first two holds).
 - **Graceful fallback:** if a `Workflow` invocation errors at any step, print `[harness] ⚠ Workflow engine unavailable — falling back to the inline single path.` (in `user_lang`), set `path_resolved → "inline"`, `mode → "single"`, and continue the CURRENT step on the inline path. Never error out.
@@ -120,7 +120,7 @@ Apply the shared opt-in convention in `templates/_shared/mode_gate.md`. /harness
 
 Status block shape + label rules: see `templates/_shared/status_format.md`.
 
-Mode enum: `<single | standard | multi>`. Additional row: `Path : <inline | workflow>`.
+Mode enum: `<single | standard | multi>`. Additional row: `Path : <inline | workflow>  (<reason>)`.
 
 Phase labels:
 - `plan_ready` → "Plan — ready"
@@ -154,7 +154,7 @@ Before starting a new task, check if `.harness/state.json` exists:
 3. Print status in standard format, prefixed with `[harness] Previous session detected.`
 4. Restore `model_config` from state.json. Apply to all subsequent sub-agent launches and Workflow `args.models`.
 5. Restore `conventions` from state.json. If value starts with `"file:"`, verify the referenced file exists. If file missing, set `conventions → null` (will trigger Step 1.5 on resume).
-6. If `has_git` is not in state.json, re-detect and store. Re-resolve §Mode Gate (the new session may lack the Workflow tool or the opt-in) and update `path_resolved` — a session that started on the workflow path may legitimately resume on the inline path.
+6. If `has_git` is not in state.json, re-detect and store. Re-resolve §Mode Gate (the new session may lack the Workflow tool or the opt-in) and update `path_resolved` — a session that started on the workflow path may legitimately resume on the inline path. On resume, do NOT re-fire §Ambiguity Prompt — reuse the stored `mode` + `path_resolved`; only the workflow→inline downgrade (engine now absent) may change `path_resolved`. The stored `mode` already preserves the chosen tier (single/standard/multi).
 7. Ask the user via AskUserQuestion (in `user_lang`):
    - header: "Session"
    - question: "[harness] Previous session detected. [standard status]. Resume, restart, or stop?"
@@ -324,7 +324,8 @@ On the WORKFLOW path the same machine applies; `harness.eval` covers verifying�
    Remaining fields (mode, model_config, etc.) are `null` until Step 1.11 final write.
 
 8. **Create git branch (if has_git):** `git checkout -b harness/<slug>`. Skip if `has_git == false`.
-9. **Mode Gate resolution:** apply §Mode Gate (no AskUserQuestion roundtrip). Store `mode` and `path_resolved` in state.json.
+9. **Mode Gate resolution:** apply §Mode Gate INCLUDING **§Ambiguity Prompt** (single source: `templates/_shared/mode_gate.md`). The mode roundtrip is removed EXCEPT this prompt, which fires only when NO opt-in is present (no `--mode`, ultracode OFF, `Workflow` tool available, `has_git == true`, interactive session, no `--no-prompt`). Skill modes: single(inline) / standard(workflow) / multi(workflow). ultracode-target (step 4 default): multi. Store `mode` and `path_resolved` in state.json. Then emit **§Path Transparency** — show `Path : <inline | workflow>  (<reason>)`. If a workflow-tier `--mode` was requested but the gate resolved to inline (Workflow tool unavailable or `has_git == false`), notify (in `user_lang`): "<tier> mode requires the native Workflow engine and git — proceeding on the inline path."
+<!-- SYNC-WITH: templates/_shared/mode_gate.md §Ambiguity Prompt -->
 10. **Model configuration:** If `--model-config` provided, use it. Otherwise, ask via AskUserQuestion (in `user_lang`):
     - header: "Model"
     - question: "Select model configuration for sub-agents:"
@@ -409,7 +410,7 @@ On the WORKFLOW path the same machine applies; `harness.eval` covers verifying�
   Directory : <path>
   Branch    : harness/<slug>     ← omit if has_git == false
   Mode      : <single | standard | multi>
-  Path      : <inline | workflow>
+  Path      : <inline | workflow>  (<reason per §Path Transparency>)
   Model     : <preset>
   Verifier  : <model_config.verifier>    ← always shown
   Style     : <auto | phase | step>

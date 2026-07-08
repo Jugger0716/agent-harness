@@ -6,7 +6,7 @@ No dependencies required. No Python, no pip, no build steps — just install the
 
 Inspired by Anthropic's [Harness Design for Long-Running Application Development](https://www.anthropic.com/engineering/harness-design-long-running-apps).
 
-> Demo GIF coming soon — see [ROADMAP.md](ROADMAP.md) for the v8.6+ planned items.
+> Demo GIF coming soon — see [ROADMAP.md](ROADMAP.md) for the v8.7+ planned items.
 
 ## At a Glance
 
@@ -179,6 +179,7 @@ All user-facing prompts use **AskUserQuestion** — a numbered selection UI wher
 
 Key interaction points:
 - **Mode selection** (refactor/migrate/debug/spec — `/harness` derives mode via its Mode Gate, no roundtrip): numbered options with token cost hints and auto-recommendation
+- **Execution-path ambiguity prompt** (no `--mode` + ultracode OFF + interactive session with the Workflow engine available): explicit inline-vs-workflow choice instead of silent auto-resolution — and every run prints `Path : <inline|workflow> (<reason>)` so the chosen path and its cause are always visible
 - **Confirmation gates**: Proceed / Modify / Stop (replaces freeform text approval)
 - **QA retry**: Fix / Accept as-is
 - **Commit**: 3 options — "Commit code only" (recommended) / "Commit all with artifacts" / "No commit" (git environments only; non-git environments skip commit)
@@ -1115,12 +1116,13 @@ Communicates in the user's language for progress, questions, confirmations, erro
 
 See [ROADMAP.md](ROADMAP.md) for the full roadmap with rationale.
 
+- **v8.6** (Shipped): Mode Gate §Ambiguity Prompt (when no `--mode` and ultracode is OFF in an interactive session with the Workflow engine available, the 8 multi-path skills explicitly ask inline-vs-workflow instead of resolving silently; `--no-prompt` and non-interactive sessions keep silent auto-resolution) + §Path Transparency (every skill prints `Path : <inline|workflow> (<reason>)`), both driven from the `templates/_shared/mode_gate.md` single source, with `scripts/verify_sync_markers.py` tracking the §Ambiguity Prompt marker across the wired skills (marker presence + referential integrity; content-drift and a §Path Transparency group are follow-ups)
 - **v8.5** (Shipped): native Workflow reframe — 8 high-overlap skills (`/harness`, `/spec`, `/debug`, `/deep-review`, `/codebase-audit`, `/migrate`, `/refactor`, `/test-gen`) author & run shipped segment scripts (`workflows/*.workflow.js`, schema-validated `agent()` fan-out) at opt-in depth; skill renames `/workflow`→`/harness`, `/code-review`→`/deep-review`, `/memory`→`/team-memory` (deprecation aliases preserved); derived **Mode Gate** (`templates/_shared/mode_gate.md`) replaces the mode-selection roundtrip; `/deep-review --comment`/`--fix` parity; `disallowed-tools` frontmatter enforced on every skill
 - **v8.4** (Shipped): `/spec` deep-mode 4-analyst pipeline (Requirements + UserScenario + RiskAuditor + TechConstraint) with cold Critic stage and 3-way revise gate; `/spec` Convention Scan (Step 1.5) with `--reference` flag; `/spec` Phase 3 persists `qa_notes.md`/`critic_findings.md`/`conventions.md` with `/workflow` Step 1.5/Step 2 reuse; `/ship` Stage 6.5 (`merge_to_base`) closes develop→main lag — Path A (protected base, PR fallback) vs Path B (local merge with FF / Non-FF / rebase-then-ff + force-with-lease), substep-level recovery, persistent retry-count cap, branch-protected rollback documentation
 - **v8.3** (Shipped): `/ship` version_bump auto-detection for `.claude-plugin/plugin.json` (`$.version`) and `.claude-plugin/marketplace.json` (`$.metadata.version` + `$.plugins[*].version`) — JSON-aware Pass 2 preserves CRLF/LF, BOM, trailing-newline, and avoids the naive-string-replace regression on coincidentally-equal version strings in other fields
 - **v8.2** (Shipped): `/ship` Safety Guard parity with `/workflow` (unconditional symlink-escape check, display-before-delete, symlink-aware deletion), strict 254-char tag-name regex hard cap
 - **v8.1** (Shipped): Path Validator single source, Auto-fix State Transition Table (invariants I1–I4), `--verifier-model` flexibility, `--output-dir` flag, Auto-fix proposal for Layer 1 failures (both `/workflow` and `/refactor`), `.github/` contribution templates
-- **v8.6+** (Planned): Custom persona override (`templates/user-override/`), template compression, external CLI wrapper, demo GIF
+- **v8.7+** (Planned): Custom persona override (`templates/user-override/`), template compression, external CLI wrapper, demo GIF
 
 ---
 

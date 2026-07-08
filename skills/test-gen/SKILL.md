@@ -40,7 +40,7 @@ Status block shape + label rules: see `templates/_shared/status_format.md`. test
 [test-gen]
   Target : <target>
   Mode   : <single | multi>
-  Path   : <inline | workflow>
+  Path   : <inline | workflow>  (<reason per §Path Transparency>)
   Model  : <preset>
   Phase  : <phase label>
   Branch : <branch>          ← omit this line if has_git == false
@@ -58,7 +58,7 @@ Apply the shared opt-in convention in `templates/_shared/mode_gate.md`. /test-ge
 | `Workflow` tool NOT available this session | single | **inline** (notify only if an explicit `--mode multi` was requested) |
 | `--mode multi` (or `deep`/`thorough`/`comprehensive`) | multi | **workflow** |
 | no `--mode` AND session is in ultracode mode | multi | **workflow** |
-| no `--mode`, no opt-in | single | **inline** |
+| no `--mode`, no opt-in | single | **inline** (interactive + engine available → asks first, §Ambiguity Prompt) |
 
 - **multi exists ONLY on the workflow path** — the engine's `parallel()` fan-out runs (a) coverage analysts over file buckets (`test-gen.analyze`) and (b) the propose-only mutation-skeptic panel (`test-gen.judge`). The inline path is the preserved single mode.
 - The `deep`/`thorough`/`comprehensive` aliases are deliberate cross-skill deepest-tier synonyms (every reframed skill accepts the others' deepest mode names and collapses them onto its own deepest tier); canonical mode names stay per-skill (single/multi).
@@ -66,6 +66,8 @@ Apply the shared opt-in convention in `templates/_shared/mode_gate.md`. /test-ge
 - **`has_git` note:** the propose segment is read-only (git-independent), but the orchestrator's inline mutation run needs a clean revert — with git it reverts via `git checkout -- <source>` and verifies with `git diff --quiet -- <source>`; without git it uses an inline backup-restore. The gate forces inline when `has_git == false` because the multi path's only added value (fan-out) does not change the orchestrator-inline run that follows.
 - **Graceful fallback:** if a segment errors, print `[test-gen] ⚠ Workflow engine unavailable — falling back to the inline single path.` (in `user_lang`), set `mode → single`, `path_resolved → inline`, and continue inline. Never error out.
 - Record `mode` + `path_resolved` in state.json (`mode` is kept for backward-compat with pre-Workflow sessions).
+- **§Ambiguity Prompt.** Apply `templates/_shared/mode_gate.md §Ambiguity Prompt`: when NO opt-in is present (no `--mode`, ultracode OFF, `Workflow` tool available, `has_git == true`, interactive, no `--no-prompt`), ask inline-vs-workflow via AskUserQuestion. Skill modes: single(inline) / multi(workflow); ultracode-target: multi (Recommended default = inline when asked). Then emit **§Path Transparency** — show `Path : <inline | workflow>  (<reason>)`. If `--mode multi` was requested but the engine/git is unavailable, notify and proceed inline. Resume reuses stored `mode`/`path_resolved` — never re-fire the prompt.
+<!-- SYNC-WITH: templates/_shared/mode_gate.md §Ambiguity Prompt -->
 
 ## Argument Parsing
 
@@ -93,7 +95,7 @@ Before starting a new task, check if `.harness/state.json` already exists **and*
 
 1. If it exists and matches, print status in the standard format (including Model line from `model_config`), prefixed with `[test-gen] Previous session detected.`
 2. Restore `model_config` from state.json. Apply it to all subsequent sub-agent launches and Workflow `args.models`.
-2.5. **Re-resolve §Mode Gate** (the new session may lack the Workflow tool or the opt-in) and update `path_resolved`. Cross-session resume re-RUNS segments; `state.runs.*.runId` values are audit + same-session only (`resumeFromRunId` is same-session only — never across sessions). **A pre-Workflow session** (state.json lacks `path_resolved` / `runs`) is from an older schema — recommend **Restart** rather than Resume.
+2.5. **Re-resolve §Mode Gate** (the new session may lack the Workflow tool or the opt-in) and update `path_resolved`. Cross-session resume re-RUNS segments; `state.runs.*.runId` values are audit + same-session only (`resumeFromRunId` is same-session only — never across sessions). **A pre-Workflow session** (state.json lacks `path_resolved` / `runs`) is from an older schema — recommend **Restart** rather than Resume. On resume, do NOT re-fire §Ambiguity Prompt — reuse the stored `mode`/`path_resolved`; only the existing workflow→inline downgrade (engine now absent) may change the stored path.
 3. Ask the user using AskUserQuestion (in `user_lang`):
      header: "Session"
      question: "[test-gen] Previous session detected. [print status in standard format]. Resume, restart, or stop?"
@@ -178,7 +180,7 @@ If `.harness/state.json` does not exist (or `state.json.skill` is not `"test-gen
     [test-gen] Started!
       Target    : <target>
       Mode      : <single | multi>
-      Path      : <inline | workflow>
+      Path      : <inline | workflow>  (<reason per §Path Transparency>)
       Branch    : harness/test-gen-<slug>     ← omit if has_git == false
       Model     : <preset name>
       Framework : <framework>
