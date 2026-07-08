@@ -120,7 +120,7 @@ Apply the shared opt-in convention in `templates/_shared/mode_gate.md`. /harness
 
 Status block shape + label rules: see `templates/_shared/status_format.md`.
 
-Mode enum: `<single | standard | multi>`. Additional row: `Path : <inline | workflow>`.
+Mode enum: `<single | standard | multi>`. Additional row: `Path : <inline | workflow>  (<reason>)`.
 
 Phase labels:
 - `plan_ready` → "Plan — ready"
