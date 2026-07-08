@@ -18,7 +18,7 @@ Skim this list to locate sections by name. Section-anchor cross-references throu
 
 1. `## Environment Detection` — `has_git` flag.
 2. `## User Language Detection` — `user_lang`.
-3. `## Mode Gate` — quick(inline) vs deep(workflow) path resolution (single source: `templates/_shared/mode_gate.md`; replaces the old mode-selection AskUserQuestion roundtrip).
+3. `## Mode Gate` — quick(inline) vs deep(workflow) path resolution (single source: `templates/_shared/mode_gate.md`; the roundtrip is removed except §Ambiguity Prompt when opt-in is absent).
 4. `## Standard Status Format` — phase enumeration (setup → completed; new in 8.4: `convention_scan_active`, `critic_*`, `re_*`, `critic_halted`). Phase labels listed inline.
 5. `## Session Recovery` — Resume jump table per phase; backward-compat policy (M14 + saved_phase mechanism); segments re-RUN across sessions (runIds audit-only).
 6. `## Workflow` (top-level container) → `### Step 1: Setup` — slugify + slug-collision check (M15) + state.json schema doc + **§Atomicity Contract** (C6, v2-extended enumeration).
@@ -54,7 +54,7 @@ Detect the user's language from their **most recent message**. Store as `user_la
 
 ## Mode Gate — path & mode resolution (single source: `templates/_shared/mode_gate.md`)
 
-Apply the shared opt-in convention in `templates/_shared/mode_gate.md`. /spec-specific resolution (replaces the old Step 1 mode-selection AskUserQuestion roundtrip):
+Apply the shared opt-in convention in `templates/_shared/mode_gate.md`. /spec-specific resolution (the mode-selection roundtrip is removed EXCEPT §Ambiguity Prompt, which fires only when opt-in is absent):
 
 | Signal (first match wins) | `mode` | `path_resolved` |
 |---|---|---|
@@ -77,7 +77,7 @@ When displaying status, read `.harness/state.json` and print (in `user_lang`):
   Skill    : spec
   Task     : <task>
   Mode     : <quick | deep>
-  Path     : <inline | workflow>
+  Path     : <inline | workflow>  (<reason per §Path Transparency>)
   Model    : <model_config preset name>    ← omit if quick mode
   Phase    : <phase label>
   QA Round : <qa_round> / 3
@@ -105,7 +105,7 @@ Before starting a new task, check if `.harness/state.json` already exists **and*
 
 1. If it exists and matches, print status in the standard format (including Model line from `model_config` if deep mode), prefixed with `[harness] Previous spec session detected.`
 2. Restore `model_config` from state.json (deep mode only). Apply it to all subsequent sub-agent launches and Workflow `args.models`.
-2.5. **Re-resolve §Mode Gate** (the new session may lack the Workflow tool or the opt-in) and update `path_resolved` — a session that started on the workflow path may legitimately resume on the inline path. Cross-session resume re-RUNS segments; `state.runs.*.runId` values are audit-only (`resumeFromRunId` is same-session only — never attempt it across sessions). If a deep-mode resume lands on the inline path, phases that require a segment run degrade per the Phase 2-D fallback rules (notify the user).
+2.5. **Re-resolve §Mode Gate** (the new session may lack the Workflow tool or the opt-in) and update `path_resolved` — a session that started on the workflow path may legitimately resume on the inline path. Cross-session resume re-RUNS segments; `state.runs.*.runId` values are audit-only (`resumeFromRunId` is same-session only — never attempt it across sessions). If a deep-mode resume lands on the inline path, phases that require a segment run degrade per the Phase 2-D fallback rules (notify the user). This re-resolution reuses the stored `{ mode, path_resolved }` and MUST NOT re-fire **§Ambiguity Prompt** — only the existing workflow→inline downgrade (engine or git now absent) may change the stored path.
 3. Ask the user using AskUserQuestion (in `user_lang`):
      header: "Session"
      question: "[harness] Previous spec session detected. [print status in standard format]. Resume, restart, or stop?"
@@ -192,7 +192,8 @@ When the user provides a task description (via $ARGUMENTS or in conversation), e
      4. **Size limit** (NEW in 8.4 for `--reference`): file size > 200 KB OR line count > 5000 → halt with "reference file too large." Convention files should be human-curated, not auto-generated dumps.
    - On valid path: normalize to a **repo-relative path** (relative to `repo_path`; no leading `/` or drive letter; e.g., `docs/references/spec.md`) and store as `cli_flags.reference: <normalized_path>` in state.json (audit-friendly). Will be consumed by Step 1.5 Convention Scan. (M4: prior wording "absolute repo-relative path" was internally contradictory and risked OS-absolute paths leaking into state.json on Windows.)
    - If not provided: `cli_flags.reference: null`.
-5. **Mode Gate resolution:** apply §Mode Gate (no AskUserQuestion roundtrip — mode is derived from `--mode` flags / ultracode opt-in / tool availability / `has_git`). Store `mode` and `path_resolved` in state.json. If the user explicitly requested `--mode deep` but the gate resolved to inline (Workflow tool unavailable or `has_git == false`), notify (in `user_lang`): "deep mode requires the native Workflow engine and git — proceeding on the inline quick path."
+5. **Mode Gate resolution:** apply §Mode Gate INCLUDING **§Ambiguity Prompt** (single source: `templates/_shared/mode_gate.md`). The mode roundtrip is removed EXCEPT this prompt, which fires only when NO opt-in is present (no `--mode`, ultracode OFF, `Workflow` tool available, `has_git == true`, interactive session, no `--no-prompt`). Skill modes: quick(inline) / deep(workflow). ultracode-target (step 4 default): deep. Store `mode` and `path_resolved` in state.json. Then emit **§Path Transparency** — show `Path : <inline | workflow>  (<reason>)`. If the user explicitly requested `--mode deep` but the gate resolved to inline (Workflow tool unavailable or `has_git == false`), notify (in `user_lang`): "deep mode requires the native Workflow engine and git — proceeding on the inline quick path."
+<!-- SYNC-WITH: templates/_shared/mode_gate.md §Ambiguity Prompt -->
 
 6. **Model configuration selection (deep mode only):**
    If mode is `quick`, skip this step entirely — no sub-agents are used.
@@ -259,7 +260,7 @@ When the user provides a task description (via $ARGUMENTS or in conversation), e
    [harness] Spec started!
      Branch : harness/spec-<slug>     ← omit if has_git == false
      Mode   : <quick | deep>
-     Path   : <inline | workflow>
+     Path   : <inline | workflow>  (<reason per §Path Transparency>)
      Model  : <preset name>           ← omit if quick mode
      Output : docs/harness/<slug>/spec.md
    ```
