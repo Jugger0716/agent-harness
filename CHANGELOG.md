@@ -37,6 +37,21 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
   match, commits-since list — report-only, never mutates git) and ends at an explicit gate; `list`
   enumerates handoffs. Inline-only, stateless, no engine escalation (team-memory pattern).
 
+- **`/deep-review` round bookkeeping** (`skills/deep-review/SKILL.md`): re-running the same target
+  auto-advances review rounds — standardized numbering (`review_report.md` = round 1,
+  `review_round<N>.md` after), orchestrator-only reconciliation of prior findings
+  (likely resolved / still open / unverifiable — reviewers stay blind; anchoring prevention intact),
+  and an advisory `## Round Verdict` block (PASS / CONDITIONAL PASS / FAIL by mechanical rule).
+  No auto-loop: each round is a fresh user invocation; `--fresh` skips reconciliation. The /spec
+  Critic oscillation invariant (auto-revise max 1 round) is untouched.
+- **`/spec` Review Sheet + `/spec digest`** (`skills/spec/SKILL.md`): every spec now opens with a
+  derived `## Review Sheet` (≤5-line TL;DR, decision table, invariants & top risks, open
+  `[unconfirmed]` questions, reading order, and — on re-synthesis only — "Changed in this
+  revision"); derived at render time, introduces no new facts, ignored by /harness (seven-section
+  contract unchanged). New read-only sub-command `/spec digest <path> [--artifact]` produces a
+  3-layer briefing (30-second / 5-minute / section-map with `path:line` anchors) plus mermaid
+  diagrams where genuinely diagrammable; optional Artifact publish, graceful skip when unavailable.
+
 ### Changed
 - **Judgment agents remapped advisor → evaluator** (deep-review Cross-Verification, debug Cross
   Verifier, spec Critic, codebase-audit Completeness Critic; SKILL.md role maps + `args.models` now

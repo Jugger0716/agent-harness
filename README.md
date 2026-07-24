@@ -70,12 +70,12 @@ Higher modes cost more per run but save total cost by reducing retry rounds. Sta
 | **Refactor** | `/refactor <target>` | Safe, behavior-preserving code structure improvement. Single (inline) or multi/comprehensive (2-3 analysts + cross-critique, native Workflow path). Execution stays gated and step-tested in the orchestrator. |
 | **Migrate** | `/migrate <target> [--from v4 --to v5]` | Staged migration of frameworks, libraries, and dependencies. Single (inline) or multi (parallel external-research + codebase-impact analysts + synthesis, native Workflow path) with WebSearch research. Staged execution stays gated and step-tested in the orchestrator. |
 | **Debug** | `/debug <error>` | Hypothesis-driven debugging with mandatory executable verification. Quick (inline) or deep (2 analysts + adversarial cross-verify, native Workflow path). |
-| **Spec** | `/spec <requirement>` | Multi-round Q&A requirements specification. Output directly compatible with `/harness` input. Quick (inline) or deep (4 analysts + Critic, native Workflow path). |
+| **Spec** | `/spec <requirement>` | Multi-round Q&A requirements specification. Output directly compatible with `/harness` input. Quick (inline) or deep (4 analysts + Critic, native Workflow path). Specs open with a derived Review Sheet (TL;DR / decision table / open questions / changed-in-this-revision); `/spec digest <file>` gives a read-only 3-layer briefing of any existing doc. |
 | **Test Gen** | `/test-gen <target>` | Automated test generation with mutation-based quality verification. Single (inline) or multi (parallel coverage analysts + propose-only mutation skeptics, native Workflow path; test generation + mutation execution stay orchestrator-inline). Supports coverage-gap and regression modes. |
 | **Team Memory** | `/team-memory <cmd>` | Team knowledge base (save/show/clean/search). Git-committed, team-shared decisions, patterns, and conventions. Human-gated CRUD — never escalates to sub-agents or the Workflow engine. _(formerly `/memory` — old name kept as a deprecation alias)_ |
 | **Handoff** | `/handoff generate/resume/list` | Session handoff for cross-session continuity: `generate` captures a verified HANDOFF document (git state, confirmed facts, next steps, reading order) behind a human gate; `resume` primes a fresh session from it with git-drift verification (report-only — never mutates git). Complements `/harness` Session Recovery (task-internal state). |
 | **Codebase Audit** | `/codebase-audit` | Systematic codebase analysis for team onboarding. Quick (inline) or deep/thorough (parameterized lens analysts + completeness critique + synthesis, native Workflow path; orchestrator writes the report). Incremental analysis support. |
-| **Deep Review** | `/deep-review <target>` | Systematic, bias-free code review. Quick (inline checklist) or deep/thorough (2-3 specialists + adversarial cross-verification, native Workflow path). Optional `--comment` (inline PR comments) / `--fix` (gated apply). _(formerly `/code-review` — old name kept as a deprecation alias)_ |
+| **Deep Review** | `/deep-review <target>` | Systematic, bias-free code review. Quick (inline checklist) or deep/thorough (2-3 specialists + adversarial cross-verification, native Workflow path). Optional `--comment` (inline PR comments) / `--fix` (gated apply). Re-runs on the same target auto-advance review rounds with prior-finding reconciliation and an advisory Round Verdict. _(formerly `/code-review` — old name kept as a deprecation alias)_ |
 | **MD Optimize** | `/md-optimize` | Optimize CLAUDE.md and project `.md` files for token efficiency. |
 | **MD Generate** | `/md-generate` | Analyze project and generate/enhance CLAUDE.md for effective Claude Code development. |
 | **Ship** | `/ship` | Q&A release pipeline: version bump, CHANGELOG (Conventional Commits), build/test verify, git ops (commit/tag/`merge_to_base`/push), GitHub release — HARD-GATE before every irreversible action. Auto-detects environment, skips unavailable stages. Stage 6.5 (`merge_to_base`, v8.4+) merges release branch into base branch BEFORE tag push so the tag is reachable from the base branch. |
@@ -121,8 +121,9 @@ claude plugin install agent-harness@agent-harness-marketplace
 /debug "NullPointerException in UserController"    # hypothesis-driven debugging
 /debug --mode deep --attach error.log              # workflow path: 2 analysts + adversarial cross-verify
 
-/spec "Add payment retry on failure"               # multi-round Q&A -> structured spec
+/spec "Add payment retry on failure"               # multi-round Q&A -> structured spec (opens with a Review Sheet)
 /spec --mode deep                                  # workflow path: 4 analysts + Critic cold review
+/spec digest docs/design/auth-spec.md              # read-only 3-layer briefing of an existing doc (30s/5min/map)
 
 /test-gen src/auth/                                # generate tests for directory
 /test-gen --coverage-gap                           # auto-find low-coverage areas
@@ -145,6 +146,7 @@ claude plugin install agent-harness@agent-harness-marketplace
 /deep-review --staged --mode quick                 # review staged changes, quick inline
 /deep-review #123 --comment                        # post critical/major findings as inline PR comments (confirmed)
 /deep-review --staged --fix                        # apply suggested fixes behind an explicit gate
+/deep-review #123                                  # run again after fixes -> round N+1 auto-detected, prior findings reconciled
 
 /refactor extract auth logic from UserController    # single inline by default; ultracode -> comprehensive
 /refactor reduce coupling in src/services/ --mode single
