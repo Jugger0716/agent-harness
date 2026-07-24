@@ -123,12 +123,12 @@ When the user provides a review target (via $ARGUMENTS or in conversation), exec
      options:
        - label: "default" / description: "Inherit parent model, no changes"
        - label: "frontier" / description: "Sonnet executor + Opus advisor + Fable evaluator (top-model judgment)"
-       - label: "balanced (Recommended)" / description: "Sonnet executor + Opus advisor (cost-efficient)"
-       - label: "economy" / description: "Haiku executor + Sonnet advisor (max savings)"
+       - label: "balanced (Recommended)" / description: "Sonnet executor + Opus advisor/evaluator (cost-efficient)"
+       - label: "economy" / description: "Haiku executor + Sonnet advisor/evaluator (max savings)"
 
    **If "Other" selected:** Parse custom format `executor:<model>,advisor:<model>,evaluator:<model>` (or a bare preset name — validated against the preset table: `default` / `all-opus` / `frontier` / `balanced` / `economy`). For the role form, validate each model name — only `fable`, `opus`, `sonnet`, `haiku` are allowed (case-insensitive). If any model name is invalid, inform the user which value is invalid and re-ask for input (max 3 retries, then apply `balanced` as default). If parsing succeeds but is partial, fill missing roles with the `balanced` defaults (executor=sonnet, advisor=opus, evaluator=opus). Show the parsed result to the user and ask for confirmation before proceeding. (deep-review maps Cross-Verification → evaluator; it runs in thorough mode only, so in deep mode `frontier` behaves like `balanced`.)
 
-   **Model config is set once at session start and cannot be changed mid-session.** To change, restart the session.
+   **Model config is set once at session start and cannot be changed mid-session (sole exception: the automatic model fallback chain in `templates/_shared/model_config.md`, which may downgrade a cell on a sunset model id).** To change, restart the session.
 
    Store result as `model_config` object: `{ "preset": "<name>", "executor": "<model|null>", "advisor": "<model|null>", "evaluator": "<model|null>" }`. For the `default` preset, store `{ "preset": "default" }`.
 
@@ -246,10 +246,10 @@ The ORCHESTRATOR writes the round report — `docs/harness/<slug>/review_report.
 
 **Round ≥ 2 reconciliation (orchestrator-only; skipped with `--fresh`):** parse the prior round report's Findings tables and classify each prior finding — apply the FIRST matching rule:
 1. `still open` — a new finding matches it: same file AND (same category OR line ranges overlapping within ±10 lines). Link the new finding # in the table.
-2. `likely resolved` — no rule-1 match, AND the prior report header records a `HEAD` baseline, AND `git diff <prior-HEAD>..HEAD -- <file>` is non-empty for the finding's file. Always rendered as "likely resolved — verify" (absence of a re-find is evidence, not proof).
+2. `likely resolved` — no rule-1 match, AND the prior report header records a `HEAD` baseline, AND `git diff <prior-HEAD> -- <file>` (baseline → WORKING TREE — catches committed AND uncommitted fixes, e.g. the `--fix`-then-re-review flow which never commits) is non-empty for the finding's file. Rendered as "likely resolved — verify"; append "(uncommitted)" when the current `HEAD` equals `<prior-HEAD>`. (Absence of a re-find is evidence, not proof.)
 3. `unverifiable` — everything else (no `HEAD` baseline in the prior report, file untouched since the prior round, or `has_git == false`). Never guess.
 
-Render the result as the `## Prior Findings Status` table. This is a report-level comparison — prior findings are never injected into reviewer prompts (anchoring prevention). Note: the current round's diff payload is NOT the baseline — cumulative branch/PR diffs always contain round-1 regions; only the `<prior-HEAD>..HEAD` delta answers "changed since the last review".
+Render the result as the `## Prior Findings Status` table. This is a report-level comparison — prior findings are never injected into reviewer prompts (anchoring prevention). Note: the current round's diff payload is NOT the baseline — cumulative branch/PR diffs always contain round-1 regions; only the `<prior-HEAD>` → working-tree delta answers "changed since the last review".
 
 #### Report Format
 
@@ -329,7 +329,7 @@ Write the report in **{user_lang}** (except the Assessment line value which stay
 ```
 
 - `Files Reviewed` rows come from `filesReviewed` (deep/thorough) or the inline scan (quick); `Lines Changed` comes from the Step 1.6 orchestrator metadata; `Findings` is the per-file count from the findings array.
-- **Round Verdict rule (mechanical):** FAIL = critical ≥ 1; CONDITIONAL PASS = critical 0 AND major ≥ 1; PASS = critical 0 AND major 0. The verdict is ADVISORY — continuing to another round or stopping is always the user's decision (after fixes, re-invoke `/deep-review` on the same target; round N+1 is auto-detected).
+- **Round Verdict rule (mechanical):** FAIL = critical ≥ 1; CONDITIONAL PASS = critical 0 AND major ≥ 1; PASS = critical 0 AND major 0. The verdict is ADVISORY — continuing to another round or stopping is always the user's decision (after fixes, re-invoke `/deep-review` on the same target; round N+1 is auto-detected). The Assessment line (APPROVE / REQUEST_CHANGES / COMMENT) remains the single authority for review actions — the Round Verdict only advises whether another round is worth running.
 - `## Notes` section (only if applicable): `- Binary files skipped: [list]` and any other orchestrator-held notes.
 
 #### Assessment Logic

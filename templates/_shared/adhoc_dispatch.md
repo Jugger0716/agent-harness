@@ -33,9 +33,12 @@ dispatch overrides `{user_lang}` — the contract enforces intentionality, not a
 1. Mechanical / exploration / collection work (file discovery, grep sweeps, inventories,
    transcript mining) → `model_config.executor`; when the preset is `default` (or no
    model_config is in scope), prefer `sonnet` over inheriting a top-tier parent model.
+   (This deliberately overrides the `default` preset's parent-inherit for BULK ad-hoc work —
+   a cost guard; this file is the authority for ad-hoc dispatches.)
 2. Judgment / verification / synthesis work (adversarial verify, critique, final review) →
    `model_config.evaluator` (fall back to `advisor`, then parent inherit).
 3. NEVER dispatch an ad-hoc agent on a tier ABOVE the skill's evaluator tier — bulk agents run
-   below the ceiling, judgment at it, nothing above it.
+   below the ceiling, judgment at it, nothing above it. (Tier order = the model_config.md
+   fallback chain: `fable → opus → sonnet → haiku`.)
 4. Ad-hoc Workflow scripts SHOULD pass `model` per stage (`agent(prompt, { model })`) following
    rules 1–2, and MAY lower `effort` for mechanical stages the same way.

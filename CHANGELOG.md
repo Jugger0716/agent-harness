@@ -62,7 +62,7 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
 
 ### Changed
 - **Judgment agents remapped advisor → evaluator** (deep-review Cross-Verification, debug Cross
-  Verifier, spec Critic, codebase-audit Completeness Critic; SKILL.md role maps + `args.models` now
+  Verifier, spec Critic, codebase-audit Completeness Critic, refactor Cross-Critique; SKILL.md role maps + `args.models` now
   pass `evaluator`; segment scripts read `MODELS.evaluator || MODELS.advisor` for stale-args resumes).
   Behavior-preserving for pre-8.7 presets — their advisor and evaluator cells are identical; only
   `frontier` differentiates the two roles. Custom `Other` `evaluator:` values — previously

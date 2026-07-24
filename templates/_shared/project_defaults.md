@@ -9,8 +9,8 @@ The declaration is one defaults line:
 
     agent-harness-defaults: path=workflow, model-config=frontier, verifier-model=haiku
 
-**Sources & precedence — the FIRST source that declares the line wins WHOLESALE (no per-key
-merging across sources):**
+**Sources & precedence — the FIRST source whose defaults line yields at least one valid key
+wins WHOLESALE (no per-key merging across sources):**
 
 | # | Source | Audience | Committed? |
 |---|--------|----------|------------|
@@ -45,7 +45,9 @@ injection. Malformed JSON in source 1 → skip that source silently and continue
   documented fallback).
 - Verifier: `--verifier-model` > **project default** > `haiku`.
 
-**Parse rule:** in sources 2–3, take the FIRST line matching `^\s*agent-harness-defaults:`;
+**Parse rule:** in sources 2–3, take the FIRST line matching `^agent-harness-defaults:` at
+column 0 — indented lines and lines inside fenced code blocks (```) are EXAMPLES, excluded
+from matching;
 in source 1, take the `env.AGENT_HARNESS_DEFAULTS` string value. Split the remainder on commas
 into `key=value` pairs; trim whitespace; keys and values are case-insensitive. An invalid
 value → warn once (in `user_lang`) and ignore that key — NEVER halt on a malformed defaults
