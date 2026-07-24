@@ -1,5 +1,39 @@
 # Agent Harness Roadmap
 
+## v8.7 — In development (`feature/v8.7-tiering-continuity`)
+
+Scope selected from the 2026-07-24 three-project usage audit (25-agent workflow; evidence: the user
+operates primarily as a free-form ultracode orchestrator — the plugin's highest-value additions are
+contracts for that path plus session continuity):
+
+- **`frontier` model preset** — Fable evaluator / Opus advisor / Sonnet executor / Haiku verifier;
+  judgment agents (cross-verification, critic) remapped to the evaluator role (no-op for pre-8.7
+  presets). See `templates/_shared/model_config.md`.
+- **Project defaults** — `agent-harness-defaults: path=..., model-config=..., verifier-model=...`
+  line in a defaults source — `.claude/settings.local.json` env (recommended) / project CLAUDE.md /
+  `~/.claude/CLAUDE.md`, first wins wholesale — as a standing opt-in (Mode Gate §Ambiguity Prompt
+  step 4.5); kills the per-session `/effort` + model-picker ritual. See `templates/_shared/project_defaults.md`.
+- **Ad-hoc Dispatch Contract** — output-language + model-routing rules for non-template sub-agents
+  and ad-hoc Workflow scripts; root-cause fix for the v8.6.0 English leak. See
+  `templates/_shared/adhoc_dispatch.md`.
+- **`/handoff` skill** — human-gated session handoff (generate / resume with git-drift verification /
+  list); replaces the 150+ hand-written HANDOFF/NEXT_SESSION documents found across the three
+  audited projects. See `skills/handoff/SKILL.md`.
+- **`/deep-review` round bookkeeping (P05, reduced scope)** — standardized round numbering,
+  orchestrator-only prior-finding reconciliation (reviewers stay blind), advisory Round Verdict;
+  no auto-convergence loop (the /spec oscillation invariant is untouched — user re-invokes per
+  round). See `skills/deep-review/SKILL.md`.
+- **`/spec` Review Sheet + `/spec digest` (P15)** — specs open with a derived review sheet (TL;DR,
+  decision table, open questions, changed-in-this-revision); `digest` produces a read-only 3-layer
+  briefing of existing docs (evidence: spec-comprehension effort was a reported top pain).
+  See `skills/spec/SKILL.md`.
+
+M4 (persona override), M3 (template compression), and L1 (external CLI wrapper) remain planned
+(see the v8.3+ table below); audit follow-ups not in this scope (cold-review preset, segment
+checkpoints, campaign ledger, `harness clean/archive`) are tracked for v8.8+.
+
+---
+
 ## v8.x — Shipped
 
 **v8.6.0** — Mode Gate §Ambiguity Prompt + §Path Transparency

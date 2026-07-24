@@ -1,7 +1,7 @@
 ---
 name: spec
 disallowed-tools: NotebookEdit
-description: Requirements specification writer with multi-round Q&A discovery. Transforms vague ideas into structured specs compatible with /harness input. Modes — quick (orchestrator only, inline) / deep (4 analysts + Critic via plugin-shipped native Workflow segments, opt-in gated). Use when you need a well-defined spec before starting implementation.
+description: Requirements specification writer with multi-round Q&A discovery. Transforms vague ideas into structured specs compatible with /harness input. Modes — quick (orchestrator only, inline) / deep (4 analysts + Critic via plugin-shipped native Workflow segments, opt-in gated). Specs open with a derived Review Sheet (TL;DR, decision table, open questions, changed-in-this-revision) for fast human review. Also: /spec digest <file> — read-only 3-layer briefing (30s/5min/section map + mermaid) of any existing spec or design doc. Use when you need a well-defined spec before starting implementation.
 ---
 
 # Agent Harness Spec
@@ -28,8 +28,9 @@ Skim this list to locate sections by name. Section-anchor cross-references throu
 10. `### HARD GATE — Spec Approval` — final approval gate with translated 3-way options + Modify reset.
 11. `### Phase 3 — Handoff` — artifacts persistence, slug-safe `/harness` invocation, cleanup safety guard, M17 variable↔filename mapping.
 12. `### Status Check (anytime)` — status summary command (subsection of Phase 3).
-13. `## Spec Output Format` — 7-section template with /harness compatibility mapping.
-14. `## Model Selection` — model_config preset → role mapping (advisor; workflow `args.models`).
+13. `## Sub-command: digest` — `/spec digest <path>`: read-only 3-layer briefing of an existing document (no state, no Q&A, no sub-agents).
+14. `## Spec Output Format` — 7-section template with /harness compatibility mapping + leading derived `## Review Sheet` (reviewer-facing, non-canonical).
+15. `## Model Selection` — model_config preset → role mapping (analysts/synthesis → advisor, Critic → evaluator; workflow `args.models`).
 
 ## Environment Detection
 
@@ -63,6 +64,8 @@ Apply the shared opt-in convention in `templates/_shared/mode_gate.md`. /spec-sp
 | `Workflow` tool NOT available this session | quick | **inline** (notify only if an explicit `--mode deep` was requested) |
 | `--mode deep` (or `comprehensive`/`thorough`/`multi`) | deep | **workflow** |
 | no `--mode` AND session is in ultracode mode | deep | **workflow** |
+| no `--mode`, ultracode OFF, resolved project-defaults line has `path=workflow` | deep | **workflow** (standing opt-in — §Ambiguity Prompt step 4.5) |
+| no `--mode`, ultracode OFF, resolved project-defaults line has `path=inline` | quick | **inline** |
 | no `--mode`, no opt-in | quick | **inline** (interactive + engine available → asks first, §Ambiguity Prompt) |
 
 - **Deep mode exists ONLY on the workflow path** — the engine's `parallel()` fan-out replaces the old hand-rolled "Launch 4 sub-agents in parallel" prose (pilot precedent: /harness standard/multi). The inline path is the preserved quick mode (Phase 2-Q: orchestrator writes spec.md directly).
@@ -100,6 +103,11 @@ Phase labels (in roughly execution order):
 - `completed` → "Completed"
 
 ## Session Recovery
+
+**digest carve-out:** if the argument immediately after `/spec` is `digest`, SKIP Session
+Recovery entirely and jump straight to `## Sub-command: digest` — a read-only sub-command must
+neither resume nor disturb an in-progress spec session (its state stays untouched for the next
+real /spec invocation).
 
 Before starting a new task, check if `.harness/state.json` already exists **and** `state.json.skill` equals `"spec"`:
 
@@ -168,6 +176,7 @@ When the user provides a task description (via $ARGUMENTS or in conversation), e
 
 ### Step 1: Setup
 
+0. **Sub-command dispatch:** if the argument immediately after `/spec` is `digest` → jump to `## Sub-command: digest` (read-only; skips state.json, git branch, Q&A, and every gate below).
 1. **Detect user language** from the task description. Store as `user_lang`.
 2. **Slugify the task:** lowercase, transliterate non-ASCII to ASCII, remove non-word chars except hyphens, replace spaces with hyphens, truncate to 50 chars. Store as `<slug>`.
 
@@ -192,26 +201,27 @@ When the user provides a task description (via $ARGUMENTS or in conversation), e
      4. **Size limit** (NEW in 8.4 for `--reference`): file size > 200 KB OR line count > 5000 → halt with "reference file too large." Convention files should be human-curated, not auto-generated dumps.
    - On valid path: normalize to a **repo-relative path** (relative to `repo_path`; no leading `/` or drive letter; e.g., `docs/references/spec.md`) and store as `cli_flags.reference: <normalized_path>` in state.json (audit-friendly). Will be consumed by Step 1.5 Convention Scan. (M4: prior wording "absolute repo-relative path" was internally contradictory and risked OS-absolute paths leaking into state.json on Windows.)
    - If not provided: `cli_flags.reference: null`.
-5. **Mode Gate resolution:** apply §Mode Gate INCLUDING **§Ambiguity Prompt** (single source: `templates/_shared/mode_gate.md`). The mode roundtrip is removed EXCEPT this prompt, which fires only when NO opt-in is present (no `--mode`, ultracode OFF, `Workflow` tool available, `has_git == true`, interactive session, no `--no-prompt`). Skill modes: quick(inline) / deep(workflow). ultracode-target (step 4 default): deep. Store `mode` and `path_resolved` in state.json. Then emit **§Path Transparency** — show `Path : <inline | workflow>  (<reason>)`. If the user explicitly requested `--mode deep` but the gate resolved to inline (Workflow tool unavailable or `has_git == false`), notify (in `user_lang`): "deep mode requires the native Workflow engine and git — proceeding on the inline quick path."
+5. **Mode Gate resolution:** apply §Mode Gate INCLUDING **§Ambiguity Prompt** (single source: `templates/_shared/mode_gate.md`). The mode roundtrip is removed EXCEPT this prompt, which fires only when NO opt-in is present (no `--mode`, ultracode OFF, no project-default `path` (`agent-harness-defaults:` line), `Workflow` tool available, `has_git == true`, interactive session, no `--no-prompt`). Skill modes: quick(inline) / deep(workflow). ultracode-target (step 4 default): deep. Store `mode` and `path_resolved` in state.json. Then emit **§Path Transparency** — show `Path : <inline | workflow>  (<reason>)`. If the user explicitly requested `--mode deep` but the gate resolved to inline (Workflow tool unavailable or `has_git == false`), notify (in `user_lang`): "deep mode requires the native Workflow engine and git — proceeding on the inline quick path."
 <!-- SYNC-WITH: templates/_shared/mode_gate.md §Ambiguity Prompt -->
 
 6. **Model configuration selection (deep mode only):**
    If mode is `quick`, skip this step entirely — no sub-agents are used.
    If mode is `deep`:
-     If `--model-config <preset>` was passed, use it directly. Otherwise, use AskUserQuestion to ask the user (in `user_lang`):
+     If `--model-config <preset>` was passed, use it directly. Otherwise, if the resolved project-defaults line (first source wins wholesale: settings.local.json env → project CLAUDE.md → user CLAUDE.md; see `templates/_shared/project_defaults.md`) contains `model-config=<preset>`, use it silently and echo `(project default)` in the Setup Summary. Otherwise, use AskUserQuestion to ask the user (in `user_lang`):
+<!-- SYNC-WITH: templates/_shared/project_defaults.md §agent-harness-defaults -->
        header: "Model"
        question: "Select model configuration for sub-agents:"
        options:
          - label: "default" / description: "Inherit parent model, no changes"
-         - label: "all-opus" / description: "All sub-agents use Opus (highest quality)"
-         - label: "balanced (Recommended)" / description: "Sonnet executor + Opus advisor (cost-efficient)"
-         - label: "economy" / description: "Haiku executor + Sonnet advisor (max savings)"
+         - label: "frontier" / description: "Sonnet executor + Opus advisor + Fable evaluator (top-model judgment)"
+         - label: "balanced (Recommended)" / description: "Sonnet executor + Opus advisor/evaluator (cost-efficient)"
+         - label: "economy" / description: "Haiku executor + Sonnet advisor/evaluator (max savings)"
 
-     **If "Other" selected:** Parse custom format `executor:<model>,advisor:<model>`. Validate each model name — only `opus`, `sonnet`, `haiku` are allowed (case-insensitive). If any model name is invalid, inform the user which value is invalid and re-ask (max 3 retries, then apply `balanced` as default). Show parsed result and ask for confirmation before proceeding.
+     **If "Other" selected:** Parse custom format `executor:<model>,advisor:<model>,evaluator:<model>` (or a bare preset name — validated against the preset table: `default` / `all-opus` / `frontier` / `balanced` / `economy`). For the role form, validate each model name — only `fable`, `opus`, `sonnet`, `haiku` are allowed (case-insensitive). If any model name is invalid, inform the user which value is invalid and re-ask (max 3 retries, then apply `balanced` as default). Show parsed result and ask for confirmation before proceeding.
 
-     **Model config is set once at session start and cannot be changed mid-session.**
+     **Model config is set once at session start and cannot be changed mid-session (sole exception: the automatic model fallback chain in `templates/_shared/model_config.md`, which may downgrade a cell on a sunset model id).**
 
-     Store result as `model_config` object: `{ "preset": "<name>", "executor": "<model|null>", "advisor": "<model|null>" }`. For `default` preset, store `{ "preset": "default" }`.
+     Store result as `model_config` object: `{ "preset": "<name>", "executor": "<model|null>", "advisor": "<model|null>", "evaluator": "<model|null>" }`. For `default` preset, store `{ "preset": "default" }`.
 
 7. **Write `.harness/state.json`** with the following fields:
    - `task` — the user's task description string
@@ -378,7 +388,7 @@ Read `mode` from state.json and branch accordingly.
 
 #### If mode == "quick": Phase 2-Q
 
-Write `spec.md` directly to `docs/harness/<slug>/spec.md` using the following format. Use `qa_discovery_notes` from `.harness/spec/qa_notes.md` as the primary source of truth.
+Write `spec.md` directly to `docs/harness/<slug>/spec.md` using the following format, prepending the derived `## Review Sheet` per §Spec Output Format (compression of the sections below + `[unconfirmed]` items; "Changed in this revision" is omitted on first synthesis and filled on Modify re-runs from the Modify request). Use `qa_discovery_notes` from `.harness/spec/qa_notes.md` as the primary source of truth.
 
 All section headings and content must be written in `user_lang`.
 
@@ -457,7 +467,7 @@ Print status in the standard format, prefixed with `[harness] Spec draft ready.`
 
    **Single-source-of-truth contract**: `state.critic.applied` is the only authoritative signal for whether Critic ran. Step 5b sets it eagerly; step 7 reads it as the sole gate to bypass Phase 2c-D. Do NOT add parallel decision logic in any other phase that diverges from this signal.
 
-6. **Render spec.md** from `plan` (PlanResult) to `docs/harness/<slug>/spec.md` — the seven canonical sections (§Spec Output Format), all headings and content in `user_lang`:
+6. **Render spec.md** from `plan` (PlanResult) to `docs/harness/<slug>/spec.md` — a leading derived `## Review Sheet` (§Spec Output Format; on re-synthesis entries — `criticFindings`/`modRequest` non-empty — fill "Changed in this revision" from those inputs, else omit that row) followed by the seven canonical sections, all headings and content in `user_lang`:
    - `## Goal` ← `goal` ; `## Background & Decisions` ← `background`
    - `## Scope` ← `scope.inScope` bullets ; `## Out of Scope` ← `scope.outOfScope` bullets
    - `## Edge Cases` ← `edgeCases[]` bullets
@@ -482,7 +492,8 @@ Print status in the standard format, prefixed with `[harness] Spec draft ready.`
        specContent: <docs/harness/<slug>/spec.md content>,
        qaNotes: <qa_discovery_notes content, or "">,
        criticFindingsPath: ".harness/spec/critic_findings.md",
-       models: { advisor: <model_config.advisor or null> }
+       models: { advisor: <model_config.advisor or null>,
+                 evaluator: <model_config.evaluator or null> }
      }
    }
    ```
@@ -641,9 +652,36 @@ Update state.json: `phase` → `"completed"`.
 
 If user asks for status, print status in the standard format defined above.
 
+## Sub-command: digest
+
+`/spec digest <path> [--artifact]` — read-only fast-comprehension briefing of an EXISTING document (a spec, design doc, or any `.md`/`.txt`/`.markdown`). No state.json, no git branch, no Q&A, no sub-agents (orchestrator-inline). Nothing is written to the repository — `--artifact` writes its page file to the session scratchpad only, never into the repo.
+
+1. **Validate `<path>`:** must exist and have a text extension (`.md`, `.txt`, `.markdown`). If the file exceeds 5000 lines, ask via AskUserQuestion (in `user_lang`): "Proceed (sampled)" / "Abort". Sampled mode is deterministic: read ALL headings; the first 40 lines of every top-level section (`##`, or the shallowest heading level the document actually uses); and, in full, any section whose heading contains — case-insensitive — one of `goal/목표`, `decision/결정`, `risk/리스크/위험`, `constraint/제약` or their `user_lang` equivalents (cap 400 lines each); hard cap 3000 lines total, earlier sections win. The briefing MUST state prominently that sampled mode was used.
+2. **Read and produce the 3-layer briefing (all in `user_lang`):**
+   - **Layer 1 — 30 seconds:** ≤5 bullets — what this is, why it exists, the one decision that matters most, the biggest risk, current status if stated.
+   - **Layer 2 — 5 minutes:** decision table (options / chosen / why), invariants & constraints, risks, open questions/TBDs, and a reading order into the source (section names + `path:line` anchors).
+   - **Layer 3 — pointer:** section map of the full document (heading → 1-line summary → line anchor). Do NOT restate the whole document.
+   - **Diagram:** if the document describes a flow, sequence, or state machine, render 1–2 mermaid diagrams (```mermaid fences). Skip when nothing is genuinely diagrammable — no decorative diagrams.
+3. **`--artifact` (optional):** if the Artifact tool is available this session, publish the briefing as a page (mermaid renders natively there). If unavailable (headless / CLI-only), print a one-line notice and continue with chat output — never an error.
+4. **Honesty rules:** the briefing compresses, it never adds. Mark inferred statements explicitly as inferred (in `user_lang`); quote decision/severity wording verbatim where exactness matters.
+
 ## Spec Output Format
 
-The spec written to `docs/harness/<slug>/spec.md` must use this exact structure for `/harness` compatibility. Write all content in `user_lang`.
+The spec written to `docs/harness/<slug>/spec.md` opens with a derived **`## Review Sheet`** (reviewer-facing; NOT one of the seven canonical sections — `/harness` ignores it), followed by the seven canonical sections in this exact structure for `/harness` compatibility. Write all content in `user_lang`.
+
+```markdown
+## Review Sheet
+
+**TL;DR** — ≤5 bullets: what / why / how / biggest risk / done-when.
+
+| Decision | Options considered | Chosen | Why |
+|----------|--------------------|--------|-----|
+
+**Invariants & top risks:** ≤5 bullets (compressed from Risks + Edge Cases).
+**Open questions:** every `[unconfirmed]` item, one line each.
+**Reading order:** what a cold reviewer should read, in order, with a 1-line reason each.
+**Changed in this revision:** re-synthesis only (Critic revise / Modify) — what changed and why. Omit on first synthesis.
+```
 
 ```markdown
 ## Goal
@@ -671,7 +709,7 @@ The spec written to `docs/harness/<slug>/spec.md` must use this exact structure 
 - {risk} — Likelihood: {low/med/high} — Mitigation: {approach}
 ```
 
-**All headings and content must be translated to `user_lang`.** The English labels above are canonical identifiers for /harness compatibility.
+**All headings and content must be translated to `user_lang`.** The English labels above are canonical identifiers for /harness compatibility. The Review Sheet is DERIVED at render time from the seven sections + Q&A notes (compression only — it must introduce no new facts); the seven canonical sections remain the SSOT.
 
 ### Section Mapping to /harness
 
@@ -691,9 +729,9 @@ Sub-agents are used only in **deep mode** (WORKFLOW path — the segment scripts
 
 Preset table + rules: see `templates/_shared/model_config.md`.
 
-Role-map: Requirements Analyst / User Scenario Analyst / Risk Auditor / Tech Constraint Analyst (and the Synthesis + Critic phases) → advisor.
+Role-map: Requirements Analyst / User Scenario Analyst / Risk Auditor / Tech Constraint Analyst (and the Synthesis phase) → advisor; Critic → evaluator (judgment role — pre-8.7 presets keep identical advisor/evaluator cells, so only `frontier` differentiates).
 
-**Applying model config:** pass the resolved advisor model once per segment run as `args.models` (`{ advisor: <model or null> }`; null = inherit parent model, i.e. the `default` preset) — the segment scripts apply it per agent. Sub-agents must NOT directly access state.json to read model_config — the orchestrator passes the resolved value at segment launch.
+**Applying model config:** pass the resolved models once per segment run as `args.models` (Plan/Re-synthesis segments: `{ advisor }`; Eval segment: `{ advisor, evaluator }` — the Critic reads `evaluator`, falling back to `advisor` for stale args; null = inherit parent model, i.e. the `default` preset) — the segment scripts apply them per agent. Sub-agents must NOT directly access state.json to read model_config — the orchestrator passes the resolved value at segment launch.
 
 ## User Interaction Rules
 
@@ -708,7 +746,10 @@ See `templates/_shared/askuserquestion.md`.
 - **"Modify" triggers Phase 2 re-run.** Q&A notes are preserved; the spec is regenerated, not patched.
 - **Analyst proposals must be independent.** Never share one analyst's findings with another during parallel analysis (the Plan segment's `parallel()` enforces this).
 - **Section mapping must be preserved.** The seven spec sections must appear in every spec for /harness compatibility.
+- **Review Sheet is derived, never authoritative.** It compresses the seven sections + Q&A notes for fast human review; it introduces no new facts, and /harness ignores it (section mapping unchanged).
 - **User language.** All user-facing output must be in `user_lang`. Re-detect on every user message. WORKFLOW path: pass `userLang` in `args` — the segment scripts build schema descriptions from it, which forces sub-agent free-text output language; ids/enums stay English raw.
+- **Ad-hoc dispatch.** Any sub-agent or Workflow script created during this skill's execution WITHOUT a shipped template follows `templates/_shared/adhoc_dispatch.md` §Ad-hoc Dispatch Contract — explicit output-language directive (schema free-text field descriptions carry `(in {user_lang})`) and role-based model routing (mechanical → executor tier, judgment → evaluator tier, never above).
+<!-- SYNC-WITH: templates/_shared/adhoc_dispatch.md §Ad-hoc Dispatch Contract -->
 - **Workflow args are a JSON object;** segment scripts defensively parse (`args` may arrive as a JSON string — engine behavior). Keep the SKILL args blocks and the scripts' `// contract` comments in 1:1 sync. Never put user-gate decisions into args.
 - **Graceful engine fallback.** Any Workflow failure degrades per the Phase 2-D fallback rules (Plan segment → quick path; Eval segment → dispatch_failed banner) with a notice — never a hard error.
 - **Intermediate outputs are ephemeral.** Only `spec.md` and the Phase 3 persisted artifacts (`qa_notes.md`, `critic_findings.md`, `conventions.md`) are preserved in `docs/harness/<slug>/`. All other `.harness/` contents (including `proposals.json`) are cleaned up after completion.

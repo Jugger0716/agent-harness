@@ -8,6 +8,70 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
 
 ## [Unreleased]
 
+## [8.7.0] — 2026-07-24
+
+### Added
+- **`frontier` model preset** (`templates/_shared/model_config.md`): `executor=sonnet, advisor=opus,
+  evaluator=fable, verifier=haiku` — top-model judgment with cost-efficient execution. `fable` is now a
+  valid model for executor/advisor/evaluator cells and custom `Other` parses (never verifier). The
+  interactive picker swaps `all-opus` for `frontier` (AskUserQuestion 4-option limit); `all-opus` stays
+  available via `--model-config all-opus` or `Other`.
+- **Project defaults** (`templates/_shared/project_defaults.md` NEW single source): one
+  `agent-harness-defaults: path=..., model-config=..., verifier-model=...` line acts as a standing
+  opt-in. Three sources, first wins wholesale: `.claude/settings.local.json`
+  `env.AGENT_HARNESS_DEFAULTS` (personal, uncommitted — recommended for team repos), project root
+  `CLAUDE.md` (team-agreed, committed), `~/.claude/CLAUDE.md` (personal global). Mode Gate
+  §Ambiguity Prompt gains step 4.5 (reason `project default (<source>)`), the model picker and
+  verifier default resolve silently from it, and session flags always win. Wired into all 8
+  multi-path skills; `verify_sync_markers.py` gains the `project-defaults` SYNC group (min_sites 8).
+- **Ad-hoc Dispatch Contract** (`templates/_shared/adhoc_dispatch.md` NEW single source): every
+  sub-agent or Workflow script created during skill execution WITHOUT a shipped template must carry an
+  explicit output-language directive (schema free-text field descriptions include `(in {user_lang})`)
+  and route models by role (mechanical → executor tier, judgment → evaluator tier, never above the
+  skill ceiling). Root-cause fix for the v8.6.0 English-leak (ad-hoc Explore/general-purpose dispatches
+  bypassed the template `{user_lang}` wiring). Wired into 11 skills; `verify_sync_markers.py` gains the
+  `adhoc-dispatch` SYNC group (min_sites 11).
+- **`/handoff` skill** (NEW — `skills/handoff/SKILL.md`): human-gated session handoff.
+  `generate` captures git state (verified by running commands), read-only `.harness/state.json`
+  pointers, and Goal / Current State (verified) / Blockers / Next Steps / Definition of Done /
+  Reading Order / Do NOT sections into `docs/harness/handoff/YYYY-MM-DD-<slug>.md` behind a
+  Save/Edit/Cancel gate; `resume` primes a fresh session with git-drift verification (branch/HEAD
+  match, commits-since list — report-only, never mutates git) and ends at an explicit gate; `list`
+  enumerates handoffs. Inline-only, stateless, no engine escalation (team-memory pattern).
+
+- **`/deep-review` round bookkeeping** (`skills/deep-review/SKILL.md`): re-running the same target
+  auto-advances review rounds — standardized numbering (`review_report.md` = round 1,
+  `review_round<N>.md` after), orchestrator-only reconciliation of prior findings
+  (likely resolved / still open / unverifiable — reviewers stay blind; anchoring prevention intact),
+  and an advisory `## Round Verdict` block (PASS / CONDITIONAL PASS / FAIL by mechanical rule).
+  No auto-loop: each round is a fresh user invocation; `--fresh` skips reconciliation. The /spec
+  Critic oscillation invariant (auto-revise max 1 round) is untouched.
+- **`/spec` Review Sheet + `/spec digest`** (`skills/spec/SKILL.md`): every spec now opens with a
+  derived `## Review Sheet` (≤5-line TL;DR, decision table, invariants & top risks, open
+  `[unconfirmed]` questions, reading order, and — on re-synthesis only — "Changed in this
+  revision"); derived at render time, introduces no new facts, ignored by /harness (seven-section
+  contract unchanged). New read-only sub-command `/spec digest <path> [--artifact]` produces a
+  3-layer briefing (30-second / 5-minute / section-map with `path:line` anchors) plus mermaid
+  diagrams where genuinely diagrammable; optional Artifact publish, graceful skip when unavailable.
+
+- **Model fallback chain** (`templates/_shared/model_config.md`): if a dispatch fails because a
+  preset cell's model id is unknown/unavailable (model sunset — e.g. a future `fable`
+  retirement), the cell downgrades step-by-step (`fable → opus → sonnet → haiku → parent
+  inherit`) with a once-per-session warning and a Setup Summary / report echo of the
+  actually-used model; the downgrade is remembered for the session. Preset names are
+  indirection — a sunset needs only a one-line preset-table patch, and persistent
+  `model-config=<preset>` project defaults keep working across model generations.
+
+### Changed
+- **Judgment agents remapped advisor → evaluator** (deep-review Cross-Verification, debug Cross
+  Verifier, spec Critic, codebase-audit Completeness Critic, refactor Cross-Critique; SKILL.md role maps + `args.models` now
+  pass `evaluator`; segment scripts read `MODELS.evaluator || MODELS.advisor` for stale-args resumes).
+  Behavior-preserving for pre-8.7 presets — their advisor and evaluator cells are identical; only
+  `frontier` differentiates the two roles. Custom `Other` `evaluator:` values — previously
+  stored-but-unused in deep-review — are now honored.
+- Interactive model pickers accept a bare preset name (e.g. `all-opus`) via `Other`, in addition to
+  the `executor:...,advisor:...,evaluator:...` custom format.
+
 ## [8.6.0] — 2026-07-08
 
 ### Added

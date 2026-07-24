@@ -70,11 +70,12 @@ Higher modes cost more per run but save total cost by reducing retry rounds. Sta
 | **Refactor** | `/refactor <target>` | Safe, behavior-preserving code structure improvement. Single (inline) or multi/comprehensive (2-3 analysts + cross-critique, native Workflow path). Execution stays gated and step-tested in the orchestrator. |
 | **Migrate** | `/migrate <target> [--from v4 --to v5]` | Staged migration of frameworks, libraries, and dependencies. Single (inline) or multi (parallel external-research + codebase-impact analysts + synthesis, native Workflow path) with WebSearch research. Staged execution stays gated and step-tested in the orchestrator. |
 | **Debug** | `/debug <error>` | Hypothesis-driven debugging with mandatory executable verification. Quick (inline) or deep (2 analysts + adversarial cross-verify, native Workflow path). |
-| **Spec** | `/spec <requirement>` | Multi-round Q&A requirements specification. Output directly compatible with `/harness` input. Quick (inline) or deep (4 analysts + Critic, native Workflow path). |
+| **Spec** | `/spec <requirement>` | Multi-round Q&A requirements specification. Output directly compatible with `/harness` input. Quick (inline) or deep (4 analysts + Critic, native Workflow path). Specs open with a derived Review Sheet (TL;DR / decision table / open questions / changed-in-this-revision); `/spec digest <file>` gives a read-only 3-layer briefing of any existing doc. |
 | **Test Gen** | `/test-gen <target>` | Automated test generation with mutation-based quality verification. Single (inline) or multi (parallel coverage analysts + propose-only mutation skeptics, native Workflow path; test generation + mutation execution stay orchestrator-inline). Supports coverage-gap and regression modes. |
 | **Team Memory** | `/team-memory <cmd>` | Team knowledge base (save/show/clean/search). Git-committed, team-shared decisions, patterns, and conventions. Human-gated CRUD — never escalates to sub-agents or the Workflow engine. _(formerly `/memory` — old name kept as a deprecation alias)_ |
+| **Handoff** | `/handoff generate/resume/list` | Session handoff for cross-session continuity: `generate` captures a verified HANDOFF document (git state, confirmed facts, next steps, reading order) behind a human gate; `resume` primes a fresh session from it with git-drift verification (report-only — never mutates git). Complements `/harness` Session Recovery (task-internal state). |
 | **Codebase Audit** | `/codebase-audit` | Systematic codebase analysis for team onboarding. Quick (inline) or deep/thorough (parameterized lens analysts + completeness critique + synthesis, native Workflow path; orchestrator writes the report). Incremental analysis support. |
-| **Deep Review** | `/deep-review <target>` | Systematic, bias-free code review. Quick (inline checklist) or deep/thorough (2-3 specialists + adversarial cross-verification, native Workflow path). Optional `--comment` (inline PR comments) / `--fix` (gated apply). _(formerly `/code-review` — old name kept as a deprecation alias)_ |
+| **Deep Review** | `/deep-review <target>` | Systematic, bias-free code review. Quick (inline checklist) or deep/thorough (2-3 specialists + adversarial cross-verification, native Workflow path). Optional `--comment` (inline PR comments) / `--fix` (gated apply). Re-runs on the same target auto-advance review rounds with prior-finding reconciliation and an advisory Round Verdict. _(formerly `/code-review` — old name kept as a deprecation alias)_ |
 | **MD Optimize** | `/md-optimize` | Optimize CLAUDE.md and project `.md` files for token efficiency. |
 | **MD Generate** | `/md-generate` | Analyze project and generate/enhance CLAUDE.md for effective Claude Code development. |
 | **Ship** | `/ship` | Q&A release pipeline: version bump, CHANGELOG (Conventional Commits), build/test verify, git ops (commit/tag/`merge_to_base`/push), GitHub release — HARD-GATE before every irreversible action. Auto-detects environment, skips unavailable stages. Stage 6.5 (`merge_to_base`, v8.4+) merges release branch into base branch BEFORE tag push so the tag is reachable from the base branch. |
@@ -108,6 +109,7 @@ claude plugin install agent-harness@agent-harness-marketplace
 /harness fix login timeout bug --mode standard    # workflow path: 2-specialist fan-out via native Workflow scripts
 /harness fix login timeout bug --mode multi       # workflow path: 3-specialist fan-out, deepest analysis
 /harness fix bug --model-config balanced          # Sonnet executor + Opus advisor (cost-efficient)
+/harness fix bug --model-config frontier          # Sonnet executor + Fable evaluator (top-model judgment)
 
 /harness plan "add user auth"                     # phase mode: plan only, end session
 /harness generate                                 # phase mode: resume from plan, generate only
@@ -119,8 +121,9 @@ claude plugin install agent-harness@agent-harness-marketplace
 /debug "NullPointerException in UserController"    # hypothesis-driven debugging
 /debug --mode deep --attach error.log              # workflow path: 2 analysts + adversarial cross-verify
 
-/spec "Add payment retry on failure"               # multi-round Q&A -> structured spec
+/spec "Add payment retry on failure"               # multi-round Q&A -> structured spec (opens with a Review Sheet)
 /spec --mode deep                                  # workflow path: 4 analysts + Critic cold review
+/spec digest docs/design/auth-spec.md              # read-only 3-layer briefing of an existing doc (30s/5min/map)
 
 /test-gen src/auth/                                # generate tests for directory
 /test-gen --coverage-gap                           # auto-find low-coverage areas
@@ -131,6 +134,9 @@ claude plugin install agent-harness@agent-harness-marketplace
 /team-memory clean                                      # remove stale/completed records
 /team-memory search authentication                      # search across knowledge base
 
+/handoff                                           # capture this session -> gated HANDOFF document
+/handoff resume                                    # prime a fresh session from the newest handoff (+ git drift check)
+
 /codebase-audit                                    # auto-recommends mode based on project size
 /codebase-audit --mode thorough                    # comprehensive multi-agent analysis
 /codebase-audit --scope "src/**" --incremental     # analyze only changes in src/
@@ -140,6 +146,7 @@ claude plugin install agent-harness@agent-harness-marketplace
 /deep-review --staged --mode quick                 # review staged changes, quick inline
 /deep-review #123 --comment                        # post critical/major findings as inline PR comments (confirmed)
 /deep-review --staged --fix                        # apply suggested fixes behind an explicit gate
+/deep-review #123                                  # run again after fixes -> round N+1 auto-detected, prior findings reconciled
 
 /refactor extract auth logic from UserController    # single inline by default; ultracode -> comprehensive
 /refactor reduce coupling in src/services/ --mode single
@@ -160,18 +167,39 @@ Inspired by Anthropic's [Advisor Strategy](https://claude.com/blog/the-advisor-s
 | Preset | Executor | Advisor | Evaluator | Verifier | Use case |
 |--------|----------|---------|-----------|----------|----------|
 | **default** | (parent) | (parent) | (parent) | Haiku | No change, inherit parent model |
-| **all-opus** | Opus | Opus | Opus | Haiku | Maximum quality |
+| **all-opus** | Opus | Opus | Opus | Haiku | Maximum quality (flag/`Other` only — not in the interactive picker) |
+| **frontier** | Sonnet | Opus | Fable | Haiku | Top-model judgment — Fable evaluates, Sonnet executes |
 | **balanced** | Sonnet | Opus | Opus | Haiku | Recommended — cost-efficient with quality judgment |
 | **economy** | Haiku | Sonnet | Sonnet | Haiku | Maximum savings, basic quality |
 
 > **Verifier defaults to Haiku** — Layer 1 Mechanical Verification only executes commands and parses exit codes. Override with `--verifier-model sonnet|opus` for sensitive mechanical verification (e.g., concurrency failures, complex test diagnostics). Not recommended for routine use — Haiku is sufficient in the vast majority of cases.
+
+> **Deprecation safety:** if a preset cell's model is no longer available (model sunset), the dispatch downgrades step-by-step along `fable → opus → sonnet → haiku → parent inherit` with a once-per-session warning and a visible echo of the actually-used model — presets (and persistent `model-config` project defaults) keep working across model generations.
 
 **Role mapping across all skills:**
 - **Executor**: bulk work — analysis, code generation, proposals (cheaper model OK)
 - **Advisor**: high-level judgment — plan review, safety checks (quality model needed)
 - **Evaluator**: independent verification — always protected (never haiku)
 
-Works with: harness, refactor, migrate, debug, spec, test-gen, deep-review, codebase-audit. Presets are selected via numbered UI (AskUserQuestion) with `Other` for custom role mapping.
+Works with: harness, refactor, migrate, debug, spec, test-gen, deep-review, codebase-audit. Presets are selected via numbered UI (AskUserQuestion) with `Other` for custom role mapping. The interactive picker holds 4 presets (default / frontier / balanced / economy — AskUserQuestion limit); `all-opus` stays available via `--model-config all-opus` or `Other`. Judgment-type sub-agents (cross-verification, critic, evaluator) map to the evaluator role — pre-8.7 presets keep identical advisor/evaluator cells, so only `frontier` differentiates them.
+
+### Project Defaults (persistent opt-in)
+
+Declare standing defaults ONCE and skip the per-session rituals (single source: `templates/_shared/project_defaults.md`). The defaults line:
+
+```
+agent-harness-defaults: path=workflow, model-config=frontier, verifier-model=haiku
+```
+
+can live in three places — the first source that declares it wins wholesale:
+
+1. **`.claude/settings.local.json`** → `"env": { "AGENT_HARNESS_DEFAULTS": "path=workflow, model-config=frontier" }` — personal, per-project, NOT committed. **Recommended when the project CLAUDE.md is team-shared** (your preferences never leak into teammates' sessions).
+2. **Project root `CLAUDE.md`** — one line anywhere. Committed; use only for genuinely team-agreed defaults.
+3. **`~/.claude/CLAUDE.md`** — personal machine-wide fallback for all projects.
+
+- `path=workflow` is a standing opt-in — the Mode Gate resolves the workflow path at the skill's ultracode-target tier without ultracode or `--mode` (§Path Transparency reason: `project default (<source>)`); `path=inline` pins the inline path.
+- `model-config=<preset>` replaces the interactive model picker when no `--model-config` flag is given (echoed as `(project default)` in the Setup Summary). Without a flag AND without a defaults line, behavior is unchanged: skills that dispatch sub-agents ask via AskUserQuestion (exception: test-gen has no picker — it silently uses the `default` preset).
+- Session input always wins: explicit flags override the line, `--mode single/quick` still forces inline, and invalid values warn once and are ignored (never a halt).
 
 ## Interactive UX
 
@@ -342,7 +370,7 @@ Higher modes use more tokens per run but have higher first-pass success rates, o
 | Option | Default | Description |
 |--------|---------|-------------|
 | mode | Mode Gate (no roundtrip) | `single` (inline, default without opt-in), `standard` / `multi` (workflow path via native Workflow segment scripts). Opt-in = ultracode session or explicit `--mode`; `has_git == false` or missing Workflow tool forces inline single. |
-| model-config | (ask user) | `default` / `all-opus` / `balanced` / `economy` — see Model Configuration section |
+| model-config | project default → else ask | `default` / `all-opus` / `frontier` / `balanced` / `economy` — see Model Configuration section |
 | scope | auto-detected | Restrict file modifications to a pattern |
 | max rounds | 3 | Maximum Generator/Evaluator retry cycles |
 | max files | 20 | Maximum number of files that can be modified |
@@ -760,12 +788,18 @@ Edge Cases -> Acceptance Criteria (Given/When/Then) -> Risks
 
 Maps directly to `/harness` input: Goal->Goal, Background->Background, Scope->Scope, Acceptance Criteria->Completion Criteria, Risks->Risks, Edge Cases->Testing Strategy.
 
+Every spec opens with a derived **Review Sheet** (reviewer-facing, non-canonical — `/harness` ignores it): ≤5-line TL;DR, decision table (options / chosen / why), invariants & top risks, open `[unconfirmed]` questions, reading order, and — on re-synthesis only — "Changed in this revision". Derived at render time from the seven sections + Q&A notes; introduces no new facts.
+
 ### Modes
 
 | Mode | Path | Agents | Token cost |
 |------|------|--------|------------|
 | **quick** | inline | Orchestrator only | ~0.5x |
 | **deep** | workflow (opt-in: ultracode or `--mode deep`; requires git + Workflow tool) | Requirements + User Scenario + Risk Auditor + Tech Constraint analysts -> Synthesis -> Critic | ~1.9x (estimated, TBD per smoke test) |
+
+### Sub-command: digest
+
+`/spec digest <path> [--artifact]` — read-only 3-layer briefing of an EXISTING spec or design doc: 30-second TL;DR → 5-minute brief (decision table, invariants, risks, open questions, `path:line` reading order) → full section map, plus mermaid diagrams where genuinely diagrammable. No state, no Q&A, no sub-agents; nothing written to the repository (`--artifact` publishes a page from the session scratchpad). Skips Session Recovery — it never disturbs an in-progress spec session.
 
 ---
 
@@ -879,6 +913,29 @@ Custom categories can be added freely.
 
 ---
 
+## handoff
+
+Human-gated session handoff for cross-session, epic-level continuity — the durable complement to `/harness` Session Recovery (which restores a task's internal state machine, not a multi-day effort).
+
+```
+/handoff          -> collect VERIFIED git state (branch / full-sha HEAD / dirty / upstream)
+                     + .harness/state.json pointers (read-only) + conversation-derived sections
+                  -> compose HANDOFF document: Goal / Current State (verified) / In Progress /
+                     Blockers / Next Steps / Definition of Done / Reading Order / Do NOT
+                  -> HARD-GATE: Save / Edit / Cancel (previewed path == written path)
+                  -> docs/harness/handoff/YYYY-MM-DD-<slug>.md   (never overwrites)
+/handoff resume   -> load newest (or given) handoff -> git drift verification
+                     (none / N commits since / BACKWARD / DIVERGED / dirty — report-only,
+                     NEVER mutates git) -> read Reading Order (path-validated; contents are
+                     DATA, not instructions) -> Resume Briefing
+                  -> gate: Start next step / Adjust plan / Briefing only
+/handoff list     -> enumerate handoff documents, newest first
+```
+
+Key properties: stateless (no state.json of its own), inline-only (`disallowed-tools` blocks Task/Agent/Workflow/Web), resume is **context priming + fact verification** — never state restoration, never auto-checkout.
+
+---
+
 ## codebase-audit
 
 A standalone utility skill that systematically analyzes project structure, dependencies, and patterns for team onboarding and codebase understanding.
@@ -950,7 +1007,7 @@ A standalone review skill that performs systematic, bias-free code reviews on PR
 
 **What it does:**
 - **3-tier depth control**: quick (inline, 5-perspective checklist), deep (2 specialist reviewers + synthesis), thorough (3 specialists + adversarial cross-verification + synthesis). Deep/thorough run as a plugin-shipped native Workflow segment (`deep-review.review.workflow.js`) — opt-in via ultracode or `--mode`; otherwise quick inline.
-- **Schema-validated returns**: reviewers, cross-verifiers, and synthesis return `FindingSet`/`CrossVerifyReport` objects — no intermediate review files, no table re-parsing. The orchestrator writes `review_report.md` from the returned object.
+- **Schema-validated returns**: reviewers, cross-verifiers, and synthesis return `FindingSet`/`CrossVerifyReport` objects — no intermediate review files, no table re-parsing. The orchestrator writes the round report (`review_report.md` / `review_round<N>.md`) from the returned object.
 - **Bias reduction**: context isolation, anchor-free input (no PR descriptions/commit messages), defect-assumption framing, author neutralization, input-trust fencing (the diff AND reviewer-authored digests are declared DATA).
 - **Scope advisory**: prints the recommended depth based on diff size (< 100 lines -> quick, 100-500 -> deep, 500+ -> thorough) — pass `--mode` to take it.
 - **Built-in parity, gated**: `--comment` posts inline PR comments (after an explicit confirm); `--fix` applies critical/major suggestions to the working tree only behind a hard gate with per-path validation — never automatically, never committed.
@@ -979,7 +1036,7 @@ With no `--mode`: ultracode sessions resolve **thorough**; non-opted sessions re
 
 ### Output
 
-Review report saved to `docs/harness/<slug>/review_report.md` with:
+Round report saved to `docs/harness/<slug>/review_report.md` (round 1; later rounds: `review_round<N>.md`) with:
 - **Assessment**: APPROVE / REQUEST_CHANGES / COMMENT (deterministic from findings)
 - **Findings table**: severity, category, file:line, description, suggestion
 - **Statistics**: finding counts by severity; **Files Reviewed** incl. no-issue files
@@ -1116,6 +1173,7 @@ Communicates in the user's language for progress, questions, confirmations, erro
 
 See [ROADMAP.md](ROADMAP.md) for the full roadmap with rationale.
 
+- **v8.7** (Shipped): model tiering + session continuity — `frontier` preset (Sonnet executor / Opus advisor / **Fable evaluator**) with the judgment-role remap (cross-verification / critic / cross-critique → evaluator; no-op for pre-8.7 presets) and a model **fallback chain** (`fable → opus → sonnet → haiku → parent`) for sunset model ids; **project defaults** (`agent-harness-defaults:` line — `.claude/settings.local.json` env / project CLAUDE.md / `~/.claude/CLAUDE.md`, first wins wholesale — standing workflow-path opt-in + silent model-config via Mode Gate step 4.5); **Ad-hoc Dispatch Contract** (output-language + model routing for non-template sub-agents — root-cause fix for the v8.6.0 English leak); new **`/handoff`** skill (generate / resume with git-drift verification / list); `/deep-review` round bookkeeping (auto round numbering + orchestrator-only prior-finding reconciliation + advisory Round Verdict); `/spec` Review Sheet + `/spec digest`; two new SYNC lint groups (project-defaults, adhoc-dispatch)
 - **v8.6** (Shipped): Mode Gate §Ambiguity Prompt (when no `--mode` and ultracode is OFF in an interactive session with the Workflow engine available, the 8 multi-path skills explicitly ask inline-vs-workflow instead of resolving silently; `--no-prompt` and non-interactive sessions keep silent auto-resolution) + §Path Transparency (every skill prints `Path : <inline|workflow> (<reason>)`), both driven from the `templates/_shared/mode_gate.md` single source, with `scripts/verify_sync_markers.py` tracking the §Ambiguity Prompt marker across the wired skills (marker presence + referential integrity; content-drift and a §Path Transparency group are follow-ups)
 - **v8.5** (Shipped): native Workflow reframe — 8 high-overlap skills (`/harness`, `/spec`, `/debug`, `/deep-review`, `/codebase-audit`, `/migrate`, `/refactor`, `/test-gen`) author & run shipped segment scripts (`workflows/*.workflow.js`, schema-validated `agent()` fan-out) at opt-in depth; skill renames `/workflow`→`/harness`, `/code-review`→`/deep-review`, `/memory`→`/team-memory` (deprecation aliases preserved); derived **Mode Gate** (`templates/_shared/mode_gate.md`) replaces the mode-selection roundtrip; `/deep-review --comment`/`--fix` parity; `disallowed-tools` frontmatter enforced on every skill
 - **v8.4** (Shipped): `/spec` deep-mode 4-analyst pipeline (Requirements + UserScenario + RiskAuditor + TechConstraint) with cold Critic stage and 3-way revise gate; `/spec` Convention Scan (Step 1.5) with `--reference` flag; `/spec` Phase 3 persists `qa_notes.md`/`critic_findings.md`/`conventions.md` with `/workflow` Step 1.5/Step 2 reuse; `/ship` Stage 6.5 (`merge_to_base`) closes develop→main lag — Path A (protected base, PR fallback) vs Path B (local merge with FF / Non-FF / rebase-then-ff + force-with-lease), substep-level recovery, persistent retry-count cap, branch-protected rollback documentation
