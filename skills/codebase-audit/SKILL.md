@@ -99,7 +99,7 @@ When the user invokes `/codebase-audit`, execute this workflow:
 
 7. **Mode resolution (§Mode Gate).** Resolve `mode` + `path_resolved` per §Mode Gate (from `--mode` flags / ultracode opt-in / Workflow availability). Print the scope-aware advisory (< 30 → quick, 30–200 → deep, 200+/monorepo → thorough). Persist `{ mode, path_resolved }` to `.harness/model_config.json`.
 
-   - If `--mode` was provided, or the session is in ultracode mode, or the project CLAUDE.md declares `agent-harness-defaults:` with a `path` value (see `templates/_shared/project_defaults.md`), use the gate result and **skip the prompt below**.
+   - If `--mode` was provided, or the session is in ultracode mode, or a project-defaults source (settings.local.json env → project CLAUDE.md → user CLAUDE.md) declares `agent-harness-defaults:` with a `path` value (see `templates/_shared/project_defaults.md`), use the gate result and **skip the prompt below**.
    - If `--no-prompt` was passed, or the session is non-interactive (headless/cron/subagent), skip the prompt and use the gate default (per §Ambiguity Prompt step 5).
    - **After resolution (every branch),** emit §Path Transparency: append `(<reason>)` to the `Path` line (reasons per `templates/_shared/mode_gate.md §Path Transparency`).
    - **Boundary / explicit-override fallback (no `--mode`, no opt-in, interactive session only):** the gate defaults to quick; offer a one-time choice so an interactive user can opt into a deeper mode, using AskUserQuestion (in `user_lang`):
@@ -149,7 +149,7 @@ When the user invokes `/codebase-audit`, execute this workflow:
 10. **Model configuration selection (deep and thorough modes only):**
    If mode is `quick`, skip this step (no sub-agents used).
 
-   If `--model-config <preset>` was passed, use it directly. Otherwise, if the project CLAUDE.md declares `agent-harness-defaults:` with `model-config=<preset>` (single source: `templates/_shared/project_defaults.md`), use it silently and echo `(project default)` in the Setup Summary. Otherwise, use AskUserQuestion to ask the user (in `user_lang`):
+   If `--model-config <preset>` was passed, use it directly. Otherwise, if a project-defaults source (settings.local.json env → project CLAUDE.md → user CLAUDE.md) declares `agent-harness-defaults:` with `model-config=<preset>` (single source: `templates/_shared/project_defaults.md`), use it silently and echo `(project default)` in the Setup Summary. Otherwise, use AskUserQuestion to ask the user (in `user_lang`):
 <!-- SYNC-WITH: templates/_shared/project_defaults.md §agent-harness-defaults -->
      header: "Model"
      question: "Select model configuration for sub-agents:"

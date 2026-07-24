@@ -15,11 +15,13 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
   interactive picker swaps `all-opus` for `frontier` (AskUserQuestion 4-option limit); `all-opus` stays
   available via `--model-config all-opus` or `Other`.
 - **Project defaults** (`templates/_shared/project_defaults.md` NEW single source): one
-  `agent-harness-defaults: path=..., model-config=..., verifier-model=...` line in the project root
-  CLAUDE.md acts as a standing opt-in — Mode Gate §Ambiguity Prompt gains step 4.5 (reason
-  `project default (CLAUDE.md)`), the model picker and verifier default resolve silently from it, and
-  session flags always win. Wired into all 8 multi-path skills; `verify_sync_markers.py` gains the
-  `project-defaults` SYNC group (min_sites 8).
+  `agent-harness-defaults: path=..., model-config=..., verifier-model=...` line acts as a standing
+  opt-in. Three sources, first wins wholesale: `.claude/settings.local.json`
+  `env.AGENT_HARNESS_DEFAULTS` (personal, uncommitted — recommended for team repos), project root
+  `CLAUDE.md` (team-agreed, committed), `~/.claude/CLAUDE.md` (personal global). Mode Gate
+  §Ambiguity Prompt gains step 4.5 (reason `project default (<source>)`), the model picker and
+  verifier default resolve silently from it, and session flags always win. Wired into all 8
+  multi-path skills; `verify_sync_markers.py` gains the `project-defaults` SYNC group (min_sites 8).
 - **Ad-hoc Dispatch Contract** (`templates/_shared/adhoc_dispatch.md` NEW single source): every
   sub-agent or Workflow script created during skill execution WITHOUT a shipped template must carry an
   explicit output-language directive (schema free-text field descriptions include `(in {user_lang})`)

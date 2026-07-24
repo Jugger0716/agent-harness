@@ -111,7 +111,7 @@ When the user provides a review target (via $ARGUMENTS or in conversation), exec
 2. **Model configuration selection (deep and thorough modes only):**
    If mode is `quick`, skip this step (no sub-agents used).
 
-   If `--model-config <preset>` was passed, use it directly. Otherwise, if the project CLAUDE.md declares `agent-harness-defaults:` with `model-config=<preset>` (single source: `templates/_shared/project_defaults.md`), use it silently and echo `(project default)` in the Setup Summary. Otherwise, use AskUserQuestion to ask the user (in `user_lang`):
+   If `--model-config <preset>` was passed, use it directly. Otherwise, if a project-defaults source (settings.local.json env → project CLAUDE.md → user CLAUDE.md) declares `agent-harness-defaults:` with `model-config=<preset>` (single source: `templates/_shared/project_defaults.md`), use it silently and echo `(project default)` in the Setup Summary. Otherwise, use AskUserQuestion to ask the user (in `user_lang`):
 <!-- SYNC-WITH: templates/_shared/project_defaults.md §agent-harness-defaults -->
      header: "Model"
      question: "Select model configuration for sub-agents:"

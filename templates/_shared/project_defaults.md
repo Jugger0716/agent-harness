@@ -1,10 +1,21 @@
 # Project Defaults — agent-harness (single source)
 
-A project may declare **persistent agent-harness defaults** in its root `CLAUDE.md` so that
-per-session opt-in rituals (path prompt, model picker) are skipped. One line, anywhere in the
-file (first match wins):
+Persistent agent-harness defaults let a user or a team skip the per-session opt-in rituals
+(path prompt, model picker). The declaration is one defaults line:
 
     agent-harness-defaults: path=workflow, model-config=frontier, verifier-model=haiku
+
+**Sources & precedence — the FIRST source that declares the line wins WHOLESALE (no per-key
+merging across sources):**
+
+| # | Source | Audience | Committed? |
+|---|--------|----------|------------|
+| 1 | `.claude/settings.local.json` → `env.AGENT_HARNESS_DEFAULTS` (the defaults line as the string value; the `agent-harness-defaults:` prefix is optional there) | Personal, per-project — **recommended** when the project CLAUDE.md is team-shared and committed | No (Claude Code's local settings file) |
+| 2 | Project root `CLAUDE.md` — one line, anywhere in the file (first match) | Team-agreed defaults; affects every developer who runs these skills | Yes |
+| 3 | `~/.claude/CLAUDE.md` (user-level) — one line, anywhere | Personal, machine-wide fallback across all projects | No |
+
+Sources are read as FILES (Read tool) — no shell command, no dependency on actual env-var
+injection. Malformed JSON in source 1 → skip that source silently and continue the search.
 
 **Keys (all optional; unknown keys → warn once in `user_lang`, then ignore):**
 
@@ -22,15 +33,17 @@ file (first match wins):
   documented fallback).
 - Verifier: `--verifier-model` > **project default** > `haiku`.
 
-**Parse rule:** scan the project root `CLAUDE.md` for the FIRST line matching
-`^\s*agent-harness-defaults:` ; split the remainder on commas into `key=value` pairs; trim
-whitespace; keys and values are case-insensitive. An invalid value → warn once (in `user_lang`)
-and ignore that key — NEVER halt on a malformed defaults line (defaults are a convenience, not
-a contract). No `CLAUDE.md` or no matching line → no defaults, zero behavior change.
+**Parse rule:** in sources 2–3, take the FIRST line matching `^\s*agent-harness-defaults:`;
+in source 1, take the `env.AGENT_HARNESS_DEFAULTS` string value. Split the remainder on commas
+into `key=value` pairs; trim whitespace; keys and values are case-insensitive. An invalid
+value → warn once (in `user_lang`) and ignore that key — NEVER halt on a malformed defaults
+line (defaults are a convenience, not a contract). No source file or no matching line → no
+defaults, zero behavior change.
 
 **Transparency:** every value consumed from this line is echoed in the Setup Summary with the
 suffix `(project default)`, and a path resolved via step 4.5 shows the §Path Transparency
-reason `project default (CLAUDE.md)`.
+reason `project default (<source>)` — `<source>` ∈ `settings.local.json` / `CLAUDE.md` /
+`~/.claude/CLAUDE.md`, so it is always visible WHICH file drove the decision.
 
 **Engine unavailability:** `path=workflow` never overrides Mode Gate steps 1–2 — if the
 `Workflow` tool is missing or `has_git == false`, the run degrades to inline exactly like

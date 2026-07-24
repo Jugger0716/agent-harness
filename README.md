@@ -181,14 +181,20 @@ Works with: harness, refactor, migrate, debug, spec, test-gen, deep-review, code
 
 ### Project Defaults (persistent opt-in)
 
-Declare standing defaults ONCE in the project root `CLAUDE.md` and skip the per-session rituals (single source: `templates/_shared/project_defaults.md`):
+Declare standing defaults ONCE and skip the per-session rituals (single source: `templates/_shared/project_defaults.md`). The defaults line:
 
 ```
 agent-harness-defaults: path=workflow, model-config=frontier, verifier-model=haiku
 ```
 
-- `path=workflow` is a standing opt-in — the Mode Gate resolves the workflow path at the skill's ultracode-target tier without ultracode or `--mode` (§Path Transparency reason: `project default (CLAUDE.md)`); `path=inline` pins the inline path.
-- `model-config=<preset>` replaces the interactive model picker when no `--model-config` flag is given (echoed as `(project default)` in the Setup Summary).
+can live in three places — the first source that declares it wins wholesale:
+
+1. **`.claude/settings.local.json`** → `"env": { "AGENT_HARNESS_DEFAULTS": "path=workflow, model-config=frontier" }` — personal, per-project, NOT committed. **Recommended when the project CLAUDE.md is team-shared** (your preferences never leak into teammates' sessions).
+2. **Project root `CLAUDE.md`** — one line anywhere. Committed; use only for genuinely team-agreed defaults.
+3. **`~/.claude/CLAUDE.md`** — personal machine-wide fallback for all projects.
+
+- `path=workflow` is a standing opt-in — the Mode Gate resolves the workflow path at the skill's ultracode-target tier without ultracode or `--mode` (§Path Transparency reason: `project default (<source>)`); `path=inline` pins the inline path.
+- `model-config=<preset>` replaces the interactive model picker when no `--model-config` flag is given (echoed as `(project default)` in the Setup Summary). Without a flag AND without a defaults line, behavior is unchanged: skills that dispatch sub-agents ask via AskUserQuestion.
 - Session input always wins: explicit flags override the line, `--mode single/quick` still forces inline, and invalid values warn once and are ignored (never a halt).
 
 ## Interactive UX

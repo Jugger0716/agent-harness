@@ -151,7 +151,7 @@ If `.harness/state.json` does not exist (or `state.json.skill` is not `"test-gen
 6. **Create directories:** `.harness/test-gen/`, `docs/harness/<slug>/`
 7. **Create git branch (if has_git):** `git checkout -b harness/test-gen-<slug>`
 8. **Model configuration selection:**
-   Resolution: `--model-config` flag > project CLAUDE.md `agent-harness-defaults:` `model-config` value (single source: `templates/_shared/project_defaults.md`; echo `(project default)` in the setup output) > `default` preset.
+   Resolution: `--model-config` flag > project-defaults source (settings.local.json env → project CLAUDE.md → user CLAUDE.md) `agent-harness-defaults:` `model-config` value (single source: `templates/_shared/project_defaults.md`; echo `(project default)` in the setup output) > `default` preset.
 <!-- SYNC-WITH: templates/_shared/project_defaults.md §agent-harness-defaults -->
    Preset table + rules: see `templates/_shared/model_config.md`. Role-map (see §Model Selection): Coverage Analyst → executor; mutation skeptic → evaluator. (Test generation is orchestrator-inline; the inline mutation run is orchestrator-owned, so its model role is moot.)
 
