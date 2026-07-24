@@ -8,6 +8,42 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
 
 ## [Unreleased]
 
+### Added
+- **`frontier` model preset** (`templates/_shared/model_config.md`): `executor=sonnet, advisor=opus,
+  evaluator=fable, verifier=haiku` — top-model judgment with cost-efficient execution. `fable` is now a
+  valid model for executor/advisor/evaluator cells and custom `Other` parses (never verifier). The
+  interactive picker swaps `all-opus` for `frontier` (AskUserQuestion 4-option limit); `all-opus` stays
+  available via `--model-config all-opus` or `Other`.
+- **Project defaults** (`templates/_shared/project_defaults.md` NEW single source): one
+  `agent-harness-defaults: path=..., model-config=..., verifier-model=...` line in the project root
+  CLAUDE.md acts as a standing opt-in — Mode Gate §Ambiguity Prompt gains step 4.5 (reason
+  `project default (CLAUDE.md)`), the model picker and verifier default resolve silently from it, and
+  session flags always win. Wired into all 8 multi-path skills; `verify_sync_markers.py` gains the
+  `project-defaults` SYNC group (min_sites 8).
+- **Ad-hoc Dispatch Contract** (`templates/_shared/adhoc_dispatch.md` NEW single source): every
+  sub-agent or Workflow script created during skill execution WITHOUT a shipped template must carry an
+  explicit output-language directive (schema free-text field descriptions include `(in {user_lang})`)
+  and route models by role (mechanical → executor tier, judgment → evaluator tier, never above the
+  skill ceiling). Root-cause fix for the v8.6.0 English-leak (ad-hoc Explore/general-purpose dispatches
+  bypassed the template `{user_lang}` wiring). Wired into 11 skills; `verify_sync_markers.py` gains the
+  `adhoc-dispatch` SYNC group (min_sites 11).
+- **`/handoff` skill** (NEW — `skills/handoff/SKILL.md`): human-gated session handoff.
+  `generate` captures git state (verified by running commands), read-only `.harness/state.json`
+  pointers, and Goal / Current State (verified) / Blockers / Next Steps / Definition of Done /
+  Reading Order / Do NOT sections into `docs/harness/handoff/YYYY-MM-DD-<slug>.md` behind a
+  Save/Edit/Cancel gate; `resume` primes a fresh session with git-drift verification (branch/HEAD
+  match, commits-since list — report-only, never mutates git) and ends at an explicit gate; `list`
+  enumerates handoffs. Inline-only, stateless, no engine escalation (team-memory pattern).
+
+### Changed
+- **Judgment agents remapped advisor → evaluator** (deep-review Cross-Verification, debug Cross
+  Verifier, spec Critic, codebase-audit Completeness Critic; SKILL.md role maps + `args.models` now
+  pass `evaluator`; segment scripts read `MODELS.evaluator || MODELS.advisor` for stale-args resumes).
+  Behavior-preserving for pre-8.7 presets — their advisor and evaluator cells are identical; only
+  `frontier` differentiates the two roles.
+- Interactive model pickers accept a bare preset name (e.g. `all-opus`) via `Other`, in addition to
+  the `executor:...,advisor:...,evaluator:...` custom format.
+
 ## [8.6.0] — 2026-07-08
 
 ### Added
