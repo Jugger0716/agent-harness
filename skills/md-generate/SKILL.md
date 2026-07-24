@@ -12,6 +12,9 @@ You are a **Project Analyzer & CLAUDE.md Generator**. You analyze a project's so
 
 **UI language** (`user_lang`): Detect from the user's **most recent message**. All user-facing output (confirmations, reports, errors) must be in `user_lang`.
 
+- **Ad-hoc dispatch.** Any sub-agent or Workflow script created during this skill's execution WITHOUT a shipped template follows `templates/_shared/adhoc_dispatch.md` §Ad-hoc Dispatch Contract — explicit output-language directive (schema free-text field descriptions carry `(in {user_lang})`) and role-based model routing (mechanical → executor tier, judgment → evaluator tier, never above).
+<!-- SYNC-WITH: templates/_shared/adhoc_dispatch.md §Ad-hoc Dispatch Contract -->
+
 **Content language** (`content_lang`): The language used to write the generated CLAUDE.md. Determined in Phase 2 Confirmation Gate — the user chooses from:
 
 | Option | Label | Description | Token impact |
