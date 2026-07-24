@@ -44,6 +44,8 @@ Apply the shared opt-in convention in `templates/_shared/mode_gate.md`. /debug-s
 | `Workflow` tool NOT available this session | quick | **inline** (notify only if an explicit `--mode deep` was requested) |
 | `--mode deep` (or `comprehensive`/`thorough`/`multi`) | deep | **workflow** |
 | no `--mode` AND session is in ultracode mode | deep | **workflow** |
+| no `--mode`, ultracode OFF, resolved project-defaults line has `path=workflow` | deep | **workflow** (standing opt-in — §Ambiguity Prompt step 4.5) |
+| no `--mode`, ultracode OFF, resolved project-defaults line has `path=inline` | quick | **inline** |
 | no `--mode`, no opt-in | quick | **inline** (interactive + engine available → asks first, §Ambiguity Prompt) |
 
 - **Deep mode exists ONLY on the workflow path** — the engine's `parallel()` fan-out replaces the old hand-rolled "Launch 2 sub-agents in parallel" prose (pilot precedent: /harness standard/multi). The inline path is the preserved quick mode (Phase 1-Q: orchestrator runs the hypothesis loop directly).
@@ -110,12 +112,12 @@ When the user describes a bug or error (via $ARGUMENTS or in conversation), exec
 3. **Slugify the error description:** lowercase, transliterate non-ASCII to ASCII, remove non-word chars except hyphens, replace spaces with hyphens, truncate to 40 chars. Store as `<slug>`.
 4. **Create directories:** `.harness/`, `.harness/debug/`, `docs/harness/<slug>/`
 5. **Create git branch (if has_git):** `git checkout -b harness/debug-<slug>`. If `has_git == false`, skip this step entirely.
-6. **Mode Gate resolution:** apply §Mode Gate INCLUDING **§Ambiguity Prompt** (single source: `templates/_shared/mode_gate.md`). The mode roundtrip is removed EXCEPT this prompt, which fires only when NO opt-in is present (no `--mode`, ultracode OFF, no `agent-harness-defaults:` project default, `Workflow` tool available, `has_git == true`, interactive session, no `--no-prompt`). Skill modes: quick(inline) / deep(workflow). ultracode-target (step 4 default): deep. Store `mode` and `path_resolved` in state.json. Then emit **§Path Transparency** — show `Path : <inline | workflow>  (<reason>)`. If the user explicitly requested `--mode deep` but the gate resolved to inline (Workflow tool unavailable or `has_git == false`), notify (in `user_lang`): "deep mode requires the native Workflow engine and git — proceeding on the inline quick path."
+6. **Mode Gate resolution:** apply §Mode Gate INCLUDING **§Ambiguity Prompt** (single source: `templates/_shared/mode_gate.md`). The mode roundtrip is removed EXCEPT this prompt, which fires only when NO opt-in is present (no `--mode`, ultracode OFF, no project-default `path` (`agent-harness-defaults:` line), `Workflow` tool available, `has_git == true`, interactive session, no `--no-prompt`). Skill modes: quick(inline) / deep(workflow). ultracode-target (step 4 default): deep. Store `mode` and `path_resolved` in state.json. Then emit **§Path Transparency** — show `Path : <inline | workflow>  (<reason>)`. If the user explicitly requested `--mode deep` but the gate resolved to inline (Workflow tool unavailable or `has_git == false`), notify (in `user_lang`): "deep mode requires the native Workflow engine and git — proceeding on the inline quick path."
 <!-- SYNC-WITH: templates/_shared/mode_gate.md §Ambiguity Prompt -->
 7. **Model configuration selection (deep mode only):**
    If mode is `quick`, skip this step entirely (no sub-agents in quick mode).
 
-   If `--model-config <preset>` was passed, use it directly. Otherwise, if a project-defaults source (settings.local.json env → project CLAUDE.md → user CLAUDE.md) declares `agent-harness-defaults:` with `model-config=<preset>` (single source: `templates/_shared/project_defaults.md`), use it silently and echo `(project default)` in the Setup Summary. Otherwise, use AskUserQuestion to ask the user (in `user_lang`):
+   If `--model-config <preset>` was passed, use it directly. Otherwise, if the resolved project-defaults line (first source wins wholesale: settings.local.json env → project CLAUDE.md → user CLAUDE.md; see `templates/_shared/project_defaults.md`) contains `model-config=<preset>`, use it silently and echo `(project default)` in the Setup Summary. Otherwise, use AskUserQuestion to ask the user (in `user_lang`):
 <!-- SYNC-WITH: templates/_shared/project_defaults.md §agent-harness-defaults -->
      header: "Model"
      question: "Select model configuration for sub-agents:"
@@ -125,11 +127,11 @@ When the user describes a bug or error (via $ARGUMENTS or in conversation), exec
        - label: "balanced (Recommended)" / description: "Sonnet executor + Opus advisor (cost-efficient)"
        - label: "economy" / description: "Haiku executor + Sonnet advisor (max savings)"
 
-   **If "Other" selected:** Parse custom format `executor:<model>,advisor:<model>,evaluator:<model>` (or a bare preset name, e.g. `all-opus`). Validate each model name — only `fable`, `opus`, `sonnet`, `haiku` are allowed (case-insensitive). If any model name is invalid, inform the user which value is invalid and re-ask for input (max 3 retries, then apply `balanced` as default). If parsing succeeds but is partial, fill missing roles with the `balanced` defaults (executor=sonnet, advisor=opus, evaluator=opus). Show the parsed result to the user and ask for confirmation before proceeding.
+   **If "Other" selected:** Parse custom format `executor:<model>,advisor:<model>,evaluator:<model>` (or a bare preset name — validated against the preset table: `default` / `all-opus` / `frontier` / `balanced` / `economy`). For the role form, validate each model name — only `fable`, `opus`, `sonnet`, `haiku` are allowed (case-insensitive). If any model name is invalid, inform the user which value is invalid and re-ask for input (max 3 retries, then apply `balanced` as default). If parsing succeeds but is partial, fill missing roles with the `balanced` defaults (executor=sonnet, advisor=opus, evaluator=opus). Show the parsed result to the user and ask for confirmation before proceeding.
 
    **Model config is set once at session start and cannot be changed mid-session.** To change, restart the session.
 
-   Store result as `model_config` object: `{ "preset": "<name>", "executor": "<model|null>", "advisor": "<model|null>" }`. For the `default` preset, store `{ "preset": "default" }`.
+   Store result as `model_config` object: `{ "preset": "<name>", "executor": "<model|null>", "advisor": "<model|null>", "evaluator": "<model|null>" }`. For the `default` preset, store `{ "preset": "default" }`.
 
 8. **Write `.harness/state.json`** with fields:
    - `skill`: `"debug"`

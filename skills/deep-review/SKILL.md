@@ -1,7 +1,7 @@
 ---
 name: deep-review
 disallowed-tools: NotebookEdit, WebSearch, WebFetch
-description: Systematic, bias-free code review for PRs, branches, or file changes. Quick mode (1 agent, 5-perspective checklist, inline) or deep/thorough modes (2-3 specialist reviewers + adversarial cross-verification + synthesis via a plugin-shipped native Workflow segment, opt-in gated). Optional --comment (inline PR comments) and --fix (gated apply). Re-running on the same target auto-advances review rounds — standardized round numbering, prior-finding reconciliation (resolved/still-open/new), and an advisory Round Verdict; continue/stop stays a human decision. The deeper, bias-reduced complement to the built-in /code-review. (formerly /code-review)
+description: Systematic, bias-free code review for PRs, branches, or file changes. Quick mode (1 agent, 5-perspective checklist, inline) or deep/thorough modes (2-3 specialist reviewers + adversarial cross-verification + synthesis via a plugin-shipped native Workflow segment, opt-in gated). Optional --comment (inline PR comments) and --fix (gated apply). Re-running on the same target auto-advances review rounds — standardized round numbering, prior-finding reconciliation (likely resolved / still open / unverifiable), and an advisory Round Verdict; continue/stop stays a human decision. The deeper, bias-reduced complement to the built-in /code-review. (formerly /code-review)
 ---
 
 # Deep Review
@@ -34,6 +34,8 @@ Apply the shared opt-in convention in `templates/_shared/mode_gate.md`. /deep-re
 | `--mode deep` | deep | **workflow** |
 | `--mode thorough` (or `comprehensive`/`multi`) | thorough | **workflow** |
 | no `--mode` AND session is in ultracode mode | thorough | **workflow** |
+| no `--mode`, ultracode OFF, resolved project-defaults line has `path=workflow` | thorough | **workflow** (standing opt-in — §Ambiguity Prompt step 4.5) |
+| no `--mode`, ultracode OFF, resolved project-defaults line has `path=inline` | quick | **inline** |
 | no `--mode`, no opt-in | quick | **inline** (interactive + engine available → asks first, §Ambiguity Prompt) |
 
 - **Deep/thorough exist ONLY on the workflow path** — the engine's `parallel()` fan-out replaces the old hand-rolled 2/3-sub-agent dispatch prose (pilot precedent: /harness standard/multi). The inline path is the preserved quick mode (single-pass 5-perspective checklist).
@@ -104,17 +106,17 @@ When the user provides a review target (via $ARGUMENTS or in conversation), exec
 
 8. **Create artifact directory:** `docs/harness/<slug>/`
 
-9. **Round detection (round bookkeeping):** scan `docs/harness/<slug>/` for `review_report.md` (legacy name = round 1) and `review_round<N>.md`. Set `round = (highest existing round, or 0) + 1`. If `round > 1`: store the highest-round report path as `prior_report_path` and notify (in `user_lang`): "Prior review round detected — this run is round <N>; prior findings will be reconciled in the report." With `--fresh`, reconciliation is skipped (numbering still advances). **Prior reports are NEVER passed to reviewers** — reviewers stay blind on every round (anchoring prevention); reconciliation is orchestrator-only at Step 5.
+9. **Round detection (round bookkeeping):** scan `docs/harness/<slug>/` for `review_report.md` (legacy name = round 1) and `review_round<N>.md`. Set `round = (highest existing round, or 0) + 1`. If `round > 1`: store the highest-round report path as `prior_report_path` and notify (in `user_lang`) — without `--fresh`: "Prior review round detected — this run is round <N>; prior findings will be reconciled in the report."; with `--fresh`: "Prior review round detected — this run is round <N>; reconciliation skipped (--fresh)." (numbering always advances). **Prior reports are NEVER passed to reviewers** — reviewers stay blind on every round (anchoring prevention); reconciliation is orchestrator-only at Step 5.
 
 ### Step 2: Mode Gate & Model Configuration
 
-1. **Mode Gate resolution:** apply §Mode Gate INCLUDING **§Ambiguity Prompt** (single source: `templates/_shared/mode_gate.md`) — the mode roundtrip is removed EXCEPT this prompt, which fires only when NO opt-in is present (no `--mode`, ultracode OFF, no `agent-harness-defaults:` project default, `Workflow` tool available, `has_git == true`, interactive, no `--no-prompt`). Skill modes: quick(inline) / deep(workflow) / thorough(workflow); ultracode-target: thorough. Store `mode` and `path_resolved` in `.harness/model_config.json`. Then emit **§Path Transparency** — show `Path : <inline | workflow>  (<reason>)`. Print the scope-aware advisory. For §Ambiguity Prompt, the `(Recommended)` option is the scope-advised tier already printed (< 100 lines → quick, 100–500 → deep, 500+ → thorough). If the user explicitly requested `--mode deep/thorough` but the gate resolved to inline (Workflow tool unavailable or `has_git == false`), notify (in `user_lang`): "deep/thorough mode requires the native Workflow engine and git — proceeding on the inline quick path."
+1. **Mode Gate resolution:** apply §Mode Gate INCLUDING **§Ambiguity Prompt** (single source: `templates/_shared/mode_gate.md`) — the mode roundtrip is removed EXCEPT this prompt, which fires only when NO opt-in is present (no `--mode`, ultracode OFF, no project-default `path` (`agent-harness-defaults:` line), `Workflow` tool available, `has_git == true`, interactive, no `--no-prompt`). Skill modes: quick(inline) / deep(workflow) / thorough(workflow); ultracode-target: thorough. Store `mode` and `path_resolved` in `.harness/model_config.json`. Then emit **§Path Transparency** — show `Path : <inline | workflow>  (<reason>)`. Print the scope-aware advisory. For §Ambiguity Prompt, the `(Recommended)` option is the scope-advised tier already printed (< 100 lines → quick, 100–500 → deep, 500+ → thorough). If the user explicitly requested `--mode deep/thorough` but the gate resolved to inline (Workflow tool unavailable or `has_git == false`), notify (in `user_lang`): "deep/thorough mode requires the native Workflow engine and git — proceeding on the inline quick path."
 <!-- SYNC-WITH: templates/_shared/mode_gate.md §Ambiguity Prompt -->
 
 2. **Model configuration selection (deep and thorough modes only):**
    If mode is `quick`, skip this step (no sub-agents used).
 
-   If `--model-config <preset>` was passed, use it directly. Otherwise, if a project-defaults source (settings.local.json env → project CLAUDE.md → user CLAUDE.md) declares `agent-harness-defaults:` with `model-config=<preset>` (single source: `templates/_shared/project_defaults.md`), use it silently and echo `(project default)` in the Setup Summary. Otherwise, use AskUserQuestion to ask the user (in `user_lang`):
+   If `--model-config <preset>` was passed, use it directly. Otherwise, if the resolved project-defaults line (first source wins wholesale: settings.local.json env → project CLAUDE.md → user CLAUDE.md; see `templates/_shared/project_defaults.md`) contains `model-config=<preset>`, use it silently and echo `(project default)` in the Setup Summary. Otherwise, use AskUserQuestion to ask the user (in `user_lang`):
 <!-- SYNC-WITH: templates/_shared/project_defaults.md §agent-harness-defaults -->
      header: "Model"
      question: "Select model configuration for sub-agents:"
@@ -124,7 +126,7 @@ When the user provides a review target (via $ARGUMENTS or in conversation), exec
        - label: "balanced (Recommended)" / description: "Sonnet executor + Opus advisor (cost-efficient)"
        - label: "economy" / description: "Haiku executor + Sonnet advisor (max savings)"
 
-   **If "Other" selected:** Parse custom format `executor:<model>,advisor:<model>,evaluator:<model>` (or a bare preset name, e.g. `all-opus`). Validate each model name — only `fable`, `opus`, `sonnet`, `haiku` are allowed (case-insensitive). If any model name is invalid, inform the user which value is invalid and re-ask for input (max 3 retries, then apply `balanced` as default). If parsing succeeds but is partial, fill missing roles with the `balanced` defaults (executor=sonnet, advisor=opus, evaluator=opus). Show the parsed result to the user and ask for confirmation before proceeding. (deep-review maps Cross-Verification → evaluator; it runs in thorough mode only, so in deep mode `frontier` behaves like `balanced`.)
+   **If "Other" selected:** Parse custom format `executor:<model>,advisor:<model>,evaluator:<model>` (or a bare preset name — validated against the preset table: `default` / `all-opus` / `frontier` / `balanced` / `economy`). For the role form, validate each model name — only `fable`, `opus`, `sonnet`, `haiku` are allowed (case-insensitive). If any model name is invalid, inform the user which value is invalid and re-ask for input (max 3 retries, then apply `balanced` as default). If parsing succeeds but is partial, fill missing roles with the `balanced` defaults (executor=sonnet, advisor=opus, evaluator=opus). Show the parsed result to the user and ask for confirmation before proceeding. (deep-review maps Cross-Verification → evaluator; it runs in thorough mode only, so in deep mode `frontier` behaves like `balanced`.)
 
    **Model config is set once at session start and cannot be changed mid-session.** To change, restart the session.
 
@@ -242,12 +244,12 @@ After completing the checklist, proceed to Step 5 (Report Generation).
 
 The ORCHESTRATOR writes the round report — `docs/harness/<slug>/review_report.md` for round 1 (legacy name unchanged), `docs/harness/<slug>/review_round<N>.md` for round ≥ 2 — quick mode from its inline checklist findings; deep/thorough from the returned `FindingSet` object (counts already normalized from findings by the script; `filesReviewed` backfilled from the reviewer union).
 
-**Round ≥ 2 reconciliation (orchestrator-only; skipped with `--fresh`):** parse the prior round report's Findings tables and classify each prior finding against this round's findings + the current diff:
-- `likely resolved` — not re-found AND its file:line region changed in the current diff (still says "verify")
-- `still open` — matched by a new finding (same file + same category or overlapping lines; link the new #)
-- `unverifiable` — not re-found and its region is outside this round's diff scope
+**Round ≥ 2 reconciliation (orchestrator-only; skipped with `--fresh`):** parse the prior round report's Findings tables and classify each prior finding — apply the FIRST matching rule:
+1. `still open` — a new finding matches it: same file AND (same category OR line ranges overlapping within ±10 lines). Link the new finding # in the table.
+2. `likely resolved` — no rule-1 match, AND the prior report header records a `HEAD` baseline, AND `git diff <prior-HEAD>..HEAD -- <file>` is non-empty for the finding's file. Always rendered as "likely resolved — verify" (absence of a re-find is evidence, not proof).
+3. `unverifiable` — everything else (no `HEAD` baseline in the prior report, file untouched since the prior round, or `has_git == false`). Never guess.
 
-Render the result as the `## Prior Findings Status` table. This is a report-level comparison — prior findings are never injected into reviewer prompts (anchoring prevention).
+Render the result as the `## Prior Findings Status` table. This is a report-level comparison — prior findings are never injected into reviewer prompts (anchoring prevention). Note: the current round's diff payload is NOT the baseline — cumulative branch/PR diffs always contain round-1 regions; only the `<prior-HEAD>..HEAD` delta answers "changed since the last review".
 
 #### Report Format
 
@@ -263,6 +265,7 @@ Write the report in **{user_lang}** (except the Assessment line value which stay
 | Files | <N files> |
 | Lines | +<added> / -<removed> |
 | Date | <ISO8601 date> |
+| HEAD | <`git rev-parse HEAD` at review time; "n/a" if has_git == false — the baseline for the next round's reconciliation> |
 
 ## Assessment: APPROVE | REQUEST_CHANGES | COMMENT
 
@@ -395,7 +398,7 @@ After presenting the report, suggest next actions based on findings (in `user_la
 | Critical/major correctness or security bugs | "Consider `/harness` to fix these issues systematically" |
 | Structural/architectural issues | "Consider `/harness` to refactor the affected components" |
 | Minor style/convention issues | "These can be addressed in a follow-up commit" |
-| Findings to be fixed now | "After applying fixes, re-run `/deep-review <same target>` — round <N+1> is auto-detected and prior findings are reconciled (resolved / still open / new)" |
+| Findings to be fixed now | "After applying fixes, re-run `/deep-review <same target>` — round <N+1> is auto-detected and prior findings are reconciled (likely resolved / still open / unverifiable)" |
 | No significant findings | "Code looks good. No action needed." |
 
 These are suggestions only -- do not auto-invoke other skills.
@@ -426,7 +429,7 @@ Preset table + rules: see `templates/_shared/model_config.md`.
 
 **Role map (deep-review):** specialist reviewers (deep: Security & Correctness, Architecture & Maintainability; thorough: Security & Correctness, Architecture & Design, DX & Maintainability) → `executor`; Synthesis → `advisor`; Cross-Verification (thorough only) → `evaluator` (judgment role — pre-8.7 presets keep identical advisor/evaluator cells, so only `frontier` differentiates).
 
-**Applying model config:** pass the resolved models once per segment run as `args.models` (`{ executor, advisor }`; null = inherit parent model, i.e. the `default` preset) — the segment script applies them per agent. Sub-agents must NOT access `.harness/model_config.json` — the orchestrator passes the resolved values at segment launch.
+**Applying model config:** pass the resolved models once per segment run as `args.models` (`{ executor, advisor, evaluator }`; null = inherit parent model, i.e. the `default` preset) — the segment script applies them per agent (Cross-Verification reads `evaluator`, falling back to `advisor` for stale args). Sub-agents must NOT access `.harness/model_config.json` — the orchestrator passes the resolved values at segment launch.
 
 ## User Interaction Rules
 

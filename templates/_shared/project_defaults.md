@@ -1,7 +1,11 @@
 # Project Defaults — agent-harness (single source)
 
 Persistent agent-harness defaults let a user or a team skip the per-session opt-in rituals
-(path prompt, model picker). The declaration is one defaults line:
+(path prompt, model picker).
+
+## §agent-harness-defaults — the defaults line
+
+The declaration is one defaults line:
 
     agent-harness-defaults: path=workflow, model-config=frontier, verifier-model=haiku
 
@@ -16,6 +20,14 @@ merging across sources):**
 
 Sources are read as FILES (Read tool) — no shell command, no dependency on actual env-var
 injection. Malformed JSON in source 1 → skip that source silently and continue the search.
+
+**Resolution is two-stage:**
+1. **Pick THE line** — the first source (1 → 2 → 3) that contains a defaults line with at least
+   one valid key. Lower sources are then ignored ENTIRELY (wholesale — no per-key merging).
+2. **Read keys ONLY from that line.** A key absent from the resolved line falls back to the
+   normal per-skill behavior (model picker / `haiku` verifier / Mode Gate steps 5–6) — NEVER
+   to a lower source. In particular, a resolved line without a `path` key is not a path
+   signal (mode_gate step 4.5 does not fire); its other keys still apply.
 
 **Keys (all optional; unknown keys → warn once in `user_lang`, then ignore):**
 
@@ -37,8 +49,10 @@ injection. Malformed JSON in source 1 → skip that source silently and continue
 in source 1, take the `env.AGENT_HARNESS_DEFAULTS` string value. Split the remainder on commas
 into `key=value` pairs; trim whitespace; keys and values are case-insensitive. An invalid
 value → warn once (in `user_lang`) and ignore that key — NEVER halt on a malformed defaults
-line (defaults are a convenience, not a contract). No source file or no matching line → no
-defaults, zero behavior change.
+line (defaults are a convenience, not a contract). A matched line that yields ZERO valid keys
+is treated as NO declaration for stage 1 — warn once and CONTINUE the source search (it does
+not block lower sources). No source file or no matching line anywhere → no defaults, zero
+behavior change.
 
 **Transparency:** every value consumed from this line is echoed in the Setup Summary with the
 suffix `(project default)`, and a path resolved via step 4.5 shows the §Path Transparency

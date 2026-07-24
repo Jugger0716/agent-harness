@@ -20,7 +20,7 @@ export const meta = {
 // ---- args (SPIKE-F1: defensive parse) -------------------------------------
 // contract — keep 1:1 with skills/spec/SKILL.md Phase 2c-D WORKFLOW dispatch (a field
 // missing on either side silently renders as ''):
-//   { task, userLang, specContent, qaNotes, criticFindingsPath, models: {advisor} }
+//   { task, userLang, specContent, qaNotes, criticFindingsPath, models: {advisor, evaluator} }
 const A = typeof args === 'string' ? JSON.parse(args) : (args || {})
 const LANG = A.userLang || 'the language of the task description'
 const MODELS = A.models || {}

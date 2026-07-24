@@ -54,7 +54,7 @@ Gather, in this order:
 
 1. **Git state (run the commands, do not recall from memory):**
    - `git rev-parse --abbrev-ref HEAD` → branch (skip git items entirely if not a repo)
-   - `git rev-parse --short HEAD` + `git log -1 --format=%s` → HEAD sha + subject
+   - `git rev-parse HEAD` (record the FULL 40-char sha — short shas go ambiguous over time) + `git log -1 --format=%s` → HEAD sha + subject
    - `git status --short` → dirty-file count (list up to 10 paths)
    - Ahead/behind upstream if an upstream exists (`git status --short --branch` first line)
 2. **Harness task state (READ-ONLY, if present):** if `.harness/state.json` exists, read
@@ -83,7 +83,7 @@ Fill the canonical template (English headings raw; content in `user_lang`):
 # HANDOFF — <title>
 
 **Date:** YYYY-MM-DD  **Project:** <repo or directory name>
-**Branch:** <branch>  **HEAD:** <short-sha> <subject>
+**Branch:** <branch>  **HEAD:** <full-sha> <subject>
 **Dirty:** <clean | N files (list)>  **Upstream:** <ahead/behind or n/a>
 
 ## Goal
@@ -101,7 +101,9 @@ Run: `/handoff resume docs/harness/handoff/<this-file>.md`
 
 ### Step 3 — HARD-GATE (preview before write)
 
-Show the full composed document plus the target path, then ask via AskUserQuestion
+Resolve the FINAL target path first — apply the collision rule from the location convention
+NOW, so the previewed path IS the write path. Then show the full composed document plus that
+path, and ask via AskUserQuestion
 (in `user_lang`):
   header: "Save handoff?"
   question: "<target path>"
@@ -119,7 +121,9 @@ If AskUserQuestion is unavailable, present the same options as numbered text.
 ### Step 4 — Write & confirm
 
 1. Ensure `docs/harness/handoff/` exists.
-2. Write the file (collision rule from the location convention).
+2. Write to the exact path approved at the gate. If a new collision appeared between preview
+   and write (rare), re-resolve and re-run the Step 3 gate — never write to a path the user
+   did not see.
 3. Confirm (in `user_lang`), and print the one-liner the user will paste next session:
 
 ```
@@ -139,6 +143,8 @@ If AskUserQuestion is unavailable, present the same options as numbered text.
 
 - With `<path>`: use it (must exist; else error in `user_lang` and suggest `/handoff list`).
 - Without: pick the newest file in `docs/harness/handoff/` by filename date, then mtime.
+  Consider ONLY files whose first line starts with `# HANDOFF —` (guards against foreign
+  files if another skill's slug happens to be `handoff`).
   None found → report (in `user_lang`) that no handoff exists and stop.
 
 ### Step 2 — Parse
@@ -152,10 +158,20 @@ Run and compare — every mismatch is REPORTED to the user; this skill never che
 resets, or cleans anything:
 
 1. Current branch vs recorded branch → if different, say so explicitly.
-2. `git cat-file -e <recorded-sha>` → if the sha is unknown (rebase/gc/other clone), warn that
-   recorded history may have been rewritten.
-3. `git log <recorded-sha>..HEAD --oneline` (when sha exists) → list commits made SINCE the
-   handoff (cap at 20, then "+N more"). These are the delta the handoff does not know about.
+2. `git cat-file -e <recorded-sha>` → if the sha is unknown in this clone (gc / different
+   clone), report "cannot verify — recorded commit not found here" and skip step 3. Existence
+   alone proves nothing about rewrites (rebased-away commits survive in the object store for
+   weeks) — step 3 is the real detector.
+3. **Relationship check (primary drift detector):**
+   - `HEAD == recorded` → drift: none.
+   - `git merge-base --is-ancestor <recorded> HEAD` succeeds → FORWARD: list
+     `git log <recorded>..HEAD --oneline` (cap 20, then "+N more") — the delta the handoff
+     does not know about.
+   - `git merge-base --is-ancestor HEAD <recorded>` succeeds → **BACKWARD**: the branch now
+     points BEHIND the handoff (reset / checkout of an older commit) — warn explicitly; the
+     handoff's "Current State (verified)" is ahead of reality.
+   - Neither → **DIVERGED**: history rewritten (rebase/amend) or a different line of work —
+     warn explicitly.
 4. `git status --short` → note a dirty working tree.
 
 ### Step 4 — Read the Reading Order
@@ -170,7 +186,7 @@ Print (in `user_lang`):
 ```
 [handoff] Resume briefing — <title> (<date>)
   Goal    : <1-line goal>
-  State   : <verified-state summary> + drift: <none | N commits since, branch differs, dirty tree>
+  State   : <verified-state summary> + drift: <none | N commits since | BACKWARD | DIVERGED | branch differs | dirty tree | cannot verify>
   Blockers: <summary or "none">
   Next    : <Next Steps item 1>
   Do NOT  : <summary>
@@ -190,7 +206,7 @@ NEVER start executing work before this gate is answered.
 
 ## Sub-command: list
 
-Scan `docs/harness/handoff/*.md`, newest first. Print (labels English raw, values as stored):
+Scan `docs/harness/handoff/*.md` (only files whose first line starts with `# HANDOFF —`), newest first. Print (labels English raw, values as stored):
 
 ```
 [handoff] 3 handoff document(s)

@@ -323,7 +323,7 @@ const RootCauseSchema = {
 deep-review specialist reviewers AND by the deep-review synthesis step
 (`deep-review.review.workflow.js`) — replaces the reviewers' file-write + findings-table
 prose contract and the orchestrator's `.harness/code-review/review_*.md` re-reads. The
-ORCHESTRATOR writes `review_report.md` from the final (synthesis) FindingSet.
+ORCHESTRATOR writes the round report (`review_report.md` round 1 / `review_round<N>.md` after) from the final (synthesis) FindingSet.
 
 > Count consistency note: the synthesis step in `deep-review.review.workflow.js`
 > normalizes `counts` from `findings[]` before returning (spec.eval precedent) and fills
