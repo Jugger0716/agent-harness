@@ -174,7 +174,7 @@ const report = await agent(
     spec_content: A.specContent,
     task_description: A.task,
   }),
-  { schema: CriticReportSchema, label: 'critic', phase: 'Critique', ...mopt(MODELS.advisor) },
+  { schema: CriticReportSchema, label: 'critic', phase: 'Critique', ...mopt(MODELS.evaluator || MODELS.advisor) },
 )
 
 // Normalize counts from items[] — items are the ground truth the Critic Gate displays.
