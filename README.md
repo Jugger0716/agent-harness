@@ -73,6 +73,7 @@ Higher modes cost more per run but save total cost by reducing retry rounds. Sta
 | **Spec** | `/spec <requirement>` | Multi-round Q&A requirements specification. Output directly compatible with `/harness` input. Quick (inline) or deep (4 analysts + Critic, native Workflow path). |
 | **Test Gen** | `/test-gen <target>` | Automated test generation with mutation-based quality verification. Single (inline) or multi (parallel coverage analysts + propose-only mutation skeptics, native Workflow path; test generation + mutation execution stay orchestrator-inline). Supports coverage-gap and regression modes. |
 | **Team Memory** | `/team-memory <cmd>` | Team knowledge base (save/show/clean/search). Git-committed, team-shared decisions, patterns, and conventions. Human-gated CRUD — never escalates to sub-agents or the Workflow engine. _(formerly `/memory` — old name kept as a deprecation alias)_ |
+| **Handoff** | `/handoff generate/resume/list` | Session handoff for cross-session continuity: `generate` captures a verified HANDOFF document (git state, confirmed facts, next steps, reading order) behind a human gate; `resume` primes a fresh session from it with git-drift verification (report-only — never mutates git). Complements `/harness` Session Recovery (task-internal state). |
 | **Codebase Audit** | `/codebase-audit` | Systematic codebase analysis for team onboarding. Quick (inline) or deep/thorough (parameterized lens analysts + completeness critique + synthesis, native Workflow path; orchestrator writes the report). Incremental analysis support. |
 | **Deep Review** | `/deep-review <target>` | Systematic, bias-free code review. Quick (inline checklist) or deep/thorough (2-3 specialists + adversarial cross-verification, native Workflow path). Optional `--comment` (inline PR comments) / `--fix` (gated apply). _(formerly `/code-review` — old name kept as a deprecation alias)_ |
 | **MD Optimize** | `/md-optimize` | Optimize CLAUDE.md and project `.md` files for token efficiency. |
@@ -132,6 +133,9 @@ claude plugin install agent-harness@agent-harness-marketplace
 /team-memory clean                                      # remove stale/completed records
 /team-memory search authentication                      # search across knowledge base
 
+/handoff                                           # capture this session -> gated HANDOFF document
+/handoff resume                                    # prime a fresh session from the newest handoff (+ git drift check)
+
 /codebase-audit                                    # auto-recommends mode based on project size
 /codebase-audit --mode thorough                    # comprehensive multi-agent analysis
 /codebase-audit --scope "src/**" --incremental     # analyze only changes in src/
@@ -174,6 +178,18 @@ Inspired by Anthropic's [Advisor Strategy](https://claude.com/blog/the-advisor-s
 - **Evaluator**: independent verification — always protected (never haiku)
 
 Works with: harness, refactor, migrate, debug, spec, test-gen, deep-review, codebase-audit. Presets are selected via numbered UI (AskUserQuestion) with `Other` for custom role mapping. The interactive picker holds 4 presets (default / frontier / balanced / economy — AskUserQuestion limit); `all-opus` stays available via `--model-config all-opus` or `Other`. Judgment-type sub-agents (cross-verification, critic, evaluator) map to the evaluator role — pre-8.7 presets keep identical advisor/evaluator cells, so only `frontier` differentiates them.
+
+### Project Defaults (persistent opt-in)
+
+Declare standing defaults ONCE in the project root `CLAUDE.md` and skip the per-session rituals (single source: `templates/_shared/project_defaults.md`):
+
+```
+agent-harness-defaults: path=workflow, model-config=frontier, verifier-model=haiku
+```
+
+- `path=workflow` is a standing opt-in — the Mode Gate resolves the workflow path at the skill's ultracode-target tier without ultracode or `--mode` (§Path Transparency reason: `project default (CLAUDE.md)`); `path=inline` pins the inline path.
+- `model-config=<preset>` replaces the interactive model picker when no `--model-config` flag is given (echoed as `(project default)` in the Setup Summary).
+- Session input always wins: explicit flags override the line, `--mode single/quick` still forces inline, and invalid values warn once and are ignored (never a halt).
 
 ## Interactive UX
 
