@@ -18,10 +18,18 @@ contracts for that path plus session continuity):
 - **`/handoff` skill** — human-gated session handoff (generate / resume with git-drift verification /
   list); replaces the 150+ hand-written HANDOFF/NEXT_SESSION documents found across the three
   audited projects. See `skills/handoff/SKILL.md`.
+- **`/deep-review` round bookkeeping (P05, reduced scope)** — standardized round numbering,
+  orchestrator-only prior-finding reconciliation (reviewers stay blind), advisory Round Verdict;
+  no auto-convergence loop (the /spec oscillation invariant is untouched — user re-invokes per
+  round). See `skills/deep-review/SKILL.md`.
+- **`/spec` Review Sheet + `/spec digest` (P15)** — specs open with a derived review sheet (TL;DR,
+  decision table, open questions, changed-in-this-revision); `digest` produces a read-only 3-layer
+  briefing of existing docs (evidence: spec-comprehension effort was a reported top pain).
+  See `skills/spec/SKILL.md`.
 
 M4 (persona override), M3 (template compression), and L1 (external CLI wrapper) remain planned
 (see the v8.3+ table below); audit follow-ups not in this scope (cold-review preset, segment
-checkpoints, spec digest, campaign ledger, `harness clean/archive`) are tracked for v8.8+.
+checkpoints, campaign ledger, `harness clean/archive`) are tracked for v8.8+.
 
 ---
 

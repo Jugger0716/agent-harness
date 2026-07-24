@@ -1,7 +1,7 @@
 ---
 name: spec
 disallowed-tools: NotebookEdit
-description: Requirements specification writer with multi-round Q&A discovery. Transforms vague ideas into structured specs compatible with /harness input. Modes — quick (orchestrator only, inline) / deep (4 analysts + Critic via plugin-shipped native Workflow segments, opt-in gated). Use when you need a well-defined spec before starting implementation.
+description: Requirements specification writer with multi-round Q&A discovery. Transforms vague ideas into structured specs compatible with /harness input. Modes — quick (orchestrator only, inline) / deep (4 analysts + Critic via plugin-shipped native Workflow segments, opt-in gated). Specs open with a derived Review Sheet (TL;DR, decision table, open questions, changed-in-this-revision) for fast human review. Also: /spec digest <file> — read-only 3-layer briefing (30s/5min/section map + mermaid) of any existing spec or design doc. Use when you need a well-defined spec before starting implementation.
 ---
 
 # Agent Harness Spec
@@ -28,8 +28,9 @@ Skim this list to locate sections by name. Section-anchor cross-references throu
 10. `### HARD GATE — Spec Approval` — final approval gate with translated 3-way options + Modify reset.
 11. `### Phase 3 — Handoff` — artifacts persistence, slug-safe `/harness` invocation, cleanup safety guard, M17 variable↔filename mapping.
 12. `### Status Check (anytime)` — status summary command (subsection of Phase 3).
-13. `## Spec Output Format` — 7-section template with /harness compatibility mapping.
+13. `## Spec Output Format` — 7-section template with /harness compatibility mapping + leading derived `## Review Sheet` (reviewer-facing, non-canonical).
 14. `## Model Selection` — model_config preset → role mapping (advisor; workflow `args.models`).
+15. `## Sub-command: digest` — `/spec digest <path>`: read-only 3-layer briefing of an existing document (no state, no Q&A, no sub-agents).
 
 ## Environment Detection
 
@@ -168,6 +169,7 @@ When the user provides a task description (via $ARGUMENTS or in conversation), e
 
 ### Step 1: Setup
 
+0. **Sub-command dispatch:** if the argument immediately after `/spec` is `digest` → jump to `## Sub-command: digest` (read-only; skips state.json, git branch, Q&A, and every gate below).
 1. **Detect user language** from the task description. Store as `user_lang`.
 2. **Slugify the task:** lowercase, transliterate non-ASCII to ASCII, remove non-word chars except hyphens, replace spaces with hyphens, truncate to 50 chars. Store as `<slug>`.
 
@@ -379,7 +381,7 @@ Read `mode` from state.json and branch accordingly.
 
 #### If mode == "quick": Phase 2-Q
 
-Write `spec.md` directly to `docs/harness/<slug>/spec.md` using the following format. Use `qa_discovery_notes` from `.harness/spec/qa_notes.md` as the primary source of truth.
+Write `spec.md` directly to `docs/harness/<slug>/spec.md` using the following format, prepending the derived `## Review Sheet` per §Spec Output Format (compression of the sections below + `[unconfirmed]` items; "Changed in this revision" is omitted on first synthesis and filled on Modify re-runs from the Modify request). Use `qa_discovery_notes` from `.harness/spec/qa_notes.md` as the primary source of truth.
 
 All section headings and content must be written in `user_lang`.
 
@@ -458,7 +460,7 @@ Print status in the standard format, prefixed with `[harness] Spec draft ready.`
 
    **Single-source-of-truth contract**: `state.critic.applied` is the only authoritative signal for whether Critic ran. Step 5b sets it eagerly; step 7 reads it as the sole gate to bypass Phase 2c-D. Do NOT add parallel decision logic in any other phase that diverges from this signal.
 
-6. **Render spec.md** from `plan` (PlanResult) to `docs/harness/<slug>/spec.md` — the seven canonical sections (§Spec Output Format), all headings and content in `user_lang`:
+6. **Render spec.md** from `plan` (PlanResult) to `docs/harness/<slug>/spec.md` — a leading derived `## Review Sheet` (§Spec Output Format; on re-synthesis entries — `criticFindings`/`modRequest` non-empty — fill "Changed in this revision" from those inputs, else omit that row) followed by the seven canonical sections, all headings and content in `user_lang`:
    - `## Goal` ← `goal` ; `## Background & Decisions` ← `background`
    - `## Scope` ← `scope.inScope` bullets ; `## Out of Scope` ← `scope.outOfScope` bullets
    - `## Edge Cases` ← `edgeCases[]` bullets
@@ -643,9 +645,36 @@ Update state.json: `phase` → `"completed"`.
 
 If user asks for status, print status in the standard format defined above.
 
+## Sub-command: digest
+
+`/spec digest <path> [--artifact]` — read-only fast-comprehension briefing of an EXISTING document (a spec, design doc, or any `.md`/`.txt`/`.markdown`). No state.json, no git branch, no Q&A, no sub-agents (orchestrator-inline), nothing written to disk.
+
+1. **Validate `<path>`:** must exist and have a text extension (`.md`, `.txt`, `.markdown`). If the file exceeds 5000 lines, ask via AskUserQuestion (in `user_lang`): "Proceed" (headings + sampled key sections) / "Abort".
+2. **Read and produce the 3-layer briefing (all in `user_lang`):**
+   - **Layer 1 — 30 seconds:** ≤5 bullets — what this is, why it exists, the one decision that matters most, the biggest risk, current status if stated.
+   - **Layer 2 — 5 minutes:** decision table (options / chosen / why), invariants & constraints, risks, open questions/TBDs, and a reading order into the source (section names + `path:line` anchors).
+   - **Layer 3 — pointer:** section map of the full document (heading → 1-line summary → line anchor). Do NOT restate the whole document.
+   - **Diagram:** if the document describes a flow, sequence, or state machine, render 1–2 mermaid diagrams (```mermaid fences). Skip when nothing is genuinely diagrammable — no decorative diagrams.
+3. **`--artifact` (optional):** if the Artifact tool is available this session, publish the briefing as a page (mermaid renders natively there). If unavailable (headless / CLI-only), print a one-line notice and continue with chat output — never an error.
+4. **Honesty rules:** the briefing compresses, it never adds. Mark inferred statements explicitly as inferred (in `user_lang`); quote decision/severity wording verbatim where exactness matters.
+
 ## Spec Output Format
 
-The spec written to `docs/harness/<slug>/spec.md` must use this exact structure for `/harness` compatibility. Write all content in `user_lang`.
+The spec written to `docs/harness/<slug>/spec.md` opens with a derived **`## Review Sheet`** (reviewer-facing; NOT one of the seven canonical sections — `/harness` ignores it), followed by the seven canonical sections in this exact structure for `/harness` compatibility. Write all content in `user_lang`.
+
+```markdown
+## Review Sheet
+
+**TL;DR** — ≤5 bullets: what / why / how / biggest risk / done-when.
+
+| Decision | Options considered | Chosen | Why |
+|----------|--------------------|--------|-----|
+
+**Invariants & top risks:** ≤5 bullets (compressed from Risks + Edge Cases).
+**Open questions:** every `[unconfirmed]` item, one line each.
+**Reading order:** what a cold reviewer should read, in order, with a 1-line reason each.
+**Changed in this revision:** re-synthesis only (Critic revise / Modify) — what changed and why. Omit on first synthesis.
+```
 
 ```markdown
 ## Goal
@@ -673,7 +702,7 @@ The spec written to `docs/harness/<slug>/spec.md` must use this exact structure 
 - {risk} — Likelihood: {low/med/high} — Mitigation: {approach}
 ```
 
-**All headings and content must be translated to `user_lang`.** The English labels above are canonical identifiers for /harness compatibility.
+**All headings and content must be translated to `user_lang`.** The English labels above are canonical identifiers for /harness compatibility. The Review Sheet is DERIVED at render time from the seven sections + Q&A notes (compression only — it must introduce no new facts); the seven canonical sections remain the SSOT.
 
 ### Section Mapping to /harness
 
@@ -710,6 +739,7 @@ See `templates/_shared/askuserquestion.md`.
 - **"Modify" triggers Phase 2 re-run.** Q&A notes are preserved; the spec is regenerated, not patched.
 - **Analyst proposals must be independent.** Never share one analyst's findings with another during parallel analysis (the Plan segment's `parallel()` enforces this).
 - **Section mapping must be preserved.** The seven spec sections must appear in every spec for /harness compatibility.
+- **Review Sheet is derived, never authoritative.** It compresses the seven sections + Q&A notes for fast human review; it introduces no new facts, and /harness ignores it (section mapping unchanged).
 - **User language.** All user-facing output must be in `user_lang`. Re-detect on every user message. WORKFLOW path: pass `userLang` in `args` — the segment scripts build schema descriptions from it, which forces sub-agent free-text output language; ids/enums stay English raw.
 - **Ad-hoc dispatch.** Any sub-agent or Workflow script created during this skill's execution WITHOUT a shipped template follows `templates/_shared/adhoc_dispatch.md` §Ad-hoc Dispatch Contract — explicit output-language directive (schema free-text field descriptions carry `(in {user_lang})`) and role-based model routing (mechanical → executor tier, judgment → evaluator tier, never above).
 <!-- SYNC-WITH: templates/_shared/adhoc_dispatch.md §Ad-hoc Dispatch Contract -->

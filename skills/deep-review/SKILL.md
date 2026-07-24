@@ -1,7 +1,7 @@
 ---
 name: deep-review
 disallowed-tools: NotebookEdit, WebSearch, WebFetch
-description: Systematic, bias-free code review for PRs, branches, or file changes. Quick mode (1 agent, 5-perspective checklist, inline) or deep/thorough modes (2-3 specialist reviewers + adversarial cross-verification + synthesis via a plugin-shipped native Workflow segment, opt-in gated). Optional --comment (inline PR comments) and --fix (gated apply). The deeper, bias-reduced complement to the built-in /code-review. (formerly /code-review)
+description: Systematic, bias-free code review for PRs, branches, or file changes. Quick mode (1 agent, 5-perspective checklist, inline) or deep/thorough modes (2-3 specialist reviewers + adversarial cross-verification + synthesis via a plugin-shipped native Workflow segment, opt-in gated). Optional --comment (inline PR comments) and --fix (gated apply). Re-running on the same target auto-advances review rounds — standardized round numbering, prior-finding reconciliation (resolved/still-open/new), and an advisory Round Verdict; continue/stop stays a human decision. The deeper, bias-reduced complement to the built-in /code-review. (formerly /code-review)
 ---
 
 # Deep Review
@@ -20,7 +20,7 @@ Detect the user's language from their **most recent message**. Store as `user_la
 
 **Re-detection:** On every user message, check if the language has changed. If so, update `user_lang` and switch all subsequent communication.
 
-**What stays in English:** Template instructions (this file and templates/*.md), file names (review_report.md), field names in the report YAML header, Workflow `args` field names.
+**What stays in English:** Template instructions (this file and templates/*.md), file names (review_report.md / review_round<N>.md), field names in the report YAML header, Workflow `args` field names.
 
 ## Mode Gate — path & mode resolution (single source: `templates/_shared/mode_gate.md`)
 
@@ -68,6 +68,7 @@ When the user provides a review target (via $ARGUMENTS or in conversation), exec
    - `--model-config <preset>` → set model config directly, skip model prompt
    - `--comment` → enable Step 6 (PR targets only)
    - `--fix` → enable Step 7 (gated apply)
+   - `--fresh` → skip prior-round reconciliation for this target (round numbering still advances — a prior report is never overwritten)
 3. **Parse the review target** from the user's input. Supported formats:
 
    | Input | Detection | Command |
@@ -102,6 +103,8 @@ When the user provides a review target (via $ARGUMENTS or in conversation), exec
 7. **Slugify the target** for artifact path: lowercase, replace non-word chars with hyphens, truncate to 50 chars. Store as `<slug>`. Example: PR #123 -> `pr-123`, `feature/auth-fix` -> `feature-auth-fix`.
 
 8. **Create artifact directory:** `docs/harness/<slug>/`
+
+9. **Round detection (round bookkeeping):** scan `docs/harness/<slug>/` for `review_report.md` (legacy name = round 1) and `review_round<N>.md`. Set `round = (highest existing round, or 0) + 1`. If `round > 1`: store the highest-round report path as `prior_report_path` and notify (in `user_lang`): "Prior review round detected — this run is round <N>; prior findings will be reconciled in the report." With `--fresh`, reconciliation is skipped (numbering still advances). **Prior reports are NEVER passed to reviewers** — reviewers stay blind on every round (anchoring prevention); reconciliation is orchestrator-only at Step 5.
 
 ### Step 2: Mode Gate & Model Configuration
 
@@ -237,7 +240,14 @@ After completing the checklist, proceed to Step 5 (Report Generation).
 
 ### Step 5: Report Generation
 
-The ORCHESTRATOR writes `docs/harness/<slug>/review_report.md` — quick mode from its inline checklist findings; deep/thorough from the returned `FindingSet` object (counts already normalized from findings by the script; `filesReviewed` backfilled from the reviewer union).
+The ORCHESTRATOR writes the round report — `docs/harness/<slug>/review_report.md` for round 1 (legacy name unchanged), `docs/harness/<slug>/review_round<N>.md` for round ≥ 2 — quick mode from its inline checklist findings; deep/thorough from the returned `FindingSet` object (counts already normalized from findings by the script; `filesReviewed` backfilled from the reviewer union).
+
+**Round ≥ 2 reconciliation (orchestrator-only; skipped with `--fresh`):** parse the prior round report's Findings tables and classify each prior finding against this round's findings + the current diff:
+- `likely resolved` — not re-found AND its file:line region changed in the current diff (still says "verify")
+- `still open` — matched by a new finding (same file + same category or overlapping lines; link the new #)
+- `unverifiable` — not re-found and its region is outside this round's diff scope
+
+Render the result as the `## Prior Findings Status` table. This is a report-level comparison — prior findings are never injected into reviewer prompts (anchoring prevention).
 
 #### Report Format
 
@@ -296,6 +306,18 @@ Write the report in **{user_lang}** (except the Assessment line value which stay
 | Suggestion | N |
 | **Total** | **N** |
 
+## Round Verdict
+
+| Round | Critical | Major | Minor | Suggestion | Verdict |
+|-------|----------|-------|-------|------------|---------|
+| <N> | n | n | n | n | PASS / CONDITIONAL PASS / FAIL |
+
+## Prior Findings Status   <!-- round ≥ 2 only; omit on round 1 or --fresh -->
+
+| Prior # (R<N-1>) | File:Line | Severity | Status | New # |
+|------------------|-----------|----------|--------|-------|
+| 1 | `path/file.ts:42` | Major | still open | R<N>-3 |
+
 ## Files Reviewed
 
 | File | Lines Changed | Findings |
@@ -304,6 +326,7 @@ Write the report in **{user_lang}** (except the Assessment line value which stay
 ```
 
 - `Files Reviewed` rows come from `filesReviewed` (deep/thorough) or the inline scan (quick); `Lines Changed` comes from the Step 1.6 orchestrator metadata; `Findings` is the per-file count from the findings array.
+- **Round Verdict rule (mechanical):** FAIL = critical ≥ 1; CONDITIONAL PASS = critical 0 AND major ≥ 1; PASS = critical 0 AND major 0. The verdict is ADVISORY — continuing to another round or stopping is always the user's decision (after fixes, re-invoke `/deep-review` on the same target; round N+1 is auto-detected).
 - `## Notes` section (only if applicable): `- Binary files skipped: [list]` and any other orchestrator-held notes.
 
 #### Assessment Logic
@@ -372,6 +395,7 @@ After presenting the report, suggest next actions based on findings (in `user_la
 | Critical/major correctness or security bugs | "Consider `/harness` to fix these issues systematically" |
 | Structural/architectural issues | "Consider `/harness` to refactor the affected components" |
 | Minor style/convention issues | "These can be addressed in a follow-up commit" |
+| Findings to be fixed now | "After applying fixes, re-run `/deep-review <same target>` — round <N+1> is auto-detected and prior findings are reconciled (resolved / still open / new)" |
 | No significant findings | "Code looks good. No action needed." |
 
 These are suggestions only -- do not auto-invoke other skills.
@@ -385,13 +409,14 @@ These are suggestions only -- do not auto-invoke other skills.
      Mode       : <mode>
      Path       : <inline | workflow>  (<reason per §Path Transparency>)
      Assessment : <APPROVE / REQUEST_CHANGES / COMMENT>
+     Round      : <N>  (<PASS | CONDITIONAL PASS | FAIL>)
      Findings   : N critical, N major, N minor, N suggestions
-     Report     : docs/harness/<slug>/review_report.md
+     Report     : docs/harness/<slug>/<review_report.md | review_round<N>.md>
    ```
 
 2. Clean up temporary files: delete `.harness/model_config.json` (if it exists). Remove `.harness/` if empty. (The old `.harness/code-review/` intermediate files no longer exist on any path — the segment returns objects.)
 
-3. Report file is preserved at `docs/harness/<slug>/review_report.md`.
+3. The round report is preserved at `docs/harness/<slug>/review_report.md` (round 1) / `review_round<N>.md` (round ≥ 2). Prior-round reports are never deleted or overwritten.
 
 ## Model Selection
 
@@ -419,7 +444,8 @@ See `templates/_shared/askuserquestion.md`.
 - **User language.** All user-facing output in `user_lang`. Re-detect on every message.
 - **Ad-hoc dispatch.** Any sub-agent or Workflow script created during this skill's execution WITHOUT a shipped template follows `templates/_shared/adhoc_dispatch.md` §Ad-hoc Dispatch Contract — explicit output-language directive (schema free-text field descriptions carry `(in {user_lang})`) and role-based model routing (mechanical → executor tier, judgment → evaluator tier, never above).
 <!-- SYNC-WITH: templates/_shared/adhoc_dispatch.md §Ad-hoc Dispatch Contract -->
-- **No intermediate files.** The segment returns schema-validated objects; only `review_report.md` is preserved in `docs/harness/<slug>/`.
+- **No intermediate files.** The segment returns schema-validated objects; only the round reports (`review_report.md`, `review_round<N>.md`) are preserved in `docs/harness/<slug>/`.
+- **Rounds are bookkeeping, never a loop.** Round numbering, reconciliation, and the Round Verdict are report-level conveniences; the skill never auto-re-reviews — each round is a fresh user invocation, and reviewers never see prior rounds (anchoring prevention).
 - **Binary files.** Skip with a note, never attempt to review binary content.
 - **Confirmation gate.** Required for deep/thorough modes. Quick mode proceeds directly.
 - **`--comment` confirms before posting** (outward-facing); `--fix` applies only behind its gate.
