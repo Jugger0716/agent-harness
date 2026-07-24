@@ -101,7 +101,7 @@ When the user invokes `/codebase-audit`, execute this workflow:
 
 7. **Mode resolution (§Mode Gate).** Resolve `mode` + `path_resolved` per §Mode Gate (from `--mode` flags / ultracode opt-in / Workflow availability). Print the scope-aware advisory (< 30 → quick, 30–200 → deep, 200+/monorepo → thorough). Persist `{ mode, path_resolved }` to `.harness/model_config.json`.
 
-   - If `--mode` was provided, or the session is in ultracode mode, or the resolved project-defaults line contains a `path` value (first source wins wholesale; see `templates/_shared/project_defaults.md`), use the gate result and **skip the prompt below**.
+   - If `--mode` was provided, or the session is in ultracode mode, or the resolved project-defaults line (`agent-harness-defaults:`) contains a `path` value (first source wins wholesale; see `templates/_shared/project_defaults.md`), use the gate result and **skip the prompt below**.
    - If `--no-prompt` was passed, or the session is non-interactive (headless/cron/subagent), skip the prompt and use the gate default (per §Ambiguity Prompt step 5).
    - **After resolution (every branch),** emit §Path Transparency: append `(<reason>)` to the `Path` line (reasons per `templates/_shared/mode_gate.md §Path Transparency`).
    - **Boundary / explicit-override fallback (no `--mode`, no opt-in, interactive session only):** the gate defaults to quick; offer a one-time choice so an interactive user can opt into a deeper mode, using AskUserQuestion (in `user_lang`):
