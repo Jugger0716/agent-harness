@@ -58,6 +58,8 @@ Apply the shared opt-in convention in `templates/_shared/mode_gate.md`. /test-ge
 | `Workflow` tool NOT available this session | single | **inline** (notify only if an explicit `--mode multi` was requested) |
 | `--mode multi` (or `deep`/`thorough`/`comprehensive`) | multi | **workflow** |
 | no `--mode` AND session is in ultracode mode | multi | **workflow** |
+| no `--mode`, ultracode OFF, resolved project-defaults line has `path=workflow` | multi | **workflow** (standing opt-in — §Ambiguity Prompt step 4.5) |
+| no `--mode`, ultracode OFF, resolved project-defaults line has `path=inline` | single | **inline** |
 | no `--mode`, no opt-in | single | **inline** (interactive + engine available → asks first, §Ambiguity Prompt) |
 
 - **multi exists ONLY on the workflow path** — the engine's `parallel()` fan-out runs (a) coverage analysts over file buckets (`test-gen.analyze`) and (b) the propose-only mutation-skeptic panel (`test-gen.judge`). The inline path is the preserved single mode.
@@ -66,7 +68,7 @@ Apply the shared opt-in convention in `templates/_shared/mode_gate.md`. /test-ge
 - **`has_git` note:** the propose segment is read-only (git-independent), but the orchestrator's inline mutation run needs a clean revert — with git it reverts via `git checkout -- <source>` and verifies with `git diff --quiet -- <source>`; without git it uses an inline backup-restore. The gate forces inline when `has_git == false` because the multi path's only added value (fan-out) does not change the orchestrator-inline run that follows.
 - **Graceful fallback:** if a segment errors, print `[test-gen] ⚠ Workflow engine unavailable — falling back to the inline single path.` (in `user_lang`), set `mode → single`, `path_resolved → inline`, and continue inline. Never error out.
 - Record `mode` + `path_resolved` in state.json (`mode` is kept for backward-compat with pre-Workflow sessions).
-- **§Ambiguity Prompt.** Apply `templates/_shared/mode_gate.md §Ambiguity Prompt`: when NO opt-in is present (no `--mode`, ultracode OFF, `Workflow` tool available, `has_git == true`, interactive, no `--no-prompt`), ask inline-vs-workflow via AskUserQuestion. Skill modes: single(inline) / multi(workflow); ultracode-target: multi (Recommended default = inline when asked). Then emit **§Path Transparency** — show `Path : <inline | workflow>  (<reason>)`. If `--mode multi` was requested but the engine/git is unavailable, notify and proceed inline. Resume reuses stored `mode`/`path_resolved` — never re-fire the prompt.
+- **§Ambiguity Prompt.** Apply `templates/_shared/mode_gate.md §Ambiguity Prompt`: when NO opt-in is present (no `--mode`, ultracode OFF, no project-default `path` (`agent-harness-defaults:` line), `Workflow` tool available, `has_git == true`, interactive, no `--no-prompt`), ask inline-vs-workflow via AskUserQuestion. Skill modes: single(inline) / multi(workflow); ultracode-target: multi (Recommended default = inline when asked). Then emit **§Path Transparency** — show `Path : <inline | workflow>  (<reason>)`. If `--mode multi` was requested but the engine/git is unavailable, notify and proceed inline. Resume reuses stored `mode`/`path_resolved` — never re-fire the prompt.
 <!-- SYNC-WITH: templates/_shared/mode_gate.md §Ambiguity Prompt -->
 
 ## Argument Parsing
@@ -151,6 +153,8 @@ If `.harness/state.json` does not exist (or `state.json.skill` is not `"test-gen
 6. **Create directories:** `.harness/test-gen/`, `docs/harness/<slug>/`
 7. **Create git branch (if has_git):** `git checkout -b harness/test-gen-<slug>`
 8. **Model configuration selection:**
+   Resolution: `--model-config` flag > the resolved project-defaults line's `model-config` value (first source wins wholesale: settings.local.json env → project CLAUDE.md → user CLAUDE.md; see `templates/_shared/project_defaults.md`; echo `(project default)` in the setup output) > `default` preset.
+<!-- SYNC-WITH: templates/_shared/project_defaults.md §agent-harness-defaults -->
    Preset table + rules: see `templates/_shared/model_config.md`. Role-map (see §Model Selection): Coverage Analyst → executor; mutation skeptic → evaluator. (Test generation is orchestrator-inline; the inline mutation run is orchestrator-owned, so its model role is moot.)
 
 9. **Write `.harness/state.json`** with fields:
@@ -545,4 +549,6 @@ See `templates/_shared/askuserquestion.md`.
 - **Trivial assertions are forbidden.** Every test must have at least 1 assertion that would fail if the target function's logic was broken.
 - **Framework detection is required.** If the framework cannot be detected and the user cannot specify one, stop with a clear error message.
 - **User language.** All user-facing output must be in `user_lang`. Re-detect on every user message. WORKFLOW path: pass `userLang` in `args` — the segment scripts build schema descriptions from it, forcing sub-agent free-text output language; identifiers/paths/enums stay English raw.
+- **Ad-hoc dispatch.** Any sub-agent or Workflow script created during this skill's execution WITHOUT a shipped template follows `templates/_shared/adhoc_dispatch.md` §Ad-hoc Dispatch Contract — explicit output-language directive (schema free-text field descriptions carry `(in {user_lang})`) and role-based model routing (mechanical → executor tier, judgment → evaluator tier, never above).
+<!-- SYNC-WITH: templates/_shared/adhoc_dispatch.md §Ad-hoc Dispatch Contract -->
 - **Intermediate outputs are ephemeral.** `.harness/test-gen/analysis.md` is a working artifact (inline path). On the workflow path the segments return schema-validated objects — no intermediate analysis/proposal files. Final artifacts (test_changes.md, test_report.md) live in `docs/harness/<slug>/`.
