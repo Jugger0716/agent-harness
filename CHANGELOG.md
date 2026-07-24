@@ -52,6 +52,14 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
   3-layer briefing (30-second / 5-minute / section-map with `path:line` anchors) plus mermaid
   diagrams where genuinely diagrammable; optional Artifact publish, graceful skip when unavailable.
 
+- **Model fallback chain** (`templates/_shared/model_config.md`): if a dispatch fails because a
+  preset cell's model id is unknown/unavailable (model sunset — e.g. a future `fable`
+  retirement), the cell downgrades step-by-step (`fable → opus → sonnet → haiku → parent
+  inherit`) with a once-per-session warning and a Setup Summary / report echo of the
+  actually-used model; the downgrade is remembered for the session. Preset names are
+  indirection — a sunset needs only a one-line preset-table patch, and persistent
+  `model-config=<preset>` project defaults keep working across model generations.
+
 ### Changed
 - **Judgment agents remapped advisor → evaluator** (deep-review Cross-Verification, debug Cross
   Verifier, spec Critic, codebase-audit Completeness Critic; SKILL.md role maps + `args.models` now
