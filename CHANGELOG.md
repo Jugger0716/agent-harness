@@ -8,6 +8,8 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
 
 ## [Unreleased]
 
+## [8.7.0] — 2026-07-24
+
 ### Added
 - **`frontier` model preset** (`templates/_shared/model_config.md`): `executor=sonnet, advisor=opus,
   evaluator=fable, verifier=haiku` — top-model judgment with cost-efficient execution. `fable` is now a
