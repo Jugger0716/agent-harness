@@ -120,11 +120,11 @@ When the user describes a bug or error (via $ARGUMENTS or in conversation), exec
      question: "Select model configuration for sub-agents:"
      options:
        - label: "default" / description: "Inherit parent model, no changes"
-       - label: "all-opus" / description: "All sub-agents use Opus (highest quality)"
+       - label: "frontier" / description: "Sonnet executor + Opus advisor + Fable evaluator (top-model judgment)"
        - label: "balanced (Recommended)" / description: "Sonnet executor + Opus advisor (cost-efficient)"
        - label: "economy" / description: "Haiku executor + Sonnet advisor (max savings)"
 
-   **If "Other" selected:** Parse custom format `executor:<model>,advisor:<model>`. Validate each model name — only `opus`, `sonnet`, `haiku` are allowed (case-insensitive). If any model name is invalid, inform the user which value is invalid and re-ask for input (max 3 retries, then apply `balanced` as default). If parsing succeeds but is partial, fill missing roles with the `balanced` defaults (executor=sonnet, advisor=opus). Show the parsed result to the user and ask for confirmation before proceeding.
+   **If "Other" selected:** Parse custom format `executor:<model>,advisor:<model>,evaluator:<model>` (or a bare preset name, e.g. `all-opus`). Validate each model name — only `fable`, `opus`, `sonnet`, `haiku` are allowed (case-insensitive). If any model name is invalid, inform the user which value is invalid and re-ask for input (max 3 retries, then apply `balanced` as default). If parsing succeeds but is partial, fill missing roles with the `balanced` defaults (executor=sonnet, advisor=opus, evaluator=opus). Show the parsed result to the user and ask for confirmation before proceeding.
 
    **Model config is set once at session start and cannot be changed mid-session.** To change, restart the session.
 
@@ -334,7 +334,8 @@ These rules are non-negotiable.
        hasGit: <state.has_git>,
        contextMd: <content of .harness/debug/context.md>,
        errorType: <state.error_type>,
-       models: { advisor: <model_config.advisor or null> }
+       models: { advisor: <model_config.advisor or null>,
+                 evaluator: <model_config.evaluator or null> }
      }
    }
    ```
@@ -501,9 +502,9 @@ Preset table + rules: see `templates/_shared/model_config.md`.
 **Role map (deep mode segment agents):**
 - Error Analyst → advisor
 - Code Archaeologist → advisor
-- Cross Verifier → advisor
+- Cross Verifier → evaluator (judgment role — pre-8.7 presets keep identical advisor/evaluator cells, so only `frontier` differentiates)
 
-**Applying model config:** pass the resolved advisor model once per segment run as `args.models` (`{ advisor: <model or null> }`; null = inherit parent model, i.e. the `default` preset) — the segment script applies it per agent. Sub-agents must NOT directly access state.json to read model_config — the orchestrator passes the resolved value at segment launch.
+**Applying model config:** pass the resolved advisor + evaluator models once per segment run as `args.models` (`{ advisor: <model or null>, evaluator: <model or null> }`; null = inherit parent model, i.e. the `default` preset) — the segment script applies it per agent. Sub-agents must NOT directly access state.json to read model_config — the orchestrator passes the resolved value at segment launch.
 
 ## User Interaction Rules
 

@@ -108,6 +108,7 @@ claude plugin install agent-harness@agent-harness-marketplace
 /harness fix login timeout bug --mode standard    # workflow path: 2-specialist fan-out via native Workflow scripts
 /harness fix login timeout bug --mode multi       # workflow path: 3-specialist fan-out, deepest analysis
 /harness fix bug --model-config balanced          # Sonnet executor + Opus advisor (cost-efficient)
+/harness fix bug --model-config frontier          # Sonnet executor + Fable evaluator (top-model judgment)
 
 /harness plan "add user auth"                     # phase mode: plan only, end session
 /harness generate                                 # phase mode: resume from plan, generate only
@@ -160,7 +161,8 @@ Inspired by Anthropic's [Advisor Strategy](https://claude.com/blog/the-advisor-s
 | Preset | Executor | Advisor | Evaluator | Verifier | Use case |
 |--------|----------|---------|-----------|----------|----------|
 | **default** | (parent) | (parent) | (parent) | Haiku | No change, inherit parent model |
-| **all-opus** | Opus | Opus | Opus | Haiku | Maximum quality |
+| **all-opus** | Opus | Opus | Opus | Haiku | Maximum quality (flag/`Other` only — not in the interactive picker) |
+| **frontier** | Sonnet | Opus | Fable | Haiku | Top-model judgment — Fable evaluates, Sonnet executes |
 | **balanced** | Sonnet | Opus | Opus | Haiku | Recommended — cost-efficient with quality judgment |
 | **economy** | Haiku | Sonnet | Sonnet | Haiku | Maximum savings, basic quality |
 
@@ -171,7 +173,7 @@ Inspired by Anthropic's [Advisor Strategy](https://claude.com/blog/the-advisor-s
 - **Advisor**: high-level judgment — plan review, safety checks (quality model needed)
 - **Evaluator**: independent verification — always protected (never haiku)
 
-Works with: harness, refactor, migrate, debug, spec, test-gen, deep-review, codebase-audit. Presets are selected via numbered UI (AskUserQuestion) with `Other` for custom role mapping.
+Works with: harness, refactor, migrate, debug, spec, test-gen, deep-review, codebase-audit. Presets are selected via numbered UI (AskUserQuestion) with `Other` for custom role mapping. The interactive picker holds 4 presets (default / frontier / balanced / economy — AskUserQuestion limit); `all-opus` stays available via `--model-config all-opus` or `Other`. Judgment-type sub-agents (cross-verification, critic, evaluator) map to the evaluator role — pre-8.7 presets keep identical advisor/evaluator cells, so only `frontier` differentiates them.
 
 ## Interactive UX
 

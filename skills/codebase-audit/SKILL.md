@@ -154,11 +154,11 @@ When the user invokes `/codebase-audit`, execute this workflow:
      question: "Select model configuration for sub-agents:"
      options:
        - label: "default" / description: "Inherit parent model, no changes"
-       - label: "all-opus" / description: "All sub-agents use Opus (highest quality)"
+       - label: "frontier" / description: "Sonnet executor + Opus advisor + Fable evaluator (top-model judgment)"
        - label: "balanced (Recommended)" / description: "Sonnet executor + Opus advisor/evaluator (cost-efficient)"
        - label: "economy" / description: "Haiku executor + Sonnet advisor/evaluator (max savings)"
 
-   **If "Other" selected:** Parse custom format `executor:<model>,advisor:<model>,evaluator:<model>`. Validate each model name — only `opus`, `sonnet`, `haiku` are allowed (case-insensitive). If any model name is invalid, inform the user which value is invalid and re-ask for input (max 3 retries, then apply `balanced` as default). If parsing succeeds but is partial, fill missing roles with the `balanced` defaults (executor=sonnet, advisor=opus, evaluator=opus). Show the parsed result to the user and ask for confirmation before proceeding.
+   **If "Other" selected:** Parse custom format `executor:<model>,advisor:<model>,evaluator:<model>` (or a bare preset name, e.g. `all-opus`). Validate each model name — only `fable`, `opus`, `sonnet`, `haiku` are allowed (case-insensitive). If any model name is invalid, inform the user which value is invalid and re-ask for input (max 3 retries, then apply `balanced` as default). If parsing succeeds but is partial, fill missing roles with the `balanced` defaults (executor=sonnet, advisor=opus, evaluator=opus). Show the parsed result to the user and ask for confirmation before proceeding.
 
    **Model config is set once at session start and cannot be changed mid-session.** To change, restart the session.
 
@@ -253,7 +253,8 @@ Proceed to Step 4 with findings.
        sharedContext: <content of .harness/context.md>,
        incrementalContext: <incremental info, else "(Full analysis — no prior audit)">,
        models: { executor: <model_config.executor or null>,
-                 advisor: <model_config.advisor or null> }
+                 advisor: <model_config.advisor or null>,
+                 evaluator: <model_config.evaluator or null> }
      }
    }
    ```
@@ -375,7 +376,7 @@ Present as recommendations, not commands. User decides.
 
 Sub-agents exist only in **deep and thorough modes** (WORKFLOW path — the segment script spawns them). Preset table + rules: see `templates/_shared/model_config.md`.
 
-**Role map (codebase-audit):** lens analysts (deep: structure+dependency, pattern+quality; thorough: structure, dependency, pattern) → `executor`; Completeness Critic (thorough) + Synthesis → `advisor`. (No evaluator role is used.)
+**Role map (codebase-audit):** lens analysts (deep: structure+dependency, pattern+quality; thorough: structure, dependency, pattern) → `executor`; Synthesis → `advisor`; Completeness Critic (thorough) → `evaluator` (judgment role — pre-8.7 presets keep identical advisor/evaluator cells, so only `frontier` differentiates; in deep mode no evaluator-role agent runs, so `frontier` behaves like `balanced`).
 
 **Applying model config (WORKFLOW path):** pass the resolved models once per segment run as `args.models` (`{ executor, advisor }`; null = inherit parent model, i.e. the `default` preset) — the segment script applies them per agent. Sub-agents must NOT access `.harness/model_config.json` — the orchestrator passes the resolved values at segment launch.
 

@@ -159,11 +159,11 @@ When the user provides a refactoring target (via $ARGUMENTS or in conversation),
      question: "Select model configuration for sub-agents:"
      options:
        - label: "default" / description: "Inherit parent model, no changes"
-       - label: "all-opus" / description: "All sub-agents use Opus (highest quality)"
+       - label: "frontier" / description: "Sonnet executor + Opus advisor + Fable evaluator (top-model judgment)"
        - label: "balanced (Recommended)" / description: "Sonnet executor + Opus advisor/evaluator (cost-efficient)"
        - label: "economy" / description: "Haiku executor + Sonnet advisor/evaluator (max savings)"
 
-   **If "Other" selected:** Parse custom format `executor:<model>,advisor:<model>,evaluator:<model>`. Validate each model name — only `opus`, `sonnet`, `haiku` are allowed (case-insensitive). If any model name is invalid, inform the user which value is invalid and re-ask for input (max 3 retries, then apply `balanced` as default). If parsing succeeds but is partial, fill missing roles with the `balanced` defaults (executor=sonnet, advisor=opus, evaluator=opus). Show the parsed result to the user and ask for confirmation before proceeding.
+   **If "Other" selected:** Parse custom format `executor:<model>,advisor:<model>,evaluator:<model>` (or a bare preset name, e.g. `all-opus`). Validate each model name — only `fable`, `opus`, `sonnet`, `haiku` are allowed (case-insensitive). If any model name is invalid, inform the user which value is invalid and re-ask for input (max 3 retries, then apply `balanced` as default). If parsing succeeds but is partial, fill missing roles with the `balanced` defaults (executor=sonnet, advisor=opus, evaluator=opus). Show the parsed result to the user and ask for confirmation before proceeding.
 
    **Model config is set once at session start and cannot be changed mid-session.** To change, restart the session.
 

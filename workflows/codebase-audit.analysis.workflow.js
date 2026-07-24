@@ -522,7 +522,7 @@ if (A.mode === 'thorough' && analyses.length >= 2) {
             .map((o) => digests[o.lensId])
             .join('\n\n'),
         }),
-        { schema: CompletenessCritiqueSchema, label: `critique_${a.lensId}`, phase: 'Critique', ...mopt(MODELS.advisor) },
+        { schema: CompletenessCritiqueSchema, label: `critique_${a.lensId}`, phase: 'Critique', ...mopt(MODELS.evaluator || MODELS.advisor) },
       ),
     ),
   )

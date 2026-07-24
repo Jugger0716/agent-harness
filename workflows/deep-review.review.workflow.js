@@ -593,7 +593,7 @@ if (A.mode === 'thorough' && reviews.length >= 2) {
             .join('\n\n'),
           diff_content: A.diffContent,
         }),
-        { schema: CrossVerifyReportSchema, label: `xv_${rv.id}`, phase: 'Cross-verify', ...mopt(MODELS.advisor) },
+        { schema: CrossVerifyReportSchema, label: `xv_${rv.id}`, phase: 'Cross-verify', ...mopt(MODELS.evaluator || MODELS.advisor) },
       ),
     ),
   )

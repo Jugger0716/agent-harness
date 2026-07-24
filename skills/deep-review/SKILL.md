@@ -116,11 +116,11 @@ When the user provides a review target (via $ARGUMENTS or in conversation), exec
      question: "Select model configuration for sub-agents:"
      options:
        - label: "default" / description: "Inherit parent model, no changes"
-       - label: "all-opus" / description: "All sub-agents use Opus (highest quality)"
+       - label: "frontier" / description: "Sonnet executor + Opus advisor + Fable evaluator (top-model judgment)"
        - label: "balanced (Recommended)" / description: "Sonnet executor + Opus advisor (cost-efficient)"
        - label: "economy" / description: "Haiku executor + Sonnet advisor (max savings)"
 
-   **If "Other" selected:** Parse custom format `executor:<model>,advisor:<model>,evaluator:<model>`. Validate each model name — only `opus`, `sonnet`, `haiku` are allowed (case-insensitive). If any model name is invalid, inform the user which value is invalid and re-ask for input (max 3 retries, then apply `balanced` as default). If parsing succeeds but is partial, fill missing roles with the `balanced` defaults (executor=sonnet, advisor=opus, evaluator=opus). Show the parsed result to the user and ask for confirmation before proceeding. (deep-review's role map uses executor + advisor; an `evaluator` value is stored but unused — harmless audit surplus.)
+   **If "Other" selected:** Parse custom format `executor:<model>,advisor:<model>,evaluator:<model>` (or a bare preset name, e.g. `all-opus`). Validate each model name — only `fable`, `opus`, `sonnet`, `haiku` are allowed (case-insensitive). If any model name is invalid, inform the user which value is invalid and re-ask for input (max 3 retries, then apply `balanced` as default). If parsing succeeds but is partial, fill missing roles with the `balanced` defaults (executor=sonnet, advisor=opus, evaluator=opus). Show the parsed result to the user and ask for confirmation before proceeding. (deep-review maps Cross-Verification → evaluator; it runs in thorough mode only, so in deep mode `frontier` behaves like `balanced`.)
 
    **Model config is set once at session start and cannot be changed mid-session.** To change, restart the session.
 
@@ -222,7 +222,8 @@ After completing the checklist, proceed to Step 5 (Report Generation).
        fileList: <changed-file list with per-file line counts>,
        userLang: <user_lang>,
        models: { executor: <model_config.executor or null>,
-                 advisor: <model_config.advisor or null> }
+                 advisor: <model_config.advisor or null>,
+                 evaluator: <model_config.evaluator or null> }
      }
    }
    ```
@@ -397,7 +398,7 @@ Sub-agents exist only in **deep and thorough modes** (WORKFLOW path — the segm
 
 Preset table + rules: see `templates/_shared/model_config.md`.
 
-**Role map (deep-review):** specialist reviewers (deep: Security & Correctness, Architecture & Maintainability; thorough: Security & Correctness, Architecture & Design, DX & Maintainability) → `executor`; Cross-Verification (thorough only) + Synthesis → `advisor`.
+**Role map (deep-review):** specialist reviewers (deep: Security & Correctness, Architecture & Maintainability; thorough: Security & Correctness, Architecture & Design, DX & Maintainability) → `executor`; Synthesis → `advisor`; Cross-Verification (thorough only) → `evaluator` (judgment role — pre-8.7 presets keep identical advisor/evaluator cells, so only `frontier` differentiates).
 
 **Applying model config:** pass the resolved models once per segment run as `args.models` (`{ executor, advisor }`; null = inherit parent model, i.e. the `default` preset) — the segment script applies them per agent. Sub-agents must NOT access `.harness/model_config.json` — the orchestrator passes the resolved values at segment launch.
 

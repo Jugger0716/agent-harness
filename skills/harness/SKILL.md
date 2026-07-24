@@ -331,11 +331,11 @@ On the WORKFLOW path the same machine applies; `harness.eval` covers verifying�
     - question: "Select model configuration for sub-agents:"
     - options:
       - "default" / "Inherit parent model, no changes"
-      - "all-opus" / "All sub-agents use Opus (highest quality)"
+      - "frontier" / "Sonnet executor + Opus advisor + Fable evaluator (top-model judgment)"
       - "balanced (Recommended)" / "Sonnet executor + Opus advisor/evaluator (cost-efficient)"
       - "economy" / "Haiku executor + Sonnet advisor/evaluator (max savings)"
 
-    If "Other": parse `executor:<model>,advisor:<model>,evaluator:<model>`. Validate — only `opus`, `sonnet`, `haiku`. Max 3 retries, then default to `balanced`. Fill missing roles from `balanced` defaults.
+    If "Other": parse `executor:<model>,advisor:<model>,evaluator:<model>` (or a bare preset name, e.g. `all-opus`). Validate — only `fable`, `opus`, `sonnet`, `haiku`. Max 3 retries, then default to `balanced`. Fill missing roles from `balanced` defaults.
 
     Store as `model_config`: `{ "preset": "<name>", "executor": "<model|null>", "advisor": "<model|null>", "evaluator": "<model|null>", "verifier": "<resolved-verifier>" }`.
     For `default` preset: `{ "preset": "default", "verifier": "<resolved-verifier>" }`.

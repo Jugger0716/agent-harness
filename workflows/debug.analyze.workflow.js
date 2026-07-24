@@ -492,7 +492,7 @@ const rootCause = await agent(
     error_analyst_output: digest(byPersona.error_analyst),
     archaeologist_output: digest(byPersona.code_archaeologist),
   }),
-  { schema: RootCauseSchema, label: 'cross_verify', phase: 'Cross-verify', ...mopt(MODELS.advisor) },
+  { schema: RootCauseSchema, label: 'cross_verify', phase: 'Cross-verify', ...mopt(MODELS.evaluator || MODELS.advisor) },
 )
 log(`Cross-verify: ${rootCause.confidence}${rootCause.summary ? ' — ' + rootCause.summary : ''}`)
 
