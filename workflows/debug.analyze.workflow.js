@@ -22,7 +22,7 @@ export const meta = {
 // contract — keep 1:1 with skills/debug/SKILL.md Phase 1-D WORKFLOW dispatch (a field
 // missing on either side silently renders as ''):
 //   { errorDescription, stackTrace, repoPath, userLang, hasGit: bool,
-//     contextMd, errorType: 'build'|'runtime'|'logic', models: {advisor} }
+//     contextMd, errorType: 'build'|'runtime'|'logic', models: {advisor, evaluator} }
 const A = typeof args === 'string' ? JSON.parse(args) : (args || {})
 const LANG = A.userLang || 'the language of the error description'
 const MODELS = A.models || {}

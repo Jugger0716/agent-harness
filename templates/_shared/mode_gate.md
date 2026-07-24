@@ -47,16 +47,18 @@ impossible request degrades correctly.
 4. **ultracode ON** (no `--mode`) → **workflow** at the skill's *current ultracode-target* tier
    (the mode its §Mode Gate table already maps ultracode to — NOT necessarily the deepest).
    No prompt — ultracode IS the opt-in. Emit §Path Transparency with reason "ultracode ON".
-4.5. **Project default** (no `--mode`, ultracode OFF) — a project-defaults source declares
-   `agent-harness-defaults:` with `path=workflow` → **workflow** at the skill's ultracode-target
-   tier (same tier rule as step 4); `path=inline` → **inline**. No prompt — the defaults line IS
-   a standing opt-in. Emit §Path Transparency with reason "project default (<source>)".
+4.5. **Project default** (no `--mode`, ultracode OFF) — the RESOLVED project-defaults line
+   declares a `path` key: `path=workflow` → **workflow** at the skill's ultracode-target tier
+   (same tier rule as step 4); `path=inline` → **inline**. No prompt — the `path` key IS a
+   standing opt-in. Emit §Path Transparency with reason "project default (<source>)".
+   **A resolved defaults line WITHOUT a `path` key is NOT a path signal — continue to steps
+   5–6 (its other keys still apply to model-config/verifier resolution).**
    Sources & search order (settings.local.json env → project CLAUDE.md → user CLAUDE.md):
    `templates/_shared/project_defaults.md`.
 5. `--no-prompt` flag **OR** the session cannot present an interactive prompt (headless / cron /
    subagent) → **inline** (existing auto-resolution). No prompt. **Default bias: auto-resolve
    UNLESS an interactive session is positively confirmed** — never block an automated run.
-6. else (no `--mode` **AND** ultracode OFF **AND** no project default **AND** engine available **AND** interactive) → **ASK**
+6. else (no `--mode` **AND** ultracode OFF **AND** no project-default `path` key **AND** engine available **AND** interactive) → **ASK**
    via AskUserQuestion (in `user_lang`):
    - header: "Path"
    - question: "No mode specified — choose how to run:"

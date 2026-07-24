@@ -196,7 +196,7 @@ can live in three places — the first source that declares it wins wholesale:
 3. **`~/.claude/CLAUDE.md`** — personal machine-wide fallback for all projects.
 
 - `path=workflow` is a standing opt-in — the Mode Gate resolves the workflow path at the skill's ultracode-target tier without ultracode or `--mode` (§Path Transparency reason: `project default (<source>)`); `path=inline` pins the inline path.
-- `model-config=<preset>` replaces the interactive model picker when no `--model-config` flag is given (echoed as `(project default)` in the Setup Summary). Without a flag AND without a defaults line, behavior is unchanged: skills that dispatch sub-agents ask via AskUserQuestion.
+- `model-config=<preset>` replaces the interactive model picker when no `--model-config` flag is given (echoed as `(project default)` in the Setup Summary). Without a flag AND without a defaults line, behavior is unchanged: skills that dispatch sub-agents ask via AskUserQuestion (exception: test-gen has no picker — it silently uses the `default` preset).
 - Session input always wins: explicit flags override the line, `--mode single/quick` still forces inline, and invalid values warn once and are ignored (never a halt).
 
 ## Interactive UX
@@ -368,7 +368,7 @@ Higher modes use more tokens per run but have higher first-pass success rates, o
 | Option | Default | Description |
 |--------|---------|-------------|
 | mode | Mode Gate (no roundtrip) | `single` (inline, default without opt-in), `standard` / `multi` (workflow path via native Workflow segment scripts). Opt-in = ultracode session or explicit `--mode`; `has_git == false` or missing Workflow tool forces inline single. |
-| model-config | (ask user) | `default` / `all-opus` / `balanced` / `economy` — see Model Configuration section |
+| model-config | project default → else ask | `default` / `all-opus` / `frontier` / `balanced` / `economy` — see Model Configuration section |
 | scope | auto-detected | Restrict file modifications to a pattern |
 | max rounds | 3 | Maximum Generator/Evaluator retry cycles |
 | max files | 20 | Maximum number of files that can be modified |
@@ -976,7 +976,7 @@ A standalone review skill that performs systematic, bias-free code reviews on PR
 
 **What it does:**
 - **3-tier depth control**: quick (inline, 5-perspective checklist), deep (2 specialist reviewers + synthesis), thorough (3 specialists + adversarial cross-verification + synthesis). Deep/thorough run as a plugin-shipped native Workflow segment (`deep-review.review.workflow.js`) — opt-in via ultracode or `--mode`; otherwise quick inline.
-- **Schema-validated returns**: reviewers, cross-verifiers, and synthesis return `FindingSet`/`CrossVerifyReport` objects — no intermediate review files, no table re-parsing. The orchestrator writes `review_report.md` from the returned object.
+- **Schema-validated returns**: reviewers, cross-verifiers, and synthesis return `FindingSet`/`CrossVerifyReport` objects — no intermediate review files, no table re-parsing. The orchestrator writes the round report (`review_report.md` / `review_round<N>.md`) from the returned object.
 - **Bias reduction**: context isolation, anchor-free input (no PR descriptions/commit messages), defect-assumption framing, author neutralization, input-trust fencing (the diff AND reviewer-authored digests are declared DATA).
 - **Scope advisory**: prints the recommended depth based on diff size (< 100 lines -> quick, 100-500 -> deep, 500+ -> thorough) — pass `--mode` to take it.
 - **Built-in parity, gated**: `--comment` posts inline PR comments (after an explicit confirm); `--fix` applies critical/major suggestions to the working tree only behind a hard gate with per-path validation — never automatically, never committed.
@@ -1005,7 +1005,7 @@ With no `--mode`: ultracode sessions resolve **thorough**; non-opted sessions re
 
 ### Output
 
-Review report saved to `docs/harness/<slug>/review_report.md` with:
+Round report saved to `docs/harness/<slug>/review_report.md` (round 1; later rounds: `review_round<N>.md`) with:
 - **Assessment**: APPROVE / REQUEST_CHANGES / COMMENT (deterministic from findings)
 - **Findings table**: severity, category, file:line, description, suggestion
 - **Statistics**: finding counts by severity; **Files Reviewed** incl. no-issue files

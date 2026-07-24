@@ -24,7 +24,9 @@ ad-hoc dispatches bypass both — this contract closes that gap.
    `userLang`) and build their schema descriptions from it — the same pattern the shipped
    segment scripts use.
 
-An English leak from an ad-hoc dispatch is a contract violation, not a style issue.
+An UNINTENDED output-language leak from an ad-hoc dispatch is a contract violation, not a
+style issue. Exception: an explicit user instruction to output in another language for a given
+dispatch overrides `{user_lang}` — the contract enforces intentionality, not a specific language.
 
 ## §Model Routing (cost discipline)
 

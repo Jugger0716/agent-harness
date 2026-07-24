@@ -28,9 +28,9 @@ Skim this list to locate sections by name. Section-anchor cross-references throu
 10. `### HARD GATE — Spec Approval` — final approval gate with translated 3-way options + Modify reset.
 11. `### Phase 3 — Handoff` — artifacts persistence, slug-safe `/harness` invocation, cleanup safety guard, M17 variable↔filename mapping.
 12. `### Status Check (anytime)` — status summary command (subsection of Phase 3).
-13. `## Spec Output Format` — 7-section template with /harness compatibility mapping + leading derived `## Review Sheet` (reviewer-facing, non-canonical).
-14. `## Model Selection` — model_config preset → role mapping (advisor; workflow `args.models`).
-15. `## Sub-command: digest` — `/spec digest <path>`: read-only 3-layer briefing of an existing document (no state, no Q&A, no sub-agents).
+13. `## Sub-command: digest` — `/spec digest <path>`: read-only 3-layer briefing of an existing document (no state, no Q&A, no sub-agents).
+14. `## Spec Output Format` — 7-section template with /harness compatibility mapping + leading derived `## Review Sheet` (reviewer-facing, non-canonical).
+15. `## Model Selection` — model_config preset → role mapping (analysts/synthesis → advisor, Critic → evaluator; workflow `args.models`).
 
 ## Environment Detection
 
@@ -64,6 +64,8 @@ Apply the shared opt-in convention in `templates/_shared/mode_gate.md`. /spec-sp
 | `Workflow` tool NOT available this session | quick | **inline** (notify only if an explicit `--mode deep` was requested) |
 | `--mode deep` (or `comprehensive`/`thorough`/`multi`) | deep | **workflow** |
 | no `--mode` AND session is in ultracode mode | deep | **workflow** |
+| no `--mode`, ultracode OFF, resolved project-defaults line has `path=workflow` | deep | **workflow** (standing opt-in — §Ambiguity Prompt step 4.5) |
+| no `--mode`, ultracode OFF, resolved project-defaults line has `path=inline` | quick | **inline** |
 | no `--mode`, no opt-in | quick | **inline** (interactive + engine available → asks first, §Ambiguity Prompt) |
 
 - **Deep mode exists ONLY on the workflow path** — the engine's `parallel()` fan-out replaces the old hand-rolled "Launch 4 sub-agents in parallel" prose (pilot precedent: /harness standard/multi). The inline path is the preserved quick mode (Phase 2-Q: orchestrator writes spec.md directly).
@@ -194,13 +196,13 @@ When the user provides a task description (via $ARGUMENTS or in conversation), e
      4. **Size limit** (NEW in 8.4 for `--reference`): file size > 200 KB OR line count > 5000 → halt with "reference file too large." Convention files should be human-curated, not auto-generated dumps.
    - On valid path: normalize to a **repo-relative path** (relative to `repo_path`; no leading `/` or drive letter; e.g., `docs/references/spec.md`) and store as `cli_flags.reference: <normalized_path>` in state.json (audit-friendly). Will be consumed by Step 1.5 Convention Scan. (M4: prior wording "absolute repo-relative path" was internally contradictory and risked OS-absolute paths leaking into state.json on Windows.)
    - If not provided: `cli_flags.reference: null`.
-5. **Mode Gate resolution:** apply §Mode Gate INCLUDING **§Ambiguity Prompt** (single source: `templates/_shared/mode_gate.md`). The mode roundtrip is removed EXCEPT this prompt, which fires only when NO opt-in is present (no `--mode`, ultracode OFF, no `agent-harness-defaults:` project default, `Workflow` tool available, `has_git == true`, interactive session, no `--no-prompt`). Skill modes: quick(inline) / deep(workflow). ultracode-target (step 4 default): deep. Store `mode` and `path_resolved` in state.json. Then emit **§Path Transparency** — show `Path : <inline | workflow>  (<reason>)`. If the user explicitly requested `--mode deep` but the gate resolved to inline (Workflow tool unavailable or `has_git == false`), notify (in `user_lang`): "deep mode requires the native Workflow engine and git — proceeding on the inline quick path."
+5. **Mode Gate resolution:** apply §Mode Gate INCLUDING **§Ambiguity Prompt** (single source: `templates/_shared/mode_gate.md`). The mode roundtrip is removed EXCEPT this prompt, which fires only when NO opt-in is present (no `--mode`, ultracode OFF, no project-default `path` (`agent-harness-defaults:` line), `Workflow` tool available, `has_git == true`, interactive session, no `--no-prompt`). Skill modes: quick(inline) / deep(workflow). ultracode-target (step 4 default): deep. Store `mode` and `path_resolved` in state.json. Then emit **§Path Transparency** — show `Path : <inline | workflow>  (<reason>)`. If the user explicitly requested `--mode deep` but the gate resolved to inline (Workflow tool unavailable or `has_git == false`), notify (in `user_lang`): "deep mode requires the native Workflow engine and git — proceeding on the inline quick path."
 <!-- SYNC-WITH: templates/_shared/mode_gate.md §Ambiguity Prompt -->
 
 6. **Model configuration selection (deep mode only):**
    If mode is `quick`, skip this step entirely — no sub-agents are used.
    If mode is `deep`:
-     If `--model-config <preset>` was passed, use it directly. Otherwise, if a project-defaults source (settings.local.json env → project CLAUDE.md → user CLAUDE.md) declares `agent-harness-defaults:` with `model-config=<preset>` (single source: `templates/_shared/project_defaults.md`), use it silently and echo `(project default)` in the Setup Summary. Otherwise, use AskUserQuestion to ask the user (in `user_lang`):
+     If `--model-config <preset>` was passed, use it directly. Otherwise, if the resolved project-defaults line (first source wins wholesale: settings.local.json env → project CLAUDE.md → user CLAUDE.md; see `templates/_shared/project_defaults.md`) contains `model-config=<preset>`, use it silently and echo `(project default)` in the Setup Summary. Otherwise, use AskUserQuestion to ask the user (in `user_lang`):
 <!-- SYNC-WITH: templates/_shared/project_defaults.md §agent-harness-defaults -->
        header: "Model"
        question: "Select model configuration for sub-agents:"
@@ -210,11 +212,11 @@ When the user provides a task description (via $ARGUMENTS or in conversation), e
          - label: "balanced (Recommended)" / description: "Sonnet executor + Opus advisor (cost-efficient)"
          - label: "economy" / description: "Haiku executor + Sonnet advisor (max savings)"
 
-     **If "Other" selected:** Parse custom format `executor:<model>,advisor:<model>,evaluator:<model>` (or a bare preset name, e.g. `all-opus`). Validate each model name — only `fable`, `opus`, `sonnet`, `haiku` are allowed (case-insensitive). If any model name is invalid, inform the user which value is invalid and re-ask (max 3 retries, then apply `balanced` as default). Show parsed result and ask for confirmation before proceeding.
+     **If "Other" selected:** Parse custom format `executor:<model>,advisor:<model>,evaluator:<model>` (or a bare preset name — validated against the preset table: `default` / `all-opus` / `frontier` / `balanced` / `economy`). For the role form, validate each model name — only `fable`, `opus`, `sonnet`, `haiku` are allowed (case-insensitive). If any model name is invalid, inform the user which value is invalid and re-ask (max 3 retries, then apply `balanced` as default). Show parsed result and ask for confirmation before proceeding.
 
      **Model config is set once at session start and cannot be changed mid-session.**
 
-     Store result as `model_config` object: `{ "preset": "<name>", "executor": "<model|null>", "advisor": "<model|null>" }`. For `default` preset, store `{ "preset": "default" }`.
+     Store result as `model_config` object: `{ "preset": "<name>", "executor": "<model|null>", "advisor": "<model|null>", "evaluator": "<model|null>" }`. For `default` preset, store `{ "preset": "default" }`.
 
 7. **Write `.harness/state.json`** with the following fields:
    - `task` — the user's task description string
@@ -647,9 +649,9 @@ If user asks for status, print status in the standard format defined above.
 
 ## Sub-command: digest
 
-`/spec digest <path> [--artifact]` — read-only fast-comprehension briefing of an EXISTING document (a spec, design doc, or any `.md`/`.txt`/`.markdown`). No state.json, no git branch, no Q&A, no sub-agents (orchestrator-inline), nothing written to disk.
+`/spec digest <path> [--artifact]` — read-only fast-comprehension briefing of an EXISTING document (a spec, design doc, or any `.md`/`.txt`/`.markdown`). No state.json, no git branch, no Q&A, no sub-agents (orchestrator-inline). Nothing is written to the repository — `--artifact` writes its page file to the session scratchpad only, never into the repo.
 
-1. **Validate `<path>`:** must exist and have a text extension (`.md`, `.txt`, `.markdown`). If the file exceeds 5000 lines, ask via AskUserQuestion (in `user_lang`): "Proceed" (headings + sampled key sections) / "Abort".
+1. **Validate `<path>`:** must exist and have a text extension (`.md`, `.txt`, `.markdown`). If the file exceeds 5000 lines, ask via AskUserQuestion (in `user_lang`): "Proceed (sampled)" / "Abort". Sampled mode is deterministic: read ALL headings; the first 40 lines of every `##` section; and, in full, any section whose heading matches goal/decision/risk/constraint keywords (cap 400 lines each); hard cap 3000 lines total, earlier sections win. The briefing MUST state prominently that sampled mode was used.
 2. **Read and produce the 3-layer briefing (all in `user_lang`):**
    - **Layer 1 — 30 seconds:** ≤5 bullets — what this is, why it exists, the one decision that matters most, the biggest risk, current status if stated.
    - **Layer 2 — 5 minutes:** decision table (options / chosen / why), invariants & constraints, risks, open questions/TBDs, and a reading order into the source (section names + `path:line` anchors).
@@ -724,7 +726,7 @@ Preset table + rules: see `templates/_shared/model_config.md`.
 
 Role-map: Requirements Analyst / User Scenario Analyst / Risk Auditor / Tech Constraint Analyst (and the Synthesis phase) → advisor; Critic → evaluator (judgment role — pre-8.7 presets keep identical advisor/evaluator cells, so only `frontier` differentiates).
 
-**Applying model config:** pass the resolved advisor model once per segment run as `args.models` (`{ advisor: <model or null> }`; null = inherit parent model, i.e. the `default` preset) — the segment scripts apply it per agent. Sub-agents must NOT directly access state.json to read model_config — the orchestrator passes the resolved value at segment launch.
+**Applying model config:** pass the resolved models once per segment run as `args.models` (Plan/Re-synthesis segments: `{ advisor }`; Eval segment: `{ advisor, evaluator }` — the Critic reads `evaluator`, falling back to `advisor` for stale args; null = inherit parent model, i.e. the `default` preset) — the segment scripts apply them per agent. Sub-agents must NOT directly access state.json to read model_config — the orchestrator passes the resolved value at segment launch.
 
 ## User Interaction Rules
 

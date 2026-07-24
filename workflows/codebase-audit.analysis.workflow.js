@@ -25,7 +25,7 @@ export const meta = {
 // contract — keep 1:1 with skills/codebase-audit/SKILL.md Step 3-W WORKFLOW dispatch (a
 // field missing on either side silently renders as ''):
 //   { mode: 'deep'|'thorough', projectPath, scope, userLang, sharedContext,
-//     incrementalContext, models: {executor, advisor} }
+//     incrementalContext, models: {executor, advisor, evaluator} }
 const A = typeof args === 'string' ? JSON.parse(args) : (args || {})
 const LANG = A.userLang || 'the language of the audit request'
 const MODELS = A.models || {}

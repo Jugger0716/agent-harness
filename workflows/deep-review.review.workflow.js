@@ -4,7 +4,7 @@
 // severity-resolved FindingSet. Returns { findingSet, stats }.
 // NO human gates here — the confirmation gate (before this segment) and the
 // --comment / --fix gates (after report generation) are rendered by the orchestrator
-// (skills/deep-review/SKILL.md). The ORCHESTRATOR writes review_report.md from the
+// (skills/deep-review/SKILL.md). The ORCHESTRATOR writes the round report (review_report.md / review_round<N>.md) from the
 // returned FindingSet; this segment is read-only and writes no files.
 //
 // Engine shape (per docs/superpowers/specs/2026-06-05-ultracode-phase1-engine-spike.md):
@@ -25,7 +25,7 @@ export const meta = {
 // contract — keep 1:1 with skills/deep-review/SKILL.md Step 4 WORKFLOW dispatch (a field
 // missing on either side silently renders as ''):
 //   { mode: 'deep'|'thorough', diffContent, fileList, userLang,
-//     models: { executor, advisor } }
+//     models: { executor, advisor, evaluator } }
 const A = typeof args === 'string' ? JSON.parse(args) : (args || {})
 const LANG = A.userLang || 'the language of the review request'
 const MODELS = A.models || {}
@@ -657,7 +657,7 @@ if (!merged.filesReviewed || merged.filesReviewed.length < fileUnion.size) {
 log(`Synthesize: ${merged.findings.length} findings (c=${merged.counts.critical} M=${merged.counts.major} m=${merged.counts.minor} s=${merged.counts.suggestion}), ${merged.filesReviewed.length} files`)
 
 // FindingSet is schema-validated -> NO file re-reads, NO table parsing. The
-// orchestrator writes review_report.md from this object, then renders the Assessment
+// orchestrator writes the round report (review_report.md / review_round<N>.md) from this object, then renders the Assessment
 // and the optional --comment / --fix gates.
 return {
   findingSet: merged,
