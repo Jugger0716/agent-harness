@@ -104,6 +104,11 @@ Phase labels (in roughly execution order):
 
 ## Session Recovery
 
+**digest carve-out:** if the argument immediately after `/spec` is `digest`, SKIP Session
+Recovery entirely and jump straight to `## Sub-command: digest` — a read-only sub-command must
+neither resume nor disturb an in-progress spec session (its state stays untouched for the next
+real /spec invocation).
+
 Before starting a new task, check if `.harness/state.json` already exists **and** `state.json.skill` equals `"spec"`:
 
 1. If it exists and matches, print status in the standard format (including Model line from `model_config` if deep mode), prefixed with `[harness] Previous spec session detected.`
@@ -209,12 +214,12 @@ When the user provides a task description (via $ARGUMENTS or in conversation), e
        options:
          - label: "default" / description: "Inherit parent model, no changes"
          - label: "frontier" / description: "Sonnet executor + Opus advisor + Fable evaluator (top-model judgment)"
-         - label: "balanced (Recommended)" / description: "Sonnet executor + Opus advisor (cost-efficient)"
-         - label: "economy" / description: "Haiku executor + Sonnet advisor (max savings)"
+         - label: "balanced (Recommended)" / description: "Sonnet executor + Opus advisor/evaluator (cost-efficient)"
+         - label: "economy" / description: "Haiku executor + Sonnet advisor/evaluator (max savings)"
 
      **If "Other" selected:** Parse custom format `executor:<model>,advisor:<model>,evaluator:<model>` (or a bare preset name — validated against the preset table: `default` / `all-opus` / `frontier` / `balanced` / `economy`). For the role form, validate each model name — only `fable`, `opus`, `sonnet`, `haiku` are allowed (case-insensitive). If any model name is invalid, inform the user which value is invalid and re-ask (max 3 retries, then apply `balanced` as default). Show parsed result and ask for confirmation before proceeding.
 
-     **Model config is set once at session start and cannot be changed mid-session.**
+     **Model config is set once at session start and cannot be changed mid-session (sole exception: the automatic model fallback chain in `templates/_shared/model_config.md`, which may downgrade a cell on a sunset model id).**
 
      Store result as `model_config` object: `{ "preset": "<name>", "executor": "<model|null>", "advisor": "<model|null>", "evaluator": "<model|null>" }`. For `default` preset, store `{ "preset": "default" }`.
 
@@ -651,7 +656,7 @@ If user asks for status, print status in the standard format defined above.
 
 `/spec digest <path> [--artifact]` — read-only fast-comprehension briefing of an EXISTING document (a spec, design doc, or any `.md`/`.txt`/`.markdown`). No state.json, no git branch, no Q&A, no sub-agents (orchestrator-inline). Nothing is written to the repository — `--artifact` writes its page file to the session scratchpad only, never into the repo.
 
-1. **Validate `<path>`:** must exist and have a text extension (`.md`, `.txt`, `.markdown`). If the file exceeds 5000 lines, ask via AskUserQuestion (in `user_lang`): "Proceed (sampled)" / "Abort". Sampled mode is deterministic: read ALL headings; the first 40 lines of every `##` section; and, in full, any section whose heading matches goal/decision/risk/constraint keywords (cap 400 lines each); hard cap 3000 lines total, earlier sections win. The briefing MUST state prominently that sampled mode was used.
+1. **Validate `<path>`:** must exist and have a text extension (`.md`, `.txt`, `.markdown`). If the file exceeds 5000 lines, ask via AskUserQuestion (in `user_lang`): "Proceed (sampled)" / "Abort". Sampled mode is deterministic: read ALL headings; the first 40 lines of every top-level section (`##`, or the shallowest heading level the document actually uses); and, in full, any section whose heading contains — case-insensitive — one of `goal/목표`, `decision/결정`, `risk/리스크/위험`, `constraint/제약` or their `user_lang` equivalents (cap 400 lines each); hard cap 3000 lines total, earlier sections win. The briefing MUST state prominently that sampled mode was used.
 2. **Read and produce the 3-layer briefing (all in `user_lang`):**
    - **Layer 1 — 30 seconds:** ≤5 bullets — what this is, why it exists, the one decision that matters most, the biggest risk, current status if stated.
    - **Layer 2 — 5 minutes:** decision table (options / chosen / why), invariants & constraints, risks, open questions/TBDs, and a reading order into the source (section names + `path:line` anchors).

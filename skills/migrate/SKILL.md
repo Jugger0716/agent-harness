@@ -206,7 +206,7 @@ When the user provides a migration target (via $ARGUMENTS or in conversation), e
 
    **If "Other" selected:** Parse custom format `executor:<model>,advisor:<model>,evaluator:<model>` (or a bare preset name — validated against the preset table: `default` / `all-opus` / `frontier` / `balanced` / `economy`). For the role form, validate each model name — only `fable`, `opus`, `sonnet`, `haiku` are allowed (case-insensitive). If any model name is invalid, inform the user which value is invalid and re-ask for input (max 3 retries, then apply `balanced` as default). If parsing succeeds but is partial, fill missing roles with the `balanced` defaults (executor=sonnet, advisor=opus, evaluator=opus). Show the parsed result to the user and ask for confirmation before proceeding.
 
-   **Model config is set once at session start and cannot be changed mid-session.** To change, restart the session.
+   **Model config is set once at session start and cannot be changed mid-session (sole exception: the automatic model fallback chain in `templates/_shared/model_config.md`, which may downgrade a cell on a sunset model id).** To change, restart the session.
 
    Store result as `model_config` object: `{ "preset": "<name>", "executor": "<model|null>", "advisor": "<model|null>", "evaluator": "<model|null>" }`. For the `default` preset, store `{ "preset": "default" }`.
 

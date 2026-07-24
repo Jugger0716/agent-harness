@@ -10,8 +10,9 @@ contracts for that path plus session continuity):
   judgment agents (cross-verification, critic) remapped to the evaluator role (no-op for pre-8.7
   presets). See `templates/_shared/model_config.md`.
 - **Project defaults** — `agent-harness-defaults: path=..., model-config=..., verifier-model=...`
-  line in the project CLAUDE.md as a standing opt-in (Mode Gate §Ambiguity Prompt step 4.5); kills
-  the per-session `/effort` + model-picker ritual. See `templates/_shared/project_defaults.md`.
+  line in a defaults source — `.claude/settings.local.json` env (recommended) / project CLAUDE.md /
+  `~/.claude/CLAUDE.md`, first wins wholesale — as a standing opt-in (Mode Gate §Ambiguity Prompt
+  step 4.5); kills the per-session `/effort` + model-picker ritual. See `templates/_shared/project_defaults.md`.
 - **Ad-hoc Dispatch Contract** — output-language + model-routing rules for non-template sub-agents
   and ad-hoc Workflow scripts; root-cause fix for the v8.6.0 English leak. See
   `templates/_shared/adhoc_dispatch.md`.

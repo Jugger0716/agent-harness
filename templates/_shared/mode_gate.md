@@ -14,7 +14,7 @@ At Setup, resolve the execution path:
    - the session opts in — ultracode mode is on, OR the user passed an explicit
      `--mode standard/multi/comprehensive/thorough/deep` (any mode the skill maps to the
      engine path; pilot precedent: /harness routes `standard` and `multi` to the engine),
-     OR a project-defaults source declares `agent-harness-defaults: path=workflow` (a standing
+     OR the resolved project-defaults line declares `agent-harness-defaults: path=workflow` (a standing
      per-project opt-in — sources & search order: `templates/_shared/project_defaults.md`),
      OR the skill's own instructions direct the model to call the `Workflow` tool
      (a documented valid opt-in).

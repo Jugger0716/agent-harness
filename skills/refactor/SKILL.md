@@ -168,7 +168,7 @@ When the user provides a refactoring target (via $ARGUMENTS or in conversation),
 
    **If "Other" selected:** Parse custom format `executor:<model>,advisor:<model>,evaluator:<model>` (or a bare preset name — validated against the preset table: `default` / `all-opus` / `frontier` / `balanced` / `economy`). For the role form, validate each model name — only `fable`, `opus`, `sonnet`, `haiku` are allowed (case-insensitive). If any model name is invalid, inform the user which value is invalid and re-ask for input (max 3 retries, then apply `balanced` as default). If parsing succeeds but is partial, fill missing roles with the `balanced` defaults (executor=sonnet, advisor=opus, evaluator=opus). Show the parsed result to the user and ask for confirmation before proceeding.
 
-   **Model config is set once at session start and cannot be changed mid-session.** To change, restart the session.
+   **Model config is set once at session start and cannot be changed mid-session (sole exception: the automatic model fallback chain in `templates/_shared/model_config.md`, which may downgrade a cell on a sunset model id).** To change, restart the session.
 
    **Verifier model** (for consistency with /harness): `model_config.verifier = cli_flags.verifier_model ?? project_default.verifier_model ?? "haiku"` (CLI flag > `agent-harness-defaults:` project default > `haiku`). Parse `--verifier-model <haiku|sonnet|opus>` from CLI if provided; reject other values. Note: `/refactor` does not currently dispatch a Verify sub-agent directly (test regression uses `test_cmd` directly), so this field is stored for future extension.
 
@@ -263,7 +263,8 @@ Read `mode` and `path_resolved` from state.json and branch accordingly.
        testCmd: <test_cmd or "">, baselineTestResults: <baseline_test_results>,
        mode: <"multi"|"comprehensive">,
        models: { executor: <model_config.executor or null>,
-                 advisor: <model_config.advisor or null> }
+                 advisor: <model_config.advisor or null>,
+                 evaluator: <model_config.evaluator or null> }
      }
    }
    ```
@@ -505,7 +506,7 @@ If user asks for status, print status in the standard format defined above.
 
 Preset table + rules: see `templates/_shared/model_config.md`.
 
-Role-map: Structural / Risk / Feasibility Analyst -> executor; Cross-Critique / Safety Advisor -> advisor; Evaluator -> evaluator.
+Role-map: Structural / Risk / Feasibility Analyst -> executor; Safety Advisor -> advisor; Cross-Critique -> evaluator (judgment role — pre-8.7 presets keep identical advisor/evaluator cells, so only `frontier` differentiates); Evaluator -> evaluator.
 
 **WORKFLOW path:** pass the resolved models once per segment run as `args.models` — Plan segment `{ executor, advisor }`, Eval segment `{ evaluator }` (null = inherit parent model, i.e. the `default` preset) — the segment scripts apply them per agent. The Safety Advisor and Auto-fix Proposer are always dispatched inline by the orchestrator (Step 4 is never scripted) and take their `model` parameter at launch as before. Sub-agents must NOT access state.json for model config.
 
