@@ -324,9 +324,10 @@ On the WORKFLOW path the same machine applies; `harness.eval` covers verifying�
    Remaining fields (mode, model_config, etc.) are `null` until Step 1.11 final write.
 
 8. **Create git branch (if has_git):** `git checkout -b harness/<slug>`. Skip if `has_git == false`.
-9. **Mode Gate resolution:** apply §Mode Gate INCLUDING **§Ambiguity Prompt** (single source: `templates/_shared/mode_gate.md`). The mode roundtrip is removed EXCEPT this prompt, which fires only when NO opt-in is present (no `--mode`, ultracode OFF, `Workflow` tool available, `has_git == true`, interactive session, no `--no-prompt`). Skill modes: single(inline) / standard(workflow) / multi(workflow). ultracode-target (step 4 default): multi. Store `mode` and `path_resolved` in state.json. Then emit **§Path Transparency** — show `Path : <inline | workflow>  (<reason>)`. If a workflow-tier `--mode` was requested but the gate resolved to inline (Workflow tool unavailable or `has_git == false`), notify (in `user_lang`): "<tier> mode requires the native Workflow engine and git — proceeding on the inline path."
+9. **Mode Gate resolution:** apply §Mode Gate INCLUDING **§Ambiguity Prompt** (single source: `templates/_shared/mode_gate.md`). The mode roundtrip is removed EXCEPT this prompt, which fires only when NO opt-in is present (no `--mode`, ultracode OFF, no `agent-harness-defaults:` project default, `Workflow` tool available, `has_git == true`, interactive session, no `--no-prompt`). Skill modes: single(inline) / standard(workflow) / multi(workflow). ultracode-target (step 4 default): multi. Store `mode` and `path_resolved` in state.json. Then emit **§Path Transparency** — show `Path : <inline | workflow>  (<reason>)`. If a workflow-tier `--mode` was requested but the gate resolved to inline (Workflow tool unavailable or `has_git == false`), notify (in `user_lang`): "<tier> mode requires the native Workflow engine and git — proceeding on the inline path."
 <!-- SYNC-WITH: templates/_shared/mode_gate.md §Ambiguity Prompt -->
-10. **Model configuration:** If `--model-config` provided, use it. Otherwise, ask via AskUserQuestion (in `user_lang`):
+10. **Model configuration:** If `--model-config` provided, use it. Otherwise, if the project CLAUDE.md declares `agent-harness-defaults:` with `model-config=<preset>` (single source: `templates/_shared/project_defaults.md`), use it silently and echo `(project default)` next to the Model line in the Setup Summary. Otherwise, ask via AskUserQuestion (in `user_lang`):
+<!-- SYNC-WITH: templates/_shared/project_defaults.md §agent-harness-defaults -->
     - header: "Model"
     - question: "Select model configuration for sub-agents:"
     - options:
@@ -340,7 +341,7 @@ On the WORKFLOW path the same machine applies; `harness.eval` covers verifying�
     Store as `model_config`: `{ "preset": "<name>", "executor": "<model|null>", "advisor": "<model|null>", "evaluator": "<model|null>", "verifier": "<resolved-verifier>" }`.
     For `default` preset: `{ "preset": "default", "verifier": "<resolved-verifier>" }`.
 
-10.5. **Verifier model determination:** `model_config.verifier = cli_flags.verifier_model ?? "haiku"` (CLI flag takes priority; preset default is always `haiku`). Store resolved value in `model_config.verifier`.
+10.5. **Verifier model determination:** `model_config.verifier = cli_flags.verifier_model ?? project_default.verifier_model ?? "haiku"` (CLI flag > `agent-harness-defaults:` project default > `haiku`; preset default is always `haiku`). Store resolved value in `model_config.verifier`.
 
     **docs_path usage rule**: Always read `docs_path` directly from state.json. Do NOT recompute from `cli_flags.output_dir`. `cli_flags` is for audit/record purposes only. Safety Guard in Session Recovery also uses `docs_path` directly (not recomputed).
 

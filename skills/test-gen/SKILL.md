@@ -66,7 +66,7 @@ Apply the shared opt-in convention in `templates/_shared/mode_gate.md`. /test-ge
 - **`has_git` note:** the propose segment is read-only (git-independent), but the orchestrator's inline mutation run needs a clean revert — with git it reverts via `git checkout -- <source>` and verifies with `git diff --quiet -- <source>`; without git it uses an inline backup-restore. The gate forces inline when `has_git == false` because the multi path's only added value (fan-out) does not change the orchestrator-inline run that follows.
 - **Graceful fallback:** if a segment errors, print `[test-gen] ⚠ Workflow engine unavailable — falling back to the inline single path.` (in `user_lang`), set `mode → single`, `path_resolved → inline`, and continue inline. Never error out.
 - Record `mode` + `path_resolved` in state.json (`mode` is kept for backward-compat with pre-Workflow sessions).
-- **§Ambiguity Prompt.** Apply `templates/_shared/mode_gate.md §Ambiguity Prompt`: when NO opt-in is present (no `--mode`, ultracode OFF, `Workflow` tool available, `has_git == true`, interactive, no `--no-prompt`), ask inline-vs-workflow via AskUserQuestion. Skill modes: single(inline) / multi(workflow); ultracode-target: multi (Recommended default = inline when asked). Then emit **§Path Transparency** — show `Path : <inline | workflow>  (<reason>)`. If `--mode multi` was requested but the engine/git is unavailable, notify and proceed inline. Resume reuses stored `mode`/`path_resolved` — never re-fire the prompt.
+- **§Ambiguity Prompt.** Apply `templates/_shared/mode_gate.md §Ambiguity Prompt`: when NO opt-in is present (no `--mode`, ultracode OFF, no `agent-harness-defaults:` project default, `Workflow` tool available, `has_git == true`, interactive, no `--no-prompt`), ask inline-vs-workflow via AskUserQuestion. Skill modes: single(inline) / multi(workflow); ultracode-target: multi (Recommended default = inline when asked). Then emit **§Path Transparency** — show `Path : <inline | workflow>  (<reason>)`. If `--mode multi` was requested but the engine/git is unavailable, notify and proceed inline. Resume reuses stored `mode`/`path_resolved` — never re-fire the prompt.
 <!-- SYNC-WITH: templates/_shared/mode_gate.md §Ambiguity Prompt -->
 
 ## Argument Parsing
@@ -151,6 +151,8 @@ If `.harness/state.json` does not exist (or `state.json.skill` is not `"test-gen
 6. **Create directories:** `.harness/test-gen/`, `docs/harness/<slug>/`
 7. **Create git branch (if has_git):** `git checkout -b harness/test-gen-<slug>`
 8. **Model configuration selection:**
+   Resolution: `--model-config` flag > project CLAUDE.md `agent-harness-defaults:` `model-config` value (single source: `templates/_shared/project_defaults.md`; echo `(project default)` in the setup output) > `default` preset.
+<!-- SYNC-WITH: templates/_shared/project_defaults.md §agent-harness-defaults -->
    Preset table + rules: see `templates/_shared/model_config.md`. Role-map (see §Model Selection): Coverage Analyst → executor; mutation skeptic → evaluator. (Test generation is orchestrator-inline; the inline mutation run is orchestrator-owned, so its model role is moot.)
 
 9. **Write `.harness/state.json`** with fields:

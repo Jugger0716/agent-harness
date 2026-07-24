@@ -14,6 +14,8 @@ At Setup, resolve the execution path:
    - the session opts in — ultracode mode is on, OR the user passed an explicit
      `--mode standard/multi/comprehensive/thorough/deep` (any mode the skill maps to the
      engine path; pilot precedent: /harness routes `standard` and `multi` to the engine),
+     OR the project CLAUDE.md declares `agent-harness-defaults: path=workflow` (a standing
+     per-project opt-in — single source: `templates/_shared/project_defaults.md`),
      OR the skill's own instructions direct the model to call the `Workflow` tool
      (a documented valid opt-in).
 3. **Graceful fallback.** If the `Workflow` tool is unavailable (or a Workflow call errors),
@@ -45,10 +47,15 @@ impossible request degrades correctly.
 4. **ultracode ON** (no `--mode`) → **workflow** at the skill's *current ultracode-target* tier
    (the mode its §Mode Gate table already maps ultracode to — NOT necessarily the deepest).
    No prompt — ultracode IS the opt-in. Emit §Path Transparency with reason "ultracode ON".
+4.5. **Project default** (no `--mode`, ultracode OFF) — the project root CLAUDE.md declares
+   `agent-harness-defaults:` with `path=workflow` → **workflow** at the skill's ultracode-target
+   tier (same tier rule as step 4); `path=inline` → **inline**. No prompt — the defaults line IS
+   a standing opt-in. Emit §Path Transparency with reason "project default (CLAUDE.md)".
+   Single source: `templates/_shared/project_defaults.md`.
 5. `--no-prompt` flag **OR** the session cannot present an interactive prompt (headless / cron /
    subagent) → **inline** (existing auto-resolution). No prompt. **Default bias: auto-resolve
    UNLESS an interactive session is positively confirmed** — never block an automated run.
-6. else (no `--mode` **AND** ultracode OFF **AND** engine available **AND** interactive) → **ASK**
+6. else (no `--mode` **AND** ultracode OFF **AND** no project default **AND** engine available **AND** interactive) → **ASK**
    via AskUserQuestion (in `user_lang`):
    - header: "Path"
    - question: "No mode specified — choose how to run:"
@@ -57,7 +64,8 @@ impossible request degrades correctly.
      (deep-review, codebase-audit, migrate, refactor); otherwise to the shallowest (inline) mode.
    On answer: set `mode` + `path_resolved`, then emit §Path Transparency.
 
-This does NOT reintroduce effort gating. Opt-in signals (ultracode, `--mode`) still resolve
+This does NOT reintroduce effort gating. Opt-in signals (ultracode, `--mode`, the project
+defaults line) still resolve
 silently; the prompt fires only when NO opt-in is present. Resume never re-fires this prompt —
 it reuses the stored `{ mode, path_resolved }` (only the workflow→inline downgrade may change it).
 
@@ -73,6 +81,7 @@ In EVERY resolution branch, the Setup Summary / status format MUST show:
 `<reason>` states WHY, and for inline-by-default also HOW to change it. Canonical reasons:
   - `--mode <m>`                          → "--mode <m>"
   - ultracode ON (step 4)                 → "ultracode ON"
+  - project default (step 4.5)            → "project default (CLAUDE.md)"
   - engine/git unavailable (step 2)       → "Workflow engine unavailable"
   - no opt-in, resolved inline (step 5)   → "no opt-in — re-run with --mode <wf-tier> for workflow"
   - chosen via §Ambiguity Prompt (step 6) → "you chose <mode>"
