@@ -174,6 +174,8 @@ Inspired by Anthropic's [Advisor Strategy](https://claude.com/blog/the-advisor-s
 
 > **Verifier defaults to Haiku** — Layer 1 Mechanical Verification only executes commands and parses exit codes. Override with `--verifier-model sonnet|opus` for sensitive mechanical verification (e.g., concurrency failures, complex test diagnostics). Not recommended for routine use — Haiku is sufficient in the vast majority of cases.
 
+> **Deprecation safety:** if a preset cell's model is no longer available (model sunset), the dispatch downgrades step-by-step along `fable → opus → sonnet → haiku → parent inherit` with a once-per-session warning and a visible echo of the actually-used model — presets (and persistent `model-config` project defaults) keep working across model generations.
+
 **Role mapping across all skills:**
 - **Executor**: bulk work — analysis, code generation, proposals (cheaper model OK)
 - **Advisor**: high-level judgment — plan review, safety checks (quality model needed)
