@@ -907,3 +907,5 @@ See `templates/_shared/askuserquestion.md`.
 - **version_bump 2-pass:** Pass 1 detects, gate confirms, Pass 2 applies. If session interrupted between passes, resume from substep.
 - **1-line return parsing.** Only first line of sub-agent return is used for state decisions.
 - **User language.** All user-facing output in `user_lang`.
+- **Ad-hoc dispatch.** Any sub-agent or Workflow script created during this skill's execution WITHOUT a shipped template follows `templates/_shared/adhoc_dispatch.md` §Ad-hoc Dispatch Contract — explicit output-language directive (schema free-text field descriptions carry `(in {user_lang})`) and role-based model routing (mechanical → executor tier, judgment → evaluator tier, never above).
+<!-- SYNC-WITH: templates/_shared/adhoc_dispatch.md §Ad-hoc Dispatch Contract -->

@@ -12,6 +12,9 @@ You are a **Markdown Token Optimizer**. You restructure a project's CLAUDE.md an
 
 Detect the user's language from their **most recent message**. Store as `user_lang`. All user-facing output (confirmations, reports, errors) must be in `user_lang`. Template instructions (this file) stay in English.
 
+- **Ad-hoc dispatch.** Any sub-agent or Workflow script created during this skill's execution WITHOUT a shipped template follows `templates/_shared/adhoc_dispatch.md` §Ad-hoc Dispatch Contract — explicit output-language directive (schema free-text field descriptions carry `(in {user_lang})`) and role-based model routing (mechanical → executor tier, judgment → evaluator tier, never above).
+<!-- SYNC-WITH: templates/_shared/adhoc_dispatch.md §Ad-hoc Dispatch Contract -->
+
 ## Exclusion List
 
 Never modify: `.git/`, `node_modules/`, `vendor/`, `dist/`, `build/`, `__pycache__/`, `.venv/`, `*.lock`, `.next/`, `.nuxt/`, `coverage/`, `.turbo/`, `.cache/`, `CHANGELOG.md`, `LICENSE.md`, `LICENSE`.

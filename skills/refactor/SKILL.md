@@ -34,6 +34,8 @@ Apply the shared opt-in convention in `templates/_shared/mode_gate.md`. /refacto
 | `--mode multi` | multi | **workflow** |
 | `--mode comprehensive` (or `thorough`/`deep`) | comprehensive | **workflow** |
 | no `--mode` AND session is in ultracode mode | comprehensive | **workflow** |
+| no `--mode`, ultracode OFF, resolved project-defaults line has `path=workflow` | comprehensive | **workflow** (standing opt-in — §Ambiguity Prompt step 4.5) |
+| no `--mode`, ultracode OFF, resolved project-defaults line has `path=inline` | single | **inline** |
 | no `--mode`, no opt-in | single | **inline** (interactive + engine available → asks first, §Ambiguity Prompt) |
 
 - **Multi/comprehensive exist ONLY on the workflow path** — the engine's `parallel()` fan-out replaces the old hand-rolled 2/3-analyst dispatch prose (Steps 2-M/2-C). The inline path is the preserved single mode.
@@ -150,24 +152,25 @@ When the user provides a refactoring target (via $ARGUMENTS or in conversation),
          - label: "Abort" / description: "Halt refactoring until tests are available"
      If user selects "Abort": halt. If "Proceed": set `test_available` to false and continue (verification will rely on code review only).
 
-8. **Mode Gate resolution:** apply §Mode Gate INCLUDING **§Ambiguity Prompt** (single source: `templates/_shared/mode_gate.md`) — the mode roundtrip is removed EXCEPT this prompt, which fires only when NO opt-in is present (no `--mode`, ultracode OFF, `Workflow` tool available, `has_git == true`, interactive, no `--no-prompt`). Skill modes: single(inline) / multi(workflow) / comprehensive(workflow); ultracode-target: comprehensive. Store `mode` and `path_resolved` in state.json. Then emit **§Path Transparency** — show `Path : <inline | workflow>  (<reason>)`. Print the scope-aware advisory (< 3 files → single, 3-10 → multi, 10+ or architecture-level → comprehensive). If the user explicitly requested `--mode multi/comprehensive` but the gate resolved to inline (Workflow tool unavailable or `has_git == false`), notify (in `user_lang`): "multi/comprehensive mode requires the native Workflow engine and git — proceeding on the inline single path."
+8. **Mode Gate resolution:** apply §Mode Gate INCLUDING **§Ambiguity Prompt** (single source: `templates/_shared/mode_gate.md`) — the mode roundtrip is removed EXCEPT this prompt, which fires only when NO opt-in is present (no `--mode`, ultracode OFF, no project-default `path` (`agent-harness-defaults:` line), `Workflow` tool available, `has_git == true`, interactive, no `--no-prompt`). Skill modes: single(inline) / multi(workflow) / comprehensive(workflow); ultracode-target: comprehensive. Store `mode` and `path_resolved` in state.json. Then emit **§Path Transparency** — show `Path : <inline | workflow>  (<reason>)`. Print the scope-aware advisory (< 3 files → single, 3-10 → multi, 10+ or architecture-level → comprehensive). If the user explicitly requested `--mode multi/comprehensive` but the gate resolved to inline (Workflow tool unavailable or `has_git == false`), notify (in `user_lang`): "multi/comprehensive mode requires the native Workflow engine and git — proceeding on the inline single path."
 <!-- SYNC-WITH: templates/_shared/mode_gate.md §Ambiguity Prompt -->
 
 9. **Model configuration selection:**
-   If `--model-config <preset>` was passed, use it directly. Otherwise, use AskUserQuestion to ask the user (in `user_lang`):
+   If `--model-config <preset>` was passed, use it directly. Otherwise, if the resolved project-defaults line (first source wins wholesale: settings.local.json env → project CLAUDE.md → user CLAUDE.md; see `templates/_shared/project_defaults.md`) contains `model-config=<preset>`, use it silently and echo `(project default)` in the Setup Summary. Otherwise, use AskUserQuestion to ask the user (in `user_lang`):
+<!-- SYNC-WITH: templates/_shared/project_defaults.md §agent-harness-defaults -->
      header: "Model"
      question: "Select model configuration for sub-agents:"
      options:
        - label: "default" / description: "Inherit parent model, no changes"
-       - label: "all-opus" / description: "All sub-agents use Opus (highest quality)"
+       - label: "frontier" / description: "Sonnet executor + Opus advisor + Fable evaluator (top-model judgment)"
        - label: "balanced (Recommended)" / description: "Sonnet executor + Opus advisor/evaluator (cost-efficient)"
        - label: "economy" / description: "Haiku executor + Sonnet advisor/evaluator (max savings)"
 
-   **If "Other" selected:** Parse custom format `executor:<model>,advisor:<model>,evaluator:<model>`. Validate each model name — only `opus`, `sonnet`, `haiku` are allowed (case-insensitive). If any model name is invalid, inform the user which value is invalid and re-ask for input (max 3 retries, then apply `balanced` as default). If parsing succeeds but is partial, fill missing roles with the `balanced` defaults (executor=sonnet, advisor=opus, evaluator=opus). Show the parsed result to the user and ask for confirmation before proceeding.
+   **If "Other" selected:** Parse custom format `executor:<model>,advisor:<model>,evaluator:<model>` (or a bare preset name — validated against the preset table: `default` / `all-opus` / `frontier` / `balanced` / `economy`). For the role form, validate each model name — only `fable`, `opus`, `sonnet`, `haiku` are allowed (case-insensitive). If any model name is invalid, inform the user which value is invalid and re-ask for input (max 3 retries, then apply `balanced` as default). If parsing succeeds but is partial, fill missing roles with the `balanced` defaults (executor=sonnet, advisor=opus, evaluator=opus). Show the parsed result to the user and ask for confirmation before proceeding.
 
-   **Model config is set once at session start and cannot be changed mid-session.** To change, restart the session.
+   **Model config is set once at session start and cannot be changed mid-session (sole exception: the automatic model fallback chain in `templates/_shared/model_config.md`, which may downgrade a cell on a sunset model id).** To change, restart the session.
 
-   **Verifier model** (for consistency with /harness): `model_config.verifier = cli_flags.verifier_model ?? "haiku"`. Parse `--verifier-model <haiku|sonnet|opus>` from CLI if provided; reject other values. Note: `/refactor` does not currently dispatch a Verify sub-agent directly (test regression uses `test_cmd` directly), so this field is stored for future extension.
+   **Verifier model** (for consistency with /harness): `model_config.verifier = cli_flags.verifier_model ?? project_default.verifier_model ?? "haiku"` (CLI flag > `agent-harness-defaults:` project default > `haiku`). Parse `--verifier-model <haiku|sonnet|opus>` from CLI if provided; reject other values. Note: `/refactor` does not currently dispatch a Verify sub-agent directly (test regression uses `test_cmd` directly), so this field is stored for future extension.
 
    Store result as `model_config` object: `{ "preset": "<name>", "executor": "<model|null>", "advisor": "<model|null>", "evaluator": "<model|null>", "verifier": "<haiku|sonnet|opus>" }`. For the `default` preset, store `{ "preset": "default", "verifier": "<resolved>" }`.
 
@@ -260,7 +263,8 @@ Read `mode` and `path_resolved` from state.json and branch accordingly.
        testCmd: <test_cmd or "">, baselineTestResults: <baseline_test_results>,
        mode: <"multi"|"comprehensive">,
        models: { executor: <model_config.executor or null>,
-                 advisor: <model_config.advisor or null> }
+                 advisor: <model_config.advisor or null>,
+                 evaluator: <model_config.evaluator or null> }
      }
    }
    ```
@@ -502,7 +506,7 @@ If user asks for status, print status in the standard format defined above.
 
 Preset table + rules: see `templates/_shared/model_config.md`.
 
-Role-map: Structural / Risk / Feasibility Analyst -> executor; Cross-Critique / Safety Advisor -> advisor; Evaluator -> evaluator.
+Role-map: Structural / Risk / Feasibility Analyst -> executor; Safety Advisor -> advisor; Cross-Critique -> evaluator (judgment role — pre-8.7 presets keep identical advisor/evaluator cells, so only `frontier` differentiates); Evaluator -> evaluator.
 
 **WORKFLOW path:** pass the resolved models once per segment run as `args.models` — Plan segment `{ executor, advisor }`, Eval segment `{ evaluator }` (null = inherit parent model, i.e. the `default` preset) — the segment scripts apply them per agent. The Safety Advisor and Auto-fix Proposer are always dispatched inline by the orchestrator (Step 4 is never scripted) and take their `model` parameter at launch as before. Sub-agents must NOT access state.json for model config.
 
@@ -523,8 +527,10 @@ See `templates/_shared/askuserquestion.md`.
 - **Safety Advisor reviews before execution, not after.** Advisory input happens before each step is applied.
 - **Use whatever skills are available.** Search by capability keyword, not plugin name. If no match, proceed without it.
 - **User language.** All user-facing output must be in `user_lang`. Re-detect on every user message. WORKFLOW path: pass `userLang` in `args` — the segment scripts build schema descriptions from it, which forces sub-agent free-text output language; ids/enums stay English raw.
+- **Ad-hoc dispatch.** Any sub-agent or Workflow script created during this skill's execution WITHOUT a shipped template follows `templates/_shared/adhoc_dispatch.md` §Ad-hoc Dispatch Contract — explicit output-language directive (schema free-text field descriptions carry `(in {user_lang})`) and role-based model routing (mechanical → executor tier, judgment → evaluator tier, never above).
+<!-- SYNC-WITH: templates/_shared/adhoc_dispatch.md §Ad-hoc Dispatch Contract -->
 - **Intermediate outputs are ephemeral.** Only final artifacts (refactor_plan.md, changes.md, qa_report.md) are preserved in `docs/`. On the workflow path there are no intermediate analysis/critique files at all — segments return schema-validated objects.
-- **Mode Gate + §Ambiguity Prompt.** The mode roundtrip is removed EXCEPT §Ambiguity Prompt (fires only when opt-in absent: no `--mode`, ultracode OFF, engine available, interactive, no `--no-prompt`). Modes: single(inline) / multi(workflow) / comprehensive(workflow); ultracode-target: comprehensive. The scope advisory stays print-only. Store `mode` + `path_resolved` in state.json; emit §Path Transparency. On session recovery, re-resolve WITHOUT re-firing §Ambiguity Prompt (reuse stored mode/path_resolved; only workflow→inline downgrade may change it).
+- **Mode Gate + §Ambiguity Prompt.** The mode roundtrip is removed EXCEPT §Ambiguity Prompt (fires only when opt-in absent: no `--mode`, ultracode OFF, no project-default `path` (`agent-harness-defaults:` line), engine available, interactive, no `--no-prompt`). Modes: single(inline) / multi(workflow) / comprehensive(workflow); ultracode-target: comprehensive. The scope advisory stays print-only. Store `mode` + `path_resolved` in state.json; emit §Path Transparency. On session recovery, re-resolve WITHOUT re-firing §Ambiguity Prompt (reuse stored mode/path_resolved; only workflow→inline downgrade may change it).
 <!-- SYNC-WITH: templates/_shared/mode_gate.md §Ambiguity Prompt -->
 - **Fan-out exists only on the workflow path.** Multi/comprehensive analysis runs as plugin-shipped segment scripts; without the engine or opt-in, the session runs single inline (with a notice on explicit requests).
 - **Execution is never scripted.** Step 4 (atomic apply + test-after-each + regression gates + Safety Advisor + auto-fix) stays in this orchestrator on every path.

@@ -45,6 +45,8 @@ Apply the shared opt-in convention in `templates/_shared/mode_gate.md`. /codebas
 | `--mode deep` | deep | **workflow** |
 | `--mode thorough` (or `comprehensive`/`multi`) | thorough | **workflow** |
 | no `--mode` AND session is in ultracode mode | thorough | **workflow** |
+| no `--mode`, ultracode OFF, resolved project-defaults line has `path=workflow` | thorough | **workflow** (standing opt-in — §Ambiguity Prompt step 4.5) |
+| no `--mode`, ultracode OFF, resolved project-defaults line has `path=inline` | quick | **inline** |
 | no `--mode`, no opt-in | quick | **inline** (an interactive session may still pick a deeper mode — see the Step 1.7 fallback) |
 
 - **deep/thorough exist ONLY on the workflow path** — the engine's `parallel()` fan-out replaces the old hand-rolled 2/3-analyst dispatch (Steps 3-D/3-T), the cross-critique dispatch, the `.harness/analysis_*.md` / `critique_*.md` intermediate files, and the file re-reads + merge. The inline path is the preserved quick mode (single-pass, no sub-agents).
@@ -99,7 +101,7 @@ When the user invokes `/codebase-audit`, execute this workflow:
 
 7. **Mode resolution (§Mode Gate).** Resolve `mode` + `path_resolved` per §Mode Gate (from `--mode` flags / ultracode opt-in / Workflow availability). Print the scope-aware advisory (< 30 → quick, 30–200 → deep, 200+/monorepo → thorough). Persist `{ mode, path_resolved }` to `.harness/model_config.json`.
 
-   - If `--mode` was provided, or the session is in ultracode mode, use the gate result and **skip the prompt below**.
+   - If `--mode` was provided, or the session is in ultracode mode, or the resolved project-defaults line (`agent-harness-defaults:`) contains a `path` value (first source wins wholesale; see `templates/_shared/project_defaults.md`), use the gate result and **skip the prompt below**.
    - If `--no-prompt` was passed, or the session is non-interactive (headless/cron/subagent), skip the prompt and use the gate default (per §Ambiguity Prompt step 5).
    - **After resolution (every branch),** emit §Path Transparency: append `(<reason>)` to the `Path` line (reasons per `templates/_shared/mode_gate.md §Path Transparency`).
    - **Boundary / explicit-override fallback (no `--mode`, no opt-in, interactive session only):** the gate defaults to quick; offer a one-time choice so an interactive user can opt into a deeper mode, using AskUserQuestion (in `user_lang`):
@@ -149,18 +151,19 @@ When the user invokes `/codebase-audit`, execute this workflow:
 10. **Model configuration selection (deep and thorough modes only):**
    If mode is `quick`, skip this step (no sub-agents used).
 
-   If `--model-config <preset>` was passed, use it directly. Otherwise, use AskUserQuestion to ask the user (in `user_lang`):
+   If `--model-config <preset>` was passed, use it directly. Otherwise, if the resolved project-defaults line (first source wins wholesale: settings.local.json env → project CLAUDE.md → user CLAUDE.md; see `templates/_shared/project_defaults.md`) contains `model-config=<preset>`, use it silently and echo `(project default)` in the Setup Summary. Otherwise, use AskUserQuestion to ask the user (in `user_lang`):
+<!-- SYNC-WITH: templates/_shared/project_defaults.md §agent-harness-defaults -->
      header: "Model"
      question: "Select model configuration for sub-agents:"
      options:
        - label: "default" / description: "Inherit parent model, no changes"
-       - label: "all-opus" / description: "All sub-agents use Opus (highest quality)"
+       - label: "frontier" / description: "Sonnet executor + Opus advisor + Fable evaluator (top-model judgment)"
        - label: "balanced (Recommended)" / description: "Sonnet executor + Opus advisor/evaluator (cost-efficient)"
        - label: "economy" / description: "Haiku executor + Sonnet advisor/evaluator (max savings)"
 
-   **If "Other" selected:** Parse custom format `executor:<model>,advisor:<model>,evaluator:<model>`. Validate each model name — only `opus`, `sonnet`, `haiku` are allowed (case-insensitive). If any model name is invalid, inform the user which value is invalid and re-ask for input (max 3 retries, then apply `balanced` as default). If parsing succeeds but is partial, fill missing roles with the `balanced` defaults (executor=sonnet, advisor=opus, evaluator=opus). Show the parsed result to the user and ask for confirmation before proceeding.
+   **If "Other" selected:** Parse custom format `executor:<model>,advisor:<model>,evaluator:<model>` (or a bare preset name — validated against the preset table: `default` / `all-opus` / `frontier` / `balanced` / `economy`). For the role form, validate each model name — only `fable`, `opus`, `sonnet`, `haiku` are allowed (case-insensitive). If any model name is invalid, inform the user which value is invalid and re-ask for input (max 3 retries, then apply `balanced` as default). If parsing succeeds but is partial, fill missing roles with the `balanced` defaults (executor=sonnet, advisor=opus, evaluator=opus). Show the parsed result to the user and ask for confirmation before proceeding.
 
-   **Model config is set once at session start and cannot be changed mid-session.** To change, restart the session.
+   **Model config is set once at session start and cannot be changed mid-session (sole exception: the automatic model fallback chain in `templates/_shared/model_config.md`, which may downgrade a cell on a sunset model id).** To change, restart the session.
 
    Store result as `model_config` object: `{ "preset": "<name>", "executor": "<model|null>", "advisor": "<model|null>", "evaluator": "<model|null>" }`. For the `default` preset, store `{ "preset": "default" }`.
 
@@ -253,7 +256,8 @@ Proceed to Step 4 with findings.
        sharedContext: <content of .harness/context.md>,
        incrementalContext: <incremental info, else "(Full analysis — no prior audit)">,
        models: { executor: <model_config.executor or null>,
-                 advisor: <model_config.advisor or null> }
+                 advisor: <model_config.advisor or null>,
+                 evaluator: <model_config.evaluator or null> }
      }
    }
    ```
@@ -375,9 +379,9 @@ Present as recommendations, not commands. User decides.
 
 Sub-agents exist only in **deep and thorough modes** (WORKFLOW path — the segment script spawns them). Preset table + rules: see `templates/_shared/model_config.md`.
 
-**Role map (codebase-audit):** lens analysts (deep: structure+dependency, pattern+quality; thorough: structure, dependency, pattern) → `executor`; Completeness Critic (thorough) + Synthesis → `advisor`. (No evaluator role is used.)
+**Role map (codebase-audit):** lens analysts (deep: structure+dependency, pattern+quality; thorough: structure, dependency, pattern) → `executor`; Synthesis → `advisor`; Completeness Critic (thorough) → `evaluator` (judgment role — pre-8.7 presets keep identical advisor/evaluator cells, so only `frontier` differentiates; in deep mode no evaluator-role agent runs, so `frontier` behaves like `balanced`).
 
-**Applying model config (WORKFLOW path):** pass the resolved models once per segment run as `args.models` (`{ executor, advisor }`; null = inherit parent model, i.e. the `default` preset) — the segment script applies them per agent. Sub-agents must NOT access `.harness/model_config.json` — the orchestrator passes the resolved values at segment launch.
+**Applying model config (WORKFLOW path):** pass the resolved models once per segment run as `args.models` (`{ executor, advisor, evaluator }`; null = inherit parent model, i.e. the `default` preset) — the segment script applies them per agent (the Completeness Critic reads `evaluator`, falling back to `advisor` for stale args). Sub-agents must NOT access `.harness/model_config.json` — the orchestrator passes the resolved values at segment launch.
 
 ## User Interaction Rules
 
@@ -396,5 +400,7 @@ See `templates/_shared/askuserquestion.md`.
 - **Stateless re-run.** No state.json, no partial resume — a re-invocation is a full clean re-run (read-only idempotent); the cost gate is re-shown, justified by re-paying tokens. Any segment `runId` in `.harness/model_config.json` is audit-only (no cross-session resume-by-id).
 - **Incremental is additive.** Incremental mode merges new findings with the prior report; it never deletes prior findings without replacement.
 - **User language.** All user-facing output in `user_lang`; templates/identifiers/enums English raw. WORKFLOW path: pass `userLang` in `args` — the segment builds schema descriptions from it, forcing sub-agent free-text output language.
+- **Ad-hoc dispatch.** Any sub-agent or Workflow script created during this skill's execution WITHOUT a shipped template follows `templates/_shared/adhoc_dispatch.md` §Ad-hoc Dispatch Contract — explicit output-language directive (schema free-text field descriptions carry `(in {user_lang})`) and role-based model routing (mechanical → executor tier, judgment → evaluator tier, never above).
+<!-- SYNC-WITH: templates/_shared/adhoc_dispatch.md §Ad-hoc Dispatch Contract -->
 - **Artifact preservation.** Only `audit_report.md` in `docs/harness/<slug>/` is preserved; `.harness/` intermediate files are cleaned up.
 - **Error handling.** Large projects without scope get a suggestion. Missing source files halt. Incremental without prior falls back to full. Any Workflow failure degrades to quick inline — never a hard error.

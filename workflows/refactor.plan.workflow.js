@@ -25,7 +25,7 @@ export const meta = {
 // contract — keep 1:1 with skills/refactor/SKILL.md Step 2-W WORKFLOW dispatch (a field
 // missing on either side silently renders as ''):
 //   { target, repoPath, lang, scope, userLang, context, testCmd,
-//     baselineTestResults, mode: 'multi'|'comprehensive', models: {executor, advisor} }
+//     baselineTestResults, mode: 'multi'|'comprehensive', models: {executor, advisor, evaluator} }
 // `context` is the CONTENT of .harness/context.md (orchestrator-collected — this script
 // never reads a path).
 const A = typeof args === 'string' ? JSON.parse(args) : (args || {})
@@ -563,7 +563,7 @@ if (A.mode === 'comprehensive' && analyses.length >= 2) {
             .join('\n\n'),
           target_description: A.target,
         }),
-        { schema: AnalysisResultSchema, label: `${a.id}_critique`, phase: 'Critique', ...mopt(MODELS.advisor) },
+        { schema: AnalysisResultSchema, label: `${a.id}_critique`, phase: 'Critique', ...mopt(MODELS.evaluator || MODELS.advisor) },
       ),
     ),
   )
