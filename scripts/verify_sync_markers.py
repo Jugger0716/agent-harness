@@ -69,6 +69,22 @@ SYNC_GROUPS = [
         "tokens": ["§Ambiguity Prompt"],       # every marked site must contain this token
         "min_sites": 7,                        # 7 skills reference the SHARED §Ambiguity Prompt
     },
+    {
+        "id": "project-defaults",
+        "target_file": "templates/_shared/project_defaults.md",
+        "section": "agent-harness-defaults",   # NO leading § — MARKER_RE captures the text AFTER §
+        "target_anchor": "agent-harness-defaults:",
+        "tokens": ["agent-harness-defaults:"],
+        "min_sites": 8,                        # all 8 multi-path skills carry the project-defaults wiring
+    },
+    {
+        "id": "adhoc-dispatch",
+        "target_file": "templates/_shared/adhoc_dispatch.md",
+        "section": "Ad-hoc Dispatch Contract",  # NO leading § — MARKER_RE captures the text AFTER §
+        "target_anchor": "Ad-hoc Dispatch Contract",
+        "tokens": ["§Ad-hoc Dispatch Contract"],
+        "min_sites": 11,                       # 8 multi-path skills + ship + md-generate + md-optimize
+    },
 ]
 
 
