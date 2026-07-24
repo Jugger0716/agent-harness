@@ -398,5 +398,7 @@ See `templates/_shared/askuserquestion.md`.
 - **Stateless re-run.** No state.json, no partial resume — a re-invocation is a full clean re-run (read-only idempotent); the cost gate is re-shown, justified by re-paying tokens. Any segment `runId` in `.harness/model_config.json` is audit-only (no cross-session resume-by-id).
 - **Incremental is additive.** Incremental mode merges new findings with the prior report; it never deletes prior findings without replacement.
 - **User language.** All user-facing output in `user_lang`; templates/identifiers/enums English raw. WORKFLOW path: pass `userLang` in `args` — the segment builds schema descriptions from it, forcing sub-agent free-text output language.
+- **Ad-hoc dispatch.** Any sub-agent or Workflow script created during this skill's execution WITHOUT a shipped template follows `templates/_shared/adhoc_dispatch.md` §Ad-hoc Dispatch Contract — explicit output-language directive (schema free-text field descriptions carry `(in {user_lang})`) and role-based model routing (mechanical → executor tier, judgment → evaluator tier, never above).
+<!-- SYNC-WITH: templates/_shared/adhoc_dispatch.md §Ad-hoc Dispatch Contract -->
 - **Artifact preservation.** Only `audit_report.md` in `docs/harness/<slug>/` is preserved; `.harness/` intermediate files are cleaned up.
 - **Error handling.** Large projects without scope get a suggestion. Missing source files halt. Incremental without prior falls back to full. Any Workflow failure degrades to quick inline — never a hard error.

@@ -1078,6 +1078,8 @@ validate_path(path, kind) where kind ∈ {output_dir, file_reference, diff_targe
 - **Generator advisors review the plan, not code.** Advisory before implementation.
 - **Use available skills.** Search by keyword, not plugin name. Proceed without if none found.
 - **User language.** All user-facing output in `user_lang` per §Output Language Contract. Glossary tokens (`PASS`/`FAIL`/`Verdict`/`[harness]`/etc.) preserved English. Inline parser keywords MUST remain English raw — see §Sub-agent Return Value Rules.
+- **Ad-hoc dispatch.** Any sub-agent or Workflow script created during this skill's execution WITHOUT a shipped template follows `templates/_shared/adhoc_dispatch.md` §Ad-hoc Dispatch Contract — explicit output-language directive (schema free-text field descriptions carry `(in {user_lang})`) and role-based model routing (mechanical → executor tier, judgment → evaluator tier, never above).
+<!-- SYNC-WITH: templates/_shared/adhoc_dispatch.md §Ad-hoc Dispatch Contract -->
 - **Intermediate outputs are ephemeral.** Only final artifacts preserved in `docs/`.
 - **Orchestrator reads no intermediate files.** See §Architecture Principles for full exception list.
 - **1-line return parsing (INLINE path only).** Only first line of an inline sub-agent return is used for state decisions. WORKFLOW path branches on schema-validated objects.

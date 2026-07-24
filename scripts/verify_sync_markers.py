@@ -77,6 +77,14 @@ SYNC_GROUPS = [
         "tokens": ["agent-harness-defaults:"],
         "min_sites": 8,                        # all 8 multi-path skills carry the project-defaults wiring
     },
+    {
+        "id": "adhoc-dispatch",
+        "target_file": "templates/_shared/adhoc_dispatch.md",
+        "section": "Ad-hoc Dispatch Contract",  # NO leading § — MARKER_RE captures the text AFTER §
+        "target_anchor": "Ad-hoc Dispatch Contract",
+        "tokens": ["§Ad-hoc Dispatch Contract"],
+        "min_sites": 11,                       # 8 multi-path skills + ship + md-generate + md-optimize
+    },
 ]
 
 

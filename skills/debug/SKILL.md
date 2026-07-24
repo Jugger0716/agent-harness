@@ -524,5 +524,7 @@ See `templates/_shared/askuserquestion.md`.
 - **Build errors get the fast path.** Skip reproduction and hypothesis loop for build/compile errors. Compiler output is direct evidence.
 - **Confirmation gates are non-negotiable.** No implicit approval. The Fix Decision HARD-GATE requires explicit user choice before any code modification.
 - **User language.** All user-facing output must be in `user_lang`. Re-detect on every user message.
+- **Ad-hoc dispatch.** Any sub-agent or Workflow script created during this skill's execution WITHOUT a shipped template follows `templates/_shared/adhoc_dispatch.md` §Ad-hoc Dispatch Contract — explicit output-language directive (schema free-text field descriptions carry `(in {user_lang})`) and role-based model routing (mechanical → executor tier, judgment → evaluator tier, never above).
+<!-- SYNC-WITH: templates/_shared/adhoc_dispatch.md §Ad-hoc Dispatch Contract -->
 - **has_git == false fallback.** When git is unavailable, replace `git blame`/`git log` verification actions with file reads, Grep pattern searches, and dependency version checks.
 - **State persistence.** Always write state.json before starting any phase. If the skill is interrupted, Session Recovery must be able to resume from the last recorded phase.
