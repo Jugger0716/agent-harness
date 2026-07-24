@@ -105,13 +105,14 @@ When the user provides a review target (via $ARGUMENTS or in conversation), exec
 
 ### Step 2: Mode Gate & Model Configuration
 
-1. **Mode Gate resolution:** apply §Mode Gate INCLUDING **§Ambiguity Prompt** (single source: `templates/_shared/mode_gate.md`) — the mode roundtrip is removed EXCEPT this prompt, which fires only when NO opt-in is present (no `--mode`, ultracode OFF, `Workflow` tool available, `has_git == true`, interactive, no `--no-prompt`). Skill modes: quick(inline) / deep(workflow) / thorough(workflow); ultracode-target: thorough. Store `mode` and `path_resolved` in `.harness/model_config.json`. Then emit **§Path Transparency** — show `Path : <inline | workflow>  (<reason>)`. Print the scope-aware advisory. For §Ambiguity Prompt, the `(Recommended)` option is the scope-advised tier already printed (< 100 lines → quick, 100–500 → deep, 500+ → thorough). If the user explicitly requested `--mode deep/thorough` but the gate resolved to inline (Workflow tool unavailable or `has_git == false`), notify (in `user_lang`): "deep/thorough mode requires the native Workflow engine and git — proceeding on the inline quick path."
+1. **Mode Gate resolution:** apply §Mode Gate INCLUDING **§Ambiguity Prompt** (single source: `templates/_shared/mode_gate.md`) — the mode roundtrip is removed EXCEPT this prompt, which fires only when NO opt-in is present (no `--mode`, ultracode OFF, no `agent-harness-defaults:` project default, `Workflow` tool available, `has_git == true`, interactive, no `--no-prompt`). Skill modes: quick(inline) / deep(workflow) / thorough(workflow); ultracode-target: thorough. Store `mode` and `path_resolved` in `.harness/model_config.json`. Then emit **§Path Transparency** — show `Path : <inline | workflow>  (<reason>)`. Print the scope-aware advisory. For §Ambiguity Prompt, the `(Recommended)` option is the scope-advised tier already printed (< 100 lines → quick, 100–500 → deep, 500+ → thorough). If the user explicitly requested `--mode deep/thorough` but the gate resolved to inline (Workflow tool unavailable or `has_git == false`), notify (in `user_lang`): "deep/thorough mode requires the native Workflow engine and git — proceeding on the inline quick path."
 <!-- SYNC-WITH: templates/_shared/mode_gate.md §Ambiguity Prompt -->
 
 2. **Model configuration selection (deep and thorough modes only):**
    If mode is `quick`, skip this step (no sub-agents used).
 
-   If `--model-config <preset>` was passed, use it directly. Otherwise, use AskUserQuestion to ask the user (in `user_lang`):
+   If `--model-config <preset>` was passed, use it directly. Otherwise, if the project CLAUDE.md declares `agent-harness-defaults:` with `model-config=<preset>` (single source: `templates/_shared/project_defaults.md`), use it silently and echo `(project default)` in the Setup Summary. Otherwise, use AskUserQuestion to ask the user (in `user_lang`):
+<!-- SYNC-WITH: templates/_shared/project_defaults.md §agent-harness-defaults -->
      header: "Model"
      question: "Select model configuration for sub-agents:"
      options:
