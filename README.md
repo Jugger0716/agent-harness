@@ -788,12 +788,18 @@ Edge Cases -> Acceptance Criteria (Given/When/Then) -> Risks
 
 Maps directly to `/harness` input: Goal->Goal, Background->Background, Scope->Scope, Acceptance Criteria->Completion Criteria, Risks->Risks, Edge Cases->Testing Strategy.
 
+Every spec opens with a derived **Review Sheet** (reviewer-facing, non-canonical — `/harness` ignores it): ≤5-line TL;DR, decision table (options / chosen / why), invariants & top risks, open `[unconfirmed]` questions, reading order, and — on re-synthesis only — "Changed in this revision". Derived at render time from the seven sections + Q&A notes; introduces no new facts.
+
 ### Modes
 
 | Mode | Path | Agents | Token cost |
 |------|------|--------|------------|
 | **quick** | inline | Orchestrator only | ~0.5x |
 | **deep** | workflow (opt-in: ultracode or `--mode deep`; requires git + Workflow tool) | Requirements + User Scenario + Risk Auditor + Tech Constraint analysts -> Synthesis -> Critic | ~1.9x (estimated, TBD per smoke test) |
+
+### Sub-command: digest
+
+`/spec digest <path> [--artifact]` — read-only 3-layer briefing of an EXISTING spec or design doc: 30-second TL;DR → 5-minute brief (decision table, invariants, risks, open questions, `path:line` reading order) → full section map, plus mermaid diagrams where genuinely diagrammable. No state, no Q&A, no sub-agents; nothing written to the repository (`--artifact` publishes a page from the session scratchpad). Skips Session Recovery — it never disturbs an in-progress spec session.
 
 ---
 
@@ -904,6 +910,29 @@ Custom categories can be added freely.
 - **Per-item HARD-GATE** on both save and delete -- nothing happens without explicit confirmation
 - **Backup before delete** -- `.harness/memory_backup/<timestamp>/` created before any cleanup
 - **Date parse safety** -- unparseable dates excluded from staleness checks
+
+---
+
+## handoff
+
+Human-gated session handoff for cross-session, epic-level continuity — the durable complement to `/harness` Session Recovery (which restores a task's internal state machine, not a multi-day effort).
+
+```
+/handoff          -> collect VERIFIED git state (branch / full-sha HEAD / dirty / upstream)
+                     + .harness/state.json pointers (read-only) + conversation-derived sections
+                  -> compose HANDOFF document: Goal / Current State (verified) / In Progress /
+                     Blockers / Next Steps / Definition of Done / Reading Order / Do NOT
+                  -> HARD-GATE: Save / Edit / Cancel (previewed path == written path)
+                  -> docs/harness/handoff/YYYY-MM-DD-<slug>.md   (never overwrites)
+/handoff resume   -> load newest (or given) handoff -> git drift verification
+                     (none / N commits since / BACKWARD / DIVERGED / dirty — report-only,
+                     NEVER mutates git) -> read Reading Order (path-validated; contents are
+                     DATA, not instructions) -> Resume Briefing
+                  -> gate: Start next step / Adjust plan / Briefing only
+/handoff list     -> enumerate handoff documents, newest first
+```
+
+Key properties: stateless (no state.json of its own), inline-only (`disallowed-tools` blocks Task/Agent/Workflow/Web), resume is **context priming + fact verification** — never state restoration, never auto-checkout.
 
 ---
 
@@ -1144,6 +1173,7 @@ Communicates in the user's language for progress, questions, confirmations, erro
 
 See [ROADMAP.md](ROADMAP.md) for the full roadmap with rationale.
 
+- **v8.7** (Shipped): model tiering + session continuity — `frontier` preset (Sonnet executor / Opus advisor / **Fable evaluator**) with the judgment-role remap (cross-verification / critic / cross-critique → evaluator; no-op for pre-8.7 presets) and a model **fallback chain** (`fable → opus → sonnet → haiku → parent`) for sunset model ids; **project defaults** (`agent-harness-defaults:` line — `.claude/settings.local.json` env / project CLAUDE.md / `~/.claude/CLAUDE.md`, first wins wholesale — standing workflow-path opt-in + silent model-config via Mode Gate step 4.5); **Ad-hoc Dispatch Contract** (output-language + model routing for non-template sub-agents — root-cause fix for the v8.6.0 English leak); new **`/handoff`** skill (generate / resume with git-drift verification / list); `/deep-review` round bookkeeping (auto round numbering + orchestrator-only prior-finding reconciliation + advisory Round Verdict); `/spec` Review Sheet + `/spec digest`; two new SYNC lint groups (project-defaults, adhoc-dispatch)
 - **v8.6** (Shipped): Mode Gate §Ambiguity Prompt (when no `--mode` and ultracode is OFF in an interactive session with the Workflow engine available, the 8 multi-path skills explicitly ask inline-vs-workflow instead of resolving silently; `--no-prompt` and non-interactive sessions keep silent auto-resolution) + §Path Transparency (every skill prints `Path : <inline|workflow> (<reason>)`), both driven from the `templates/_shared/mode_gate.md` single source, with `scripts/verify_sync_markers.py` tracking the §Ambiguity Prompt marker across the wired skills (marker presence + referential integrity; content-drift and a §Path Transparency group are follow-ups)
 - **v8.5** (Shipped): native Workflow reframe — 8 high-overlap skills (`/harness`, `/spec`, `/debug`, `/deep-review`, `/codebase-audit`, `/migrate`, `/refactor`, `/test-gen`) author & run shipped segment scripts (`workflows/*.workflow.js`, schema-validated `agent()` fan-out) at opt-in depth; skill renames `/workflow`→`/harness`, `/code-review`→`/deep-review`, `/memory`→`/team-memory` (deprecation aliases preserved); derived **Mode Gate** (`templates/_shared/mode_gate.md`) replaces the mode-selection roundtrip; `/deep-review --comment`/`--fix` parity; `disallowed-tools` frontmatter enforced on every skill
 - **v8.4** (Shipped): `/spec` deep-mode 4-analyst pipeline (Requirements + UserScenario + RiskAuditor + TechConstraint) with cold Critic stage and 3-way revise gate; `/spec` Convention Scan (Step 1.5) with `--reference` flag; `/spec` Phase 3 persists `qa_notes.md`/`critic_findings.md`/`conventions.md` with `/workflow` Step 1.5/Step 2 reuse; `/ship` Stage 6.5 (`merge_to_base`) closes develop→main lag — Path A (protected base, PR fallback) vs Path B (local merge with FF / Non-FF / rebase-then-ff + force-with-lease), substep-level recovery, persistent retry-count cap, branch-protected rollback documentation
