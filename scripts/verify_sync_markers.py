@@ -85,6 +85,16 @@ SYNC_GROUPS = [
         "tokens": ["§Ad-hoc Dispatch Contract"],
         "min_sites": 11,                       # 8 multi-path skills + ship + md-generate + md-optimize
     },
+    {
+        "id": "handoff-state-record",
+        "target_file": "skills/handoff/SKILL.md",
+        "section": "Fixed Label Record Format",  # NO leading § — MARKER_RE captures the text AFTER §
+        "target_anchor": "Fixed Label Record Format",
+        # the 5-field fixed-label record /handoff generate writes and /handoff resume Step 3.5
+        # + /harness Session Boundary both reference (P0-4, v8.8 epic-continuity wiring)
+        "tokens": ["Skill :", "Task :", "Phase :", "Mode :", "Docs :"],
+        "min_sites": 2,                        # skills/handoff/SKILL.md (self) + skills/harness/SKILL.md
+    },
 ]
 
 

@@ -228,6 +228,80 @@ When state.json exists and `/harness` is called with no arguments:
 
 ---
 
+## Session Boundary
+
+> Single source for every user-facing block printed when a session ends mid-task. Referenced
+> by name (never restated) at: the 4 phase/step-mode phase-boundary sites in §Workflow Steps
+> 2/4/5/6 (After Plan / After Generate / After Verify / After Evaluate), the Step 5 L1
+> max-retry 1st HARD-GATE "Stop" branch, and the Step 8 end-of-session summary (all 3 commit
+> branches + `has_git == false`; excludes the commit-failure abort path, which does not end the
+> session). Shape + label rules mirror Setup Summary (§Output Language Contract — Print
+> Translation Pattern: labels English raw, values per Preserved-English Glossary).
+
+### Type A — phase-boundary (mid-task; session can resume next time)
+
+```
+[harness] Session boundary — <completed phase> complete.
+  Task    : <task>
+  Branch  : <state.json.branch>     ← omit if has_git == false
+  Phase   : <completed phase label> → <next phase label>
+  Output  : <docs_path>
+  Resume  : <resume command — see table below>
+  Handoff : Run `/handoff generate` to capture this session for cross-session continuity.
+```
+
+| Boundary site | Completed → Next | Resume command |
+|---|---|---|
+| After Plan (Step 2) | Plan → Generate | `/harness generate` |
+| After Generate (Step 4) | Generate → Verify | `/harness verify` |
+| After Verify (Step 5) | Verify → Evaluate | `/harness evaluate` |
+| After Evaluate (Step 6) | Evaluate → Verdict & Loop | `/harness` (no args — Session Recovery / no-args next-step rule routes to Step 7) |
+| Step 5 L1 max-retry "Stop" (1st HARD-GATE) | Verify (Layer 1) halted | `/harness` (no args — §Session Recovery `verify_done` branch re-enters the 1st HARD-GATE directly) |
+
+### Type B — Step 8 end-of-session summary (task complete)
+
+Applies at the end of every Step 8 branch that concludes the session: all 3 commit options
+("Commit code only" / "Commit all" / "No commit") and the `has_git == false` branch. Does
+**NOT** apply to the commit-failure abort path (§Step 8 "Commit code only" step 3, "If the
+commit FAILS") — that path leaves the session open/resumable, so no closing summary is printed.
+
+```
+[harness] Session boundary — Task complete.
+  Task      : <task>
+  Reason    : <QA PASS | Accept as-is | Max rounds reached>
+  Remaining : <none | see {docs_path}qa_report.md>
+  Output    : <docs_path>     (preserved — see §Step 8)
+  Branch    : <state.json.branch>     ← omit if has_git == false
+  Commit    : <sha>                   ← omit if has_git == false or "No commit" was selected
+  Handoff   : Run `/handoff generate` to capture this session for cross-session continuity.
+```
+
+- `Reason` is derived from §Step 7 without a new state.json field (P2-2 deferred — see
+  ROADMAP.md): `QA PASS` (Step 7 "If PASS"), `Accept as-is` (Step 7 Layer 2 or Layer 3
+  "Accept as-is" branch), `Max rounds reached` (Step 7 "If FAIL and max rounds reached").
+- `Remaining` is `none` only for `QA PASS`; both `Accept as-is` and `Max rounds reached` point
+  at `{docs_path}qa_report.md`.
+
+### `/handoff generate` field contract (P0-4)
+
+When the `Handoff` row above is followed, `/handoff generate` reads `skill` / `task` / `phase`
+/ `mode` / `docs_path` from `.harness/state.json` **read-only** — `/harness` never writes to,
+reads from, or relies on any `/handoff` artifact — and records them under its HANDOFF
+document's `## In Progress` section using this fixed-label format (parse anchor for its own
+`resume` cross-check):
+```
+Skill : <skill>
+Task : <task>
+Phase : <phase>
+Mode : <mode>
+Docs : <docs_path>
+```
+<!-- SYNC-WITH: skills/handoff/SKILL.md §Fixed Label Record Format -->
+See `skills/handoff/SKILL.md` §Fixed Label Record Format / §Live task-state cross-check for the
+full contract — this file (`/harness`) has no further obligation beyond being read.
+
+---
+
 ## State Machine
 
 ### State Transition Diagram
@@ -326,6 +400,13 @@ On the WORKFLOW path the same machine applies; `harness.eval` covers verifying�
    Remaining fields (mode, model_config, etc.) are `null` until Step 1.11 final write.
 
 8. **Create git branch (if has_git):** `git checkout -b harness/<slug>`. Skip if `has_git == false`.
+   **(P0-5) On failure** (branch already exists — the common cause): never proceed on an unspecified branch.
+   - Check whether the existing `harness/<slug>` has any commits beyond its creation point (e.g. `git log harness/<slug> --oneline -1` vs the base branch).
+   - **Empty branch** (no commits ahead — e.g. a stale branch from an aborted prior attempt): reuse it silently (`git checkout harness/<slug>`). Nothing to contaminate; no confirmation needed.
+   - **Non-empty branch** (already carries commits — a real prior slice/attempt): **never reuse silently** — silent reuse mixes the prior slice's changes into this session's diff and contaminates Layer 2/3 judgment and any later `/deep-review` scope. Resolve via ONE of:
+     - **Suffix**: append `-2`, `-3`, … to `<slug>` and retry `git checkout -b harness/<slug>-N` until it succeeds (no confirmation needed — this always yields a fresh branch).
+     - **User confirmation**: ask via AskUserQuestion (in `user_lang`): header "Branch", question "harness/<slug> already has commits — reusing it will mix its changes into this session's diff.", options: "Reuse anyway" / "Continue on the existing branch (diff may include prior commits)", "New branch" / "Create harness/<slug>-2 instead". On "Reuse anyway": print per OLC `[harness] ⚠ Reusing harness/<slug> — N prior commit(s) will appear in this session's diff.` before continuing.
+   - Whichever branch name is finally used, record the ACTUAL name in `state.json.branch` (Setup Summary step 12 reads this field — it may differ from the literal `harness/<slug>`).
 9. **Mode Gate resolution:** apply §Mode Gate INCLUDING **§Ambiguity Prompt** (single source: `templates/_shared/mode_gate.md`). The mode roundtrip is removed EXCEPT this prompt, which fires only when NO opt-in is present (no `--mode`, ultracode OFF, no project-default `path` (`agent-harness-defaults:` line), `Workflow` tool available, `has_git == true`, interactive session, no `--no-prompt`). Skill modes: single(inline) / standard(workflow) / multi(workflow). ultracode-target (step 4 default): multi. Store `mode` and `path_resolved` in state.json. Then emit **§Path Transparency** — show `Path : <inline | workflow>  (<reason>)`. If a workflow-tier `--mode` was requested but the gate resolved to inline (Workflow tool unavailable or `has_git == false`), notify (in `user_lang`): "<tier> mode requires the native Workflow engine and git — proceeding on the inline path."
 <!-- SYNC-WITH: templates/_shared/mode_gate.md §Ambiguity Prompt -->
 10. **Model configuration:** If `--model-config` provided, use it. Otherwise, if the resolved project-defaults line (first source wins wholesale: settings.local.json env → project CLAUDE.md → user CLAUDE.md; see `templates/_shared/project_defaults.md`) contains `model-config=<preset>`, use it silently and echo `(project default)` next to the Model line in the Setup Summary. Otherwise, ask via AskUserQuestion (in `user_lang`):
@@ -411,7 +492,7 @@ On the WORKFLOW path the same machine applies; `harness.eval` covers verifying�
 ```
 [harness] Task started!
   Directory : <path>
-  Branch    : harness/<slug>     ← omit if has_git == false
+  Branch    : <state.json.branch>     ← omit if has_git == false
   Mode      : <single | standard | multi>
   Path      : <inline | workflow>  (<reason per §Path Transparency>)
   Model     : <preset>
@@ -430,6 +511,12 @@ If `model_config.verifier` is `sonnet` or `opus`, also print:
 ```
   ⚠ Verifier set to <model> — high cost for mechanical verification. haiku is usually sufficient.
 ```
+
+**(P1-3)** If `build_cmd`, `test_cmd`, `lint_cmd`, AND `type_check_cmd` are ALL `null` (nothing was auto-detected or provided), also print:
+```
+  ⚠ No build/test/lint/type-check command detected — Layer 1 verification is inactive; completion will rely on Layer 2/3 (LLM judgment) alone. Provide --lint-cmd / --type-check-cmd, or verify manually.
+```
+This is a warning only — it does NOT halt (legitimate git-free/doc-only tasks have no verification commands).
 
 13. **Proceed to Step 1.5** (Convention Scan). If `run_style == "step"` and the CLI step is not `plan`, check prerequisites and jump to the requested step after Step 1.5 completes.
 
@@ -589,7 +676,7 @@ Before the plan dispatch/segment, prepare:
 
 Print: `[harness] Plan complete.`
 
-**If `run_style == "phase"` or (`run_style == "step"` and requested step was `plan`):** Print spec.md path, inform user session can end. Halt.
+**If `run_style == "phase"` or (`run_style == "step"` and requested step was `plan`):** Print the §Session Boundary block (Type A: After Plan). Halt.
 
 **If `run_style == "auto"`:** Continue to Step 3 (Gate).
 
@@ -669,7 +756,7 @@ Print: `[harness] Phase: Generate`
 
 Print: `[harness] Generate complete.`
 
-**If `run_style == "phase"` or (`run_style == "step"` and requested step was `generate`):** Inform user, halt.
+**If `run_style == "phase"` or (`run_style == "step"` and requested step was `generate`):** Print the §Session Boundary block (Type A: After Generate). Halt.
 
 **If `run_style == "auto"`:** Continue to Step 5 (Verify).
 
@@ -767,11 +854,11 @@ Ask via AskUserQuestion (in `user_lang`):
 - options:
   - "Auto-fix proposal" / "Let AI (Opus) analyze the failure and propose a minimal diff (1 attempt only)" ← **HIDE this option if `verify.autofix_attempted == true OR state.autofix != null`** (see §State Machine — I2)
   - "Continue to Evaluator" / "Skip remaining verify issues, proceed to QA"
-  - "Stop" / "Halt for manual intervention. Review verify_report.md"
+  - "Stop" / "Halt — resumable next session (`/harness` re-enters this gate directly). Review verify_report.md"
 </HARD-GATE>
 
 If "Continue": INLINE → proceed to Step 6 (evaluator receives the Layer-1-FAILED verify_context). WORKFLOW → run `harness.eval` with `skipL1: true` and treat its return as the Step 7 verdict.
-If "Stop": halt (keep phase as `verify_done`).
+If "Stop": **(P1-2)** print the §Session Boundary block (Type A: Step 5 L1 max-retry "Stop"), then halt (keep phase as `verify_done` — unchanged; see §Session Recovery `verify_done` branch for re-entry). Selection count stays 3 (`Auto-fix proposal` / `Continue to Evaluator` / `Stop`) and no state-machine field changes — only the "Stop" output gains the boundary block + `/handoff generate` recommendation.
 
 **If "Auto-fix proposal":**
 
@@ -833,7 +920,7 @@ After 2nd HARD-GATE decision, set `verify.autofix_attempted = true` in state.jso
 
 #### After Verify Phase
 
-**If `run_style == "phase"` or (`run_style == "step"` and requested step was `verify`):** Inform user of result, halt.
+**If `run_style == "phase"` or (`run_style == "step"` and requested step was `verify`):** Print the §Session Boundary block (Type A: After Verify). Halt.
 
 **If `run_style == "auto"`:** Continue to Step 6 (INLINE) / Step 7 (WORKFLOW — evaluation already ran inside `harness.eval`).
 
@@ -871,7 +958,7 @@ Print: `[harness] Phase: Evaluate (Layer 2+3)`
 
 Print: `[harness] Evaluate complete.`
 
-**If `run_style == "phase"` or (`run_style == "step"` and requested step was `evaluate`):** Inform user, halt.
+**If `run_style == "phase"` or (`run_style == "step"` and requested step was `evaluate`):** Print the §Session Boundary block (Type A: After Evaluate). Halt.
 
 **If `run_style == "auto"`:** Continue to Step 7.
 
@@ -961,31 +1048,34 @@ Ask via AskUserQuestion (in `user_lang`):
 - header: "Commit"
 - question: "Implementation complete. Choose how to finish:"
 - options:
-  - "Commit code only (Recommended)" / "Clean artifacts, commit code changes only"
+  - "Commit code only (Recommended)" / "Clean `.harness/` only, commit code + spec/QA evidence, `{docs_path}` preserved on disk"
   - "Commit all" / "Commit everything including artifacts"
   - "No commit" / "Clean .harness/ only, keep changes in working tree"
 
 Actions (apply Safety Guard before each delete):
-- "Commit code only": (protect persisted spec artifacts) Apply this exact **commit-first** 5-step sequence:
-  1. **(M8) Safety Guard validation** on `{docs_path}` — apply the full Artifact Cleanup Safety Guard per `templates/_shared/safety_guard.md` (slug check + path depth + `Path.cwd()` containment) BEFORE any staging or deletion. If validation fails, **ABORT**: do NOT stage, do NOT delete. Surface the failed check to the user. Both `.harness/` and `{docs_path}` remain intact for manual recovery.
-  2. **Stage** the code changes plus the spec-persistence files (only if the source file exists — silently skip missing files):
+- "Commit code only": (protect persisted spec/QA artifacts — **`{docs_path}` is never deleted on this path**, P0-2) Apply this exact **commit-first** 4-step sequence:
+  1. **(M8) Safety Guard validation** on `{docs_path}` — apply the full Artifact Cleanup Safety Guard per `templates/_shared/safety_guard.md` (slug check + path depth + `Path.cwd()` containment) BEFORE any staging. Retained as defense-in-depth even though this branch no longer deletes `{docs_path}`: it also guards the `.harness/` delete in step 4 by confirming `{docs_path}` (read from the same state.json) is a well-formed, contained path before any cleanup proceeds. If validation fails, **ABORT**: do NOT stage, do NOT delete `.harness/`. Surface the failed check to the user. Both `.harness/` and `{docs_path}` remain intact for manual recovery.
+  2. **Stage** the code changes plus the spec/QA-persistence files (only if the source file exists — silently skip missing files):
+     - `{docs_path}spec.md`
+     - `{docs_path}qa_report.md`
      - `{docs_path}qa_notes.md`
      - `{docs_path}critic_findings.md`
      - `{docs_path}conventions.md`
 
-     **(s4) Per-file staging failure handling**: if `git add <file>` fails for a specific spec-artifact file (permission, .gitignore conflict, etc.), warn the user (in `user_lang`): "Failed to stage `<file>`: <error>. Spec artifact may not be in git history." Continue with remaining files — do NOT abort the whole sequence on a single staging failure. The code commit (step 3) is more critical than any individual artifact preservation.
-  3. **Commit** the staged code changes plus spec artifacts, then **confirm the commit succeeded** (git exit 0 / a new commit object exists). **If the commit FAILS** (pre-commit hook rejection, signing failure, locked index, disk error, nothing-to-commit): **STOP without deleting anything** — `.harness/` and `{docs_path}` stay intact so the session is resumable and all artifacts recoverable. Surface the git error (in `user_lang`) and tell the user to resolve it and re-run, or commit manually. Do NOT proceed to steps 4–5.
-  4. **Delete `.harness/`** — only after a confirmed-successful commit (the Safety Guard already validated the parent context).
-  5. **Delete `{docs_path}`** working-directory contents — only after a confirmed-successful commit.
+     **(s4) Per-file staging failure handling**: if `git add <file>` fails for a specific artifact file (permission, `.gitignore` conflict, etc.), warn the user (in `user_lang`): "Failed to stage `<file>`: <error>. Artifact may not be in git history — it remains on disk at `{docs_path}` regardless (this path never deletes `{docs_path}`)." Continue with remaining files — do NOT abort the whole sequence on a single staging failure. The code commit (step 3) is more critical than any individual artifact preservation. Because `{docs_path}` is never deleted here, a staging failure can never strand a file — it stays on disk even when `git add` failed for it (e.g. `docs/` is `.gitignore`d, the common case in this repo itself — `.gitignore:7`).
+  3. **Commit** the staged code changes plus artifacts, then **confirm the commit succeeded** (git exit 0 / a new commit object exists). **If the commit FAILS** (pre-commit hook rejection, signing failure, locked index, disk error, nothing-to-commit): **STOP without deleting anything** — `.harness/` and `{docs_path}` stay intact so the session is resumable and all artifacts recoverable. Surface the git error (in `user_lang`) and tell the user to resolve it and re-run, or commit manually. Do NOT proceed to step 4. **This sub-path does not end the session** — do NOT print the §Session Boundary block here.
+  4. **Delete `.harness/`** — only after a confirmed-successful commit (the Safety Guard already validated the parent context). `{docs_path}` is **never deleted** on this path.
 
-  **(m2) commit-first ordering note**: the commit (step 3) now precedes both deletes (steps 4–5), so the spec artifacts physically exist on disk at commit time and are captured normally; the subsequent working-tree deletion is intentional cleanup (the 3 artifacts remain in git history, recoverable). Critically, because nothing is deleted until the commit is confirmed, a commit failure can never strand the session: `state.json` (`.harness/`) and `{docs_path}` survive for resume/manual recovery. (This supersedes the prior stage→delete→commit order, in which a final-step commit failure left state and docs already deleted.)
-- "Commit all": **stage + commit** `{docs_path}` + code, **confirm the commit succeeded**, then delete `.harness/` (on commit failure, keep `.harness/` intact and surface the error — same recovery rule as "Commit code only" step 3).
-- "No commit": delete `.harness/` only
+  **(m2) commit-first, no-delete-of-docs_path ordering note**: the commit (step 3) precedes the only delete in this sequence (`.harness/`, step 4), so artifacts physically exist on disk at commit time and are captured normally when staging succeeds. `{docs_path}` itself is never deleted by this branch (P0-2 removes the prior "delete `{docs_path}` working-directory contents" step), so `spec.md` / `qa_report.md` remain on disk even when `docs/` is `.gitignore`d and staging silently fails per (s4). Because nothing is deleted until the commit is confirmed, a commit failure can never strand the session: `state.json` (`.harness/`) and `{docs_path}` survive for resume/manual recovery. (This supersedes the prior stage→delete→commit order, in which a final-step commit failure left state and docs already deleted.)
+
+  On success, print the §Session Boundary block (Type B — `Commit` = the new commit sha).
+- "Commit all": **stage + commit** `{docs_path}` + code, **confirm the commit succeeded**, then delete `.harness/` (on commit failure, keep `.harness/` intact and surface the error — same recovery rule as "Commit code only" step 3; that failure sub-path does not end the session, so no boundary block there). On success, print the §Session Boundary block (Type B — `Commit` = the new commit sha).
+- "No commit": delete `.harness/` only. Print the §Session Boundary block (Type B — `Commit` row omitted, no commit was made).
 
 #### If has_git == false:
 
 Inform user artifacts are in `{docs_path}`.
-Delete `.harness/` only. No git operations.
+Delete `.harness/` only. No git operations. Print the §Session Boundary block (Type B — `Branch`/`Commit` rows omitted).
 
 ---
 
