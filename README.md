@@ -6,7 +6,7 @@ No dependencies required. No Python, no pip, no build steps — just install the
 
 Inspired by Anthropic's [Harness Design for Long-Running Application Development](https://www.anthropic.com/engineering/harness-design-long-running-apps).
 
-> Demo GIF coming soon — see [ROADMAP.md](ROADMAP.md) for the v8.7+ planned items.
+> Demo GIF coming soon — see [ROADMAP.md](ROADMAP.md) for the v8.8+ planned items.
 
 ## At a Glance
 
@@ -73,9 +73,9 @@ Higher modes cost more per run but save total cost by reducing retry rounds. Sta
 | **Spec** | `/spec <requirement>` | Multi-round Q&A requirements specification. Output directly compatible with `/harness` input. Quick (inline) or deep (4 analysts + Critic, native Workflow path). Specs open with a derived Review Sheet (TL;DR / decision table / open questions / changed-in-this-revision); `/spec digest <file>` gives a read-only 3-layer briefing of any existing doc. |
 | **Test Gen** | `/test-gen <target>` | Automated test generation with mutation-based quality verification. Single (inline) or multi (parallel coverage analysts + propose-only mutation skeptics, native Workflow path; test generation + mutation execution stay orchestrator-inline). Supports coverage-gap and regression modes. |
 | **Team Memory** | `/team-memory <cmd>` | Team knowledge base (save/show/clean/search). Git-committed, team-shared decisions, patterns, and conventions. Human-gated CRUD — never escalates to sub-agents or the Workflow engine. _(formerly `/memory` — old name kept as a deprecation alias)_ |
-| **Handoff** | `/handoff generate/resume/list` | Session handoff for cross-session continuity: `generate` captures a verified HANDOFF document (git state, confirmed facts, next steps, reading order) behind a human gate; `resume` primes a fresh session from it with git-drift verification (report-only — never mutates git). Complements `/harness` Session Recovery (task-internal state). |
+| **Handoff** | `/handoff generate/resume/list` | Session handoff for cross-session continuity: `generate` captures a verified HANDOFF document (git state, confirmed facts, next steps, reading order, an optional epic Progress Ledger) behind a human gate; `resume` primes a fresh session from it with git-drift verification plus a live `.harness/state.json` cross-check (both report-only — never mutates git or `.harness/`). Complements `/harness` Session Recovery (task-internal state); `/harness` recommends `/handoff generate` at every session boundary. |
 | **Codebase Audit** | `/codebase-audit` | Systematic codebase analysis for team onboarding. Quick (inline) or deep/thorough (parameterized lens analysts + completeness critique + synthesis, native Workflow path; orchestrator writes the report). Incremental analysis support. |
-| **Deep Review** | `/deep-review <target>` | Systematic, bias-free code review. Quick (inline checklist) or deep/thorough (2-3 specialists + adversarial cross-verification, native Workflow path). Optional `--comment` (inline PR comments) / `--fix` (gated apply). Re-runs on the same target auto-advance review rounds with prior-finding reconciliation and an advisory Round Verdict. _(formerly `/code-review` — old name kept as a deprecation alias)_ |
+| **Deep Review** | `/deep-review <target>` | Systematic, bias-free code review. Quick (inline checklist) or deep/thorough (2-3 specialists + adversarial cross-verification, native Workflow path). Optional `--comment` (inline PR comments) / `--fix` (gated apply) / `--spec <path>` (opt-in spec-conformance pass, reviewers stay blind to it). Re-runs on the same target auto-advance review rounds with prior-finding reconciliation and an advisory Round Verdict. _(formerly `/code-review` — old name kept as a deprecation alias)_ |
 | **MD Optimize** | `/md-optimize` | Optimize CLAUDE.md and project `.md` files for token efficiency. |
 | **MD Generate** | `/md-generate` | Analyze project and generate/enhance CLAUDE.md for effective Claude Code development. |
 | **Ship** | `/ship` | Q&A release pipeline: version bump, CHANGELOG (Conventional Commits), build/test verify, git ops (commit/tag/`merge_to_base`/push), GitHub release — HARD-GATE before every irreversible action. Auto-detects environment, skips unavailable stages. Stage 6.5 (`merge_to_base`, v8.4+) merges release branch into base branch BEFORE tag push so the tag is reachable from the base branch. |
@@ -424,6 +424,12 @@ docs/harness/<task-slug>/
   verify_report.md                  # Layer 1 verification results (overwritten each run)
   qa_report.md                      # Evaluator output — Layer 2 + Layer 3 (preserved)
 ```
+
+`docs/harness/<task-slug>/` is never deleted by any Step 8 finishing branch — only `.harness/`
+(the ephemeral working state above) is cleaned up, regardless of which commit option is chosen
+(including "Commit code only", the recommended default) or whether the repo has git at all.
+This holds even when staging one of these files into git fails (e.g. a `.gitignore`d `docs/`,
+the case in this repository itself) — the file still remains on disk.
 
 ### Plugin Compatibility
 

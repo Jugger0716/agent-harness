@@ -1,5 +1,52 @@
 # Agent Harness Roadmap
 
+## v8.8 — In development (Anthropic best-practices gap analysis — epic continuity)
+
+Scope selected from a gap analysis against Anthropic's official Claude Code best-practices
+document (`docs/harness/anthropic-best-practices-skill-improvements/anthropic-best-practices.md`),
+targeting the reported pain point: epic-scale work done through `/harness` ends each session
+"ambiguously incomplete" because session-boundary output, artifact preservation, and the
+`/harness` ↔ `/handoff` handoff were each only partially specified. Design principle: `/harness`
+stays the slice executor (unchanged state machine, unchanged `state.json` v3 schema); `/handoff`
+becomes the epic ledger — all changes are contract precision (tables/states/gates), not new
+subsystems.
+
+- **`## Session Boundary` single source + Step 8 evidence-preservation fix** — every
+  `/harness` session-ending point (4 phase boundaries + the L1 max-retry "Stop" + Step 8) now
+  prints one standardized block (resume command, `{docs_path}`, `/handoff generate`
+  recommendation); Step 8's recommended "Commit code only" option no longer deletes
+  `{docs_path}` (previously silently destroyed `spec.md`/`qa_report.md` in `.gitignore`d
+  `docs/` setups — this repo's own default). See `skills/harness/SKILL.md`.
+- **`/harness` → `/handoff` wiring + optional epic Progress Ledger** — `/harness` recommends
+  `/handoff generate`; `generate` records task state in a fixed-label parse-anchor format;
+  `resume` cross-checks it against the live `.harness/state.json` (report-only); `generate`
+  gains an optional `## Progress Ledger` (Epic/Slice/Status/Evidence/Notes) that survives across
+  an epic's multiple HANDOFF documents via an Epic-matching carry-forward rule. See
+  `skills/handoff/SKILL.md`.
+- **`/harness` branch-reuse safety + Setup Summary verification-gap warning** — a pre-existing,
+  non-empty `harness/<slug>` branch is never silently reused (diff-contamination risk); Setup
+  Summary warns (never halts) when all 4 verification commands are `null`. See
+  `skills/harness/SKILL.md`.
+- **`/spec` cross-skill session-conflict gate** — symmetric to `/harness`'s own gate; closes a
+  real (not hypothetical) silent-overwrite path where `/spec` would delete a live `/harness`
+  session's `state.json` with no confirmation. See `skills/spec/SKILL.md` §Session Recovery.
+- **`/deep-review --spec <path>` opt-in Spec Conformance pass** — an independent report section
+  checking the diff against a spec's Acceptance Criteria/Scope; the defect reviewers stay
+  spec-blind (anchoring invariant unconditional); only upgrades `## Assessment`, never
+  `## Statistics`/`## Round Verdict`. See `skills/deep-review/SKILL.md`.
+- **`/spec` fresh-session recommendation** — the Phase 3 "start implementation" prompt defaults
+  to printing the exact `/harness --output-dir ...` command for a NEW session, per the
+  reference document's Phase 0 guidance, alongside the previous immediate-invoke option. See
+  `skills/spec/SKILL.md` §Phase 3.
+
+**Deferred to v8.9+ (documented, not silently dropped):**
+
+| Item | Why deferred |
+|------|-------------|
+| **P2-1** — non-destructive "view state only" option in `/harness` Session Recovery's Resume/Restart/Stop gate; explicit priority rule between Session Recovery and the no-args next-step suggestion | Real gap (2 of 3 existing options are destructive), but additive to the same gate rather than blocking the epic-continuity fixes above |
+| **P2-2** — state-machine-level distinction between the 3 different roads that all currently converge on `phase: "completed"` (QA PASS / Accept-as-is / Max-rounds-reached) | The Session Boundary block (v8.8, above) already derives a display-only `Reason` label from existing fields without a schema change; a true state-machine fork would require a `state.json` version bump, which is out of scope until real usage shows the display-only mitigation is insufficient |
+| **P2-3** — top-of-file invariant summary in `skills/harness/SKILL.md` (the file is ~75KB/1,090 lines with Key Rules/Architecture Principles at the bottom — a compact-survival risk) | Needs to re-evaluate alongside M3 (template compression, below) rather than as an isolated insertion; the fixed SKILL.md section-order convention means this needs its own design pass, not a drive-by edit |
+
 ## v8.7 — In development (`feature/v8.7-tiering-continuity`)
 
 Scope selected from the 2026-07-24 three-project usage audit (25-agent workflow; evidence: the user

@@ -6,7 +6,118 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/).
 
-## [Unreleased]
+## [8.8.0] — 2026-07-28
+
+### Added — Epic continuity (Anthropic best-practices gap analysis)
+
+- **`## Session Boundary` single source** (`skills/harness/SKILL.md`): every point where a
+  `/harness` session ends now prints one standardized block instead of ad-hoc prose. Type A
+  (phase/step-mode boundaries after Plan/Generate/Verify/Evaluate, plus the Layer-1 max-retry
+  1st HARD-GATE "Stop") shows the completed→next phase, the exact next-session resume command,
+  `{docs_path}`, and a `/handoff generate` recommendation. Type B (Step 8 end-of-session
+  summary — all 3 commit branches + `has_git == false`, excluding the commit-failure abort
+  path) adds the completion reason (`QA PASS` / `Accept as-is` / `Max rounds reached`, derived
+  from existing state — no new field), remaining-issue pointer, and commit sha. Replaces the
+  previously unspecified (and inconsistent across 4 sites) "Inform user, halt." family of
+  directives.
+- **Step 8 "Commit code only" no longer deletes `{docs_path}`** (`skills/harness/SKILL.md`
+  §Step 8): the recommended commit option used to stage 3 artifacts (`qa_notes.md` /
+  `critic_findings.md` / `conventions.md`) then delete the entire `{docs_path}` working
+  directory — including `spec.md` and `qa_report.md`, which were never staged. In a repo where
+  `docs/` is `.gitignore`d (this repository's own default), that meant the flagship "Commit
+  code only" path silently destroyed the evidence a later session or `/handoff` would need.
+  `spec.md` and `qa_report.md` are now added to the staged-file list, and the `{docs_path}`
+  deletion step is removed outright (only `.harness/` is ever deleted by Step 8, in any of the
+  3 commit branches). Step 8's option description and the `(m2)` commit-first ordering note are
+  updated to match; commit-first ordering and the no-delete-on-commit-failure safety rule are
+  unchanged.
+- **`/harness` → `/handoff` wiring** (`skills/harness/SKILL.md`, `skills/handoff/SKILL.md`):
+  `/harness` now recommends `/handoff generate` at every Session Boundary. `/handoff generate`
+  records `skill`/`task`/`phase`/`mode`/`docs_path` under a fixed-label parse-anchor format
+  (new `<!-- SYNC-WITH: skills/handoff/SKILL.md §Fixed Label Record Format -->` group,
+  `verify_sync_markers.py`, `min_sites: 2`). `/handoff resume` gains a new Step 3.5 — a
+  read-only, report-only live cross-check of the recorded `phase` and `docs_path` against the
+  current `.harness/state.json` (never mutates `.harness/`; `disallowed-tools` unchanged).
+- **`/handoff` optional epic Progress Ledger** (`skills/handoff/SKILL.md`): `generate` gains an
+  optional `## Progress Ledger` section (`Epic` / `Slice` / `Status` / `Evidence` / `Notes`
+  columns; `Status` is a fixed English-raw enum — `done` / `in-progress` / `blocked` /
+  `dropped`, never translated) that carries slice history across an epic's sessions inside the
+  existing HANDOFF document (no new artifact path). Carry-forward source selection scans
+  `docs/harness/handoff/` newest-first (capped at 20 files / 90 days) for the most recent
+  document whose ledger's `Epic` matches — a DIFFERENT rule than `resume`'s newest-file-only
+  selection, so a ledger-less single-task handoff in between two epic slices doesn't break the
+  chain. No source found → starts an empty ledger, surfaced at the Step 3 HARD-GATE preview
+  (never silent).
+- **`/harness` branch-creation failure handling** (`skills/harness/SKILL.md` §Step 1): `git
+  checkout -b harness/<slug>` failing (branch already exists) is no longer undefined behavior.
+  An empty pre-existing branch is reused silently; a branch that already carries commits
+  requires an explicit suffix (`harness/<slug>-2`) or user confirmation before reuse — silent
+  reuse of a non-empty branch would mix a prior slice's commits into the new session's diff and
+  contaminate Layer 2/3 judgment and `/deep-review` scope. The actual branch name used is always
+  recorded in `state.json.branch`.
+- **`/spec` cross-skill session-conflict gate** (`skills/spec/SKILL.md` §Session Recovery):
+  `/spec` used to silently fall through to Step 1 and overwrite a live `.harness/state.json`
+  owned by another skill (e.g. a paused `/harness` slice) with no confirmation at all — the
+  asymmetric counterpart to `/harness`'s own "Session Conflict" gate, which already existed. A
+  matching gate is added: if `.harness/state.json` exists and its `skill` field is absent or not
+  `"spec"`, `/spec` now asks before deleting it (non-interactive sessions halt instead of
+  auto-deleting — the safe default for a destructive, unattended action).
+- **`/deep-review --spec <path>` opt-in Spec Conformance pass** (`skills/deep-review/SKILL.md`
+  §Step 4.5): an orchestrator-inline pass (all modes) checks the diff against a spec's
+  Acceptance Criteria / Scope / Out-of-Scope, producing an independent `## Spec Conformance`
+  report section. The 5-perspective (quick) / specialist (deep/thorough) defect reviewers never
+  see the spec — the anchoring invariant is unconditional. Conformance findings are excluded
+  from `## Statistics` and `## Round Verdict` (no double counting); a `requirement not
+  implemented` or `out-of-scope change` finding upgrades `## Assessment` to `REQUEST_CHANGES`
+  (added as a row to the existing Assessment Logic table — the line's format and the Round
+  Verdict mechanical rule are unchanged).
+- **`/harness` L1 max-retry "Stop" now carries a resume-aware output** (`skills/harness/SKILL.md`
+  §Step 5): the gate keeps its existing 3 options (`Auto-fix proposal` / `Continue to
+  Evaluator` / `Stop` — no new option, no state-machine change) — `Stop`'s description now says
+  the session is resumable, and selecting it prints the Session Boundary block plus a
+  `/handoff generate` recommendation. `Stop` was already non-destructive (`phase` stays
+  `verify_done`, no delete); what was missing was the user-facing signal that it is resumable.
+- **`/harness` Setup Summary warns when Layer 1 is fully inactive** (`skills/harness/SKILL.md`
+  §Step 1): if `build_cmd`/`test_cmd`/`lint_cmd`/`type_check_cmd` are ALL `null`, Setup Summary
+  now prints a `⚠` warning (same position/format as the existing verifier-cost warning) that
+  completion will rely on Layer 2/3 (LLM judgment) alone. Warning only — never halts (legitimate
+  git-free/doc-only tasks have no verification commands).
+- **`/spec` fresh-session recommendation** (`skills/spec/SKILL.md` §Phase 3): the "start
+  implementation" prompt now defaults to "New session (Recommended)" — printing the exact
+  `/harness --output-dir docs/harness/<slug>/ "..."` command for the user to run in a fresh
+  session — alongside "Continue here" (immediate invoke, previous behavior) and "Done". The
+  load-bearing `--output-dir` and the persist-then-cleanup-then-invoke/print ordering (C1) are
+  unchanged in every branch.
+
+### Not implemented this round (documented, not silently dropped)
+
+- **P2-1** (non-destructive "view state only" Session Recovery option; no-args-vs-Session-Recovery
+  priority documentation), **P2-2** (state-machine-level distinction between `completed` via QA
+  PASS / Accept-as-is / Max-rounds — the Session Boundary block above only derives a
+  display-only label from existing fields), and **P2-3** (a top-of-file invariant summary block
+  in `skills/harness/SKILL.md`, given the file's length and compact-survival risk) are deferred.
+  See `ROADMAP.md` for tracking.
+- **Rejected, with reasons** (carried forward so they are not re-proposed at the next audit):
+  skipping the plan phase for one-line diffs (`/harness` is deliberately a heavyweight
+  orchestrator; small tasks shouldn't invoke it); reversing the ≥50-line CLAUDE.md "rich"
+  threshold (that's `/md-optimize`'s job, not `/harness`'s); moving Key Rules/Architecture
+  Principles to the top of `skills/harness/SKILL.md` (real compact-survival risk, but a
+  broad reorg is out of scope here — tracked as P2-3); a new `/epic` skill (the 3-actually-used
+  skills in practice are `/harness`/`/deep-review`/`/handoff` — extending `/handoff` gives the
+  same value far cheaper); an epic state machine inside `/harness` itself (would break the
+  `state.json` v3 / "1 task = 1 branch" invariants); strengthening the `verify_*.py` /
+  `check_workflow_syntax.mjs` regexes (previously rejected on 6 false-positives — the only
+  script touch here is the additive `handoff-state-record` SYNC group registration, not a
+  strengthened check); and an auto-convergence loop for `/deep-review` (already scoped out in
+  the v8.7 ROADMAP entry — rounds stay user-re-invoked bookkeeping).
+
+### Fixed
+
+- **`README.md` docs/harness File Structure note**: added an explicit statement that
+  `docs/harness/<task-slug>/` is never deleted by any `/harness` Step 8 branch (only `.harness/`
+  is) — closing the doc-vs-behavior gap the Step 8 fix above addresses, and keeping the existing
+  `(preserved)` annotations, `skills/harness/SKILL.md` Key Rules, and the Step 8 commit-option
+  description in agreement.
 
 ## [8.7.0] — 2026-07-24
 
