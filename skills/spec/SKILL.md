@@ -20,7 +20,7 @@ Skim this list to locate sections by name. Section-anchor cross-references throu
 2. `## User Language Detection` — `user_lang`.
 3. `## Mode Gate` — quick(inline) vs deep(workflow) path resolution (single source: `templates/_shared/mode_gate.md`; the roundtrip is removed except §Ambiguity Prompt when opt-in is absent).
 4. `## Standard Status Format` — phase enumeration (setup → completed; new in 8.4: `convention_scan_active`, `critic_*`, `re_*`, `critic_halted`). Phase labels listed inline.
-5. `## Session Recovery` — Resume jump table per phase; backward-compat policy (M14 + saved_phase mechanism); segments re-RUN across sessions (runIds audit-only).
+5. `## Session Recovery` — cross-skill session-conflict gate 0 (NEW, P0-6); Resume jump table per phase; backward-compat policy (M14 + saved_phase mechanism); segments re-RUN across sessions (runIds audit-only).
 6. `## Workflow` (top-level container) → `### Step 1: Setup` — slugify + slug-collision check (M15) + state.json schema doc + **§Atomicity Contract** (C6, v2-extended enumeration).
 7. `### Step 1.5: Convention Scan` (NEW in 8.4) — `--reference` flag step 4.5, has_git=true/false branches, **§Step 1.5 conventions field contract** (canonical SSOT for `state.conventions` enum + M16 SYNC-WITH markers).
 8. `### Phase 1 — Requirements Discovery (Multi-round Q&A)` — idempotent state init (qa_round preserved on Resume).
@@ -109,9 +109,38 @@ Recovery entirely and jump straight to `## Sub-command: digest` — a read-only 
 neither resume nor disturb an in-progress spec session (its state stays untouched for the next
 real /spec invocation).
 
-Before starting a new task, check if `.harness/state.json` already exists **and** `state.json.skill` equals `"spec"`:
+Before starting a new task, check if `.harness/state.json` exists.
 
-1. If it exists and matches, print status in the standard format (including Model line from `model_config` if deep mode), prefixed with `[harness] Previous spec session detected.`
+**0. (NEW — P0-6) Cross-skill session conflict gate** — symmetric to `/harness`'s own gate
+(`skills/harness/SKILL.md` §Session Recovery item 1; closes the gap where `/spec` used to fall
+through to "proceed to Step 1 normally" and overwrite a live `/harness` session with **no**
+gate — [M1]): if `.harness/state.json` exists AND (`skill` is absent OR `skill != "spec"`), a
+different skill's live session — or an unmarked legacy file — occupies this directory's single
+`.harness/state.json` slot. Do NOT fall through to Step 1, which would overwrite it ungated.
+(A truly-missing `skill` field is treated the SAME as a mismatched skill here — every state.json
+`/spec` itself has ever written always carries `skill: "spec"` per Step 1 item 7 below, so an
+absent field can only mean another skill's file or a pre-skill-field legacy file; the safe
+default is to gate, not to guess it is safe to overwrite.)
+
+Ask via AskUserQuestion (in `user_lang`):
+  header: "Session Conflict"
+  question: "A `/{skill|'unknown'}` session exists in this directory (task: `{task}`, phase: `{phase}`, docs: `{docs_path}`). Starting /spec here will delete it. Delete it and start /spec?"
+  options:
+    - label: "Delete and start" / description: "Delete .harness/ and proceed with /spec"
+    - label: "Cancel" / description: "Keep existing session and halt"
+
+If "Cancel" → halt (before any directory creation or state.json write). If "Delete and start" →
+delete `.harness/`, then proceed to Step 1 normally (fresh /spec session).
+
+**Non-interactive default**: if the session cannot present an interactive prompt
+(headless/cron/subagent — no AskUserQuestion available), the safe default is **halt**, never a
+silent delete-and-overwrite — a destructive, irreversible action must not proceed unattended
+just because no one is watching to answer the gate. Print the same conflict message and stop.
+
+If the file does not exist, OR it exists and `skill == "spec"`, gate 0 does not apply — continue
+below with `/spec`'s own session recovery:
+
+1. If it exists and `skill == "spec"`, print status in the standard format (including Model line from `model_config` if deep mode), prefixed with `[harness] Previous spec session detected.`
 2. Restore `model_config` from state.json (deep mode only). Apply it to all subsequent sub-agent launches and Workflow `args.models`.
 2.5. **Re-resolve §Mode Gate** (the new session may lack the Workflow tool or the opt-in) and update `path_resolved` — a session that started on the workflow path may legitimately resume on the inline path. Cross-session resume re-RUNS segments; `state.runs.*.runId` values are audit-only (`resumeFromRunId` is same-session only — never attempt it across sessions). If a deep-mode resume lands on the inline path, phases that require a segment run degrade per the Phase 2-D fallback rules (notify the user). This re-resolution reuses the stored `{ mode, path_resolved }` and MUST NOT re-fire **§Ambiguity Prompt** — only the existing workflow→inline downgrade (engine or git now absent) may change the stored path.
 3. Ask the user using AskUserQuestion (in `user_lang`):
@@ -149,7 +178,8 @@ Before starting a new task, check if `.harness/state.json` already exists **and*
 
 **Backward compat (8.4)**: pre-8.4 state.json files lack the `cli_flags.reference`, `conventions`, and `critic` fields. Treat each as `null` default via the `state.get(field, null)` pattern. **(M9) Cross-skill policy asymmetry — intentional**: this `/spec` policy diverges from `/harness`'s pre-v8.1 soft-default backward-compat policy in `skills/harness/SKILL.md`. `/harness` recovers missing fields silently and proceeds; `/spec` halts. Reason: 8.4 analyst injection requires `state.conventions` to be set (the 4-analyst deep pipeline depends on convention context for high-quality output), so silently degrading pre-8.4 sessions through the 8.4 flow would produce lower-quality specs without user awareness. A pre-8.4 state.json reaching `qa_complete` and resuming under 8.4 will: (a) treat conventions as null and trigger a hard-error halt at Phase 2-D step 1 (per single-source-of-truth contract), forcing the user to either Restart or fix conventions manually — this halt is the intentional design, not a bug.
 
-If `.harness/state.json` does not exist (or `skill` field is not `"spec"`), proceed to Step 1 normally.
+If `.harness/state.json` does not exist, proceed to Step 1 normally. (The `skill` field
+mismatch case is now fully handled by gate 0 above — it no longer falls through here.)
 
 ## Smart Routing
 
@@ -608,16 +638,43 @@ Update state.json: `phase` → `"completed"`.
 
 2. **Smart Routing suggestion** — suggest next step using AskUserQuestion (in `user_lang`):
      header: "Next Step"
-     question: "Your spec is ready. Would you like to start implementation?"
+     question: "Your spec is ready. Best practice is to implement in a fresh session — a clean context avoids carrying the accumulated Q&A / Critic discussion into the implementation phase. Would you like to start implementation?"
      options:
-       - label: "Start /harness" / description: "Launch implementation workflow using this spec"
+       - label: "New session (Recommended)" / description: "Print the exact /harness command to run in a fresh session"
+       - label: "Continue here" / description: "Invoke /harness immediately in this same session"
        - label: "Done" / description: "Keep the spec for later use"
 
-   If user selects "Start /harness": **first run step 3 (persist artifacts) and step 4 (cleanup), THEN** invoke `/harness --output-dir docs/harness/<slug>/ "Implement based on {docs_path}spec.md"` (translate the quoted string to `user_lang`). This ordering is critical (C1): persisting artifacts BEFORE invoke ensures `/harness` Step 1.5 / Step 2 can actually read `qa_notes.md` / `critic_findings.md` / `conventions.md` from `{docs_path}` — invoking first would short-circuit step 3 and make the persistence contract a no-op. The explicit `{docs_path}spec.md` form (vs bare `spec.md`) documents the path-assembly contract at the call site so future maintainers don't mistake the bare filename for a working-dir lookup.
+   **(P1-4) In every branch below**, run step 3 (persist artifacts) and step 4 (cleanup) BEFORE
+   printing or invoking anything — this ordering is unchanged and critical (C1): persisting
+   artifacts BEFORE invoke/print ensures `/harness` Step 1.5 / Step 2 can actually read
+   `qa_notes.md` / `critic_findings.md` / `conventions.md` from `{docs_path}` — reversing the
+   order would short-circuit step 3 and make the persistence contract a no-op.
 
-   The `--output-dir` argument is **load-bearing** for slug-safe handoff: without it, `/harness` re-slugifies its own task description and writes to a different `docs/harness/<re-slug>/` directory — silently bypassing the artifacts persisted in step 3 below. Always pass `--output-dir docs/harness/<slug>/` so `/harness`'s `docs_path` matches `/spec`'s `docs_path` exactly.
+   If user selects **"New session (Recommended)"**: after steps 3–4, print (in `user_lang`;
+   the command string itself stays English raw):
+   ```
+   [harness] Spec complete! Start implementation in a fresh session with:
+     /harness --output-dir docs/harness/<slug>/ "Implement based on {docs_path}spec.md"
+   ```
+   Then halt — the user runs the printed command in a new session (`/clear` first, or a new
+   window/terminal, per their own workflow). No implementation begins in this session.
 
-   If user selects "Done": **first run step 3 (persist artifacts) and step 4 (cleanup)**, then halt. Persisting artifacts on the "Done" path preserves `qa_notes.md` / `critic_findings.md` / `conventions.md` so a future `/harness` session invoked manually via `--output-dir docs/harness/<slug>/` can still consume them.
+   If user selects **"Continue here"**: after steps 3–4, invoke `/harness --output-dir
+   docs/harness/<slug>/ "Implement based on {docs_path}spec.md"` (translate the quoted string
+   to `user_lang`) immediately in this session. The explicit `{docs_path}spec.md` form (vs bare
+   `spec.md`) documents the path-assembly contract at the call site so future maintainers don't
+   mistake the bare filename for a working-dir lookup.
+
+   The `--output-dir` argument is **load-bearing** for slug-safe handoff in **both** branches
+   above: without it, `/harness` re-slugifies its own task description and writes to a
+   different `docs/harness/<re-slug>/` directory — silently bypassing the artifacts persisted
+   in step 3 below. Always pass `--output-dir docs/harness/<slug>/` so `/harness`'s `docs_path`
+   matches `/spec`'s `docs_path` exactly — in the printed string and in the immediate invoke
+   alike.
+
+   If user selects **"Done"**: after steps 3–4, halt. Persisting artifacts on the "Done" path
+   preserves `qa_notes.md` / `critic_findings.md` / `conventions.md` so a future `/harness`
+   session invoked manually via `--output-dir docs/harness/<slug>/` can still consume them.
 
 3. **Persist spec artifacts to `{docs_path}` (NEW in 8.4)** — BEFORE cleanup:
 

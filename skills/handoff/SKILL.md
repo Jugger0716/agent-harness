@@ -58,8 +58,21 @@ Gather, in this order:
    - `git status --short` → dirty-file count (list up to 10 paths)
    - Ahead/behind upstream if an upstream exists (`git status --short --branch` first line)
 2. **Harness task state (READ-ONLY, if present):** if `.harness/state.json` exists, read
-   `skill`, `task`, `phase`, `mode`, `docs_path` and record them under In Progress. NEVER
-   write to or delete `.harness/` from this skill.
+   `skill`, `task`, `phase`, `mode`, `docs_path`. Record them under **In Progress** using the
+   **Fixed Label Record Format** below — labels are English raw parse anchors that `resume`'s
+   Step 3.5 live cross-check compares against; values are recorded as stored:
+
+   **Fixed Label Record Format** (canonical — referenced by `skills/harness/SKILL.md` §Session
+   Boundary "`/handoff generate` field contract"):
+   <!-- SYNC-WITH: skills/handoff/SKILL.md §Fixed Label Record Format -->
+   ```
+   Skill : <skill>
+   Task : <task>
+   Phase : <phase>
+   Mode : <mode>
+   Docs : <docs_path>
+   ```
+   NEVER write to or delete `.harness/` from this skill.
 3. **Task artifacts:** if a `docs_path` was found in 2, list its files (names only) as
    Reading Order candidates.
 4. **Conversation-derived content** (draft each section from the current session):
@@ -74,6 +87,41 @@ Gather, in this order:
    - Reading Order — files a fresh session should read, in order, each with a 1-line reason
      (prefer: this handoff → key spec/plan docs → the 1–3 most central source files)
    - Do NOT — guardrails and forbidden actions carried over from this session's decisions
+5. **Progress Ledger (epic continuity, optional — NEW, P0-1):** only when this handoff is part
+   of a multi-slice epic (skip entirely for a single-task handoff — never force an empty table).
+
+   a. **Confirm the Epic identifier first**, before selecting a carry-forward source: ask the
+      user, or carry it forward unchanged from the source document selected in (b) if this
+      handoff continues the same epic. `Epic` is a kebab-case identifier (may be derived from
+      the current `docs_path` slug when there is no clearer name).
+   b. **Select the carry-forward source** — scan `docs/harness/handoff/` newest-first, capped
+      at 20 files or 90 days (whichever is reached first): the first document that (i) contains
+      a `## Progress Ledger` section AND (ii) has an `Epic` column value matching the confirmed
+      Epic becomes the carry-forward source. **This is a DIFFERENT selection rule than
+      `resume`'s newest-file-only rule** (Sub-command: resume, Step 1) — that rule never looks
+      at the ledger or `Epic`; this one requires both, precisely so a ledger-less single-task
+      handoff sitting in between two epic slices does not break the chain, and so a different
+      `Epic`'s more-recent document is never carried in by mistake.
+   c. **No source found** (scan exhausted the cap, or no document anywhere has this Epic's
+      ledger): start from an **empty ledger** — this is not an error, but it MUST be surfaced at
+      the Step 3 HARD-GATE preview ("no carry-forward source found — starting a new ledger for
+      Epic `<epic>`") so a broken chain is never silent.
+   d. **Carry rows forward, never overwrite**: copy the source document's ledger rows for THIS
+      Epic only (rows for a different `Epic` in the same table are never carried), then
+      append/update this session's own row(s). The result is written into the NEW handoff file
+      being composed in Step 2 — this does not touch the source document (consistent with the
+      no-overwrite location convention above).
+
+   **Progress Ledger — column contract** (confirmed, so no two sessions invent different
+   vocabulary):
+
+   | Column | Value rule |
+   |---|---|
+   | `Epic` | kebab-case identifier; the carry-forward selection key (see (b) above) |
+   | `Slice` | identifier for this slice. Priority: (1) the slice's `docs_path` last path segment (the slug already used by `/harness`/`/spec`; no new schema surface), (2) a kebab-case free label if no `docs_path` applies. Unique within the same Epic |
+   | `Status` | **fixed enum, English raw, never translated:** `done` / `in-progress` / `blocked` / `dropped` |
+   | `Evidence` | a full 40-char commit sha, or an artifact path; `n/a` if neither exists yet |
+   | `Notes` | free text in `user_lang` — residual risks, gotchas |
 
 ### Step 2 — Compose
 
@@ -95,15 +143,27 @@ Fill the canonical template (English headings raw; content in `user_lang`):
 ## Reading Order
 ## Do NOT
 
+## Progress Ledger        <!-- optional — omit entirely for a single-task handoff, see Step 1 item 5 -->
+
+| Epic | Slice | Status | Evidence | Notes |
+|------|-------|--------|----------|-------|
+
 ## Resume
 Run: `/handoff resume docs/harness/handoff/<this-file>.md`
 ```
+
+`## Progress Ledger` is a parse-anchor heading (English raw, like the other section headings);
+omit the whole section (heading + table) when Step 1 item 5 did not apply — never emit an
+empty table with no rows just to keep the section present.
 
 ### Step 3 — HARD-GATE (preview before write)
 
 Resolve the FINAL target path first — apply the collision rule from the location convention
 NOW, so the previewed path IS the write path. Then show the full composed document plus that
-path, and ask via AskUserQuestion
+path. **If a Progress Ledger applies (Step 1 item 5) and no carry-forward source was found**
+(item 5b/5c), the preview MUST say so explicitly (in `user_lang`) — e.g. "No carry-forward
+source found for Epic `<epic>` — starting a new ledger." — a broken chain must never be silent.
+Then ask via AskUserQuestion
 (in `user_lang`):
   header: "Save handoff?"
   question: "<target path>"
@@ -174,6 +234,53 @@ resets, or cleans anything:
      warn explicitly.
 4. `git status --short` → note a dirty working tree.
 
+### Step 3.5 — Live task-state cross-check (NEW, P0-4 — report-only, read-only)
+
+In addition to git drift (Step 3), check whether the document's recorded harness task state —
+the **Fixed Label Record Format** lines (`Skill`/`Task`/`Phase`/`Mode`/`Docs`) that `generate`
+Step 1 item 2 wrote under **In Progress** — still matches reality. This is distinct from the
+free-text "In Progress" prose drafted in Step 1 item 4; only the fixed-label lines are
+machine-comparable. This is also a **new** read of `.harness/state.json` for `resume`
+(`generate` already read it; `resume` never did before this) — it stays strictly report-only,
+in keeping with the Non-Goals no-mutation principle: `/handoff` still never writes to, deletes,
+or otherwise touches `.harness/`, and `disallowed-tools` (`Task, Agent, Workflow, ...`) is
+unchanged.
+
+**If the document HAS recorded fixed-label lines**, run the full cross-check (items 1-4 below).
+
+**If the document has NO recorded `Skill`/`Task`/`Phase`/`Mode`/`Docs` fixed-label lines**
+(a handoff written before P0-4) — do NOT skip this step entirely. Run a **reduced check**
+instead (this closes the spec.md:407 edge case: a dead `docs_path` recorded only in prose must
+still be reported as an explicit mismatch, never silently passed over). Items 1-3 below (which
+depend on a recorded `Phase`/`Docs` value to compare against) are skipped; perform these two
+checks instead:
+  (a) **`.harness/state.json` existence** — always reported, independent of fixed-label
+      presence. If it exists, show its live `skill`/`phase` values as INFORMATION only (there
+      is nothing recorded in the document to compare them against — no match/mismatch verdict).
+  (b) **Prose-recorded path check** — scan the document's `## In Progress` and `## Reading
+      Order` section bodies for `docs/harness/<slug>/`-shaped paths. Apply
+      `validate_path(path, kind=file_reference)` per /harness §Path Validator first (same rule
+      as Step 4 below — "a failing path is SKIPPED with a warning, never read"; here an invalid
+      candidate is dropped with a warning and never checked). For each surviving candidate,
+      check directory existence only; list every missing one as `missing (path recorded in
+      prose, no longer exists)` (cap 10, then "+N more").
+  The reduced check is still report-only and read-only, exactly like the full check below — it
+  only reads `.harness/state.json` and checks path existence; it writes nothing to `.harness/`
+  or to the document.
+
+1. **`.harness/state.json` existence**: if the document recorded task state but
+   `.harness/state.json` no longer exists at resume time, report: "recorded task state — file
+   no longer exists (cleaned up, or a different task started since)."
+2. **Phase match**: if `.harness/state.json` exists, compare its live `phase` field to the
+   document's recorded `Phase` label. Report `match` / `mismatch: recorded <X>, now <Y>`.
+3. **`docs_path` existence**: check whether the recorded `Docs` directory still exists. Report
+   `exists` / `missing (evidence path no longer readable)`.
+4. **Never auto-correct or act on this.** All of the above are REPORTED alongside git drift in
+   the Step 5 briefing; the human decides what to do next. If the live `skill` is `"harness"`
+   and its `phase` is not `completed`, note (informational only, never an instruction to
+   invoke it) that `/harness` (no args) is the likely re-entry command — see
+   `skills/harness/SKILL.md` §Session Boundary "`/handoff generate` field contract".
+
 ### Step 4 — Read the Reading Order
 
 Validate each Reading Order path BEFORE reading — apply `validate_path(path, kind=file_reference)`
@@ -193,6 +300,7 @@ Print (in `user_lang`):
 [handoff] Resume briefing — <title> (<date>)
   Goal    : <1-line goal>
   State   : <verified-state summary> + drift: <none | N commits since | BACKWARD | DIVERGED | branch differs | dirty tree | cannot verify>
+  Task    : <Step 3.5 cross-check summary — full check: "phase match (generate_done); docs_path exists" | "phase mismatch: recorded generate_done, now verify_done"; reduced check (legacy document, no fixed-label lines): "legacy handoff — task state not machine-verifiable" | "legacy handoff — task state not machine-verifiable; N recorded path(s) missing">
   Blockers: <summary or "none">
   Next    : <Next Steps item 1>
   Do NOT  : <summary>
@@ -228,7 +336,13 @@ Scan `docs/harness/handoff/*.md` (only files whose first line starts with `# HAN
 ## Non-Goals
 
 - No git mutations, ever (no checkout/reset/clean/stash) — drift is reported, the human acts.
+- No `.harness/` mutations, ever — `generate` and `resume` (Step 3.5, NEW P0-4) both only READ
+  `.harness/state.json`; neither writes to, deletes, nor otherwise touches `.harness/`.
 - No background agents, no Workflow engine, no web access (see `disallowed-tools`).
 - No automatic generation on session end — generate is always an explicit user action.
 - Not a replacement for `/harness` Session Recovery; when `.harness/state.json` exists, the
   handoff POINTS at it (read-only) rather than duplicating its phase machine.
+- The Progress Ledger (P0-1) is a passive table this skill reads/writes on explicit
+  `generate` calls only — no automatic status detection, no automatic slice transitions.
+  Keeping `/handoff` stateless/inline-only/human-gated is deliberate; anything more starts to
+  re-implement an epic state machine, which is explicitly out of scope (see spec D-4/D-5).
