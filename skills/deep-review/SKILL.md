@@ -71,6 +71,7 @@ When the user provides a review target (via $ARGUMENTS or in conversation), exec
    - `--comment` → enable Step 6 (PR targets only)
    - `--fix` → enable Step 7 (gated apply)
    - `--fresh` → skip prior-round reconciliation for this target (round numbering still advances — a prior report is never overwritten)
+   - `--spec <path>` → opt-in Spec Conformance pass (Step 4.5, P1-1). Available in EVERY mode (quick/deep/thorough) — it is always orchestrator-inline, independent of the Mode Gate.
 3. **Parse the review target** from the user's input. Supported formats:
 
    | Input | Detection | Command |
@@ -240,6 +241,52 @@ After completing the checklist, proceed to Step 5 (Report Generation).
 
 3. **On Workflow error** (launch failure, script error, schema-invalid result): apply §Mode Gate graceful fallback → notify and re-run Step 4 as quick inline (Step 4-Q).
 
+### Step 4.5: Spec Conformance Pass (opt-in — `--spec <path>`, P1-1)
+
+Runs only when `--spec <path>` was passed. Available in **every mode** (quick/deep/thorough) —
+this pass is ALWAYS orchestrator-inline; the workflow segment script is out of scope for this
+change (see spec §Scope) and is never touched. Runs AFTER Step 4 (Review Execution) and BEFORE
+Step 5 (Report Generation) so its findings fold into the same report without a second
+report-write pass.
+
+1. **Path validation**: apply `validate_path(path, kind=file_reference)` per the harness
+   §Path Validator convention (`skills/harness/SKILL.md`) — relative path, no `..` segment,
+   inside the repo, outside `.harness/`, `docs/harness/*`, `memory/`, `.git/`; the file must
+   also exist and be readable.
+   - **On any validation failure** (missing file, out-of-scope path, unreadable): never hard-error.
+     Skip the pass entirely, warn (in `user_lang`): `[deep-review] ⚠ --spec path invalid or
+     unreadable — conformance pass skipped. Review continues without it.`, and record
+     "Conformance pass: skipped (<reason>)" in the `## Notes` section (Step 5). The Assessment
+     upgrade rule below does NOT fire when the pass was skipped.
+   - **Size guard**: if the file exceeds 5000 lines, sample it the same way `/spec digest`
+     does (`skills/spec/SKILL.md` §Sub-command: digest) rather than reading it whole.
+
+2. **Perform the pass** (orchestrator-inline — the orchestrator itself reads the spec content
+   and the already-collected diff directly; this is NOT one of the 5-perspective / specialist
+   defect reviewers and MUST stay a separate pass from them):
+   - Read the spec's Acceptance Criteria / Scope / Out of Scope sections (or the nearest
+     equivalent, if the file is not an agent-harness-format spec).
+   - For each requirement/acceptance criterion: is it addressed by the diff (`file:line`
+     evidence where possible)?
+   - For each edge case the spec explicitly names: is it covered by a test in the diff (when
+     the diff includes tests)?
+   - Does the diff touch any file/area the spec explicitly marks Out of Scope?
+   - **Over-reporting guard (mandatory)** — mirrors the reference document's Phase-3 warning:
+     *a reviewer told to find gaps will find something even when the work is fine — report
+     only gaps that affect correctness or an explicitly stated requirement; everything else is
+     optional, not a finding.* Never manufacture a finding just to justify the pass having run.
+   - **Anchoring invariant (unconditional)**: this pass reads the spec; the 5-perspective
+     (quick) / specialist (deep/thorough) defect reviewers never do — spec content is never
+     added to their prompts or to the workflow segment's `args`, even though both passes run in
+     the same session/orchestrator turn.
+
+3. **Record results** as a list of conformance findings, each with `type` (`requirement not
+   implemented` | `missing edge-case test` | `out-of-scope change`), `description`, and an
+   optional `file:line`. Severity (critical/major/minor) is for report display only — these
+   findings do NOT feed `## Statistics` or `## Round Verdict` (Step 5 below, AC-26).
+
+4. **Workflow**: n/a — this pass never touches the Workflow tool, in any mode.
+
 ### Step 5: Report Generation
 
 The ORCHESTRATOR writes the round report — `docs/harness/<slug>/review_report.md` for round 1 (legacy name unchanged), `docs/harness/<slug>/review_round<N>.md` for round ≥ 2 — quick mode from its inline checklist findings; deep/thorough from the returned `FindingSet` object (counts already normalized from findings by the script; `filesReviewed` backfilled from the reviewer union).
@@ -315,6 +362,16 @@ Write the report in **{user_lang}** (except the Assessment line value which stay
 |-------|----------|-------|-------|------------|---------|
 | <N> | n | n | n | n | PASS / CONDITIONAL PASS / FAIL |
 
+## Spec Conformance   <!-- only present when --spec was passed AND the pass was not skipped -->
+
+Checked against: `<--spec path>`
+
+| Type | File:Line | Description |
+|------|-----------|-------------|
+| requirement not implemented | `path/file.ts:—` | <description> |
+
+<or, when the pass found 0 gaps:> No conformance gaps found against `<--spec path>`.
+
 ## Prior Findings Status   <!-- round ≥ 2 only; omit on round 1 or --fresh -->
 
 | Prior # (R<N-1>) | File:Line | Severity | Status | New # |
@@ -329,8 +386,8 @@ Write the report in **{user_lang}** (except the Assessment line value which stay
 ```
 
 - `Files Reviewed` rows come from `filesReviewed` (deep/thorough) or the inline scan (quick); `Lines Changed` comes from the Step 1.6 orchestrator metadata; `Findings` is the per-file count from the findings array.
-- **Round Verdict rule (mechanical):** FAIL = critical ≥ 1; CONDITIONAL PASS = critical 0 AND major ≥ 1; PASS = critical 0 AND major 0. The verdict is ADVISORY — continuing to another round or stopping is always the user's decision (after fixes, re-invoke `/deep-review` on the same target; round N+1 is auto-detected). The Assessment line (APPROVE / REQUEST_CHANGES / COMMENT) remains the single authority for review actions — the Round Verdict only advises whether another round is worth running.
-- `## Notes` section (only if applicable): `- Binary files skipped: [list]` and any other orchestrator-held notes.
+- **Round Verdict rule (mechanical):** FAIL = critical ≥ 1; CONDITIONAL PASS = critical 0 AND major ≥ 1; PASS = critical 0 AND major 0. The verdict is ADVISORY — continuing to another round or stopping is always the user's decision (after fixes, re-invoke `/deep-review` on the same target; round N+1 is auto-detected). The Assessment line (APPROVE / REQUEST_CHANGES / COMMENT) remains the single authority for review actions — the Round Verdict only advises whether another round is worth running. **Spec Conformance findings (Step 4.5, `--spec` only) are NEVER counted here** — this rule reads defect findings exclusively (AC-26; no double counting with the Assessment upgrade row below).
+- `## Notes` section (only if applicable): `- Binary files skipped: [list]`, `- Conformance pass: skipped (<reason>)` (§Step 4.5, when `--spec` was passed but validation failed), and any other orchestrator-held notes.
 
 #### Assessment Logic
 
@@ -343,8 +400,11 @@ Determine the assessment based on findings:
 | 1-2 major findings | COMMENT |
 | Only minor / suggestion | APPROVE |
 | No findings | APPROVE |
+| Spec Conformance (`--spec`, Step 4.5) found ≥1 `requirement not implemented` or `out-of-scope change` finding | **Upgrade to REQUEST_CHANGES** — overrides a lower assessment from the rows above. A `missing edge-case test` conformance finding alone does NOT upgrade. |
 
-**Keep `## Assessment: APPROVE`, `## Assessment: REQUEST_CHANGES`, or `## Assessment: COMMENT` exactly as shown (English, on one line).** Parsed programmatically.
+**Keep `## Assessment: APPROVE`, `## Assessment: REQUEST_CHANGES`, or `## Assessment: COMMENT` exactly as shown (English, on one line).** Parsed programmatically — the upgrade rule changes which VALUE is chosen, never the line's format. When the upgrade fires, state the reason in `## Summary` (e.g. "Upgraded to REQUEST_CHANGES: 1 requirement from `--spec` is not implemented — see Spec Conformance.") — never append the reason onto the `## Assessment:` line itself.
+
+**Spec Conformance / Statistics / Round Verdict relationship (AC-26, confirmed):** Statistics and Round Verdict count defect findings ONLY (never conformance findings — no double counting); the Assessment upgrade row above is the ONLY place conformance findings have any effect. A diff can legitimately show `Round Verdict: PASS` (0 defect findings) alongside `## Assessment: REQUEST_CHANGES` (a conformance gap) — that is not a contradiction: Round Verdict advises on defect-review rounds, Assessment is the review-action authority.
 
 ### Step 6: PR Comment Parity (`--comment`)
 
@@ -414,6 +474,7 @@ These are suggestions only -- do not auto-invoke other skills.
      Assessment : <APPROVE / REQUEST_CHANGES / COMMENT>
      Round      : <N>  (<PASS | CONDITIONAL PASS | FAIL>)
      Findings   : N critical, N major, N minor, N suggestions
+     Conformance: <N gap(s) against <path> | n/a>     ← omit if --spec was not passed
      Report     : docs/harness/<slug>/<review_report.md | review_round<N>.md>
    ```
 
@@ -438,6 +499,7 @@ See `templates/_shared/askuserquestion.md`.
 ## Key Rules
 
 - **Read-only by default.** Never modify source code outside the `--fix` apply gate (Step 7) — and there only after explicit user approval, path validation, and display-before-edit. Never create git branches; never commit or push.
+- **Spec Conformance is opt-in and structurally separate from defect review.** `--spec <path>` adds an orchestrator-inline pass (Step 4.5, P1-1) with its own `## Spec Conformance` report section; the 5-perspective (quick) / specialist (deep/thorough) defect reviewers never see the spec — the anchoring invariant holds unconditionally. Conformance findings are excluded from `## Statistics` / `## Round Verdict` and only ever affect `## Assessment` via the explicit upgrade rule (a `requirement not implemented` or `out-of-scope change` finding upgrades to `REQUEST_CHANGES`).
 - **Deep/thorough exist only on the workflow path.** Without the engine or the opt-in, the review runs as quick inline (with a notice on explicit requests).
 - **No anchoring.** Never pass PR descriptions, commit messages, or author identity to the segment. Diff + file list only.
 - **Defect assumption.** All reviewers start from "assume defects exist" -- not "confirm correctness."
