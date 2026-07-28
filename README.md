@@ -6,7 +6,7 @@ No dependencies required. No Python, no pip, no build steps — just install the
 
 Inspired by Anthropic's [Harness Design for Long-Running Application Development](https://www.anthropic.com/engineering/harness-design-long-running-apps).
 
-> Demo GIF coming soon — see [ROADMAP.md](ROADMAP.md) for the v8.7+ planned items.
+> Demo GIF coming soon — see [ROADMAP.md](ROADMAP.md) for the v8.8+ planned items.
 
 ## At a Glance
 
