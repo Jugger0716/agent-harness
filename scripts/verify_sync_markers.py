@@ -67,7 +67,17 @@ SYNC_GROUPS = [
         "section": "Ambiguity Prompt",        # NO leading § — MARKER_RE captures the text AFTER §
         "target_anchor": "§Ambiguity Prompt",  # substring that must exist in target_file (§ kept)
         "tokens": ["§Ambiguity Prompt"],       # every marked site must contain this token
-        "min_sites": 7,                        # 7 skills reference the SHARED §Ambiguity Prompt
+        # min_sites is a RAW OCCURRENCE floor, NOT a file-count floor (site count != file
+        # count — this scan does not dedupe by file). As of /study: 9 multi-path skills
+        # carry the marker (debug, deep-review, harness, migrate, refactor, spec, study,
+        # test-gen = 8 files, + migrate and refactor EACH carrying the marker twice = 2 extra
+        # raw sites -> 10 total). codebase-audit references §Ambiguity Prompt in prose only
+        # and carries NO marker — a pre-existing gap (skills/codebase-audit/SKILL.md §Mode
+        # Gate), tracked separately, not part of this floor. Prior value (7) was a floor
+        # BELOW the already-measured 9 raw sites (slack 2) — a /study marker omission would
+        # have silently passed; 10 = 9 (measured before /study) + 1 (this skill), so removing
+        # /study's marker now actually fails this check (AC-22 verification method).
+        "min_sites": 10,
     },
     {
         "id": "project-defaults",
@@ -75,7 +85,12 @@ SYNC_GROUPS = [
         "section": "agent-harness-defaults",   # NO leading § — MARKER_RE captures the text AFTER §
         "target_anchor": "agent-harness-defaults:",
         "tokens": ["agent-harness-defaults:"],
-        "min_sites": 8,                        # all 8 multi-path skills carry the project-defaults wiring
+        # 9 multi-path skills (codebase-audit, debug, deep-review, harness, migrate,
+        # refactor, spec, study, test-gen) each carry exactly ONE marker in this group — raw
+        # site count equals file count here (no duplicate-marker skill, unlike
+        # ambiguity-prompt above). Prior value (8) was measured with zero slack before
+        # /study; 9 = 8 + 1 (this skill).
+        "min_sites": 9,
     },
     {
         "id": "adhoc-dispatch",
@@ -83,7 +98,10 @@ SYNC_GROUPS = [
         "section": "Ad-hoc Dispatch Contract",  # NO leading § — MARKER_RE captures the text AFTER §
         "target_anchor": "Ad-hoc Dispatch Contract",
         "tokens": ["§Ad-hoc Dispatch Contract"],
-        "min_sites": 11,                       # 8 multi-path skills + ship + md-generate + md-optimize
+        # 9 multi-path skills + ship + md-generate + md-optimize = 12 files, one marker each
+        # (raw site count equals file count in this group too). Prior value (11) was measured
+        # with zero slack before /study; 12 = 11 + 1 (this skill).
+        "min_sites": 12,
     },
     {
         "id": "handoff-state-record",
