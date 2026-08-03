@@ -79,6 +79,7 @@ Higher modes cost more per run but save total cost by reducing retry rounds. Sta
 | **MD Optimize** | `/md-optimize` | Optimize CLAUDE.md and project `.md` files for token efficiency. |
 | **MD Generate** | `/md-generate` | Analyze project and generate/enhance CLAUDE.md for effective Claude Code development. |
 | **Ship** | `/ship` | Q&A release pipeline: version bump, CHANGELOG (Conventional Commits), build/test verify, git ops (commit/tag/`merge_to_base`/push), GitHub release — HARD-GATE before every irreversible action. Auto-detects environment, skips unavailable stages. Stage 6.5 (`merge_to_base`, v8.4+) merges release branch into base branch BEFORE tag push so the tag is reachable from the base branch. |
+| **Study** | `/study` | Turn a `/harness` output, a whole project, or a git diff into a 7-section, 3-tier study guide (concept / code excerpts / interview Q&A / exercises / design rationale / anti-patterns / glossary) for post-hoc learning. Quick (inline, full path) or deep/thorough (3 evidence lenses + per-topic-bucket authors + a thorough-only critic + assemble, native Workflow path). Machine-checked provenance (repo-quote re-verification, inference-vs-repo claim basis) and a self-contained static HTML report — never a WebSearch/WebFetch dependency. |
 
 ### Skill Naming & Built-in Command Relationship
 
@@ -93,6 +94,19 @@ Three skills were renamed into the plugin namespace to remove collisions with Cl
 Old names are scheduled for removal no earlier than the next MAJOR release.
 
 **Relationship to the native Workflow engine (`/ultracode`):** agent-harness does **not** compete with the engine — at opt-in depth (an ultracode session, or an explicit `--mode`) the multi-agent skills *author and run* native Workflow segment scripts (`${CLAUDE_PLUGIN_ROOT}/workflows/<skill>.<segment>.workflow.js`), layering their opinionated phased methodology, auto-detection, and human-in-the-loop HARD-GATEs on top of the engine's `parallel()` / `phase()` / `runId`-resume primitives. The HARD-GATEs (spec-confirm, verify-fail, auto-fix-apply) always stay in the orchestrator and are never delegated to a background Workflow agent.
+
+### Repository Layout
+
+Four top-level directories, each with a fixed role:
+
+| Directory | Role |
+|-----------|------|
+| `skills/<name>/SKILL.md` | The skill definition — orchestrator prompt, Mode Gate resolution, HARD-GATEs, and (for stateful skills) the phase state machine. Claude Code auto-discovers a skill from this file's presence alone. |
+| `workflows/<skill>.<segment>.workflow.js` | Native Workflow engine segment scripts — the code that actually runs when a skill's deep/thorough/multi mode is opt-in. Filename pattern is fixed: `<skill>.<segment>.workflow.js`, 1:1 with the SKILL.md `Workflow { scriptPath: ... }` call site. |
+| `templates/<skill>/<role>.md` | Sub-agent persona templates a segment script copies in at author-time (`SYNC-SOURCE: templates/<skill>/<role>.md` comments mark the embedded copy). Some are DUAL-USE (the same file also dispatches as-is on a skill's inline path). |
+| `scripts/*.{mjs,py}` | Repository self-verification lints (`check_workflow_syntax.mjs`, `verify_meta_literal.py`, `verify_block_sync.py`, `verify_sync_markers.py`) — they check this repo's own `workflows/`/`skills/`/`templates/` source, and are never executed at skill runtime. |
+
+One additional asset type lives under `templates/`: a **skill-only static asset** (e.g. `templates/study/html_shell.html`) — a non-`.md` file a skill reads and splices content into directly (never dispatched to a sub-agent, never a `SYNC-SOURCE` embed target), author-time-authored once and reused unchanged across runs.
 
 ## Install
 
@@ -1172,6 +1186,54 @@ CHANGELOG.md                  # repo root, Keep a Changelog format (Step 3 prepe
 ### Language Support
 
 Communicates in the user's language for progress, questions, confirmations, errors, and gate prompts. State.json field names, file names, branch/tag names, and commit message structure stay in English for tooling compatibility.
+
+---
+
+## study
+
+Turns an already-produced development artifact — a `/harness` output directory, a whole project, or a git diff — into a study guide so a learner can internalize the work after the fact, grounded in cited real code rather than a prettier restatement of it.
+
+```
+/study                                # auto-detects the most recent /harness output (spec.md + changes.md)
+/study --harness anthropic-best-practices-skill-improvements
+/study --project
+/study --diff v8.7.0..HEAD
+/study --mode thorough --md           # Markdown output instead of HTML
+```
+
+**What it does:**
+- **7 sections per topic**: (a) concept explanation, (b) real code excerpts, (c) interview Q&A, (d) hands-on exercise (with answer + hint), (e) design rationale (incl. rejected alternatives), (f) anti-patterns & pitfalls, (g) glossary & further reading. One author owns all 7 sections of a topic, so its Q&A and exercise answers can never silently contradict each other.
+- **3-tier coverage**: topics are distributed across basic/practice/advanced tiers (a coverage allocation, not a per-topic 3x regeneration) — see the mode/quota table below.
+- **Machine-checked provenance, not a prompt promise**: every code excerpt is re-read against the real repository file before publishing (whitespace-normalized fingerprint match) and gets a badge computed from that check, never from a model-filled field; every narrative claim (design decision, anti-pattern, glossary term) carries a `repo`/`inference` basis, auto-downgraded to `inference` if its evidence path does not resolve. `disallowed-tools` includes `WebSearch`/`WebFetch`, so every external link is labeled unverified structurally, not by policy.
+- **Self-contained static HTML** by default (`--md` for a degraded Markdown view instead) — inline CSS/JS, dark/light aware, tier-filterable, zero external requests.
+
+### Modes
+
+| Mode | Topics (default) | Agents | Token cost |
+|------|-------------------|--------|------------|
+| **quick** | 4 (range 3-5) | 0 (inline, full 7-section/3-tier path — the Windows CRLF safety net) | 1x |
+| **deep** | 8 (range 6-10) | 3 evidence lenses + topic-bucket authors + assemble | ~1.5x *(estimated)* |
+| **thorough** | 10 (range 10-15) | + a reproducibility/misconception critic pass | ~2.5x *(estimated)* |
+
+deep/thorough run on the native Workflow path (opt-in via `--mode` or an ultracode session); quick is always inline and is a genuinely complete path, never a stub.
+
+### Options
+
+| Option | Default | Description |
+|--------|---------|--------------|
+| `--harness <slug>` | auto-detect | Target an existing `docs/harness/<slug>/` directory (needs `spec.md`; `changes.md` improves rationale evidence) |
+| `--project` | — | Whole-project target |
+| `--diff <range>` | — | A git diff range as the target |
+| `--md` | off (HTML) | Markdown output instead of HTML — mutually exclusive with HTML |
+| `--mode` | auto-recommend | `quick` / `deep` / `thorough` |
+
+### Output
+
+`docs/harness/<slug>/study_guide.html` (round 1) / `study_guide_round<N>.html` (round ≥ 2, prior rounds never deleted or overwritten — same rule as `/deep-review`), plus a `study_guide[_round<N>].json` SSOT object snapshot and a `docs/harness/study_index.md` append-only index. Completion prints 4 accounting lines: `Claims`, `Quotes`, `Exercises`, `Refs`.
+
+**Safety features**: read-only over the analyzed source (only 4 paths are ever written — the rendered guide, its JSON snapshot, the root index, and a session-scoped topic-approval cache), a single combined confirmation gate (topics + cost + Artifact-publish disclosure) before any authoring spend, and an un-approved-topic guard (the segment may narrow/merge the approved list but never silently add to it).
+
+**What is and is not machine-checked** (stated plainly, because the rest of this section reads like a capability list): what the tooling actually verifies is **quote realness** (the excerpt's path, line range, and whitespace-normalized fingerprint against the real file), **answer presence** (every exercise has a non-blank hint and answer; every Q&A item has a non-blank answer), and **reference-path validity** (repo-internal evidence paths resolve). What it does **not** and cannot verify is whether the explanations are pedagogically sound, whether the answers are *correct*, whether external links exist, or whether you will actually be able to reproduce and explain the work afterwards — **that final judgment is yours**. Token-cost multipliers are marked *(estimated)* until measured. Treat the guide as a well-sourced study aid, not an audited textbook.
 
 ---
 
