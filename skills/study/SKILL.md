@@ -275,6 +275,20 @@ Collect the authored topics into the same `studyGuide = { topics: [...] }` shape
          //   3. quick pays none of this (the evidence never leaves the orchestrator's context), so
          //      the inline path fills its full line budget and ignores this entire section.
          //
+         // **On a dense-code target, prefer quick — the cap cannot hold both.** Reserving prose
+         // first protects the rationale but starves the cited block, and no split of 35,000 fixes
+         // it when individual files are large: measured 2026-08-04 on
+         // `--harness feature-face-auth-sse-subscribe`, the protected subtrees are 19,655
+         // characters, leaving 13,280 for code, while the top three ranked files are 3,611 /
+         // 13,042 / 13,808 characters — so `FaceAuthSseWindowApplication.java`, the 527-line class
+         // the feature is ABOUT and the one whose two windows merge, is dropped whole. Give the
+         // cited block the whole cap instead and the rationale disappears. This is not a ratio to
+         // tune; it is the cap being smaller than the target needs. quick has no such cap and
+         // holds its full 600-line budget in one context, which is the second and stronger reason
+         // the budgets do not rank the way the mode names suggest (§Risks). When a target's top
+         // files are this large, say so at the Step 1.6 gate so the user can choose quick knowingly
+         // rather than receive a deep guide whose central file was silently dropped.
+         //
          // Over the cap, reduce in this fixed order and no other:
          //   1. the `## Cited Source Files` block is NEVER trimmed and code is NEVER shaved — drop
          //      whole files from the bottom of the ranking instead (Step 1.3(4));
