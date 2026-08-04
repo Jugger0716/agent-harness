@@ -18,6 +18,17 @@
 > **Append and correct in place — never delete a repudiated figure.** §Repudiated Figures is the
 > only thing standing between a retired number and its restoration as a measurement; that
 > restoration has already happened once (`3,611`, below).
+>
+> **Pin every measurement of THIS repository's own state to a commit SHA.** A figure taken from
+> something that keeps changing — a script's line count, a fill result, `git diff main..HEAD` —
+> is true only at the commit where it was measured, and a moving range cited in the present tense
+> is false the moment the branch grows. This is not hypothetical: an audit found `548 of 550
+> lines` broken by the commit made two minutes after it was written, and `199,206 characters`
+> already wrong at the commit that introduced it. A pinned figure does not rot; it becomes
+> historical, which is what a ledger is for. **A figure with no SHA must be one of two things**:
+> a measurement of an external target, or of a file whose content has not changed since — and if
+> you cannot say which, pin it. This is the same discipline as §Fill Rule's "never inherit a
+> ranking", applied to the record instead of to the run.
 
 ## Index
 
@@ -53,6 +64,13 @@ Never restore any left-column value as a measurement. Every one of them was publ
 | "all 16 occurrences of `A` are the English indefinite article" | 15 are the `A` of `Q&A`; the 16th is a code span naming a DIFFERENT skill's segment script | a cross-file collision, not an article — a fifth kind alongside §Named By Name's four | 3d39129 |
 | §1.6 gate's `12,238` (= `8,627 + 3,611`) | `12,069` (= `8,627 + 3,442`) | carried the repudiated `3,611` **after** Step 2-W had retired it, so the file asserted and repudiated the same number | 9d25760 |
 | zero-code state `48,015` | `47,993` | counted the 22-character `## Cited Source Files` heading that Step 1.3(7) never appends when no file qualifies | 9d25760 |
+| `--stat` = 794 characters over **15 files** | **14 files** | 794 characters is right; the `--stat` output is 15 *lines* — 14 file rows plus the summary row — and the line count was read as a file count | 2026-08-05 audit |
+| `templates/study/html_shell.html` ≈ **~9,800** characters | **9,962** | never re-measured; the file has not changed, so this was wrong when written, next to a paragraph demanding characters be counted with a script | 2026-08-05 audit |
+| `367 characters unused **because** spec.md has a 457-character paragraph` | 367 = spec **200** + changes **167** | the paragraph accounts for 200; `changes.md` independently loses 167 to its own 177-character line at its snap point | 2026-08-05 audit |
+| `a 457-character paragraph **with no newline in it**` | 456-character body plus its terminator | 457 includes the line terminator that §Prose Reservation elsewhere pins as INCLUDED — the same boundary described both ways in one file | 2026-08-05 audit |
+| room range `10,599-34,978` | **unestablished** | depends on a fill never run for all 10 targets. The upper bound is `35,000 − 22`, and that 22 is the heading constant retired one row above: at `code = 0` Step 1.3(7) appends nothing, so the bound would be 35,000. The clause it supported does not need a room range at all (see §Dead Escape Clauses) | 2026-08-05 audit |
+| `git diff main..HEAD` = 2,145 lines / 199,206 characters | true only **at `d8fea6d`** | a moving range cited in the present tense. At `243867b`, the commit that introduced the figure, the range was already 2,377 lines / 221,207 characters; today it is 2,810 / 248,829, i.e. **7.1×** the cap rather than 5.7× | 2026-08-05 audit |
+| `its own **548-line** fill gathers 23,511` (present tense) | true only **at `a8b97bc`** | `88c2e5f`, made two minutes later on the same branch, grew `verify_sync_markers.py` from 221 to 300 lines; the fill now stops at **498 of 550 lines over 2 files**. The figures are correct at the pinned SHA — the tense was the defect | 2026-08-05 audit |
 
 **One figure is retained deliberately and must not be read as live:** the ranking
 `732 / 221 / 198`, with `workflows/study.analyze.workflow.js` on top. It predates step 3's
@@ -209,6 +227,16 @@ segment script. So the honest lesson is a cross-file collision — a fifth kind 
 the rule enumerates — and the example never supported the point it was cited for, because clause
 (b)'s 3-character floor excludes a one-character identifier under either reading.
 
+**Why clause (c) pins whole-token matching (measured 2026-08-05).** Leaving "occurs" to the
+reader is not neutral — the two readings disagree on real output. On this repository's own
+`workflows/study.analyze.workflow.js` the substring reading yields **7** qualifying declarations
+against the whole-token reading's **6**, the difference being `lenses` matching inside
+`lensesRequested`; the 6 is what this ledger and SKILL.md record, so whole-token is the reading
+the measurements were taken under. On `pass-monorepo-be`'s `SalesDomainService.java` the readings
+pick different declarations and the merged window comes out **264 lines** (substring:
+`cancel`/`register`) versus **297** (whole-token: `cancel`/`SalesDomainService`). An unpinned
+reading is therefore a determinism violation, not a stylistic choice.
+
 **Why tightening the test makes it worse (measured 2026-08-04, this repository).** `topics`
 (line 615) enters the top two on kinds (iii) and (iv) ALONE — six filename occurrences plus two
 `topics=N` completion-sentinel attributes, and **zero** references to the declaration. Excluding
@@ -231,10 +259,25 @@ rule ranks by first mention in the documents, and a document discussing one part
 the declarations that sit next to each other inside it.
 
 That measurement is taken on the FILE, not on a live selection: basename recovery has since moved
-this file to 5th, so no `--harness` target in this repository actually windows it. The overlap
-arithmetic is unaffected — it is a property of where the two declarations sit — but the merge rule
-itself remains **unrun**, and the target that would exercise it is one citing a file longer than
-the per-file cap that the fill actually reaches.
+this file to 5th, so no `--harness` target in this repository actually windows it — verified
+2026-08-05 by reproducing the fill across all three of this repository's slugs, none of which
+reaches an over-cap file.
+
+**A reaching target does exist, and it was found (2026-08-05).** Reproducing Step 1.3(2)-(5) over
+`pass-monorepo-be`, `--harness feature-coin-operated-washer` fills to `FacilityApplication.java`
+(940 lines), windows it, merges 44-193 + 81-230 into 44-230 = **187 lines / 11,595 characters**,
+and **adopts that merged window as final evidence under both the quick and the workflow path** —
+the character remainder does not displace it. So the merge rule is not merely arithmetic here: a
+`/study` invocation on that slug exercises it end to end. (The other candidate,
+`--harness feature-face-auth-sse-subscribe`, does NOT qualify on the workflow path: its
+reservation of 8,627 leaves 26,373 characters, the first two ranked files take 16,273, and
+`FaceAuthSseWindowApplication.java`'s merged window needs 13,632 — so it is dropped whole, exactly
+as §Reduction Order already records. A first pass through this audit reported it as adopted; it
+had modelled the line budget without the character remainder.)
+
+What remains unrun is therefore narrower than "the merge rule": it is a live `/study` invocation
+observing the orchestrator perform the Grep calls, the `\|` un-escaping and the extension ordering
+without hitting the failure modes this file warns about.
 
 ## §Fallback Cap
 
@@ -323,7 +366,9 @@ satisfies `reserved + filled + overhead ≤ 35,000` by construction, so "over th
 reached by comparing UNDIMINISHED demand against the cap — and running rung 1 first on that
 comparison drops all the code before any prose is touched.
 
-Measured on `--harness study-skill`: reserved 8,565 + filled code 23,511 + overhead 227 =
+Measured on `--harness study-skill` **at `a8b97bc`** (198 + 221 + 129 = 548 lines,
+8,182 + 9,010 + 6,319 = 23,511 characters — see the pinning rule at the top of this file):
+reserved 8,565 + filled code 23,511 + overhead 227 =
 **32,303**, inside the cap with all three ranked files intact. But undiminished demand is
 `47,993 + 23,511 + 227 = 71,731`, and reducing that by rung 1 first drops file after file to
 47,993 with **zero code left**, still over, and only then cuts `spec.md` — landing at 13,064
@@ -334,10 +379,14 @@ quote.
 
 **The slack-return pass count is pinned, and leaving it open cost a round.** Snapping down means
 a prefix stops at the last line boundary before its target, so some slack goes unused. Measured
-on `--harness study-skill`: slack `11,262 − 8,565 = 2,697` targets spec 9,951 / changes 1,311,
-which snap to **9,751 / 1,144** — prose lands at **10,895**, returning 2,330 of 2,697 (86.4%) and
-leaving 367 characters unused because `spec.md` has a 457-character paragraph with no newline in
-it right at the boundary. A tempting second reading — iterate, and hand a document's unusable
+on `--harness study-skill` **at `a8b97bc`**: slack `11,262 − 8,565 = 2,697` targets spec 9,951 /
+changes 1,311, which snap to **9,751 / 1,144** — prose lands at **10,895**, returning 2,330 of
+2,697 (86.4%) and leaving **367** characters unused. That 367 is **not** all one document's
+doing, which an earlier wording implied: `spec.md` contributes **200**, losing them to a single
+457-character line at its boundary (456 characters of body plus the terminator this file counts
+as included), and `changes.md` independently contributes **167**, losing them to its own
+177-character line. Snap loss is a property of both documents, not of one unusually long
+paragraph. A tempting second reading — iterate, and hand a document's unusable
 share to the other — recovers most of that (about 11,257 on this target) but requires a
 redistribution rule the one-pass rule does not state, a termination argument, and a second
 competing definition of the split. The two readings differ by 362 characters on this target, and
@@ -349,9 +398,10 @@ the fill has three stop conditions. **Character-bound**: the next ranked file's 
 exceeded the remaining characters, and the slack IS that remainder, so the file is too large by
 definition (measured on `--harness feature-face-auth-sse-subscribe`). **Line-bound**: the next
 file's lines exceeded the 550-line budget, and no amount of character slack lifts a line cap
-(measured on `--harness study-skill`, where the fill stops at 548 of 550 lines and the next
-ranked file, `templates/study/html_shell.html` at 199 lines, is excluded by lines while its
-~9,800 characters would have fit a larger slack). **File-count-bound**: the 12-file ceiling,
+(measured on `--harness study-skill` **at `a8b97bc`**, where the fill stops at 548 of 550 lines
+and the next ranked file, `templates/study/html_shell.html` at 199 lines, is excluded by lines
+while its **9,962** characters would have fit a larger slack — that file is unchanged since, so
+only the fill's stopping point is SHA-dependent here). **File-count-bound**: the 12-file ceiling,
 which character slack does not lift either — no measured target has reached it (§Fill Rule tops
 out at 11 files), but an enumeration that claims completeness has to include it. An earlier
 revision stated the first case only; a later one stated two and asserted "do not restate the
@@ -398,8 +448,13 @@ governs instead.
 **(a) "If the reserved prefixes alone exceed the room, cut further from the tail of the larger
 one."** The fill admits a file only while `code + overhead ≤ 35,000 − reserved`, so
 `reserved ≤ 35,000 − code − overhead` holds by construction, with equality the only tight case.
-Measured across the 10 targets, reservations run 1,277-8,720 against a room of 10,599-34,978 —
-zero cases, and PROSE_CAP being a flat 8,750 means there is no reachable input that produces one.
+Measured across the 10 targets, reservations run **1,277-8,720** — and since PROSE_CAP is a flat
+8,750, no reachable input produces a reservation above it, so the clause can only fire if the
+room ever fell below 8,750, which the construction above forbids. (An earlier version of this
+paragraph also quoted a room range of `10,599-34,978`. That figure is retired — see
+§Repudiated Figures: it depends on a fill never run across all 10 targets, and its upper bound
+carries a heading constant this file has already retired. The argument never needed it: the flat
+PROSE_CAP is what closes the case.)
 
 **(b) "If the cited block alone still exceeds the cap, proceed over the cap and say so."** Same
 inequality, plus the degenerate case closes it from the other side: if even the top-ranked file
