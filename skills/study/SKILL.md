@@ -100,7 +100,7 @@ The Author segment/inline pass MAY merge, narrow, or re-tier the approved topic 
 3. **Gather target evidence** (orchestrator-inline, cheap — this is NOT the Author segment). The branches below are keyed on the **resolved target kind**, not on which flag was typed — an auto-detected run (no flag at all, step 2) resolves a harness slug and therefore takes the first branch:
    - **harness slug target** (explicit `--harness <slug>`, or a slug resolved by auto-detect): read `spec.md` + `changes.md` in full, **then follow them into the code they name.** Those two documents are a decision ledger; stopping at them is precisely what produces a guide about prose instead of about code. Sub-procedure:
      1. **Run this as a script, not by eye** (Grep/Bash — same standing as the deterministic-render rule in §3.2.2). Extracting paths, counting citations and ordering them are byte-level operations; performed by hand, the same target yields a different ordering on every run, which destroys the reproducibility step 3 exists for.
-     2. **Extract candidate paths.** From both documents — inside code spans/fences and in running text — collect repo-relative tokens matching `[\w./-]+\.(json|yaml|html|toml|java|tsx|cpp|mjs|cjs|yml|ps1|sql|css|js|ts|py|go|rs|rb|sh|cc|c|h)\b` and count occurrences of each. **The alternation is ordered longest-extension-first and closed with `\b` — do not "tidy" it into alphabetical order, and do not "harden" the ending into `(?![\w])`.** Ripgrep and most regex engines are leftmost-*first*, not leftmost-longest: with `js` ahead of `json`, `state.json` matches as `state.js`, and with `h` ahead of `html`, `html_shell.html` matches as `html_shell.h`. Both truncations produce paths that do not exist, so step 3 deletes them silently and the config bucket simply disappears with no error anywhere. The trailing `\b` is deliberate and `(?![\w])` is not an acceptable substitute: it is semantically identical here, but ripgrep's default engine has no look-around and rejects it outright with `regex parse error` — the pattern would die in the exact tool step 1 tells you to use. (All three behaviours measured 2026-08-03 against this repository's own `spec.md`.) Known gap, accepted: extension-less files such as `.gitattributes` or `Dockerfile` cannot be found by an extension pattern, so they never enter evidence this way even though §3.4a can classify one as `config` if a topic quotes it from elsewhere.
+     2. **Extract candidate paths.** From both documents — inside code spans/fences and in running text — collect repo-relative tokens matching `[\w./-]+\.(json|yaml|html|toml|java|tsx|cpp|mjs|cjs|yml|ps1|sql|css|js|ts|py|go|rs|rb|sh|cc|c|h)\b` and count occurrences of each. **The alternation is ordered longest-extension-first and closed with `\b` — do not "tidy" it into alphabetical order, and do not "harden" the ending into `(?![\w])`.** Ripgrep is leftmost-*first*, not leftmost-longest, so alphabetical order truncates `state.json` to `state.js` and the resulting path — which does not exist — is deleted silently by step 3, taking the config bucket with it; and ripgrep's default engine has no look-around, so `(?![\w])`, semantically identical here, dies with `regex parse error` in the exact tool step 1 tells you to use. Both failure modes are measured (`workflows/_reference/study_measurements.md` §Outline Patterns). Known gap, accepted: extension-less files such as `.gitattributes` or `Dockerfile` cannot be found by an extension pattern, so they never enter evidence this way even though §3.4a can classify one as `config` if a topic quotes it from elsewhere.
 
         **Second known gap, also accepted — the `config` bucket can be structurally empty.** A `spec.md` describing work that has not shipped yet names the files that work will *create*, and step 3 drops every path that does not exist at scan time. On a `--harness` target those future artifacts are overwhelmingly config: measured 2026-08-04 against this repository, the documents named `state.json` (6), `.harness/study/topics.json` (5), `topics.json` (5), `study_guide.json` (3), `.harness/model_config.json` (2) and `model_config.json` (1) — six config paths, all correctly dropped as non-existent, leaving zero config candidates and an evidence set that was 100% executable code. The bias is systematic, not incidental, because naming files-to-be-created is what a spec does. **Do not add a compensating branch**: quoting a file that does not exist is precisely what this skill must never do, and §3.9's publish gate keys on a topic having *neither* code *nor* config, so `config == 0` on its own can never fire a false gate. Report it, do not repair it.
      3. **Exclude, then order deterministically.** Drop prose (`.md`/`.mdx`/`.txt`/`.rst`/`.adoc`), **everything under `docs/`** (this skill's own output — otherwise a previous round's report qualifies as "code"), non-existent paths, binaries, **empty files (0 bytes)**, and anything failing `resolve ⊆ cwd`. Order by citation count descending, then **path ascending** as the tie-break.
@@ -109,35 +109,27 @@ The Author segment/inline pass MAY merge, narrow, or re-tier the approved topic 
 
         **Before dropping a non-existent path, try its basename ONCE.** Deep package trees make documents abbreviate — a Java spec writes `app/pass-window-app/.../features/external/controller/FaceAuthSseController.java`, and step 2's pattern swallows the `.../` elision into the path, producing something that cannot exist. Recover it, and accept the result ONLY when BOTH hold: (a) exactly ONE file outside the §Exclusion List trees carries that basename, and (b) if the token contains a path separator, the recovered path's tail matches the token's segments after its last elision. Otherwise drop as before — **an ambiguous basename is never guessed.** Merge a recovered path's count into that file's existing count when it is already ranked; one document routinely writes the same file both ways.
 
-        **The exclusions in the paragraph above RE-APPLY to the recovered path, not only to the token.** A bare basename carries no directory, so "everything under `docs/`" cannot possibly fire at the token stage — it has to fire again after recovery, or a basename smuggles this skill's own previous output back in as evidence, which is the exact circularity that exclusion exists to prevent. Measured 2026-08-04 on this repository: `study_guide.html` (5 citations), `study_guide.json` (4, across two spellings) and `study_guide_round2.html` (1) all recover uniquely into `docs/harness/study-skill/`; `study_guide.html` contains a `<script>` block, so §3.4a would classify a previous round's own report as **`code`**, and at 5 citations it wins the path tie-break (`d` < `w`) against `workflows/study.analyze.workflow.js`. So: re-run prose, `docs/`, binary and `resolve ⊆ cwd` against the RECOVERED path and drop it there. Recovery may only change WHERE a path points — never WHETHER it is admissible.
+        **The exclusions in the paragraph above RE-APPLY to the recovered path, not only to the token.** A bare basename carries no directory, so "everything under `docs/`" cannot possibly fire at the token stage — it has to fire again after recovery, or a basename smuggles this skill's own previous output back in as evidence, which is the exact circularity that exclusion exists to prevent — measured, this repository's own `study_guide.html` recovers uniquely, contains a `<script>` block, and would therefore be admitted as `code` by §3.4a. So: re-run prose, `docs/`, binary and `resolve ⊆ cwd` against the RECOVERED path and drop it there. Recovery may only change WHERE a path points — never WHETHER it is admissible.
 
-        Measured 2026-08-04 on a Java monorepo (`pass-monorepo-be`, `--harness gate-control-sse`): 78 tokens matched, 64 dropped as non-existent, of which **57 resolved uniquely by basename and 0 were absent from the repository** — 62 of 78 citation-weight, including all 54 cited `.java` files, was being discarded. Without this recovery the top-ranked evidence was three `application*.yml` files and none of the code the spec is about, so the guide would have taught Spring configuration instead of gate control.
-
-        **Deep-tree elision is not the only abbreviation, and an earlier claim here — that this repository's paths are too shallow for its documents to abbreviate, so self-targeting could never surface recovery — was wrong.** Measured 2026-08-04 on `--harness study-skill`: these documents cite the verifier scripts by **bare basename** (`verify_meta_literal.py`, `verify_sync_markers.py`, `check_workflow_syntax.mjs`, `html_shell.html`) about as often as by path, and 9 tokens recover on this target — of which 5 survive the re-applied exclusions above and 4 are dropped as `docs/` output. A bare basename is an abbreviation with no separator at all, so clause (b) never even applies to it. Recovery is therefore load-bearing on this repository too — enough to reorder the ranking outright, which step 4's worked example now records.
+        **Recovery is load-bearing on deep package trees AND on this shallow repository** — 62 of 78 citation-weight recovered on a Java monorepo, and bare-basename citations of the verifier scripts reorder this repository's own ranking outright. Both measurements, and the earlier claim they refuted, are in `workflows/_reference/study_measurements.md` §Basename Recovery.
      4. **Budget — the WORKFLOW path gets LESS than quick, not more.** deep/thorough = **550 lines** total / **300 lines per file** / at most **12 files**; quick = **600 lines** total / **300 lines per file** / at most **12 files** (quick holds this evidence in ONE context while authoring 3-5 topics and writing a ~60KB report — see §Risks).
 
-        **Fill it: take files in ranking order and STOP at the first one that will not fit — never skip it to take a smaller file further down.** The kept set is always a prefix of the ranking, which is the same thing as "drop from the bottom" (below) when you walk the ranking in order. Skipping is a third algorithm that neither phrase sanctions, and it is worse than it looks: measured 2026-08-04 on `--harness feature-face-auth-sse-subscribe`, greedy skipping reached 598 of 600 lines but let a 2-citation file in while passing over a 3-citation one, whereas stopping yields 513 of 600 with the ranking intact. Trading 14% of the budget for that inversion is the wrong trade, because citation rank is the ONLY relevance signal this step has, and skipping systematically favours small files — the exact size bias that made the old 3-file ceiling so bad on Java. Report the stop in the step-7 notice. The LINE budget is the binding constraint; the 12-file ceiling only bounds fragmentation and is not meant to bind. This replaces an earlier 3-file ceiling that bound first on every target ever measured and left most of the line budget unspent — measured 2026-08-04 across 8 real slugs, the old ceiling produced 180 / 358 / 465 / 471 / 513 / 548 / 502 / 350 lines against budgets of 550, while filling produces 549 / 547 / 529 / 496 / 547 / 548 / 502 / 350 over 11 / 6 / 5 / 4 / 4 / 3 / 3 / 2 files. The worst case was a Java monorepo slug citing 44 files: 3 of them gave **180 of 550**, and filling gives 549 — a 3× increase in evidence for a budget that was already allocated. The 12 comes from that measurement (the highest fill observed is 11 files), not from taste.
+        **Fill it: take files in ranking order and STOP at the first one that will not fit — never skip it to take a smaller file further down.** The kept set is always a prefix of the ranking, which is the same thing as "drop from the bottom" (below) when you walk the ranking in order. Skipping is a third algorithm that neither phrase sanctions, and it is worse than it looks: it buys line count by admitting a lower-cited file over a higher-cited one, and citation rank is the ONLY relevance signal this step has — measured, skipping systematically favours small files, the exact size bias that made the old 3-file ceiling so bad on Java. Report the stop in the step-7 notice. The LINE budget is the binding constraint; the 12-file ceiling only bounds fragmentation, is not meant to bind, and its 12 is a measured maximum rather than taste. The skipping comparison and the 8-slug before/after table that retired the old 3-file ceiling are both in `workflows/_reference/study_measurements.md` §Fill Rule.
 
-        **On the inline path filling is free; on the WORKFLOW path it is not, and the line budget is not what binds there.** quick holds the evidence in one context with no serialization cap, so it simply fills. deep/thorough serialize through `args.sharedEvidence` under a hard 35,000-character cap, and characters-per-line is language-dependent: measured 2026-08-04, a filled 550-line gather is 24,923 characters on one Java slug and **31,945** on another (58 chars/line). Fill first on that second slug and the cap has `35,000 − 31,945 = 3,055` characters left for two documents measuring **26,688** together — the code side alone eats the allowance. So on the workflow path, **Step 2-W reserves prose FIRST and the reserved remainder sizes this step's fill**: that reservation is a fixed **8,750-character** prose budget split between the two documents (Step 2-W), so this step fills against `35,000 − <reserved> − the block's own overhead`, roughly 26,000 characters on that slug rather than the 31,945 a full 550-line fill wants. **Compute the reservation BEFORE starting this fill.** It depends only on the two documents' lengths — never on what this step selects — so there is no circularity, and it is what makes the §1.6 gate able to state the reduction before the spend rather than after it. Fill until the line budget OR that character remainder runs out, whichever binds first.
+        **On the inline path filling is free; on the WORKFLOW path it is not, and the line budget is not what binds there.** quick holds the evidence in one context with no serialization cap, so it simply fills. deep/thorough serialize through `args.sharedEvidence` under a hard 35,000-character cap, and characters-per-line is language-dependent — measured, a filled 550-line gather runs from 24,923 to **31,945** characters with the language, and at the high end the code side alone eats the whole allowance (`workflows/_reference/study_measurements.md` §Serialization Cost). So on the workflow path, **Step 2-W reserves prose FIRST and the reserved remainder sizes this step's fill**: that reservation is a fixed **8,750-character** prose budget split between the two documents (Step 2-W), so this step fills against `35,000 − <reserved> − the block's own overhead`. **Compute the reservation BEFORE starting this fill.** It depends only on the two documents' lengths — never on what this step selects — so there is no circularity, and it is what makes the §1.6 gate able to state the reduction before the spend rather than after it. Fill until the line budget OR that character remainder runs out, whichever binds first.
 
-        An earlier revision of this paragraph claimed the workflow path pays nothing for filling, on the ground that the cap holds the total constant. It does not — the arithmetic above is what a fill-first order actually produces. Two later revisions then tried to protect the prose by heading NAME (`Goal`/`Background`/`Scope`/`Approach`) and by heading SUBTREE; both are measured failures, and Step 2-W records the measurements and the positional rule that replaced them. The composition trade — code displacing the decision ledger's prose — is still the one this skill wants, but it is bounded, and the bound is now a number (8,750 characters) instead of a heading pattern that a document can decline to follow.
-
-        The inversion is counterintuitive enough to state outright. quick holds the evidence in one context and never serializes it; deep/thorough must pass it through `args.sharedEvidence`, which the orchestrator re-emits as tool-call output and the segment then re-embeds in EVERY lens and bucket prompt — 6 agents in deep, 7+ in thorough. **Evidence cost is multiplied by the agent count on the workflow path and paid once on the inline one**, so the budgets run opposite to the modes' apparent size. **What deep and thorough buy is more ANALYSIS over the same evidence — 8-15 topics, three independent lenses, a critic and an assemble pass — never more evidence.** (Measured 2026-08-04: the old 5-file / 1,200-line row produced an 898-line gather that serialized to ~56,000 characters. The orchestrator cannot re-emit that in one dispatch call, and hand-transcribing it would corrupt the §3.4 quote re-verification the whole guide rests on — the exact failure mode §3.2.2 forbids for the render.)
+        The inversion is counterintuitive enough to state outright. quick holds the evidence in one context and never serializes it; deep/thorough must pass it through `args.sharedEvidence`, which the orchestrator re-emits as tool-call output and the segment then re-embeds in EVERY lens and bucket prompt — 6 agents in deep, 7+ in thorough. **Evidence cost is multiplied by the agent count on the workflow path and paid once on the inline one**, so the budgets run opposite to the modes' apparent size. **What deep and thorough buy is more ANALYSIS over the same evidence — 8-15 topics, three independent lenses, a critic and an assemble pass — never more evidence.** (Measured: the old, larger budget row serialized to ~56,000 characters, which the orchestrator cannot re-emit in one dispatch call at all, and hand-transcribing it would corrupt the §3.4 quote re-verification the whole guide rests on — the exact failure mode §3.2.2 forbids for the render. `workflows/_reference/study_measurements.md` §Serialization Cost.)
 
         **When the caps conflict, the total wins and whole files drop from the bottom of the ranking** — which the fill rule above now makes true by construction rather than by exception. It was previously false in practice: with a 3-file ceiling the FILE cap bound first on all 8 measured targets, so "the total wins" described a conflict that never arose. The three limits are still not independent: a real ranking can satisfy every per-file cap and still exceed the total. Never shave a file into a fragment to make the arithmetic work, and never cut the top-ranked file's window count to buy room — those windows are the entire point of step 5. Drop the lowest-ranked file instead, whole, and name it in the step-7 notice.
 
-        **Worked example — the order of operations is: compute step 5's windows (merging any overlap) FIRST, then test the total, then drop whole files from the bottom.**
+        **The order of operations is: compute step 5's windows (merging any overlap) FIRST, then test the total, then drop whole files from the bottom.** The worked example on this repository's own three candidate slugs, the counterfactual that exercises the merge, and the ranking history are in `workflows/_reference/study_measurements.md` §Fill Rule.
 
-        *Measured 2026-08-04, `--harness study-skill`:* the ranking is `scripts/verify_meta_literal.py` (10 citations, 198 lines) / `scripts/verify_sync_markers.py` (9, 221) / `scripts/check_workflow_syntax.mjs` (6, 129) / `templates/study/html_shell.html` (6, 199) / `workflows/study.analyze.workflow.js` (5, 743). The third and fourth tie at 6 citations and the path tie-break separates them (`s` < `t`). The first three sit under the 300-line per-file cap and enter whole for a total of **548** — inside deep's 550 and quick's 600 alike; the fourth would reach 747 and does not fit, so the fill stops there and the fifth is never examined. No window, no merge, no drop. **Note the ranking has five entries and the kept set has three** — a prefix, which is what the fill rule says it always is. Do not read a worked example that lists only the kept files as a complete ranking; that reading is what made the next paragraph's earlier claim look stronger than it was.
-
-        Two corrections follow, and each cost a round to find. **(i) Never inherit a ranking — re-measure it.** An earlier revision of this file recorded `732 / 221 / 198` with `workflows/study.analyze.workflow.js` on top. That measurement predates step 3's basename recovery, which merges bare-basename citations into the small verifier scripts and pushes `study.analyze.workflow.js` down to **5th, at 5 citations**. A ranking is an output of steps 2-3, so it changes whenever they do. **(ii) Step 5 does not run on any `--harness` target in this repository — but that is a property of the KEPT SET, not of the procedure.** Measured across all three candidate slugs, the fill keeps 198/221/129, 221/129/152 and 152/198, and not one KEPT file exceeds the per-file cap. The rankings themselves DO contain over-cap files — `workflows/study.analyze.workflow.js` (743 lines) sits 5th on `study-skill` — they are simply never reached, because the fill stops earlier. Two consequences, both previously unstated: (a) where the next candidate IS over the cap, the fill cannot know whether it fits without computing step 5's windows, so **step 5 runs on a file the fill then drops**; (b) step 5's visibility rule then fires for that file, printing a notice about a file that never entered the evidence. When it does, name the file as *evaluated for the budget, then dropped* — never as gathered evidence, which is what the unqualified notice implies. Windowing and its merge rule are therefore documented-but-unrun HERE; the target that exercises them is one whose documents cite a file longer than 300 lines that the fill actually REACHES (the Java monorepo in step 3's measurement is one). Do not read the counterfactual below as a record of a run.
-
-        *Counterfactual, kept because it is the arithmetic these caps exist for.* Were the ranking `732 / 221 / 198` in quick with the top file over the cap: its two windows merge to a 151-line union (step 5, measured on the file itself), so 151 + 221 + 198 = 570 of 600 and nothing drops. Had those same windows been disjoint they would contribute 300, so 300 + 221 = 521, and the third file at 198 would reach 719 — dropped. Same rule, different union, opposite outcome; that is exactly why the drop test runs last. Naïvely capping the top file at 300 instead of windowing it gives 300 + 221 + 198 = 719, 20% over.
+        Two rules survive from that history and are load-bearing here. **(i) Never inherit a ranking — re-measure it**: a ranking is an output of steps 2-3, so it changes whenever they do, and the ranking this file once published was already stale. **(ii) Where the next candidate is OVER the per-file cap, the fill cannot know whether it fits without computing step 5's windows, so step 5 runs on a file the fill then drops** — and step 5's visibility rule then fires for that file, printing a notice about a file that never entered the evidence. When it does, name the file as *evaluated for the budget, then dropped*, never as gathered evidence, which is what the unqualified notice implies. Windowing and its merge rule are therefore documented-but-unrun on every `--harness` target in this repository; the target that exercises them is one citing a file longer than 300 lines that the fill actually REACHES.
      5. **Over the per-file cap, never truncate from the head.** Grep the top-level declaration outline **using the pattern set for the file's extension (table below)**, with line numbers, then read **at most two 150-line windows** centred on declarations the documents named by name.
 
         **The patterns are per-extension, and every one of them is ripgrep-safe** — no look-around, no backreferences — because sub-procedure step 1 tells you to run this with Grep/Bash and ripgrep's default engine rejects look-around outright (same measured constraint as step 2's `(?![\w])` note). Match each pattern against the whole line anchored at `^`; the declaration's name is the LAST capture group that is a bare identifier.
 
-        **Read `\|` in the table below as a plain `|`.** A pipe inside a GFM table cell has to be written `\|` or it ends the cell, so the alternations appear escaped — but `\|` in a regex means a LITERAL pipe character, which turns `(class\|interface)` into a pattern matching the text `class|interface` and silently matches nothing. **Un-escape every `\|` to `|` before handing a pattern to Grep.** Measured 2026-08-04: the `.java` type pattern copied WITH its table escaping returns **0 matches and no parse error** on a file where the un-escaped form finds `public class FaceAuthSseWindowApplication` at line 82 — ripgrep accepts it and silently finds nothing, which is worse than being rejected. Same failure family as step 2's `(?![\w])`: a pattern that reads correctly in the document and dies in the tool this step tells you to use.
+        **Read `\|` in the table below as a plain `|`.** A pipe inside a GFM table cell has to be written `\|` or it ends the cell, so the alternations appear escaped — but `\|` in a regex means a LITERAL pipe character, which turns `(class\|interface)` into a pattern matching the text `class|interface` and silently matches nothing. **Un-escape every `\|` to `|` before handing a pattern to Grep.** Measured, the `.java` type pattern copied WITH its table escaping returns **0 matches and no parse error** on a file where the un-escaped form finds a `public class` declaration — ripgrep accepts it and silently finds nothing, which is worse than being rejected (`workflows/_reference/study_measurements.md` §Outline Patterns). Same failure family as step 2's `(?![\w])`: a pattern that reads correctly in the document and dies in the tool this step tells you to use.
 
         | Extensions | Outline patterns |
         |---|---|
@@ -153,27 +145,25 @@ The Author segment/inline pass MAY merge, narrow, or re-tier the approved topic 
 
         **The `.js` row is frozen.** Those three patterns are byte-identical to the only set this file ever carried, and every measurement in steps 4-5 rests on them (45 outline declarations in `workflows/study.analyze.workflow.js`, 6 qualifying, `topics`/`deviations` on top). Touch that row and the whole sub-procedure has to be re-measured.
 
-        **Why the table exists: the single previous set was JavaScript-shaped and silently matched nothing else.** `^class ` requires `class` at column 0, but Java writes `public class Foo`, has no `function` keyword and no `const x =`. Measured 2026-08-04 on `pass-monorepo-be`, the old set found **0** declarations in every Java file tested — including an 864-line class whose declaration sits at line 142 — so every over-cap Java file fell straight through to the fallback: no windows, no named-by-name test, no tie-break, no merge. Step 5 was dead code for the one language this skill had been validated against, and nothing said so, because the fallback is documented and its output looks plausible. With the table those same files yield 25 / 45 / 1 / 9 / 10 declarations, and the window merge fires on two real targets it could never reach before (`FaceAuthSseWindowApplication.java` 527 lines → windows 8-157 + 108-257 merge to 8-257 = 250 against a naive 300; `FacilityApplication.java` 940 lines → 44-193 + 81-230 merge to 44-230 = 187). A single-declaration file (a Java enum dictionary: outline 1, qualifying 1) correctly yields ONE window, not two.
+        **Why the table exists: the single previous set was JavaScript-shaped and silently matched nothing else.** `^class ` requires `class` at column 0, but Java writes `public class Foo`, has no `function` keyword and no `const x =` — so the old set found **0** declarations in every Java file tested and step 5 was dead code for the one language this skill had been validated against, invisibly, because the fallback is documented and its output looks plausible. Full before/after measurement: `workflows/_reference/study_measurements.md` §Outline Patterns.
 
         **Visibility rule — an outline that finds nothing is REPORTED, never silent.** For every file that goes over the per-file cap, print one line (in `user_lang`) when either its outline came back **empty** (no pattern set for the extension, or none matched) or its outline was non-empty but **nothing qualified**, naming the file, which of the two happened, and that the fallback was used instead of windows. The two cases have different fixes — a missing pattern set versus documents that never name a declaration — and a silent fallback is precisely what let an entire language go unwindowed for five rounds.
 
-        **"Named by name" is a mechanical test, not a judgment call.** An outline declaration qualifies only when its identifier (a) occurs in `spec.md`/`changes.md` **inside a backtick code span or a fenced block**, and (b) is at least 3 characters long. A bare occurrence in running prose does NOT qualify. This is not pedantry: the identifiers in a segment script are also ordinary English or ordinary domain words, and a loose reading counts every one of those (measured 2026-08-04 in those two documents: `topics` 12, `deviations` 8, `render` 3, `buckets` 1 — and none of the four occurrences refers to the declaration it matches). Clause (b) is what keeps `const A = …` at line 46 of this repository's own segment script out of the running: `A` is one character, so it never qualifies under either reading. **An earlier revision cited that declaration as the loose reading's top candidate and explained its 16 hits as the English indefinite article. Both halves were wrong** — re-measured, 15 of the 16 are the `A` of `Q&A` and the 16th is a code span `` `A.targetFiles` `` that refers to a DIFFERENT skill's segment script, not this one, so the honest lesson is a cross-file collision (a fifth kind alongside the four below) rather than an article. The conclusion is unchanged and is what matters: the two readings centre the window on the schemas versus on the fan-out and reconcile, so leaving this open destroys exactly the determinism this sub-procedure exists for.
+        **"Named by name" is a mechanical test, not a judgment call.** An outline declaration qualifies only when its identifier (a) occurs in `spec.md`/`changes.md` **inside a backtick code span or a fenced block**, and (b) is at least 3 characters long. A bare occurrence in running prose does NOT qualify. This is not pedantry: the identifiers in a segment script are also ordinary English or ordinary domain words, and a loose reading counts every one of those (measured: `topics` 12, `deviations` 8, `render` 3, `buckets` 1 in those two documents — and none of the four occurrences refers to the declaration it matches). Clause (b) exists because a one-character identifier collides with everything, including a code span that names a DIFFERENT skill's segment script — a cross-file collision, and a fifth kind alongside the four below. Both measurements: `workflows/_reference/study_measurements.md` §Named By Name. The two readings centre the window on the schemas versus on the fan-out and reconcile, so leaving this open destroys exactly the determinism this sub-procedure exists for.
 
         **What the test CANNOT distinguish — and why that is deliberately left alone.** A code-span occurrence comes in four kinds and this rule counts all four: (i) a genuine quote of the declaration (`` `mopt = (m) => (m ? { model: m } : {})` ``); (ii) a schema or field name equal to the identifier (`` `deviations[]` ``); (iii) a **filename whose stem equals the identifier** (`` `.harness/study/topics.json` ``); and (iv) an unrelated token that merely sits inside a code span (`` `render in ${LANG}` `` matches the `render` helper at line 55). Kinds (iii) and (iv) are not references to the declaration at all.
 
-        Measured 2026-08-04 against this repository: `topics` (line 615) enters the top two on kinds (iii) and (iv) ALONE — six filename occurrences plus two `topics=N` completion-sentinel attributes, and **zero** references to the declaration. **Leave it that way.** Excluding filename-stem occurrences flips the top two to `deviations` (line 614) and `mopt` (line **49**), whose windows are 540-689 and 1-124 — disjoint, and one of them centred on exactly the prologue-and-schemas region the paragraph above exists to keep the window away from. The proxy's false positives correlate with the code a document is actually discussing, because a document that explains the reconcile step also names the files that step reads and writes. So **do not add a kind-(iii) or kind-(iv) exclusion, and do not "tighten" this test** — measured, the strict reading is the worse one. This is the same shape as the extension-ordering rule in step 2: an obvious-looking cleanup that a measurement reverses.
+        Measured against this repository, one declaration enters the top two on kinds (iii) and (iv) ALONE, with **zero** references to the declaration itself — and **leave it that way.** Excluding filename-stem occurrences flips the top two to a disjoint pair, one of them centred on exactly the prologue-and-schemas region the paragraph above exists to keep the window away from. The proxy's false positives correlate with the code a document is actually discussing, because a document that explains the reconcile step also names the files that step reads and writes. So **do not add a kind-(iii) or kind-(iv) exclusion, and do not "tighten" this test** — measured, the strict reading is the worse one (`workflows/_reference/study_measurements.md` §Named By Name). This is the same shape as the extension-ordering rule in step 2: an obvious-looking cleanup that a measurement reverses.
 
         The correlation is luck, not a guarantee, so the residual risk is stated rather than hidden: a document that names a file whose stem collides with an unrelated declaration far from the interesting code will pull the window there, and **nothing in this skill catches that.** The chosen range is recorded only in step 6's `## Cited Source Files` heading (`path (lines a-b of T, cited N times)`), while Step 1.6's gate summarizes that whole block as a file count plus a line total — so the window's position is not in front of the user at the one approval that spends tokens. Surfacing the per-file ranges at that gate is the cheap remedy if this ever bites; it is not done today.
 
         If nothing qualifies — or the outline came back empty in the first place — take the **last `min(⌈T/3⌉, 300)` lines of the FILE**, ending at line `T` (its executable part), not a third of the outline list: an empty outline has no third to take, and after the table above that is a routine case for any extension with no pattern set. Head-truncating a 732-line segment script yields its schemas and prose and drops the fan-out, bucketing and reconcile — the part worth studying.
 
-        **The `300` in that expression is the per-file cap and it is load-bearing, not belt-and-braces.** An uncapped "last third" breaches the per-file cap on any file over 900 lines (`⌈T/3⌉ > 300`), and that is reachable in ordinary data rather than in a constructed case: measured 2026-08-04, `pass-monorepo-be`'s `--harness face-auth-sse-completion` spec cites `schema-application.sql` **five times by bare basename**, exactly one candidate survives the §Exclusion List (the `build/` copy is excluded by it), so step 3's basename recovery resolves it to a **974-line** file; `.sql` has no outline row, so the fallback fires, and an uncapped third is **325 lines — 1.08× the per-file cap** (59% of deep's entire 550-line total in one file). The same repository's `schema-facility.sql` is 1,305 lines, an uncapped 435 (1.45× the cap, 79% of the total). No measured file breaches the TOTAL budget this way, only the per-file one — but the per-file cap is what step 4's arithmetic and its counterfactual both assume, so an exception to it silently invalidates them. **Seven of the 23 extensions in step 2's pattern have no outline row** (`json`/`yaml`/`yml`/`toml`/`html`/`css`/`sql`), so the fallback is their normal path, not their exception, and a config or schema file large enough to breach the cap is an ordinary member of that set. **If more than two named declarations qualify, take them in the order the documents first mention them, then by ascending line number in the outline** — a windowing rule without a tie-break re-introduces exactly the non-determinism step 3 removed. (Line number, not path: every candidate here lives in the SAME file by construction, so a path tie-break can never separate two of them.)
+        **The `300` in that expression is the per-file cap and it is load-bearing, not belt-and-braces.** An uncapped "last third" breaches the per-file cap on any file over 900 lines (`⌈T/3⌉ > 300`), and that is reachable in ordinary data rather than in a constructed case: measured, a `.sql` schema file recovered by bare basename runs 974 and 1,305 lines on a real target, giving an uncapped third of 325 and 435 — 1.08× and 1.45× the per-file cap, and 59% and 79% of deep's entire 550-line total in one file (`workflows/_reference/study_measurements.md` §Fallback Cap). No measured file breaches the TOTAL budget this way, only the per-file one — but the per-file cap is what step 4's arithmetic and its counterfactual both assume, so an exception to it silently invalidates them. **Seven of the 23 extensions in step 2's pattern have no outline row** (`json`/`yaml`/`yml`/`toml`/`html`/`css`/`sql`), so the fallback is their normal path, not their exception, and a config or schema file large enough to breach the cap is an ordinary member of that set. **If more than two named declarations qualify, take them in the order the documents first mention them, then by ascending line number in the outline** — a windowing rule without a tie-break re-introduces exactly the non-determinism step 3 removed. (Line number, not path: every candidate here lives in the SAME file by construction, so a path tie-break can never separate two of them.)
 
         **The two windows can overlap, and on real code they usually do — merge them, and count the union.** A window is `[max(1, d-74), min(T, d+75)]` where `d` is the declaration's line and `T` the file's line count (clamping at either end only shortens a window; it never slides it). Two windows that overlap or touch — `start2 <= end1 + 1` after sorting by start — become the single range `[min(start), max(end)]`, and the line count Step 1.3(4)'s budget sees is that UNION, never the sum of the two. **Do not instead slide the second window down to the next non-overlapping qualifying declaration.** That reading buys line count by re-opening the selection this sub-step just closed: it overrides "the order the documents first mention them" with a second, competing rule, and it centres a window on a declaration the documents mentioned *less*, purely because it sits further away. Merging changes no selection at all — it only stops the same lines from being gathered twice, and stops the budget from being told 300 when it received 151.
 
-        Measured 2026-08-04 against this repository's own `workflows/study.analyze.workflow.js` (743 lines): 45 outline declarations, 6 qualify, and the first two under the ordering rule are `topics` (line 615) and `deviations` (line 614) — **adjacent lines.** Their windows are 541-690 and 540-689, so a naive sum of 300 stands against a union of **151**: 149 duplicated lines and a 99% over-count of the budget. Overlap is the normal case here, not a pathology — the ordering rule ranks by first mention in the documents, and a document discussing one part of a file names the declarations that sit next to each other inside it.
-
-        That measurement is taken on the FILE, not on a live selection: step 4 records that basename recovery has since moved this file to 5th, so no `--harness` target in this repository actually windows it. The overlap arithmetic is unaffected — it is a property of where the two declarations sit — but the merge rule itself remains **unrun here**, and the target that would exercise it is one citing a file longer than the per-file cap.
+        Overlap is the normal case here, not a pathology — the ordering rule ranks by first mention in the documents, and a document discussing one part of a file names the declarations that sit next to each other inside it. Measured on this repository's own segment script, the first two qualifying declarations sit on **adjacent lines**, so a naive sum of 300 stands against a union of **151**. That measurement is taken on the FILE, not on a live selection, so the merge rule itself remains **unrun** on every `--harness` target here (`workflows/_reference/study_measurements.md` §Window Merge).
      6. Append to the gathered evidence as a `## Cited Source Files` section, each file headed `path (lines a-b of T, cited N times)`.
      7. **Zero qualifying files** → add nothing, print one line (in `user_lang`) saying so, and let the §1.6 gate show it: the guide will be prose-anchored, which is a fact the user should approve knowingly rather than discover afterwards. Truncated by a cap → one line in the same form as the `--diff` truncation notice.
    - `--project`: a light structural pass (top-level dirs, README/CLAUDE.md excerpts, entry points) — same spirit as codebase-audit's quick overview, not a deep scan.
@@ -194,7 +184,7 @@ The Author segment/inline pass MAY merge, narrow, or re-tier the approved topic 
    - the numbered candidate topic list, each line carrying its `knowledgeCategory` and its `codeAnchor` (the path, or `none`);
    - one evidence line — `Evidence : spec.md + changes.md + <F> cited source files (<L> lines total)` — so the user sees how much §1.3 actually pulled in at the moment of the only irreversible-spend approval, not afterwards. **On the workflow path this line MUST also carry the prose reservation**: `spec.md <kept>/<total> + changes.md <kept>/<total> chars`, where `<kept>` is the FINAL length — the reservation **after** Step 2-W's slack return, not the bare reservation. All three of its inputs (the reservation, the filled code, the overhead) are known once Step 1.3(4)'s fill has run, so computing it here does not wait on Step 2-W; Step 2-W is only where it is applied to the payload. Without this the line names the two documents unconditionally while the authors may receive a fraction of them — measured on `--harness study-skill`, 10,895 of 47,993 characters, **23%** — and the only per-document notice (`kept K of T`, Step 2-W) prints AFTER the gate, i.e. after the spend. A gate that reports code volume to the character and prose volume not at all is disclosing the cheaper half;
    - **and, when `F == 0` or any candidate carries `codeAnchor: none`, one warning line** (in `user_lang`): those topics will be anchored in prose rather than code, and the remedies are to narrow the target to something containing executable code or to drop those candidates via "Edit selection". This is a warning, never a block — a documentation-only change is a legitimate thing to study, and the user is the one who knows which case this is.
-   - **and, when `path_resolved == workflow`, one dense-target line** (in `user_lang`) whenever Step 2-W's 35,000-character cap would force a reduction — per target kind: on a harness slug, when `len(spec.md) + len(changes.md) + <a full-line-budget fill> + overhead > 35,000`; on `--diff` or `--project`, when that branch's evidence exceeds `35,000 − overhead` (measured, both do so on this repository: a 199,206-character diff and an 83,258-character README). **Do NOT write the harness-slug condition as "the reservation plus the top-ranked cited file exceed the cap" — that is structurally impossible and would make this line dead.** The fill stops when the character remainder runs out, so `reserved + kept code + overhead ≤ 35,000` is an INVARIANT of every completed fill; any subset of the kept payload therefore also fits, and the test could only fire when the fill took zero files. Measured on the target this file uses as its dense example, `feature-face-auth-sse-subscribe`: the reservation is 8,627 and the top-ranked file 3,442, so that phrasing yields 12,069 against 35,000 and stays silent on the very run where the third-ranked file is dropped. The condition above instead asks what the cap COSTS — it compares undiminished demand against the cap — which is the same test Step 2-W fires on, so the gate and the reduction can never disagree. **`<a full-line-budget fill>` means Step 1.3(4)'s fill with the CHARACTER-remainder constraint removed** — line budget, per-file cap and file ceiling only. That is a distinct quantity from the fill actually executed, and on a character-bound target the two differ a lot: measured on `feature-face-auth-sse-subscribe`, the executed fill is 16,275 characters over 2 files while the full-line-budget fill is 29,907 over 3. So the ranking and its windows have already run by this point and no new analysis is needed, but this one sum is computed here, from them — do not read "the arithmetic has already run" as meaning Step 1.3(4) printed this number, because on a character-bound target it never computed it. The undiminished quantity is the correct one and the error direction is safe: it is always ≥ the executed fill, so the test can over-warn but never stay silent on a real reduction. Name what the cap drops — how many ranked files the character remainder admits and which it excludes, or which per-file diffs / structural files fall off the bottom — and say that `--mode quick` carries no such cap and holds its full 600-line budget in one context. **The arithmetic for this line belongs to Step 1.3(4) and has already run** — the reservation is computed from the two documents' lengths before the fill, and the fill's own stop point names the dropped files, so nothing here waits on Step 2-W. Step 2-W is where the cap is *spent*; this gate is where its consequence is *disclosed*. A dense target reaching this gate silently is the specific failure this line exists to prevent: the user would approve a deep run and receive a guide whose central file was dropped, learning it only from the completion block. Like the line above, this is a warning and never a block.
+   - **and, when `path_resolved == workflow`, one dense-target line** (in `user_lang`) whenever Step 2-W's 35,000-character cap would force a reduction — per target kind: on a harness slug, when `len(spec.md) + len(changes.md) + <a full-line-budget fill> + overhead > 35,000`; on `--diff` or `--project`, when that branch's evidence exceeds `35,000 − overhead` (measured, both do so on this repository: a 199,206-character diff and an 83,258-character README). The condition asks what the cap COSTS — it compares undiminished demand against the cap — which is the same test Step 2-W fires on, so the gate and the reduction can never disagree. **Do NOT rewrite it as "the reservation plus the top-ranked cited file exceed the cap": that is structurally impossible and would make this line dead**, because `reserved + kept code + overhead ≤ 35,000` is an INVARIANT of every completed fill, so any subset of a kept payload also fits and the test could only fire when the fill took zero files (`workflows/_reference/study_measurements.md` §Gate Condition). **`<a full-line-budget fill>` means Step 1.3(4)'s fill with the CHARACTER-remainder constraint removed** — line budget, per-file cap and file ceiling only. On a character-bound target that is a strictly LARGER quantity than the fill actually executed, so the ranking and its windows have already run by this point and no new analysis is needed, but this one sum is computed HERE from them — Step 1.3(4) never printed it. The error direction is safe: always ≥ the executed fill, so the test can over-warn but never stay silent on a real reduction. Name what the cap drops — how many ranked files the character remainder admits and which it excludes, or which per-file diffs / structural files fall off the bottom — and say that `--mode quick` carries no such cap and holds its full 600-line budget in one context. Step 2-W is where the cap is *spent*; this gate is where its consequence is *disclosed*, so a dense target must never reach it silently: the user would approve a deep run and receive a guide whose central file was dropped, learning it only from the completion block. Like the line above, this is a warning and never a block.
 
    Then present via AskUserQuestion (in `user_lang`):
      header: "Study Guide"
@@ -254,21 +244,14 @@ Collect the authored topics into the same `studyGuide = { topics: [...] }` shape
          // AND re-embedded in every lens and bucket prompt (6 agents in deep, 7+ in thorough).
          // Step 1.3's budget caps the cited source files, but until the rungs below existed nothing
          // capped `spec.md` + `changes.md`, and the `--diff` branch's own cap is a LINE cap that
-         // says nothing about characters: measured 2026-08-04 on `--harness study-skill`, the two
-         // documents are `42,492 + 5,501 = 47,993` characters against the **23,511** characters of
-         // code that same target's own 548-line fill gathers (8,182 + 9,010 + 6,319) — the uncapped
-         // part is 2.04× the budgeted part, measured within ONE target rather than across two.
-         // (An earlier revision of this sentence said "85KB … nearly four times".
-         // That compared the two documents' CRLF BYTE size to the code's CHARACTER size; the cap
-         // declared just below (**Cap: 35,000 characters**) is in characters, so mixing the units
-         // overstates the ratio by ~1.9×. Count characters on both sides of every comparison in this
-         // block, and cite the cap by NAME rather than by line number — an absolute line pointer
-         // inside this file is not checked by any Layer 1 script and silently rots on the next edit,
-         // as an earlier revision of this very sentence did.) Under the previous, larger
-         // row the combined payload reached ~56,000 characters, which the orchestrator cannot
-         // re-emit in one dispatch call at all, making the dispatch itself unexecutable. quick pays
-         // none of this (the evidence never leaves the orchestrator's context), which is why the cap
-         // lives here and not in 1.3.
+         // says nothing about characters: measured within ONE target, the two documents are 47,993
+         // characters against the **23,511** its own 548-line fill gathers — the uncapped part is
+         // 2.04× the budgeted part. **Count characters on both sides of every comparison in this
+         // block** (an earlier revision compared CRLF BYTES to characters and overstated the ratio
+         // by ~1.9×), **and cite the cap by NAME, never by line number** — an absolute pointer
+         // inside this file is checked by no Layer 1 script and silently rots on the next edit, as
+         // an earlier revision of this very sentence did. quick pays none of this (the evidence
+         // never leaves the orchestrator's context), which is why the cap lives here and not in 1.3.
          // **Cap: 35,000 characters.** Do NOT raise it to buy room: the measured failure point is
          // ~56,000 (dispatch unexecutable), the safe boundary between the two is UNMEASURED, and
          // the failure mode is the dispatch not running at all. Reserve prose instead (below).
@@ -276,10 +259,10 @@ Collect the authored topics into the same `studyGuide = { topics: [...] }` shape
          // **This cap, not Step 1.3(4)'s line budget, is the binding constraint on THIS path** —
          // so reserve prose FIRST and let the reserved remainder size the cited block, rather than
          // filling lines and discovering there is no room left. Chars-per-line is language-
-         // dependent and the old "550 lines is about 23,000 characters" assumption is low for
-         // Java: measured 2026-08-04, a filled 550-line gather serialized to 24,923 characters on
-         // one Java slug and **31,945** on another (58 chars/line) — fill-first on that second slug
-         // leaves `35,000 − 31,945 = 3,055` characters for two documents measuring 26,688 together.
+         // dependent, and the old "550 lines is about 23,000 characters" assumption is low for
+         // Java: measured, a filled 550-line gather reaches **31,945** characters, leaving 3,055 of
+         // the cap for two documents measuring 26,688 together
+         // (`workflows/_reference/study_measurements.md` §Serialization Cost).
          // Order of operations:
          //   1. Compute the two documents' RESERVED PREFIXES (the rule below). This depends only on
          //      their lengths, so it is computable before anything is selected.
@@ -300,39 +283,23 @@ Collect the authored topics into the same `studyGuide = { topics: [...] }` shape
          //
          // **On a dense-code target, prefer quick — the cap cannot hold both.** Reserving prose
          // first protects the rationale but starves the cited block, and no split of 35,000 fixes
-         // it when individual files are large: measured 2026-08-04 on
-         // `--harness feature-face-auth-sse-subscribe`, the reservation below is 8,627 characters
-         // (7,321 of `spec.md` + 1,306 of `changes.md` after the line snap), leaving
-         // `35,000 − 8,627 = 26,373` for code before this block's overhead, while the top three
-         // ranked files contribute **3,442 / 12,833 / 13,632** characters (the third is the merged
-         // 250-line window 8-257 of the 527-line class, not the whole file) — so the fill takes the
-         // first two (16,275) and stops, and `FaceAuthSseWindowApplication.java`, the class the
-         // feature is ABOUT and the one whose two windows merge, is dropped whole. **This is the one
-         // measured case where the CHARACTER remainder is what stops the fill**: three files are
-         // 513 lines, comfortably inside the 550 budget, but 29,907 characters against a 26,373
-         // remainder. (An earlier revision of this paragraph carried 3,611 / 13,042 / 13,808 and a
-         // 16,653 sum. Re-measured under this block's own convention — LF-normalized characters —
-         // none of the three reproduces, and they do not reproduce as CRLF characters or as bytes
-         // either; they overstate by 1.6-4.7%. They were inherited across revisions without being
-         // re-measured, which is the same failure the fill rule's "never inherit a ranking" note
-         // warns about.) Give the cited block the whole cap instead and the rationale disappears.
-         // **This is not a ratio to tune; it is the cap being smaller than the target needs — and
-         // here is the measurement that proves it rather than asserts it.** The name-based
-         // reservation, re-measured correctly at 17,859 characters (subtree union), left 17,141 and
-         // admitted the SAME two files. So freeing 9,232 characters of headroom buys **zero**
-         // additional code on this target: the third file needs 13,632 and fits under neither rule.
-         // Do not read the positional rule
-         // as more evidence on a dense target — what it buys is a reservation that is computable and
-         // non-zero on the targets where the name test scored zero. (An earlier revision of this
-         // paragraph said the old rule admitted ONE file. That came from its own unreproducible
-         // arithmetic — it recorded a 19,655-character reservation and a 13,280-character remainder,
-         // and `35,000 − 19,655 = 15,345`, neither of which is the measured 17,859/17,141.)
-         // quick has no such cap and holds its full 600-line budget in one context, which is the
-         // second and stronger reason
-         // the budgets do not rank the way the mode names suggest (§Risks). When a target's top
-         // files are this large, say so at the Step 1.6 gate — the gate defines that line, and
-         // Step 1.3(4) has already computed the arithmetic it needs — so the user can choose quick
-         // knowingly rather than receive a deep guide whose central file was silently dropped.
+         // it when individual files are large. **This is not a ratio to tune; it is the cap being
+         // smaller than the target needs** — and that is measured, not asserted: on the one dense
+         // target in the measured set the reservation is 8,627 characters, the fill takes two of
+         // the three ranked files and drops `FaceAuthSseWindowApplication.java`, the class the
+         // feature is ABOUT and the one whose two windows merge; and the previous name-based
+         // reservation, which left 9,232 characters MORE room for code, admitted the SAME two
+         // files. Freeing headroom therefore buys zero additional code there. What the positional
+         // rule buys is a reservation that is computable and non-zero on the targets where the
+         // name test scored zero — never more evidence on a dense one. The per-file figures, and
+         // the four repudiated ones this paragraph used to carry, are in
+         // `workflows/_reference/study_measurements.md` §Reduction Order and §Repudiated Figures.
+         //   quick has no such cap and holds its full 600-line budget in one context, which is the
+         //   second and stronger reason the budgets do not rank the way the mode names suggest
+         //   (§Risks). When a target's top files are this large, say so at the Step 1.6 gate — the
+         //   gate defines that line, and Step 1.3(4) has already computed the arithmetic it needs —
+         //   so the user can choose quick knowingly rather than receive a deep guide whose central
+         //   file was silently dropped.
          //
          // **The reduction IS the reservation plus the fill — there is no second, later ladder that
          // reduces again.** Read the four rungs below as what each part may and may not give up, not
@@ -350,14 +317,11 @@ Collect the authored topics into the same `studyGuide = { topics: [...] }` shape
          // no other", and that framing is a measured trap.** Under the reserve-first order the
          // assembled payload satisfies `reserved + filled + overhead ≤ 35,000` by construction, so
          // "over the cap" can only be reached by comparing UNDIMINISHED demand against the cap — and
-         // running rung 1 first on that comparison drops all the code before any prose is touched.
-         // Measured on `--harness study-skill`: reserved 8,565 + filled code 23,511 + overhead 227 =
-         // **32,303**, inside the cap with all three ranked files intact. But undiminished demand is
-         // `47,993 + 23,511 + 227 = 71,731`, and reducing that by rung 1 first drops file after file
-         // to 47,993 with **zero code left**, still over, and only then cuts `spec.md` — landing at
-         // 13,064 with a prose-only guide and 62% of the cap unspent. Same four rungs, opposite
-         // outcome, and the difference is 23,511 characters of the evidence this skill exists to
-         // quote. The ordering above is the one that is measured to work.
+         // running rung 1 first on that comparison drops all the code before any prose is touched,
+         // landing on a prose-only guide with 62% of the cap unspent. Measured, the difference is
+         // 23,511 characters of the very evidence this skill exists to quote
+         // (`workflows/_reference/study_measurements.md` §Reduction Order). The ordering above is
+         // the one that is measured to work.
          //
          // **Slack after the fill returns to prose, and this is provable rather than a preference.**
          // If `reserved + filled + overhead < 35,000`, extend the reserved prefixes — **ONE pass, no
@@ -367,88 +331,43 @@ Collect the authored topics into the same `studyGuide = { topics: [...] }` shape
          // document is already whole its share goes to the other**; if both are whole there is
          // nothing to place. Where the two independent `round_half_up` shares would sum to one more
          // character than the slack, take the smaller — the total may never exceed the ceiling.
-         //   **One pass, and the snap loss is NOT recovered — this is a deliberate determinism
-         //   trade, and leaving it open cost a round.** Snapping down means a prefix stops at the
-         //   last line boundary before its target, so some slack goes unused. Measured on
-         //   `--harness study-skill`: slack `11,262 − 8,565 = 2,697` targets spec 9,951 / changes
-         //   1,311, which snap to **9,751 / 1,144** — prose lands at **10,895**, returning 2,330 of
-         //   2,697 (86.4%) and leaving 367 characters unused because `spec.md` has a 457-character
-         //   paragraph with no newline in it right at the boundary. A tempting second reading —
-         //   iterate, and hand a document's unusable share to the other — recovers most of that
-         //   (about 11,257 on this target) but requires a redistribution rule the paragraph above
-         //   does not state, a termination argument, and a second competing definition of the split.
-         //   The two readings differ by 362 characters on this target, and that number is printed at
-         //   the §1.6 gate, so an unpinned choice is a determinism violation in a figure the user
-         //   approves against. One pass wins; the 367 characters are the price.
-         //   **`11,262` is the CEILING (`35,000 − 23,511 − 227`), not an achieved value.** An earlier
-         //   revision of this paragraph reported it as the result. Nothing in this rule reaches it.
-         //   The slack can never instead admit another code file, and the proof has **THREE** cases,
-         //   because Step 1.3(4)'s fill has three stop conditions, not two. **Character-bound**: the
-         //   next ranked file's characters exceeded the remaining characters, and the slack IS that
-         //   remainder, so the file is too large by definition (measured on
-         //   `--harness feature-face-auth-sse-subscribe`, above). **Line-bound**: the next file's
-         //   lines exceeded the 550-line budget, and no amount of character slack lifts a line cap
-         //   (measured on `--harness study-skill`, where the fill stops at 548 of 550 lines and the
-         //   next ranked file, `templates/study/html_shell.html` at 199 lines, is excluded by lines
-         //   while its ~9,800 characters would have fit a larger slack). **File-count-bound**: the
-         //   12-file ceiling, which character slack does not lift either — no measured target has
-         //   reached it (the fill measurements above top out at 11 files), but an enumeration that
-         //   claims completeness has to include it. An earlier revision of this paragraph stated the
-         //   first case only, then a later one stated two and asserted "do not restate the claim with
-         //   only one of them" while itself omitting the third. All three hold; state all three.
+         //   **One pass, and the snap loss is NOT recovered — a deliberate determinism trade.**
+         //   Snapping down leaves some slack unused; an iterating reading recovers most of it but
+         //   needs a redistribution rule this one does not state, a termination argument, and a
+         //   second competing definition of the split. The two readings differ by 362 characters
+         //   on a measured target — a figure the §1.6 gate prints, so an unpinned choice is a
+         //   determinism violation in a number the user approves against. One pass wins.
+         //   **`11,262` on that target is the CEILING (`35,000 − 23,511 − 227`), never an achieved
+         //   value** — an earlier revision reported it as the result; the rule reaches 10,895.
+         //   **The slack can never instead admit another code file**, and the proof has THREE
+         //   cases, because Step 1.3(4)'s fill has three stop conditions: character-bound (the
+         //   slack IS the very remainder the next file already exceeded), line-bound, and
+         //   file-count-bound — character slack lifts neither a line cap nor a file ceiling.
+         //   State all three; two successive revisions each stated fewer and said so wrongly.
+         //   Measurements: `workflows/_reference/study_measurements.md` §Reduction Order.
          //
          // **Reserve prose by POSITION. This step never parses a heading — not its text, not its
          // level.** Two earlier rules here did, and both are measured failures with the same root
-         // cause: a heading is not a contract this skill controls.
-         //   (a) The NAME test ("keep Goal/Background/Scope/Approach") scores **ZERO on 3 of the 10**
-         //       real `docs/harness/<slug>/spec.md` files measured 2026-08-04 across two
-         //       repositories — including a 51,080-character spec — and **ZERO on all 8 of the 8**
-         //       `changes.md` files. It cannot be repaired by lengthening the list: those ten specs
-         //       carry FIVE different heading vocabularies: `Goal` (2 targets); `1. Goal` (1);
-         //       `목표 (Goal)` (3); `목표` alone (1, which does NOT match); and three sharing no
-         //       vocabulary at all (`목적`; `변경 이력`; `1. 정확도 판정 요약`). Break the seven
-         //       non-zero targets down and not one of them matched by design: 3 only because a
-         //       bilingual heading happens to carry the English word in parentheses, 3 only because
-         //       that spec's headings happen to be English at all — which neither producer
-         //       guarantees — and **1 only through a nested `In Scope`**, an unrelated subsection,
-         //       while its own top-level headings (`1. 정확도 판정 요약` / `2. 범위(This PR) vs Defer`)
-         //       match nothing. A test whose hit rate is decided by a translator's parenthetical is
-         //       not a contract.
-         //       Both producers of this file render headings in `user_lang` (`skills/spec/SKILL.md`
-         //       §Phase 2-D step 6; `skills/harness/SKILL.md` §Step 2 — WORKFLOW path step 5), so an
-         //       English name list can never be relied on,
-         //       and `/spec`'s seven canonical sections contain no `Approach` at all. The eight
-         //       `changes.md` files are worse than merely unmatched: their headings vary by producer
-         //       — and they vary WITHIN one producer, not merely between producers: of the three
-         //       agent-harness ones, two carry `Modified Files`/`Created Files`/`Advisor Feedback
-         //       Applied` and the third has no `Advisor` heading at all, using `Round 1 Changes` /
-         //       `Deleted Files` / `검증` / `Cold-review fix` instead. The pass-monorepo-be ones add
-         //       `Changes by Finding`, `Phase 0~4`, `에러코드 제거 판단 근거` and `Verify`. So no name
-         //       list survives the next target, and the sample proves it twice over.
-         //   (b) The SUBTREE test ("keep the heading and everything deeper under it, to the next
-         //       heading at the same-or-shallower level") fails whenever a section's body is written
-         //       at a SHALLOWER level than its heading. Measured on this repository's own
-         //       `docs/harness/study-skill/spec.md` (278 lines / 42,492 characters): `### Goal`,
-         //       `### Background` and `### Scope` capture 287 / 1,325 / 1,809 characters correctly,
-         //       but `### Approach` at line 42 is followed by `## 1.` … `## 16.` — sixteen shallower
-         //       siblings holding the entire design rationale — so its subtree is the heading ALONE,
-         //       **12 characters of 42,492**, and the protected total is 3,433 (8.1%). An earlier
-         //       revision of this comment read "leaf `###` sections with nothing nested under them"
-         //       as the SAFE case. It is the EMPTY case; which one it is depends on where the body
-         //       was written, and nothing here can constrain that.
+         // cause: a heading is not a contract this skill controls. The NAME test
+         // (`Goal`/`Background`/`Scope`/`Approach`) scores ZERO on 3 of 10 real `spec.md` files and
+         // on ALL 8 `changes.md` files, across five different heading vocabularies, because both
+         // producers render headings in `user_lang`. The SUBTREE test keeps the heading ALONE
+         // whenever a section's body sits at a SHALLOWER level than its heading — 12 characters of
+         // 42,492 on this repository's own spec. Neither is repairable by lengthening a list; the
+         // measurements, target by target, are in `workflows/_reference/study_measurements.md`
+         // §Prose Reservation.
          //
          // **The rule.**
-         //   len(f)     = f's character count after normalizing CRLF to LF. Fix this or the same
-         //                file reserves differently per platform: measured, the `study-skill` spec
-         //                is 42,492 characters LF-normalized and 42,769 raw, a 277-character spread.
-         //                A kept PREFIX is measured the same way and INCLUDES its final line
-         //                terminator; the old rule's section figures quoted above exclude theirs, so
-         //                an old-vs-new comparison can differ by one character per section. Stated
-         //                once so nobody chases a four-character gap between two conventions.
+         //   len(f)     = f's character count after normalizing CRLF to LF — fix this, or the same
+         //                file reserves differently per platform (measured spread on this
+         //                repository's own spec: 277 characters). A kept PREFIX is measured the
+         //                same way and INCLUDES its final line terminator.
          //   PROSE_CAP  = **8,750 characters**, for BOTH documents together (25% of the 35,000 cap).
          //   reserve(f) = min(len(f), round_half_up(PROSE_CAP × len(f) / (len(spec) + len(changes))))
          //   then snap DOWN to the end of the last COMPLETE line at or before that offset, so a
          //   sentence, table row or list item is never cut mid-line. Ties in round(): half up.
+         //   Two worked reservations, re-derived from the real files rather than inherited:
+         //   `workflows/_reference/study_measurements.md` §Verified Independently.
          //   Branches, all of them reachable in the measured set:
          //     - a document shorter than its share is kept WHOLE and reserves nothing further — its
          //       unused share becomes room for code (measured: `dryrun-version-flag` keeps both
@@ -465,30 +384,23 @@ Collect the authored topics into the same `studyGuide = { topics: [...] }` shape
          //   itself what creates the over-cap state that justifies cutting prose to PROSE_CAP, so
          //   code takes the room first and prose is then trimmed to a quota. The return closes that
          //   circle; do not drop it as an optimization.
-         //   Measured outcome across the same 10 targets: reservation rises on **9** and falls on
-         //   **1**. The three zero-protection targets become 8,301 / 1,277 / 8,592; the heading-
-         //   inversion target goes 3,433 → 8,565 and its prefix now reaches line 77, past the
-         //   `### Approach` heading that stopped the subtree walk at line 42. The single fall is
-         //   `feature-face-auth-sse-subscribe`, 17,859 → 8,627 — the dense-code target this comment
-         //   already singles out as the one where the reservation starved the code, so that is the
-         //   intended direction. It buys no extra code THERE (the paragraph above measures why: the
-         //   same two ranked files fit under both rules), so do not sell this rule on the dense
-         //   target; sell it on the three targets that reserved nothing at all.
-         //   **8,750 is a policy ceiling, not a measured threshold.** Its one anchor is the 24,923-
-         //   character filled gather above, which leaves 10,077 characters; 8,750 sits under that.
+         //   Measured across the same 10 targets, the reservation rises on **9** and falls on **1**
+         //   — the fall being the dense-code target where the old reservation had starved the code,
+         //   so that is the intended direction. Do not sell this rule on the dense target; sell it
+         //   on the three targets that reserved nothing at all
+         //   (`workflows/_reference/study_measurements.md` §Prose Reservation).
+         //   **8,750 is a policy ceiling, not a measured threshold.** Its one anchor is the
+         //   24,923-character filled gather, which leaves 10,077 characters; 8,750 sits under that.
          //   Raising it requires a new measurement first, exactly as the 35,000 cap does.
          //
          // **What the positional rule does NOT promise.** A head prefix is a PROXY for "where the
-         // rationale lives", and it is measurably not a guarantee. `/spec` puts a derived
-         // `## Review Sheet` ahead of the seven canonical sections (`skills/spec/SKILL.md`
-         // §Spec Output Format), and
-         // 2 of the 10 measured specs open on something else entirely (`## 변경 이력`;
-         // `## 1. 정확도 판정 요약`) — so "the first heading is the goal" is 8 of 10, not a rule. One
-         // measured target loses a section the name test held: on `coin-washer-review-fix` the
-         // prefix ends at line 72 and never reaches `## 접근 방식 (Approach)` at line 87 (a
-         // 1,950-character subtree), even though its reserved total rises 3,475 → 8,481. Do not
-         // write this rule up as reaching the rationale; it reaches the document's opening, which on
-         // measured evidence is usually but not always the same thing.
+         // rationale lives", and measurably not a guarantee: `/spec` puts a derived `## Review
+         // Sheet` ahead of the seven canonical sections (`skills/spec/SKILL.md` §Spec Output
+         // Format), 2 of the 10 measured specs open on something else entirely, and one measured
+         // target loses a section the old name test held. Do not write this rule up as reaching the
+         // rationale; it reaches the document's opening, which on measured evidence is usually but
+         // not always the same thing (`workflows/_reference/study_measurements.md`
+         // §Prose Reservation).
          //
          // **`--diff` and `--project` rungs (4).** Neither branch produces a `spec.md`, a
          // `changes.md`, or a `## Cited Source Files` block, so rungs 1-3 have nothing to act on and
@@ -498,19 +410,18 @@ Collect the authored topics into the same `studyGuide = { topics: [...] }` shape
          // Reserving 8,750 here would strand it: nothing is entitled to it.
          //   - `--diff` — the branch's own "first ~3000 lines / ~150 files" cap is a LINE cap and
          //     says nothing about characters. Measured 2026-08-04, `git diff main..HEAD` on this
-         //     repository is 2,145 lines / **199,206 characters** (200,487 bytes — count characters,
-         //     per the note above): already inside the line cap, and 5.7× the character cap, 3.6× the
-         //     ~56,000 at which the dispatch stops being executable — so the line cap has never once
-         //     bound on a real range here, and the dispatch would simply not run. Keep
-         //     `git diff --stat` whole — measured **794 characters over 15 files** on that range, and
-         //     it is the one piece the §1.6 gate already shows the user; at this branch's ~150-file
-         //     limit the same per-file rate extrapolates to roughly 8,000 characters, which is an
-         //     ESTIMATE and not measured, so treat `--stat` as capped evidence like everything else
-         //     rather than as free overhead. Cut the unified diff to `35,000 − overhead` at a
-         //     **file boundary**:
-         //     whole per-file diffs, dropped from the BOTTOM of `--stat`'s file order, never a
-         //     partial hunk. A partial hunk is a shaved excerpt, and §3.4's quote re-verification
-         //     cannot check one — the same asymmetry rung 1 enforces for cited files.
+         //     repository is 2,145 lines / **199,206 characters**: already inside the line cap, and
+         //     5.7× the character cap and 3.6× the ~56,000 at which the dispatch stops being
+         //     executable — so the line cap has never once bound on a real range here, and the
+         //     dispatch would simply not run. Keep `git diff --stat` whole (measured 794 characters
+         //     over 15 files; it is the one piece the §1.6 gate already shows the user), but treat
+         //     it as capped evidence like everything else rather than as free overhead — at this
+         //     branch's ~150-file limit the same per-file rate extrapolates to roughly 8,000
+         //     characters, which is an ESTIMATE, not a measurement. Cut the unified diff to
+         //     `35,000 − overhead` at a **file boundary**: whole per-file diffs, dropped from the
+         //     BOTTOM of `--stat`'s file order, never a partial hunk. A partial hunk is a shaved
+         //     excerpt, and §3.4's quote re-verification cannot check one — the same asymmetry
+         //     rung 1 enforces for cited files.
          //   - `--project` — "README/CLAUDE.md excerpts" had no cap of any kind, and "excerpts" set
          //     no size. Measured, this repository's own `README.md` is **83,258 characters** (84,922
          //     bytes), 2.4× the whole cap by itself. Cap the structural pass plus excerpts at the
@@ -530,24 +441,15 @@ Collect the authored topics into the same `studyGuide = { topics: [...] }` shape
          //
          // **Two escape clauses that used to live here are STRUCTURALLY DEAD on the harness-slug
          // branch — recorded rather than deleted, so the next round does not re-derive them as
-         // missing.** (a) "if the reserved prefixes alone exceed the room, cut further from the tail
-         // of the larger one": the fill admits a file only while `code + overhead ≤ 35,000 −
-         // reserved`, so `reserved ≤ 35,000 − code − overhead` holds by construction, with equality
-         // the only tight case. Measured across the 10 targets, reservations run 1,277-8,720 against
-         // a room of 10,599-34,978 — zero cases, and PROSE_CAP being a flat 8,750 means there is no
-         // reachable input that produces one. (b) "if (1) alone still exceeds the cap, proceed over
-         // the cap and say so": same inequality, plus the degenerate case closes it from the other
-         // side — if even the top-ranked file exceeds the remainder, the prefix fill takes ZERO files
-         // and `code = 0`. Both clauses can only fire on the `--diff`/`--project` branches, where
-         // PROSE_CAP does not apply and rung 4's own cap governs instead; keep them for those two and
-         // do not resurrect them here. **This is the same treatment the §1.6 gate condition gets a
-         // few paragraphs up** — a condition proven unreachable is written down as unreachable, not
-         // left in the list looking load-bearing.
-         //   The dead clause (b) has a useful corollary worth stating: on a target whose top-ranked
-         //   file alone exceeds the remainder, the fill takes zero files and the slack-return rule
-         //   then hands roughly `35,000 − PROSE_CAP` characters back to prose, so the cap is spent on
-         //   the decision ledger rather than left unused. That is a real benefit of the slack return,
-         //   not merely a tidiness rule.
+         // missing.** Both ("cut further from the tail of the larger prefix" and "proceed over the
+         // cap and say so") are unreachable here by the same construction: the fill admits a file
+         // only while `code + overhead ≤ 35,000 − reserved`, and in the degenerate case it takes
+         // ZERO files. **They can only fire on the `--diff`/`--project` branches, where PROSE_CAP
+         // does not apply and rung 4's own cap governs — keep them for those two and do not
+         // resurrect them here.** Proofs and the 10-target range:
+         // `workflows/_reference/study_measurements.md` §Dead Escape Clauses. **This is the same
+         // treatment the §1.6 gate condition gets a few paragraphs up** — a condition proven
+         // unreachable is written down as unreachable, not left in the list looking load-bearing.
          // Print one line per reduced document (in `user_lang`), same form as the `--diff`
          // truncation notice: `<file> : kept <K> of <T> characters (through line <L>)`. **This
          // replaces an earlier "naming every section dropped or truncated" instruction, which an
