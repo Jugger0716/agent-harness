@@ -118,7 +118,9 @@ The Author segment/inline pass MAY merge, narrow, or re-tier the approved topic 
 
         **Fill it: take files in ranking order until the next one would exceed the line total.** The LINE budget is the binding constraint; the 12-file ceiling only bounds fragmentation and is not meant to bind. This replaces an earlier 3-file ceiling that bound first on every target ever measured and left most of the line budget unspent — measured 2026-08-04 across 8 real slugs, the old ceiling produced 180 / 358 / 465 / 471 / 513 / 548 / 502 / 350 lines against budgets of 550, while filling produces 549 / 547 / 529 / 496 / 547 / 548 / 502 / 350 over 11 / 6 / 5 / 4 / 4 / 3 / 3 / 2 files. The worst case was a Java monorepo slug citing 44 files: 3 of them gave **180 of 550**, and filling gives 549 — a 3× increase in evidence for a budget that was already allocated. The 12 comes from that measurement (the highest fill observed is 11 files), not from taste.
 
-        **On the workflow path this costs nothing.** `args.sharedEvidence` is capped at 35,000 characters (Step 2-W), so the payload total is unchanged and only its COMPOSITION shifts — measured on that same 44-file slug, the cited block goes 8,618 → 24,923 characters and the room left for `spec.md` + `changes.md` goes 26,382 → 10,077. That is the trade this skill exists to make: code displacing the decision ledger's prose, not the reverse. Two things make it safe rather than lucky, and both were measured: the reduction order's protected sections (`Goal`/`Background`/`Scope`/`Approach`) plus `changes.md` came to 9,934 characters against 10,077 available — it fits, but by **143 characters**, so if a future target's protected sections do not fit, say so in the Step 2-W notice instead of trimming them silently. On the inline path there is no serialization cap at all, so quick simply gets more evidence in one context.
+        **On the inline path filling is free; on the WORKFLOW path it is not, and the line budget is not what binds there.** quick holds the evidence in one context with no serialization cap, so it simply fills. deep/thorough serialize through `args.sharedEvidence` under a hard 35,000-character cap, and characters-per-line is language-dependent: measured 2026-08-04, a filled 550-line gather is 24,923 characters on one Java slug and **31,945** on another (58 chars/line), the second leaving just 2,935 characters for two documents needing 26,688. So on the workflow path, **Step 2-W reserves the protected prose FIRST and the reserved remainder sizes this step's fill** — on that second slug about 240 lines rather than 547. Fill until the line budget OR that remainder runs out, whichever binds first.
+
+        An earlier revision of this paragraph claimed the workflow path pays nothing for filling, on the ground that the cap holds the total constant. That was measured on a slug whose protected sections are leaf headings and happened to fit with 143 characters to spare; on a slug that nests its content one level deeper the same arithmetic leaves no prose at all (Step 2-W records the 18-characters-of-2,254 measurement). The composition trade — code displacing the decision ledger's prose — is still the one this skill wants, but it is bounded by the rationale a lens needs, not unbounded.
 
         The inversion is counterintuitive enough to state outright. quick holds the evidence in one context and never serializes it; deep/thorough must pass it through `args.sharedEvidence`, which the orchestrator re-emits as tool-call output and the segment then re-embeds in EVERY lens and bucket prompt — 6 agents in deep, 7+ in thorough. **Evidence cost is multiplied by the agent count on the workflow path and paid once on the inline one**, so the budgets run opposite to the modes' apparent size. **What deep and thorough buy is more ANALYSIS over the same evidence — 8-15 topics, three independent lenses, a critic and an assemble pass — never more evidence.** (Measured 2026-08-04: the old 5-file / 1,200-line row produced an 898-line gather that serialized to ~56,000 characters. The orchestrator cannot re-emit that in one dispatch call, and hand-transcribing it would corrupt the §3.4 quote re-verification the whole guide rests on — the exact failure mode §3.2.2 forbids for the render.)
 
@@ -255,18 +257,48 @@ Collect the authored topics into the same `studyGuide = { topics: [...] }` shape
          // orchestrator cannot re-emit in one dispatch call at all, making the dispatch itself
          // unexecutable. quick pays none of this (the evidence never leaves the orchestrator's
          // context), which is why the cap lives here and not in 1.3.
-         // **Cap: 35,000 characters** — sized against Step 1.3(4)'s workflow-path row (550 lines,
-         // measured at 24,923 characters of Java on a filled 11-file gather), leaving room for the
-         // two documents. Step 1.3(4) records the measured margin: the protected sections plus
-         // changes.md came to 9,934 against 10,077 available, i.e. 143 characters of slack.
-         // Over it, reduce in this fixed order and no other:
-         //   1. the `## Cited Source Files` block is NEVER trimmed — it is what Step 1.3 exists
-         //      to produce and it is already budgeted;
+         // **Cap: 35,000 characters.** Do NOT raise it to buy room: the measured failure point is
+         // ~56,000 (dispatch unexecutable), the safe boundary between the two is UNMEASURED, and
+         // the failure mode is the dispatch not running at all. Reserve prose instead (below).
+         //
+         // **This cap, not Step 1.3(4)'s line budget, is the binding constraint on THIS path** —
+         // so reserve prose FIRST and let the reserved remainder size the cited block, rather than
+         // filling lines and discovering there is no room left. Chars-per-line is language-
+         // dependent and the old "550 lines is about 23,000 characters" assumption is low for
+         // Java: measured 2026-08-04, a filled 550-line gather serialized to 24,923 characters on
+         // one Java slug and **31,945** on another (58 chars/line), the latter leaving only 2,935
+         // characters for two documents that needed 26,688. Order of operations:
+         //   1. Compute the spec's PROTECTED SUBTREES (below) and `changes.md`'s reservation.
+         //   2. Give the entire remainder to the `## Cited Source Files` block, and stop adding
+         //      files when either that remainder or Step 1.3(4)'s line budget runs out — whichever
+         //      binds first. On the measured Java slug this is ~240 lines, not 547.
+         //   3. quick pays none of this (the evidence never leaves the orchestrator's context), so
+         //      the inline path fills its full line budget and ignores this entire section.
+         //
+         // Over the cap, reduce in this fixed order and no other:
+         //   1. the `## Cited Source Files` block is NEVER trimmed and code is NEVER shaved — drop
+         //      whole files from the bottom of the ranking instead (Step 1.3(4));
          //   2. drop whole `##`/`###` sections of `spec.md` from the BOTTOM, keeping
          //      Goal/Background/Scope/Approach — that is where the rationale a lens needs lives;
          //   3. then the same for `changes.md`.
-         // Print one line (in `user_lang`) naming every section dropped, same form as the
-         // `--diff` truncation notice. If (1) alone still exceeds the cap, do NOT trim it —
+         // **Protection is by SUBTREE, not by heading.** Keeping a `##` section keeps that heading
+         // AND every deeper heading under it, up to the next heading at the same-or-shallower
+         // level. Keeping the heading alone retains the title and throws the content away, which
+         // is a silent, total loss: measured 2026-08-04 on `--harness feature-face-auth-sse-subscribe`,
+         // whose spec nests its content one level down, `## 2. Background` retained **18** characters
+         // of a 2,254-character subtree and `## 4. Approach` retained **16** of 13,897 — 47,459
+         // characters of spec reduced to 2,103, with the protected sections present in name only.
+         // `## 3. Scope` survived there purely by accident, because its subsections happen to be
+         // titled "In scope"/"Out of scope" and matched the name test. The sibling slug escaped it
+         // only because ITS Goal/Background/Scope/Approach are leaf `###` sections with nothing
+         // nested under them — so a rule that looks correct on one target can be totally broken on
+         // the next, and heading depth is what decides.
+         // **Prose may be truncated; code may not.** If the protected subtrees alone exceed the
+         // room, truncate the LARGEST protected subtree (keeping its head) and say so — prose
+         // degrades gracefully, whereas a shaved excerpt breaks the §3.4 quote re-verification the
+         // whole guide rests on. That asymmetry is why (1) drops whole files and this step does not.
+         // Print one line (in `user_lang`) naming every section dropped or truncated, same form as
+         // the `--diff` truncation notice. If (1) alone still exceeds the cap, do NOT trim it —
          // proceed over the cap and say so in that same line, because a guide anchored in
          // truncated code is the exact failure this skill exists to avoid.
        topics: <the approved [{id, title, tier}] list from topics.json>,
