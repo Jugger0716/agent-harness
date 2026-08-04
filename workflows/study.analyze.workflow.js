@@ -103,11 +103,14 @@ const ExerciseSchema = {
     difficulty: { enum: ['basic', 'practice', 'advanced'] },
   },
 }
-const ClaimSchema = (fields) => ({
+// optionalFields: property definitions that are NOT added to `required` — used where forcing a
+// field makes the model invent content (see the decisions call site below).
+const ClaimSchema = (fields, optionalFields = {}) => ({
   type: 'object',
   required: [...fields, 'basis'],
   properties: {
     ...Object.fromEntries(fields.map((f) => [f, { type: 'string', description: `render in ${LANG}` }])),
+    ...optionalFields,
     basis: { enum: ['repo', 'inference'] },
     evidenceRef: { type: 'string', description: 'required when basis is repo; repo-relative path, raw' },
   },
@@ -119,11 +122,18 @@ const TopicSchema = {
     id: { type: 'string', description: 'echoed exactly from the approved topic list, English raw' },
     title: { type: 'string', description: `render in ${LANG}` },
     tier: { enum: ['basic', 'practice', 'advanced'] },
-    concept: { type: 'string', description: `(a) at most 200 words, render in ${LANG}` },
+    concept: { type: 'string', description: `(a) at most 200 words, or at most 700 characters when the output language is not space-delimited word-by-word (Korean, Japanese, Chinese), render in ${LANG}` },
     excerpts: { type: 'array', maxItems: 2, items: ExcerptSchema, description: '(b) at most 2 items, each code at most 25 lines' },
     qa: { type: 'array', minItems: 3, maxItems: 3, items: QAItemSchema, description: '(c) exactly 3 items' },
     exercise: { ...ExerciseSchema, description: '(d) exactly 1' },
-    decisions: { type: 'array', items: ClaimSchema(['decision', 'rationale', 'rejectedAlternatives']), description: '(e)' },
+    // (e) `rejectedAlternatives` is OPTIONAL on purpose: as a required field it taught the author to
+    // manufacture a rejected option for every claim, which is exactly the artifact-decision prose the
+    // guide is not for. SCOPE NOTE: this schema governs the WORKFLOW path only — the quick inline path
+    // (Step 2-Q) is not schema-validated, so the same rule must also live in
+    // templates/study/topic_author.md, which is the single owner both paths read.
+    decisions: { type: 'array', items: ClaimSchema(['decision', 'rationale'], {
+      rejectedAlternatives: { type: 'string', description: `render in ${LANG}; a single string, never an array; omit the field entirely when the evidence names no rejected alternative — never invent one to fill it` },
+    }), description: '(e)' },
     antipatterns: { type: 'array', items: ClaimSchema(['pattern', 'why']), description: '(f)' },
     glossary: { type: 'array', items: ClaimSchema(['term', 'definition']), description: '(g) glossary terms' },
     furtherReading: { type: 'array', maxItems: 2, items: {
@@ -381,11 +391,11 @@ Write all free-text output in **{user_lang}**. Identifiers, paths, code, and enu
 
 For EACH topic in Topics, author all 7 sections:
 
-1. (a) Concept explanation — plain-language explanation. At most 200 words. Stop at 200 words even if more could be said; depth belongs in (e)/(f), not a longer (a).
-2. (b) Code excerpts — at most 2 excerpts, each at most 25 lines. source is "repo" only for an actual quote (then path/lineStart/lineEnd are REQUIRED and must be the real location — the orchestrator re-reads the file and re-verifies before publishing), or "model" for an illustrative example that is NOT from the repository (leave path/lineStart/lineEnd empty — never invent a plausible-looking path). When in doubt, use "model".
+1. (a) Concept explanation — plain-language explanation. At most 200 words, or at most 700 characters when the output language is not space-delimited word-by-word (Korean, Japanese, Chinese) — "word" has no stable meaning there and an unmeasurable cap is not a cap. Stop at the cap even if more could be said; depth belongs in (e)/(f), not a longer (a).
+2. (b) Code excerpts — at most 2 excerpts, each at most 25 lines. source is "repo" only for an actual quote (then path/lineStart/lineEnd are REQUIRED and must be the real location — the orchestrator re-reads the file and re-verifies before publishing), or "model" for an illustrative example that is NOT from the repository (leave path/lineStart/lineEnd empty — never invent a plausible-looking path). When in doubt, use "model". Prefer executable code and config over prose: a .md file is a valid excerpt source ONLY when that .md is itself the artifact under study — quoting this skill's own procedure text (skills/** or templates/**/*.md) back as a topic's code is outside (b)'s scope and belongs in (e)/(g). When a topic has both the prose instruction and the executable code that instruction describes, always cite the executable code.
 3. (c) Interview Q&A — exactly 3 questions, each with a checkable answer (required, never blank) and a difficulty tag.
 4. (d) Exercise — exactly 1 task, with BOTH hint and answer REQUIRED (never blank) and a difficulty tag.
-5. (e) Design decisions — rationale + rejected alternatives/trade-offs where the evidence has them. basis is "repo" (evidence explicitly states this — evidenceRef REQUIRED, a real path) or "inference" (your own reasonable inference — say so).
+5. (e) Engineering principle — state in decision the generalized engineering principle the evidence demonstrates: one sentence phrased so it holds for other codebases too (never make this repository the grammatical subject). In rationale, write how this work demonstrates that principle AND what concretely breaks when it is violated. rejectedAlternatives is OPTIONAL and a single string, never a list — omit the field entirely when the evidence names no rejected alternative rather than inventing one; a manufactured alternative is exactly the artifact-decision prose this guide is not for. basis is "repo" (evidence explicitly states this — evidenceRef REQUIRED, a real path) or "inference" (your own reasonable inference — say so).
 6. (f) Anti-patterns & pitfalls — what a learner should NOT do, and the specific failure it would cause. Same basis/evidenceRef rule as (e).
 7. (g) Glossary & further reading — terms a learner needs defined (same basis/evidenceRef rule), plus at most 2 external links per topic. Every external link is unverified by construction — there is no web tool available for this skill.
 
@@ -396,7 +406,7 @@ Echo the topic id exactly as given in Topics — never rename or paraphrase it.
 Return a structured object with one topic entry per topic you were given (the dispatching engine enforces the shape):
 - id: exactly as given (English raw)
 - title, tier: as given
-- concept: at most 200 words, render in {user_lang}
+- concept: at most 200 words (700 characters for a non-space-delimited script), render in {user_lang}
 - excerpts: at most 2 items, each { source, path, lineStart, lineEnd, code (at most 25 lines), explanation }.
   RESTORED RULE (field optionality): path, lineStart and lineEnd apply ONLY when source is repo,
   where they are required and must be exact. When source is model, LEAVE ALL THREE UNSET — do
@@ -404,7 +414,7 @@ Return a structured object with one topic entry per topic you were given (the di
   orchestrator, fails, and is surfaced to the user as a failed anchor.
 - qa: exactly 3 items, each { question, answer, difficulty }
 - exercise: exactly 1 { prompt, hint, answer, difficulty }
-- decisions: { decision, rationale, rejectedAlternatives, basis, evidenceRef } items
+- decisions: { decision, rationale, rejectedAlternatives?, basis, evidenceRef } items — decision holds the generalized principle; rejectedAlternatives is a single OPTIONAL string, never a list, omitted when the evidence names none
 - antipatterns: { pattern, why, basis, evidenceRef } items
 - glossary: { term, definition, basis, evidenceRef } items
 - furtherReading: at most 2 { url, note } items
@@ -601,7 +611,6 @@ if (bucketResults.length === 0) {
 
 // ---- reconcile against the approved topic list (deviations, not silent drops) --
 const approvedIds = new Set(topicsApproved.map((t) => t.id))
-const assignedIds = new Set(topicsApproved.map((t) => t.id))
 const deviations = []
 const topics = []
 const returnedIds = new Set()
@@ -614,8 +623,20 @@ bucketResults.forEach((b) => {
     topics.push(topic)
   })
 })
-const missingIds = [...assignedIds].filter((id) => !returnedIds.has(id))
-const missingSections = missingIds.map((id) => `topic ${id} — not authored (bucket failure or omitted by its author)`)
+const missingIds = [...approvedIds].filter((id) => !returnedIds.has(id))
+// Fixed element format, 1:1 with skills/study/SKILL.md Step 2-W: a BARE id means the topic was
+// never authored (bucket failure, or its author omitted it); a DOTTED `<id>.<sectionKey>` means the
+// topic authored fine but that one section came back empty. The orchestrator distinguishes the two
+// warnings by that shape alone, so emitting a prose sentence here implements neither of them.
+const SECTION_KEYS = ['concept', 'excerpts', 'qa', 'exercise', 'decisions', 'antipatterns', 'glossary', 'furtherReading']
+const isEmptySection = (v) =>
+  v == null || (Array.isArray(v) ? v.length === 0 : typeof v === 'string' && v.trim() === '')
+const missingSections = [...missingIds]
+topics.forEach((t) => {
+  SECTION_KEYS.forEach((k) => {
+    if (isEmptySection(t[k])) missingSections.push(`${t.id}.${k}`)
+  })
+})
 log(`Author: ${topics.length} topic(s) authored, ${missingIds.length} missing`)
 
 // ---- Phase 3: pedagogical critic (thorough only) ------------------------------
