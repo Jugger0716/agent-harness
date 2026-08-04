@@ -149,7 +149,7 @@ The Author segment/inline pass MAY merge, narrow, or re-tier the approved topic 
 
         **Visibility rule — an outline that finds nothing is REPORTED, never silent.** For every file that goes over the per-file cap, print one line (in `user_lang`) when either its outline came back **empty** (no pattern set for the extension, or none matched) or its outline was non-empty but **nothing qualified**, naming the file, which of the two happened, and that the fallback was used instead of windows. The two cases have different fixes — a missing pattern set versus documents that never name a declaration — and a silent fallback is precisely what let an entire language go unwindowed for five rounds.
 
-        **"Named by name" is a mechanical test, not a judgment call.** An outline declaration qualifies only when its identifier (a) occurs in `spec.md`/`changes.md` **inside a backtick code span or a fenced block**, and (b) is at least 3 characters long. A bare occurrence in running prose does NOT qualify. This is not pedantry: the identifiers in a segment script are also ordinary English or ordinary domain words, and a loose reading counts every one of those (measured: `topics` 12, `deviations` 8, `render` 3, `buckets` 1 in those two documents — and none of the four occurrences refers to the declaration it matches). Clause (b) exists because a one-character identifier collides with everything, including a code span that names a DIFFERENT skill's segment script — a cross-file collision, and a fifth kind alongside the four below. Both measurements: `workflows/_reference/study_measurements.md` §Named By Name. The two readings centre the window on the schemas versus on the fan-out and reconcile, so leaving this open destroys exactly the determinism this sub-procedure exists for.
+        **"Named by name" is a mechanical test, not a judgment call.** An outline declaration qualifies only when its identifier (a) occurs in `spec.md`/`changes.md` **inside a backtick code span or a fenced block**, (b) is at least 3 characters long, and (c) occurs there as a **whole token** — bounded by non-word characters on both sides — never as a substring of a longer identifier. A bare occurrence in running prose does NOT qualify. **Clause (c) is not decoration: leaving the match semantics unstated changes real output.** Measured, a substring reading finds 7 qualifying declarations in this repository's own segment script where whole-token finds the 6 the frozen-row note above records (`lenses` matches inside `lensesRequested`), and on a Java target the two pick different declarations and merge to 264 versus 297 lines. A match rule that leaves the window undetermined is the same determinism violation this sub-procedure exists to remove, so it is pinned rather than left to the reader. This is not pedantry: the identifiers in a segment script are also ordinary English or ordinary domain words, and a loose reading counts every one of those (measured: `topics` 12, `deviations` 8, `render` 3, `buckets` 1 in those two documents — and none of the four occurrences refers to the declaration it matches). Clause (b) exists because a one-character identifier collides with everything, including a code span that names a DIFFERENT skill's segment script — a cross-file collision, and a fifth kind alongside the four below. Both measurements: `workflows/_reference/study_measurements.md` §Named By Name. The strict and loose readings of what a code-span occurrence COUNTS AS (below) centre the window on the schemas versus on the fan-out and reconcile, so leaving that open would destroy exactly the determinism this sub-procedure exists for — which is why the next paragraph settles it too.
 
         **What the test CANNOT distinguish — and why that is deliberately left alone.** A code-span occurrence comes in four kinds and this rule counts all four: (i) a genuine quote of the declaration (`` `mopt = (m) => (m ? { model: m } : {})` ``); (ii) a schema or field name equal to the identifier (`` `deviations[]` ``); (iii) a **filename whose stem equals the identifier** (`` `.harness/study/topics.json` ``); and (iv) an unrelated token that merely sits inside a code span (`` `render in ${LANG}` `` matches the `render` helper at line 55). Kinds (iii) and (iv) are not references to the declaration at all.
 
@@ -244,9 +244,12 @@ Collect the authored topics into the same `studyGuide = { topics: [...] }` shape
          // AND re-embedded in every lens and bucket prompt (6 agents in deep, 7+ in thorough).
          // Step 1.3's budget caps the cited source files, but until the rungs below existed nothing
          // capped `spec.md` + `changes.md`, and the `--diff` branch's own cap is a LINE cap that
-         // says nothing about characters: measured within ONE target, the two documents are 47,993
-         // characters against the **23,511** its own 548-line fill gathers — the uncapped part is
-         // 2.04× the budgeted part. **Count characters on both sides of every comparison in this
+         // says nothing about characters: measured within ONE target at `a8b97bc`, the two
+         // documents are 47,993 characters against the **23,511** that target's 548-line fill
+         // gathered — the uncapped part is 2.04× the budgeted part. **Pin a figure like that to a
+         // SHA**: `88c2e5f`, two minutes later, changed a ranked script's length and the fill now
+         // stops elsewhere, so the present tense would already be false (ledger §Repudiated
+         // Figures). **Count characters on both sides of every comparison in this
          // block** (an earlier revision compared CRLF BYTES to characters and overstated the ratio
          // by ~1.9×), **and cite the cap by NAME, never by line number** — an absolute pointer
          // inside this file is checked by no Layer 1 script and silently rots on the next edit, as
@@ -409,12 +412,15 @@ Collect the authored topics into the same `studyGuide = { topics: [...] }` shape
          // branch of the rule above the whole `35,000 − overhead` goes to that branch's own evidence.
          // Reserving 8,750 here would strand it: nothing is entitled to it.
          //   - `--diff` — the branch's own "first ~3000 lines / ~150 files" cap is a LINE cap and
-         //     says nothing about characters. Measured 2026-08-04, `git diff main..HEAD` on this
-         //     repository is 2,145 lines / **199,206 characters**: already inside the line cap, and
-         //     5.7× the character cap and 3.6× the ~56,000 at which the dispatch stops being
-         //     executable — so the line cap has never once bound on a real range here, and the
-         //     dispatch would simply not run. Keep `git diff --stat` whole (measured 794 characters
-         //     over 15 files; it is the one piece the §1.6 gate already shows the user), but treat
+         //     says nothing about characters. Measured at `d8fea6d`, `git diff main..d8fea6d` on
+         //     this repository is 2,145 lines / **199,206 characters**: already inside the line
+         //     cap, and 5.7× the character cap and 3.6× the ~56,000 at which the dispatch stops
+         //     being executable — so the line cap has never once bound on a real range here, and
+         //     the dispatch would simply not run. **Cite a diff range by SHA, never `main..HEAD`**:
+         //     that range moves, and this figure was already stale at the commit that introduced
+         //     it (ledger §Repudiated Figures). Keep `git diff --stat` whole (measured 794
+         //     characters over 14 files — the output is 15 LINES, 14 file rows plus the summary;
+         //     it is the one piece the §1.6 gate already shows the user), but treat
          //     it as capped evidence like everything else rather than as free overhead — at this
          //     branch's ~150-file limit the same per-file rate extrapolates to roughly 8,000
          //     characters, which is an ESTIMATE, not a measurement. Cut the unified diff to
