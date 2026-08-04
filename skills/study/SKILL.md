@@ -266,55 +266,287 @@ Collect the authored topics into the same `studyGuide = { topics: [...] }` shape
          // filling lines and discovering there is no room left. Chars-per-line is language-
          // dependent and the old "550 lines is about 23,000 characters" assumption is low for
          // Java: measured 2026-08-04, a filled 550-line gather serialized to 24,923 characters on
-         // one Java slug and **31,945** on another (58 chars/line), the latter leaving only 2,935
-         // characters for two documents that needed 26,688. Order of operations:
-         //   1. Compute the spec's PROTECTED SUBTREES (below) and `changes.md`'s reservation.
+         // one Java slug and **31,945** on another (58 chars/line) — fill-first on that second slug
+         // leaves `35,000 − 31,945 = 3,055` characters for two documents measuring 26,688 together.
+         // Order of operations:
+         //   1. Compute the two documents' RESERVED PREFIXES (the rule below). This depends only on
+         //      their lengths, so it is computable before anything is selected.
          //   2. Give the entire remainder to the `## Cited Source Files` block, and stop adding
          //      files when either that remainder or Step 1.3(4)'s line budget runs out — whichever
-         //      binds first. On the measured Java slug this is ~240 lines, not 547.
+         //      binds first.
          //   3. quick pays none of this (the evidence never leaves the orchestrator's context), so
          //      the inline path fills its full line budget and ignores this entire section.
+         // **The remainder is `35,000 − <reserved> − this block's own overhead`, not `35,000 −
+         // <reserved>`.** The cap applies to the whole `sharedEvidence` string, so the
+         // `## Cited Source Files` heading, every `path (lines a-b of T, cited N times)` header line
+         // and any truncation notice consume it too. Two readers who ignore the overhead compute
+         // two different remainders, which is the same class of non-determinism step 3 exists to
+         // remove. **And do this arithmetic with a script, not by eye** — the standing rule from
+         // Step 1.3 sub-procedure step 1 applies unchanged here: character counting and
+         // line-boundary snapping are byte-level operations, and by hand the same target yields a
+         // different reservation on every run.
          //
          // **On a dense-code target, prefer quick — the cap cannot hold both.** Reserving prose
          // first protects the rationale but starves the cited block, and no split of 35,000 fixes
          // it when individual files are large: measured 2026-08-04 on
-         // `--harness feature-face-auth-sse-subscribe`, the protected subtrees are 19,655
-         // characters, leaving 13,280 for code, while the top three ranked files are 3,611 /
-         // 13,042 / 13,808 characters — so `FaceAuthSseWindowApplication.java`, the 527-line class
-         // the feature is ABOUT and the one whose two windows merge, is dropped whole. Give the
-         // cited block the whole cap instead and the rationale disappears. This is not a ratio to
-         // tune; it is the cap being smaller than the target needs. quick has no such cap and
-         // holds its full 600-line budget in one context, which is the second and stronger reason
+         // `--harness feature-face-auth-sse-subscribe`, the reservation below is 8,627 characters
+         // (7,321 of `spec.md` + 1,306 of `changes.md` after the line snap), leaving
+         // `35,000 − 8,627 = 26,373` for code before this block's overhead, while the top three
+         // ranked files contribute **3,442 / 12,833 / 13,632** characters (the third is the merged
+         // 250-line window 8-257 of the 527-line class, not the whole file) — so the fill takes the
+         // first two (16,275) and stops, and `FaceAuthSseWindowApplication.java`, the class the
+         // feature is ABOUT and the one whose two windows merge, is dropped whole. **This is the one
+         // measured case where the CHARACTER remainder is what stops the fill**: three files are
+         // 513 lines, comfortably inside the 550 budget, but 29,907 characters against a 26,373
+         // remainder. (An earlier revision of this paragraph carried 3,611 / 13,042 / 13,808 and a
+         // 16,653 sum. Re-measured under this block's own convention — LF-normalized characters —
+         // none of the three reproduces, and they do not reproduce as CRLF characters or as bytes
+         // either; they overstate by 1.6-4.7%. They were inherited across revisions without being
+         // re-measured, which is the same failure the fill rule's "never inherit a ranking" note
+         // warns about.) Give the cited block the whole cap instead and the rationale disappears.
+         // **This is not a ratio to tune; it is the cap being smaller than the target needs — and
+         // here is the measurement that proves it rather than asserts it.** The name-based
+         // reservation, re-measured correctly at 17,859 characters (subtree union), left 17,141 and
+         // admitted the SAME two files. So freeing 9,232 characters of headroom buys **zero**
+         // additional code on this target: the third file needs 13,632 and fits under neither rule.
+         // Do not read the positional rule
+         // as more evidence on a dense target — what it buys is a reservation that is computable and
+         // non-zero on the targets where the name test scored zero. (An earlier revision of this
+         // paragraph said the old rule admitted ONE file. That came from its own unreproducible
+         // arithmetic — it recorded a 19,655-character reservation and a 13,280-character remainder,
+         // and `35,000 − 19,655 = 15,345`, neither of which is the measured 17,859/17,141.)
+         // quick has no such cap and holds its full 600-line budget in one context, which is the
+         // second and stronger reason
          // the budgets do not rank the way the mode names suggest (§Risks). When a target's top
-         // files are this large, say so at the Step 1.6 gate so the user can choose quick knowingly
-         // rather than receive a deep guide whose central file was silently dropped.
+         // files are this large, say so at the Step 1.6 gate — the gate defines that line, and
+         // Step 1.3(4) has already computed the arithmetic it needs — so the user can choose quick
+         // knowingly rather than receive a deep guide whose central file was silently dropped.
          //
-         // Over the cap, reduce in this fixed order and no other:
-         //   1. the `## Cited Source Files` block is NEVER trimmed and code is NEVER shaved — drop
-         //      whole files from the bottom of the ranking instead (Step 1.3(4));
-         //   2. drop whole `##`/`###` sections of `spec.md` from the BOTTOM, keeping
-         //      Goal/Background/Scope/Approach — that is where the rationale a lens needs lives;
-         //   3. then the same for `changes.md`.
-         // **Protection is by SUBTREE, not by heading.** Keeping a `##` section keeps that heading
-         // AND every deeper heading under it, up to the next heading at the same-or-shallower
-         // level. Keeping the heading alone retains the title and throws the content away, which
-         // is a silent, total loss: measured 2026-08-04 on `--harness feature-face-auth-sse-subscribe`,
-         // whose spec nests its content one level down, `## 2. Background` retained **18** characters
-         // of a 2,254-character subtree and `## 4. Approach` retained **16** of 13,897 — 47,459
-         // characters of spec reduced to 2,103, with the protected sections present in name only.
-         // `## 3. Scope` survived there purely by accident, because its subsections happen to be
-         // titled "In scope"/"Out of scope" and matched the name test. The sibling slug escaped it
-         // only because ITS Goal/Background/Scope/Approach are leaf `###` sections with nothing
-         // nested under them — so a rule that looks correct on one target can be totally broken on
-         // the next, and heading depth is what decides.
-         // **Prose may be truncated; code may not.** If the protected subtrees alone exceed the
-         // room, truncate the LARGEST protected subtree (keeping its head) and say so — prose
-         // degrades gracefully, whereas a shaved excerpt breaks the §3.4 quote re-verification the
-         // whole guide rests on. That asymmetry is why (1) drops whole files and this step does not.
-         // Print one line (in `user_lang`) naming every section dropped or truncated, same form as
-         // the `--diff` truncation notice. If (1) alone still exceeds the cap, do NOT trim it —
-         // proceed over the cap and say so in that same line, because a guide anchored in
-         // truncated code is the exact failure this skill exists to avoid.
+         // **The reduction IS the reservation plus the fill — there is no second, later ladder that
+         // reduces again.** Read the four rungs below as what each part may and may not give up, not
+         // as a sequence to run after assembling an over-cap payload:
+         //   1. the `## Cited Source Files` block is NEVER trimmed and code is NEVER shaved. Step
+         //      1.3(4)'s fill has ALREADY bounded it by the character remainder, so there is nothing
+         //      here to re-cut; a file that did not fit was never gathered.
+         //   2. `spec.md` is cut from its TAIL to its reserved prefix (the rule below) — this is
+         //      where the cap is actually paid;
+         //   3. then the same for `changes.md`;
+         //   4. a `--diff` or `--project` target carries neither document — those two branches have
+         //      their own rungs, stated at the end of this comment.
+         //
+         // **An earlier revision framed these four as "Over the cap, reduce in this fixed order and
+         // no other", and that framing is a measured trap.** Under the reserve-first order the
+         // assembled payload satisfies `reserved + filled + overhead ≤ 35,000` by construction, so
+         // "over the cap" can only be reached by comparing UNDIMINISHED demand against the cap — and
+         // running rung 1 first on that comparison drops all the code before any prose is touched.
+         // Measured on `--harness study-skill`: reserved 8,565 + filled code 23,511 + overhead 227 =
+         // **32,303**, inside the cap with all three ranked files intact. But undiminished demand is
+         // `47,993 + 23,511 + 227 = 71,731`, and reducing that by rung 1 first drops file after file
+         // to 48,015 with **zero code left**, still over, and only then cuts `spec.md` — landing at
+         // 13,064 with a prose-only guide and 62% of the cap unspent. Same four rungs, opposite
+         // outcome, and the difference is 23,511 characters of the evidence this skill exists to
+         // quote. The ordering above is the one that is measured to work.
+         //
+         // **Slack after the fill returns to prose, and this is provable rather than a preference.**
+         // If `reserved + filled + overhead < 35,000`, extend the reserved prefixes — **ONE pass, no
+         // iteration** — by splitting the slack on the SAME basis as the reservation itself
+         // (`len(spec)` and `len(changes)`, the ORIGINAL lengths, not the unread remainders), then
+         // snapping each extended offset DOWN to a line boundary and never past whole. **If one
+         // document is already whole its share goes to the other**; if both are whole there is
+         // nothing to place. Where the two independent `round_half_up` shares would sum to one more
+         // character than the slack, take the smaller — the total may never exceed the ceiling.
+         //   **One pass, and the snap loss is NOT recovered — this is a deliberate determinism
+         //   trade, and leaving it open cost a round.** Snapping down means a prefix stops at the
+         //   last line boundary before its target, so some slack goes unused. Measured on
+         //   `--harness study-skill`: slack `11,262 − 8,565 = 2,697` targets spec 9,951 / changes
+         //   1,311, which snap to **9,751 / 1,144** — prose lands at **10,895**, returning 2,330 of
+         //   2,697 (86.4%) and leaving 367 characters unused because `spec.md` has a 457-character
+         //   paragraph with no newline in it right at the boundary. A tempting second reading —
+         //   iterate, and hand a document's unusable share to the other — recovers most of that
+         //   (about 11,257 on this target) but requires a redistribution rule the paragraph above
+         //   does not state, a termination argument, and a second competing definition of the split.
+         //   The two readings differ by 362 characters on this target, and that number is printed at
+         //   the §1.6 gate, so an unpinned choice is a determinism violation in a figure the user
+         //   approves against. One pass wins; the 367 characters are the price.
+         //   **`11,262` is the CEILING (`35,000 − 23,511 − 227`), not an achieved value.** An earlier
+         //   revision of this paragraph reported it as the result. Nothing in this rule reaches it.
+         //   The slack can never instead admit another code file, and the proof has **THREE** cases,
+         //   because Step 1.3(4)'s fill has three stop conditions, not two. **Character-bound**: the
+         //   next ranked file's characters exceeded the remaining characters, and the slack IS that
+         //   remainder, so the file is too large by definition (measured on
+         //   `--harness feature-face-auth-sse-subscribe`, above). **Line-bound**: the next file's
+         //   lines exceeded the 550-line budget, and no amount of character slack lifts a line cap
+         //   (measured on `--harness study-skill`, where the fill stops at 548 of 550 lines and the
+         //   next ranked file, `templates/study/html_shell.html` at 199 lines, is excluded by lines
+         //   while its ~9,800 characters would have fit a larger slack). **File-count-bound**: the
+         //   12-file ceiling, which character slack does not lift either — no measured target has
+         //   reached it (the fill measurements above top out at 11 files), but an enumeration that
+         //   claims completeness has to include it. An earlier revision of this paragraph stated the
+         //   first case only, then a later one stated two and asserted "do not restate the claim with
+         //   only one of them" while itself omitting the third. All three hold; state all three.
+         //
+         // **Reserve prose by POSITION. This step never parses a heading — not its text, not its
+         // level.** Two earlier rules here did, and both are measured failures with the same root
+         // cause: a heading is not a contract this skill controls.
+         //   (a) The NAME test ("keep Goal/Background/Scope/Approach") scores **ZERO on 3 of the 10**
+         //       real `docs/harness/<slug>/spec.md` files measured 2026-08-04 across two
+         //       repositories — including a 51,080-character spec — and **ZERO on all 8 of the 8**
+         //       `changes.md` files. It cannot be repaired by lengthening the list: those ten specs
+         //       carry FIVE different heading vocabularies: `Goal` (2 targets); `1. Goal` (1);
+         //       `목표 (Goal)` (3); `목표` alone (1, which does NOT match); and three sharing no
+         //       vocabulary at all (`목적`; `변경 이력`; `1. 정확도 판정 요약`). Break the seven
+         //       non-zero targets down and not one of them matched by design: 3 only because a
+         //       bilingual heading happens to carry the English word in parentheses, 3 only because
+         //       that spec's headings happen to be English at all — which neither producer
+         //       guarantees — and **1 only through a nested `In Scope`**, an unrelated subsection,
+         //       while its own top-level headings (`1. 정확도 판정 요약` / `2. 범위(This PR) vs Defer`)
+         //       match nothing. A test whose hit rate is decided by a translator's parenthetical is
+         //       not a contract.
+         //       Both producers of this file render headings in `user_lang` — `skills/spec/SKILL.md:500`
+         //       and `skills/harness/SKILL.md:663` — so an English name list can never be relied on,
+         //       and `/spec`'s seven canonical sections contain no `Approach` at all. The eight
+         //       `changes.md` files are worse than merely unmatched: their headings vary by producer
+         //       — and they vary WITHIN one producer, not merely between producers: of the three
+         //       agent-harness ones, two carry `Modified Files`/`Created Files`/`Advisor Feedback
+         //       Applied` and the third has no `Advisor` heading at all, using `Round 1 Changes` /
+         //       `Deleted Files` / `검증` / `Cold-review fix` instead. The pass-monorepo-be ones add
+         //       `Changes by Finding`, `Phase 0~4`, `에러코드 제거 판단 근거` and `Verify`. So no name
+         //       list survives the next target, and the sample proves it twice over.
+         //   (b) The SUBTREE test ("keep the heading and everything deeper under it, to the next
+         //       heading at the same-or-shallower level") fails whenever a section's body is written
+         //       at a SHALLOWER level than its heading. Measured on this repository's own
+         //       `docs/harness/study-skill/spec.md` (278 lines / 42,492 characters): `### Goal`,
+         //       `### Background` and `### Scope` capture 287 / 1,325 / 1,809 characters correctly,
+         //       but `### Approach` at line 42 is followed by `## 1.` … `## 16.` — sixteen shallower
+         //       siblings holding the entire design rationale — so its subtree is the heading ALONE,
+         //       **12 characters of 42,492**, and the protected total is 3,433 (8.1%). An earlier
+         //       revision of this comment read "leaf `###` sections with nothing nested under them"
+         //       as the SAFE case. It is the EMPTY case; which one it is depends on where the body
+         //       was written, and nothing here can constrain that.
+         //
+         // **The rule.**
+         //   len(f)     = f's character count after normalizing CRLF to LF. Fix this or the same
+         //                file reserves differently per platform: measured, the `study-skill` spec
+         //                is 42,492 characters LF-normalized and 42,769 raw, a 277-character spread.
+         //                A kept PREFIX is measured the same way and INCLUDES its final line
+         //                terminator; the old rule's section figures quoted above exclude theirs, so
+         //                an old-vs-new comparison can differ by one character per section. Stated
+         //                once so nobody chases a four-character gap between two conventions.
+         //   PROSE_CAP  = **8,750 characters**, for BOTH documents together (25% of the 35,000 cap).
+         //   reserve(f) = min(len(f), round_half_up(PROSE_CAP × len(f) / (len(spec) + len(changes))))
+         //   then snap DOWN to the end of the last COMPLETE line at or before that offset, so a
+         //   sentence, table row or list item is never cut mid-line. Ties in round(): half up.
+         //   Branches, all of them reachable in the measured set:
+         //     - a document shorter than its share is kept WHOLE and reserves nothing further — its
+         //       unused share becomes room for code (measured: `dryrun-version-flag` keeps both
+         //       documents entire at 2,914 + 849, and `coin-washer-setup-manual` its whole 1,277);
+         //     - `changes.md` absent → its len is 0, so `spec.md` takes the whole PROSE_CAP
+         //       (measured: 2 of the 10 targets have no `changes.md`);
+         //     - both absent → there is nothing to reserve and the cited block gets the full 35,000.
+         //   **This fires only when the full serialization — both documents whole plus the filled
+         //   cited block plus the overhead above — would exceed 35,000.** Under the cap both
+         //   documents go in whole. Over it, the reservation is the floor the prefixes are cut TO,
+         //   and the slack-return rule above then hands back everything the code did not use — which
+         //   is what makes "a floor, not a quota" literally true instead of merely intended. Without
+         //   that return it would be false: sizing the fill at `35,000 − PROSE_CAP − overhead` is
+         //   itself what creates the over-cap state that justifies cutting prose to PROSE_CAP, so
+         //   code takes the room first and prose is then trimmed to a quota. The return closes that
+         //   circle; do not drop it as an optimization.
+         //   Measured outcome across the same 10 targets: reservation rises on **9** and falls on
+         //   **1**. The three zero-protection targets become 8,301 / 1,277 / 8,592; the heading-
+         //   inversion target goes 3,433 → 8,565 and its prefix now reaches line 77, past the
+         //   `### Approach` heading that stopped the subtree walk at line 42. The single fall is
+         //   `feature-face-auth-sse-subscribe`, 17,859 → 8,627 — the dense-code target this comment
+         //   already singles out as the one where the reservation starved the code, so that is the
+         //   intended direction. It buys no extra code THERE (the paragraph above measures why: the
+         //   same two ranked files fit under both rules), so do not sell this rule on the dense
+         //   target; sell it on the three targets that reserved nothing at all.
+         //   **8,750 is a policy ceiling, not a measured threshold.** Its one anchor is the 24,923-
+         //   character filled gather above, which leaves 10,077 characters; 8,750 sits under that.
+         //   Raising it requires a new measurement first, exactly as the 35,000 cap does.
+         //
+         // **What the positional rule does NOT promise.** A head prefix is a PROXY for "where the
+         // rationale lives", and it is measurably not a guarantee. `/spec` puts a derived
+         // `## Review Sheet` ahead of the seven canonical sections (`skills/spec/SKILL.md:727`), and
+         // 2 of the 10 measured specs open on something else entirely (`## 변경 이력`;
+         // `## 1. 정확도 판정 요약`) — so "the first heading is the goal" is 8 of 10, not a rule. One
+         // measured target loses a section the name test held: on `coin-washer-review-fix` the
+         // prefix ends at line 72 and never reaches `## 접근 방식 (Approach)` at line 87 (a
+         // 1,950-character subtree), even though its reserved total rises 3,475 → 8,481. Do not
+         // write this rule up as reaching the rationale; it reaches the document's opening, which on
+         // measured evidence is usually but not always the same thing.
+         //
+         // **`--diff` and `--project` rungs (4).** Neither branch produces a `spec.md`, a
+         // `changes.md`, or a `## Cited Source Files` block, so rungs 1-3 have nothing to act on and
+         // this cap was, until measured, entirely unenforced on them. **PROSE_CAP does not apply on
+         // these two branches** — there is no decision ledger to reserve for, so by the "both absent"
+         // branch of the rule above the whole `35,000 − overhead` goes to that branch's own evidence.
+         // Reserving 8,750 here would strand it: nothing is entitled to it.
+         //   - `--diff` — the branch's own "first ~3000 lines / ~150 files" cap is a LINE cap and
+         //     says nothing about characters. Measured 2026-08-04, `git diff main..HEAD` on this
+         //     repository is 2,145 lines / **199,206 characters** (200,487 bytes — count characters,
+         //     per the note above): already inside the line cap, and 5.7× the character cap, 3.6× the
+         //     ~56,000 at which the dispatch stops being executable — so the line cap has never once
+         //     bound on a real range here, and the dispatch would simply not run. Keep
+         //     `git diff --stat` whole — measured **794 characters over 15 files** on that range, and
+         //     it is the one piece the §1.6 gate already shows the user; at this branch's ~150-file
+         //     limit the same per-file rate extrapolates to roughly 8,000 characters, which is an
+         //     ESTIMATE and not measured, so treat `--stat` as capped evidence like everything else
+         //     rather than as free overhead. Cut the unified diff to `35,000 − overhead` at a
+         //     **file boundary**:
+         //     whole per-file diffs, dropped from the BOTTOM of `--stat`'s file order, never a
+         //     partial hunk. A partial hunk is a shaved excerpt, and §3.4's quote re-verification
+         //     cannot check one — the same asymmetry rung 1 enforces for cited files.
+         //   - `--project` — "README/CLAUDE.md excerpts" had no cap of any kind, and "excerpts" set
+         //     no size. Measured, this repository's own `README.md` is **83,258 characters** (84,922
+         //     bytes), 2.4× the whole cap by itself. Cap the structural pass plus excerpts at the
+         //     same `35,000 − overhead`, take each prose file's head, and drop whole files from the
+         //     bottom of the structural listing. **The head-truncation applies to PROSE only.** If
+         //     an entry-point item carries an actual code excerpt rather than just a path, it obeys
+         //     rung 1 instead — whole file or not at all, never a head — for the same reason the
+         //     `--diff` rung refuses a partial hunk. Step 1.3's `--project` branch does not say
+         //     which of the two an "entry point" is, so decide by what you are about to emit: a path
+         //     listing is prose, a quoted excerpt is code.
+         //   Both notices take the same form as the `--diff` truncation notice, and both surface at
+         //   the §1.6 gate through the dense-target line rather than being discovered afterwards.
+         //
+         // **Prose may be truncated; code may not.** Prose degrades gracefully in whatever survives,
+         // whereas a shaved excerpt breaks the §3.4 quote re-verification the whole guide rests on.
+         // That asymmetry is why (1) drops whole files and this step never removes a byte from one.
+         //
+         // **Two escape clauses that used to live here are STRUCTURALLY DEAD on the harness-slug
+         // branch — recorded rather than deleted, so the next round does not re-derive them as
+         // missing.** (a) "if the reserved prefixes alone exceed the room, cut further from the tail
+         // of the larger one": the fill admits a file only while `code + overhead ≤ 35,000 −
+         // reserved`, so `reserved ≤ 35,000 − code − overhead` holds by construction, with equality
+         // the only tight case. Measured across the 10 targets, reservations run 1,277-8,720 against
+         // a room of 10,599-34,978 — zero cases, and PROSE_CAP being a flat 8,750 means there is no
+         // reachable input that produces one. (b) "if (1) alone still exceeds the cap, proceed over
+         // the cap and say so": same inequality, plus the degenerate case closes it from the other
+         // side — if even the top-ranked file exceeds the remainder, the prefix fill takes ZERO files
+         // and `code = 0`. Both clauses can only fire on the `--diff`/`--project` branches, where
+         // PROSE_CAP does not apply and rung 4's own cap governs instead; keep them for those two and
+         // do not resurrect them here. **This is the same treatment the §1.6 gate condition gets a
+         // few paragraphs up** — a condition proven unreachable is written down as unreachable, not
+         // left in the list looking load-bearing.
+         //   The dead clause (b) has a useful corollary worth stating: on a target whose top-ranked
+         //   file alone exceeds the remainder, the fill takes zero files and the slack-return rule
+         //   then hands roughly `35,000 − PROSE_CAP` characters back to prose, so the cap is spent on
+         //   the decision ledger rather than left unused. That is a real benefit of the slack return,
+         //   not merely a tidiness rule.
+         // Print one line per reduced document (in `user_lang`), same form as the `--diff`
+         // truncation notice: `<file> : kept <K> of <T> characters (through line <L>)`. **This
+         // replaces an earlier "naming every section dropped or truncated" instruction, which an
+         // offset cut satisfies vacuously** — offset cutting drops no *sections*, so a 90% tail loss
+         // would report nothing at all and the file's own worst case (a silent, total loss) would
+         // reappear in the very rule written to prevent it. `K`, `T` and `L` need no heading parsing,
+         // so they are computable by the same script that computed the reservation, and `kept 0 of
+         // <T>` prints in the same form rather than printing nothing. `K` is the FINAL kept length —
+         // after the slack return, not the bare reservation — so it matches what the §1.6 gate
+         // printed. On the `--diff`/`--project` branches, where clause (b) above is live: if the
+         // capped evidence alone still exceeds the
+         // cap, do NOT trim it — proceed over the cap and say so in that same line, because a guide
+         // anchored in truncated code is the exact failure this skill exists to avoid.
        topics: <the approved [{id, title, tier}] list from topics.json>,
        tierQuota: { basic: <n>, practice: <n>, advanced: <n> },
          // <n> = the ACTUAL tier distribution of the approved `topics` list above (count
@@ -505,7 +737,7 @@ Named here so the two cross-references in Step 1.3 and Step 3.2 resolve, and so 
 
 - **quick holds everything in one context.** The inline path carries the full gathered evidence, authors 3-5 topics against it, and renders a report that has measured ~60KB — all in a single orchestrator context. A run that overruns it loses the authored topics, not just the render, which is why the Step 1.3 total cap drops whole files rather than shaving them. Note the budgets do NOT rank the way the mode names suggest: quick's row (600 lines) is the LARGEST of the three, because deep and thorough pay for their evidence again per agent — see Step 1.3(4).
 - **A single large Write can truncate silently.** A truncated HTML file still renders in a browser, so the failure is invisible without the Step 3.2.3 tail check. Prefer the deterministic script; on the fallback path, Write the shell plus the first topic and Edit in the rest.
-- **The workflow path pays a serialization cost quick does not.** `args.sharedEvidence` is emitted inline by the orchestrator and then re-embedded in every lens and bucket prompt, so evidence size multiplies by the agent count. The 35,000-character cap in Step 2-W exists for this and has no analogue on the inline path.
+- **The workflow path pays a serialization cost quick does not.** `args.sharedEvidence` is emitted inline by the orchestrator and then re-embedded in every lens and bucket prompt, so evidence size multiplies by the agent count. The 35,000-character cap in Step 2-W exists for this and has no analogue on the inline path. It binds on all THREE target kinds, not only on a harness slug: measured 2026-08-04, a real `git diff` range serialized to 199,206 characters and this repository's own `README.md` to 83,258 — 5.7× and 2.4× the cap, from targets that carry no `spec.md` at all. Step 2-W rung 4 is what reduces those. (Both figures are LF-normalized CHARACTER counts, not the 200,487/84,922 byte sizes `wc -c` reports; the cap is a character cap, and quoting bytes for it is a mistake this file has now made twice.)
 - **Every count in this skill is a count, not a guarantee of understanding.** §5.3 states the boundary; do not let a green accounting block be read as a claim about what the reader learned.
 
 ## Key Rules
