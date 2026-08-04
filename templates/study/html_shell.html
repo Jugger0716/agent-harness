@@ -45,23 +45,27 @@
     --bg: #ffffff; --fg: #1a1a1a; --muted: #5b6270; --border: #d8dce2;
     --card: #f7f8fa; --accent: #2f6fed; --code-bg: #f0f2f5; --code-fg: #1a1a1a;
     --badge-repo: #1a7f37; --badge-fail: #b3261e; --badge-model: #8a5a00; --badge-link: #6e6e6e;
+    --badge-inference: #6d3fa3;
   }
   @media (prefers-color-scheme: dark) {
     :root {
       --bg: #14161a; --fg: #e6e8eb; --muted: #9aa3b2; --border: #2c313a;
       --card: #1b1e23; --accent: #7aa2ff; --code-bg: #0e1013; --code-fg: #e6e8eb;
       --badge-repo: #4fbf67; --badge-fail: #ff6b64; --badge-model: #e0a63a; --badge-link: #9aa3b2;
+      --badge-inference: #c3a6ff;
     }
   }
   :root[data-theme="light"] {
     --bg: #ffffff; --fg: #1a1a1a; --muted: #5b6270; --border: #d8dce2;
     --card: #f7f8fa; --accent: #2f6fed; --code-bg: #f0f2f5; --code-fg: #1a1a1a;
     --badge-repo: #1a7f37; --badge-fail: #b3261e; --badge-model: #8a5a00; --badge-link: #6e6e6e;
+    --badge-inference: #6d3fa3;
   }
   :root[data-theme="dark"] {
     --bg: #14161a; --fg: #e6e8eb; --muted: #9aa3b2; --border: #2c313a;
     --card: #1b1e23; --accent: #7aa2ff; --code-bg: #0e1013; --code-fg: #e6e8eb;
     --badge-repo: #4fbf67; --badge-fail: #ff6b64; --badge-model: #e0a63a; --badge-link: #9aa3b2;
+    --badge-inference: #c3a6ff;
   }
   * { box-sizing: border-box; }
   body {
@@ -99,6 +103,10 @@
   .badge.repo { color: var(--badge-repo); }
   .badge.fail { color: var(--badge-fail); }
   .badge.model { color: var(--badge-model); }
+  /* Narrative claim whose basis is `inference` (declared, or auto-downgraded because its
+     evidenceRef did not resolve). Its own kind on purpose: `fail` would assert a failure
+     that did not happen, `model` already means "model-generated code example". */
+  .badge.inference { color: var(--badge-inference); }
   .badge.link { color: var(--badge-link); }
   .excerpt, .claim { margin-bottom: 14px; }
   .excerpt:last-child, .claim:last-child { margin-bottom: 0; }
