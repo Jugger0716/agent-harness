@@ -104,7 +104,9 @@ The Author segment/inline pass MAY merge, narrow, or re-tier the approved topic 
 
         **Second known gap, also accepted — the `config` bucket can be structurally empty.** A `spec.md` describing work that has not shipped yet names the files that work will *create*, and step 3 drops every path that does not exist at scan time. On a `--harness` target those future artifacts are overwhelmingly config: measured 2026-08-04 against this repository, the documents named `state.json` (6), `.harness/study/topics.json` (5), `topics.json` (5), `study_guide.json` (3), `.harness/model_config.json` (2) and `model_config.json` (1) — six config paths, all correctly dropped as non-existent, leaving zero config candidates and an evidence set that was 100% executable code. The bias is systematic, not incidental, because naming files-to-be-created is what a spec does. **Do not add a compensating branch**: quoting a file that does not exist is precisely what this skill must never do, and §3.9's publish gate keys on a topic having *neither* code *nor* config, so `config == 0` on its own can never fire a false gate. Report it, do not repair it.
      3. **Exclude, then order deterministically.** Drop prose (`.md`/`.mdx`/`.txt`/`.rst`/`.adoc`), **everything under `docs/`** (this skill's own output — otherwise a previous round's report qualifies as "code"), non-existent paths, binaries, and anything failing `resolve ⊆ cwd`. Order by citation count descending, then **path ascending** as the tie-break.
-     4. **Budget:** deep/thorough = at most 5 files / 1,200 lines total / **400 lines per file**; quick = at most 3 files / 600 lines total / **300 lines per file** (quick holds this same evidence in ONE context while authoring 3-5 topics and writing a ~60KB report — see §Risks).
+     4. **Budget — the WORKFLOW path gets LESS than quick, not more.** deep/thorough = at most 3 files / **550 lines** total / **300 lines per file**; quick = at most 3 files / **600 lines** total / **300 lines per file** (quick holds this evidence in ONE context while authoring 3-5 topics and writing a ~60KB report — see §Risks).
+
+        The inversion is counterintuitive enough to state outright. quick holds the evidence in one context and never serializes it; deep/thorough must pass it through `args.sharedEvidence`, which the orchestrator re-emits as tool-call output and the segment then re-embeds in EVERY lens and bucket prompt — 6 agents in deep, 7+ in thorough. **Evidence cost is multiplied by the agent count on the workflow path and paid once on the inline one**, so the budgets run opposite to the modes' apparent size. **What deep and thorough buy is more ANALYSIS over the same evidence — 8-15 topics, three independent lenses, a critic and an assemble pass — never more evidence.** (Measured 2026-08-04: the old 5-file / 1,200-line row produced an 898-line gather that serialized to ~56,000 characters. The orchestrator cannot re-emit that in one dispatch call, and hand-transcribing it would corrupt the §3.4 quote re-verification the whole guide rests on — the exact failure mode §3.2.2 forbids for the render.)
 
         **When the caps conflict, the total wins and whole files drop from the bottom of the ranking.** The three limits are not independent: a real ranking can satisfy every per-file cap and still exceed the total. Never shave a file into a fragment to make the arithmetic work, and never cut the top-ranked file's window count to buy room — those windows are the entire point of step 5. Drop the lowest-ranked file instead, whole, and name it in the step-7 notice. (Worked example, this repository, quick: ranked 732 / 221 / 198 lines → the engine file's two 150-line windows = 300, plus the second file whole = 221, totals 521 of 600, and the third file is dropped. Naïvely capping instead gives 300 + 221 + 198 = 719, which is 20% over.)
      5. **Over the per-file cap, never truncate from the head.** Grep the top-level declaration outline (`^(export )?(async )?function`, `^const [A-Za-z_]+ =`, `^class `) with line numbers, then read **at most two 150-line windows** centred on declarations the documents named by name.
@@ -185,7 +187,30 @@ Collect the authored topics into the same `studyGuide = { topics: [...] }` shape
        mode: <"deep"|"thorough">,
        userLang: <user_lang>,
        targetLabel: <"harness:<slug>" | "project:<name>" | "diff:<range>">,
-       sharedEvidence: <content gathered in Step 1.3, already capped>,
+       sharedEvidence: <content gathered in Step 1.3, capped per the rule below>,
+         // **Serialization cap — WORKFLOW path only.** `args` travels inline in the dispatch
+         // call, so whatever goes here is re-emitted by the orchestrator as tool-call output
+         // AND re-embedded in every lens and bucket prompt (6 agents in deep, 7+ in thorough).
+         // Step 1.3's budget caps the cited source files, and the `--diff` branch caps its own
+         // unified diff, but NOTHING caps `spec.md` + `changes.md`: measured 2026-08-04 on this
+         // repository they are 85KB, against roughly 23KB of code under Step 1.3(4)'s
+         // workflow-path row — the uncapped part is nearly four times the budgeted part. Under
+         // the previous, larger row the combined payload reached ~56,000 characters, which the
+         // orchestrator cannot re-emit in one dispatch call at all, making the dispatch itself
+         // unexecutable. quick pays none of this (the evidence never leaves the orchestrator's
+         // context), which is why the cap lives here and not in 1.3.
+         // **Cap: 35,000 characters** — sized against Step 1.3(4)'s workflow-path row (3 files /
+         // 550 lines, roughly 23,000 characters of code), leaving room for the two documents.
+         // Over it, reduce in this fixed order and no other:
+         //   1. the `## Cited Source Files` block is NEVER trimmed — it is what Step 1.3 exists
+         //      to produce and it is already budgeted;
+         //   2. drop whole `##`/`###` sections of `spec.md` from the BOTTOM, keeping
+         //      Goal/Background/Scope/Approach — that is where the rationale a lens needs lives;
+         //   3. then the same for `changes.md`.
+         // Print one line (in `user_lang`) naming every section dropped, same form as the
+         // `--diff` truncation notice. If (1) alone still exceeds the cap, do NOT trim it —
+         // proceed over the cap and say so in that same line, because a guide anchored in
+         // truncated code is the exact failure this skill exists to avoid.
        topics: <the approved [{id, title, tier}] list from topics.json>,
        tierQuota: { basic: <n>, practice: <n>, advanced: <n> },
          // <n> = the ACTUAL tier distribution of the approved `topics` list above (count
@@ -367,6 +392,15 @@ Sub-agents exist only in **deep and thorough modes** (WORKFLOW path). Preset tab
 ## User Interaction Rules
 
 See `templates/_shared/askuserquestion.md`.
+
+## Risks
+
+Named here so the two cross-references in Step 1.3 and Step 3.2 resolve, and so nothing below is rediscovered per run.
+
+- **quick holds everything in one context.** The inline path carries the full gathered evidence, authors 3-5 topics against it, and renders a report that has measured ~60KB — all in a single orchestrator context. A run that overruns it loses the authored topics, not just the render, which is why the Step 1.3 total cap drops whole files rather than shaving them. Note the budgets do NOT rank the way the mode names suggest: quick's row (3 files / 600 lines) is the LARGEST of the three, because deep and thorough pay for their evidence again per agent — see Step 1.3(4).
+- **A single large Write can truncate silently.** A truncated HTML file still renders in a browser, so the failure is invisible without the Step 3.2.3 tail check. Prefer the deterministic script; on the fallback path, Write the shell plus the first topic and Edit in the rest.
+- **The workflow path pays a serialization cost quick does not.** `args.sharedEvidence` is emitted inline by the orchestrator and then re-embedded in every lens and bucket prompt, so evidence size multiplies by the agent count. The 35,000-character cap in Step 2-W exists for this and has no analogue on the inline path.
+- **Every count in this skill is a count, not a guarantee of understanding.** §5.3 states the boundary; do not let a green accounting block be read as a claim about what the reader learned.
 
 ## Key Rules
 
