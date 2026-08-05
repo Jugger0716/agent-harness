@@ -45,6 +45,7 @@
 - §Reduction Order — why "rung 1 first" is a measured trap
 - §Gate Condition — why the first §1.6 dense-target condition was unreachable
 - §Dead Escape Clauses — the two clauses proven unreachable on the harness-slug branch
+- §C# Target — the third language: what the extension set missed, and what one target measured
 
 ## §Repudiated Figures
 
@@ -70,6 +71,7 @@ Never restore any left-column value as a measurement. Every one of them was publ
 | `a 457-character paragraph **with no newline in it**` | 456-character body plus its terminator | 457 includes the line terminator that §Prose Reservation elsewhere pins as INCLUDED — the same boundary described both ways in one file | 2026-08-05 audit |
 | room range `10,599-34,978` | **unestablished** | depends on a fill never run for all 10 targets. The upper bound is `35,000 − 22`, and that 22 is the heading constant retired one row above: at `code = 0` Step 1.3(7) appends nothing, so the bound would be 35,000. The clause it supported does not need a room range at all (see §Dead Escape Clauses) | 2026-08-05 audit |
 | `git diff main..HEAD` = 2,145 lines / 199,206 characters | true only **at `d8fea6d`** | a moving range cited in the present tense. At `243867b`, the commit that introduced the figure, the range was already 2,377 lines / 221,207 characters; today it is 2,810 / 248,829, i.e. **7.1×** the cap rather than 5.7× | 2026-08-05 audit |
+| "alphabetical order truncates `state.json` to `state.js`" — stated as a property of the ORDERING | a property of the ordering **only once the trailing `\b` is gone**; with the anchor present the alphabetical alternation truncates nothing | measured 2026-08-05 on a fixture carrying `state.json`, `html_shell.html`, `GateService.cs`, `Aptner.Pass.Utility.csproj` and `app.css`: the shipped alternation and a fully alphabetical one return **identical, correct** full paths, while dropping the `\b` from the alphabetical one truncates all five at once. The prohibition stands — the attribution was wrong, and it pointed the next editor at the cheaper of the two guards | 2026-08-05 |
 | `its own **548-line** fill gathers 23,511` (present tense) | true only **at `a8b97bc`** | `88c2e5f`, made two minutes later on the same branch, grew `verify_sync_markers.py` from 221 to 300 lines; the fill now stops at **498 of 550 lines over 2 files**. The figures are correct at the pinned SHA — the tense was the defect | 2026-08-05 audit |
 
 **One figure is retained deliberately and must not be read as live:** the ranking
@@ -211,6 +213,40 @@ pattern copied WITH its GFM table escaping (`\|` left as `\|`) returns **0 match
 error** on a file where the un-escaped form finds `public class FaceAuthSseWindowApplication` at
 line 82 — ripgrep accepts it and silently finds nothing, which is worse than being rejected.
 
+**Correction to the first of those two, measured 2026-08-05 — the ordering was never the guard.**
+Re-running both alternations against a fixture holding `state.json`, `templates/study/html_shell.html`,
+`Aptner.Pass.Gate/GateService.cs`, `Aptner.Pass.Utility/Aptner.Pass.Utility.csproj` and `src/app.css`:
+the shipped longest-first alternation and a fully alphabetical one return the **same six correct full
+paths**. Drop the trailing `\b` from the alphabetical one and all five truncate at once
+(`state.js`, `html_shell.h`, `GateService.c`, `…Utility.c`, `app.c`). So the truncation is real, but
+it is gated on the ANCHOR, not on the order — which inverts which prohibition matters: `(?![\w])`
+is the dangerous edit, because the parse error it produces invites an editor to delete the anchor
+rather than restore `\b`. Length ordering is kept as insurance that survives that edit; it is no
+longer sold as the thing preventing truncation (§Repudiated Figures).
+
+**A third language, and the same anchor trap in the OUTLINE patterns (measured 2026-08-05 on
+`AptnerPass`, a C#/.NET Framework 4.7.2 WinForms solution, `v1_develop` @ `1d0705264b8cb405`).**
+The `.java` type pattern anchors at column 0, and C# block-scoped namespaces indent every type
+declaration, so a `.cs` row ported from it finds **0** types in all six real files tested. Anchoring
+with `^\s*` instead recovers them:
+
+| File | lines | col-0 anchor | `^\s*` anchor | member pattern |
+|---|---|---|---|---|
+| `Aptner.Pass.Kiosk/Presenters/KioskPresenter.cs` | 663 | 0 | 1 | 55 |
+| `Aptner.Pass.Pos/Presenters/PosPresenter.cs` | 470 | 0 | 1 | 44 |
+| `Aptner.Pass.Services/ApiService/ApiService.cs` | 1,506 | 0 | 2 | 98 |
+| `Aptner.Pass.Common/Common/EnumDefine.cs` | 371 | 0 | 22 | 17 |
+| `Aptner.Pass.Utility/Common/Messages.cs` | 924 | 0 | 1 | 472 |
+| `AptnerPass/Program.cs` | 18 | 0 | 1 | 0 |
+
+The 22 on `EnumDefine.cs` is confirmed by ripgrep, not only by the script, and the 472 on
+`Messages.cs` is real rather than over-matching — that file is one-line `public static` factory
+methods almost end to end. The C# member pattern differs from the Java one only by adding
+`internal`, which contributed **nothing** on any of the six: it is kept for languages-not-repos
+correctness, not on the strength of this sample. **The lesson is the one the table already exists
+for, one language later: a row ported between languages inherits its anchoring assumption, and the
+failure is silent because the fallback output looks plausible.**
+
 ## §Named By Name
 
 **What a loose reading would count (measured 2026-08-04 in this repository's own `spec.md` +
@@ -247,6 +283,27 @@ false positives correlate with the code a document is actually discussing, becau
 explains the reconcile step also names the files that step reads and writes. The correlation is
 luck, not a guarantee: a document naming a file whose stem collides with an unrelated declaration
 far from the interesting code will pull the window there, and nothing in this skill catches that.
+
+**Kind (iii) is not accidental in one-type-per-file languages — it is the naming convention
+(measured 2026-08-05, `AptnerPass`).** C# (like Java) names a file after the type it declares, and
+a `--harness` document opens with a table of changed PATHS in code spans. So the type's identifier
+is guaranteed a very early code-span occurrence that refers to a filename, and the
+first-mention ordering is decided by the file table rather than by the discussion. On
+`KioskPresenter.cs`: **4 of 56** outline declarations qualify, and the top two are both
+`KioskPresenter` — the class at line 21 and its constructor at line 40, tied at the same
+first-mention offset because both matched inside the path `…/Presenters/KioskPresenter.cs`. Their
+windows merge to **[1, 115]**: usings, fields, constructor. `StopDevice` (line 485) and
+`OnDeviceAuthenticationCallbackAsync` (line 654) — the SSE surface the artifact is entirely about —
+rank 3rd and 4th and are never reached. `PosPresenter.cs` behaves identically ([1, 111]).
+
+The measured argument for keeping kinds (iii)/(iv) still stands and is NOT reversed here: it was
+taken on JavaScript, where a stem-to-declaration collision is coincidence. What this target shows
+is that the *correlation the argument rests on* — false positives landing near the code under
+discussion — is a property of the language's file/type convention, not a property of the proxy. On
+C#/Java it inverts and lands on the head of the file. Recorded, not repaired: the prohibition on
+adding a kind-(iii) exclusion is unchanged, because the JavaScript measurement showing the strict
+reading is WORSE has not been re-run here, and swapping one unmeasured rule for another is what
+this ledger exists to stop.
 
 ## §Window Merge
 
@@ -292,9 +349,9 @@ is 1,305 lines, an uncapped 435 (1.45× the cap, 79% of the total).
 
 No measured file breaches the TOTAL budget this way, only the per-file one — but the per-file cap
 is what the fill arithmetic and its counterfactual both assume, so an exception to it silently
-invalidates them. **Seven of the 23 extensions in the step-2 pattern have no outline row**
-(`json`/`yaml`/`yml`/`toml`/`html`/`css`/`sql`), so the fallback is their normal path, not their
-exception, and a config or schema file large enough to breach the cap is an ordinary member of
+invalidates them. **Eight of the 25 extensions in the step-2 pattern have no outline row**
+(`json`/`yaml`/`yml`/`toml`/`html`/`css`/`sql`/`csproj`), so the fallback is their normal path, not
+their exception, and a config or schema file large enough to breach the cap is an ordinary member of
 that set.
 
 ## §Prose Reservation
@@ -464,3 +521,81 @@ Clause (b) has a useful corollary worth keeping: on a target whose top-ranked fi
 the remainder, the fill takes zero files and the slack-return rule then hands roughly
 `35,000 − PROSE_CAP` characters back to prose, so the cap is spent on the decision ledger rather
 than left unused. That is a real benefit of the slack return, not merely a tidiness rule.
+**That corollary was observed for the first time on 2026-08-05** — by a target that reached
+`code = 0` through the OTHER door (the extraction set matched nothing at all, rather than the top
+file being too large). See §C# Target.
+
+## §C# Target
+
+Measured 2026-08-05 against `AptnerPass`, a C#/.NET Framework 4.7.2 WinForms solution
+(`v1_develop` @ `1d0705264b8cb405f63e00820171f2e3e48b0852`), `--harness guardtec-sse-review-fixes`,
+`spec.md` 30,107 + `changes.md` 6,131 = **36,238** LF-normalized characters. This is the third
+language and the first target whose two documents exceed the 35,000 cap **on their own**.
+
+**The extension set matched nothing.** Run against both documents, the shipped pattern returned
+**0 tokens**. Not a thin ranking — an empty extraction stage, on a target whose entire subject is
+C# code. The documents cite roughly 110 `.cs`/`.csproj` paths. Adding `csproj` and `cs` at their
+length positions yields **43 distinct tokens / 108 citations → 9 ranked files / 4,432 lines**:
+
+| # | cites | lines | path |
+|---|---|---|---|
+| 1 | 6 | 663 | `Aptner.Pass.Kiosk/Presenters/KioskPresenter.cs` |
+| 2 | 6 | 470 | `Aptner.Pass.Pos/Presenters/PosPresenter.cs` |
+| 3 | 6 | 138 | `Aptner.Pass.Utility/Aptner.Pass.Utility.csproj` |
+| 4 | 6 | 214 | `UnitTestProject/UnitTestProject.csproj` |
+| 5 | 4 | 128 | `Aptner.Pass.Services/Aptner.Pass.Services.csproj` |
+| 6 | 2 | 1,506 | `Aptner.Pass.Services/ApiService/ApiService.cs` |
+| 7 | 2 | 18 | `AptnerPass/Program.cs` |
+| 8 | 1 | 371 | `Aptner.Pass.Common/Common/EnumDefine.cs` |
+| 9 | 1 | 924 | `Aptner.Pass.Utility/Common/Messages.cs` |
+
+**29 tokens still drop, and the dominant cause is not the pattern.** The artifact describes work on
+`epic/guardtec-sse` while the working tree sits on `v1_develop`, so most of the feature's files —
+`FaceAuthSseService.cs`, `FaceAuthSsePresenterCoordinator.cs`, `ITokenAccessor.cs`,
+`FaceAuthMaskingHelper.cs`, `IdVerificationService.cs` — do not exist at scan time and are dropped
+correctly. **A `--harness` target is only as good as the checkout it is read against, and nothing
+in this skill detects the mismatch**; it surfaces only as a thin `## Cited Source Files` block.
+Two bare basenames were ambiguous and correctly never guessed: `Program.cs` across **5** candidates
+and `ApiService.cs` across **2** — while the full-path spelling of the latter resolved directly, so
+the same file both resolved and dropped depending on how the document happened to spell it.
+
+**Build-output trees are not in the §Exclusion List.** `bin/`, `obj/` and `artifacts/` are absent
+from it, and a .NET build populates all three with copies. On this target the ambiguity above is
+partly what that produces. Recorded, not repaired: adding exclusions changes every ranking
+measured so far, so it needs its own re-measurement round.
+
+**Prose reservation and the slack return, on the pre-fix run (`code = 0`).** The reservation fires
+because the two documents alone exceed the cap. Raw shares `7,270 / 1,480` (= PROSE_CAP exactly);
+snapped down to line boundaries **`7,144 / 1,420` = 8,564**. Slack `35,000 − 8,564 = 26,436`, split
+on the ORIGINAL lengths as `21,963 / 4,473`, snapped again to a final **`29,012 / 5,867` = 34,879
+of 35,000** — 99.5% of the slack returned, **121 characters unused** to snapping (95 from `spec.md`,
+26 from `changes.md`). The cap is therefore paid entirely from the prose tail: `spec.md` keeps
+through line 351 of 377, `changes.md` through line 91 of 95. The §1.6 dense-target condition
+(`36,238 + 0 + 0 > 35,000`) fires, as does the `F == 0` warning.
+
+**The post-fix fill, and a stop condition the measured set had not shown before.** With `csproj`/
+`cs` extracted and the `.cs` outline row in place, the reservation is unchanged (it depends only on
+the two documents), the remainder for code is `35,000 − 8,564 − 22 = 26,414`, and the fill keeps
+**3 files / 364 lines / 13,734 characters**: `KioskPresenter.cs` windowed to [1, 115] (3,905),
+`PosPresenter.cs` to [1, 111] (3,747), and `Aptner.Pass.Utility.csproj` whole (138 lines, 6,082).
+It then stops **line-bound** — `364 + 214 > 550` for `UnitTestProject.csproj` — with 12,680
+characters of the remainder still unspent. Every previously measured stop was character-bound;
+this is the line cap binding first on a real target, which is the case §Reduction Order's
+three-case proof names but had no worked example for. The slack returns to prose
+(`10,535 / 2,145`), landing the payload at **34,835 of 35,000**. The §1.6 dense-target line fires
+here too: `30,107 + 6,131 + 13,756 = 49,994`, and what the cap drops is 15,159 characters of prose
+tail, not code.
+
+**Two windows on a merged head are not the same as evidence about the change.** 226 of the 364
+kept lines are the two Presenter file heads (§Named By Name); the 138-line `csproj` is the one
+kept file that is squarely about what the artifact did (`<Compile Include>` add/remove). Report
+this as the fill working exactly as specified and the SELECTION being weak, not as a fill bug.
+
+**The auto-detect ranking branch is still unexecuted — the premise that it would run here was
+wrong.** `docs/harness/` in this repository is matched by `.gitignore:148` (`**/docs/harness/`);
+the only two tracked paths under it sit in a directory that is not a candidate. Of 32 directories,
+**16** carry both `spec.md` and `changes.md`, and `git log -1 --format=%cI` returns empty for
+**all 16**, so Step 1.2 takes the mtime fallback exactly as it did on the other two repositories.
+Three repositories, three mtime fallbacks: the git-tracked ranking branch has never run.
+(Independent of that, an explicit `--harness <slug>` bypasses auto-detect altogether, so this
+branch cannot be exercised by a flagged invocation at all.)
