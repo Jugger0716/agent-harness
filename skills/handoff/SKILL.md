@@ -1,7 +1,7 @@
 ---
 name: handoff
 disallowed-tools: NotebookEdit, Task, Agent, Workflow, WebSearch, WebFetch
-description: Session handoff manager for cross-session continuity. Generate a structured HANDOFF document (git state, verified facts, next steps, reading order) behind a human gate, then prime a fresh session from it with git-drift verification (/handoff resume). Complements /harness Session Recovery (task-internal state.json phase restore) — this covers epic-level, multi-day, cross-session continuity. Inline-only, stateless, human-gated writes; never escalates to background agents or the Workflow engine.
+description: Session handoff manager for cross-session continuity. Generate a structured HANDOFF document (git state, verified facts, next steps, reading order) — written immediately, with no save confirmation, because the location convention never overwrites — then prime a fresh session from it with git-drift verification (/handoff resume). Complements /harness Session Recovery (task-internal state.json phase restore) — this covers epic-level, multi-day, cross-session continuity. Inline-only, stateless, non-overwriting writes; never escalates to background agents or the Workflow engine.
 ---
 
 # Handoff — Session Handoff Manager
@@ -32,7 +32,7 @@ Parse the argument immediately after `/handoff`:
 
 | Input | Action |
 |-------|--------|
-| (none) or `generate` | Capture current session → HANDOFF document (gated write) |
+| (none) or `generate` | Capture current session → HANDOFF document (written immediately, never overwrites) |
 | `generate <title>` | Same, with an explicit title |
 | `resume` | Locate the newest HANDOFF document and prime from it |
 | `resume <path>` | Prime from the given HANDOFF document |
@@ -104,7 +104,7 @@ Gather, in this order:
       `Epic`'s more-recent document is never carried in by mistake.
    c. **No source found** (scan exhausted the cap, or no document anywhere has this Epic's
       ledger): start from an **empty ledger** — this is not an error, but it MUST be surfaced at
-      the Step 3 HARD-GATE preview ("no carry-forward source found — starting a new ledger for
+      Step 4's write report ("no carry-forward source found — started a new ledger for
       Epic `<epic>`") so a broken chain is never silent.
    d. **Carry rows forward, never overwrite**: copy the source document's ledger rows for THIS
       Epic only (rows for a different `Epic` in the same table are never carried), then
@@ -156,40 +156,66 @@ Run: `/handoff resume docs/harness/handoff/<this-file>.md`
 omit the whole section (heading + table) when Step 1 item 5 did not apply — never emit an
 empty table with no rows just to keep the section present.
 
-### Step 3 — HARD-GATE (preview before write)
+### Step 3 — Resolve the final path (no gate — the write is unconditional)
 
-Resolve the FINAL target path first — apply the collision rule from the location convention
-NOW, so the previewed path IS the write path. Then show the full composed document plus that
-path. **If a Progress Ledger applies (Step 1 item 5) and no carry-forward source was found**
-(item 5b/5c), the preview MUST say so explicitly (in `user_lang`) — e.g. "No carry-forward
-source found for Epic `<epic>` — starting a new ledger." — a broken chain must never be silent.
-Then ask via AskUserQuestion
-(in `user_lang`):
-  header: "Save handoff?"
-  question: "<target path>"
-  options:
-    - label: "Save" / description: "Write the handoff document"
-    - label: "Edit" / description: "Tell me what to change before saving"
-    - label: "Cancel" / description: "Discard — nothing is written"
+Resolve the FINAL target path: apply the collision rule from the location convention NOW, so
+the resolved path IS the write path. Then go straight to Step 4 — **`generate` never asks
+whether to save.**
 
-- **Save**: proceed to Step 4.
-- **Edit**: ask what to change (free text), apply, re-show the preview, re-ask the gate.
-- **Cancel**: stop; write nothing.
+**Why there is no confirmation here, stated so it is not "restored" as a missing safety net.**
+Three properties make the write safe without one, and all three are structural rather than
+promised: (i) the location convention **never overwrites** — an existing filename takes `-2`,
+`-3`, …, so no prior handoff can be destroyed and a re-run after a correction is simply a new
+file; (ii) the write is a single local document under `docs/harness/handoff/`, touching no git
+state, no `.harness/`, and nothing outward-facing; and (iii) `generate` is *already* an
+explicit user action (§Non-Goals — nothing auto-generates a handoff), so the gate was a second
+confirmation of a command the user had just typed. What a preview-gate genuinely bought was the
+chance to correct a fact before it became durable; that is preserved by writing first and
+reporting after — **the file is the preview**, and correcting it means editing it in place or
+re-running (which yields `-2`, never an overwrite). Step 4 says both.
 
-If AskUserQuestion is unavailable, present the same options as numbered text.
+**Not all of it survives, and the difference is written down rather than glossed.** Of what the
+gate did: the broken-chain warning and the resolved path **moved** to Step 4's report; the
+full-document preview is **replaced** — by the written file itself, not by anything Step 4
+prints; and `Cancel` is **removed outright**, so there is no longer any path through `generate`
+that writes nothing. A handoff created by mistake is corrected by deleting the file (Step 4).
+**Do not describe this change as lossless** — an earlier revision of this paragraph claimed
+"nothing is dropped, only re-ordered", which is false on both the preview and `Cancel`, and
+would let a later audit conclude the removal cost nothing.
 
-### Step 4 — Write & confirm
+### Step 4 — Write & report
 
 1. Ensure `docs/harness/handoff/` exists.
-2. Write to the exact path approved at the gate. If a new collision appeared between preview
-   and write (rare), re-resolve and re-run the Step 3 gate — never write to a path the user
-   did not see.
-3. Confirm (in `user_lang`), and print the one-liner the user will paste next session:
+2. Write to the path resolved in Step 3. If a collision appeared between resolution and write
+   (a concurrent run), re-resolve by the same `-2`/`-3` rule and write there — **never
+   overwrite an existing handoff**, and name the path actually written in the report below.
+3. Report (in `user_lang`). **The report is not optional chrome — it carries what the removed
+   gate used to carry**, so print all of it:
+   - **If a Progress Ledger applies (Step 1 item 5) and no carry-forward source was found**
+     (item 5b/5c), say so explicitly — e.g. "No carry-forward source found for Epic `<epic>` —
+     started a new ledger." **A broken chain must never be silent**; this line moved from the
+     preview to here, and it is the one line whose omission the removal of the gate could
+     actually cost.
+   - The path that was written, plus the resume one-liner below.
+   - One line telling the user how to correct it — **three ways, and the third is the one that
+     replaces `Cancel`**: edit the file directly; re-run `/handoff generate` (a re-run writes a
+     NEW `-2` file — prior handoffs are never modified); or **delete the file**, which is a
+     legitimate correction and not a repair of anything, since a handoff is a plain local
+     document that no state, no lint and no other skill reads. **Say so explicitly**: with no
+     gate, an unwanted `generate` — including a bare `/handoff`, which IS `generate` per the
+     dispatch table — can only be undone by deleting, and until it is deleted a path-less
+     `/handoff resume` will select it, because `resume` Step 1 picks the NEWEST document.
 
 ```
 [handoff] Saved : docs/harness/handoff/YYYY-MM-DD-<slug>.md
+  Ledger  : <"no carry-forward source found for Epic <epic> — started a new ledger" | omit the line entirely>
+  Correct : edit that file / re-run `/handoff generate` (writes a new `-2` file — nothing is overwritten) / delete it if unwanted (until then a path-less `resume` picks it, being newest)
   Next session → /handoff resume docs/harness/handoff/YYYY-MM-DD-<slug>.md
 ```
+
+The `Ledger` row is **omitted when a carry-forward source WAS found, and omitted when no ledger
+applies at all** — it exists only to make the broken-chain case loud. The `Correct` row always
+prints: it is what replaces the gate's "Edit" option.
 
 > **gitignore note:** many projects gitignore `docs/harness/`. If `git check-ignore` says the
 > written file is ignored, append one warning line (in `user_lang`): the handoff exists only on
@@ -344,5 +370,12 @@ Scan `docs/harness/handoff/*.md` (only files whose first line starts with `# HAN
   handoff POINTS at it (read-only) rather than duplicating its phase machine.
 - The Progress Ledger (P0-1) is a passive table this skill reads/writes on explicit
   `generate` calls only — no automatic status detection, no automatic slice transitions.
-  Keeping `/handoff` stateless/inline-only/human-gated is deliberate; anything more starts to
+  Keeping `/handoff` stateless and inline-only is deliberate; anything more starts to
   re-implement an epic state machine, which is explicitly out of scope (see spec D-4/D-5).
+- **No save confirmation on `generate`** — Step 2 composes, Step 3 resolves the path, Step 4
+  writes, and nothing in between asks. Writes never overwrite (the `-2`/`-3` collision rule),
+  never touch git or `.harness/`, and never leave the machine, and `generate` is itself an
+  explicit user action per the bullet above. **The one thing this genuinely gives up is the
+  `Cancel` option** — there is no longer a way to invoke `generate` and write nothing, so an
+  unwanted document is undone by deleting the file (Step 3, Step 4). `resume` keeps its Step 5
+  gate, which guards *starting work*, not writing a file — do not "harmonize" the two.
