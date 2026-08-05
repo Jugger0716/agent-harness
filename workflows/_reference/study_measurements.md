@@ -855,3 +855,32 @@ targets, with the reason stated inline so it is not "fixed" back into an uncondi
 general lesson is the one this whole ledger keeps re-learning**: a rule written while looking at one
 branch acquires that branch's assumptions silently, exactly as the `.java` outline row did for
 `.cs` (§Outline Patterns).
+
+**The dispatch ran, and it partly answers Finding 1.** 7 agents, 3/3 lenses, 8/8 topics,
+`missingSections` empty, `deviations` empty, payload 34,542 characters. §3.4 re-verification:
+**15 of 15** repo excerpts verified, zero downgraded (0 content-mismatch, 0 anchor-missing,
+0 path-invalid). §3.5: **40 of 40** repo-basis claims resolve. §3.4a: 4 code / 2 config / 3 prose /
+6 prose-self / 0 unknown.
+
+**Three of those 15 excerpts, and 8 of those 40 claims, quote files rung 4 had DROPPED** —
+`skills/handoff/SKILL.md` (2 excerpts, 5 claims) and `skills/harness/SKILL.md` (1 excerpt,
+3 claims), neither of which appears anywhere in the 34,542 characters that were sent. All three
+excerpts carry correct line ranges and pass the re-read. This is the third independent
+confirmation of "`sharedEvidence` is a cost bound, not an evidence boundary" (§C# Target recorded
+the first two), and the first where the un-sent file was withheld *by this skill's own reduction*
+rather than merely absent from a ranking. **Finding 1's cost is therefore lower than its
+description implies**: the ordering is still uninformed, but the authors recovered two of the
+three dropped files themselves. The mitigation is conditional and must not be read as general —
+it works only because `cwd` IS the analyzed repository here, so the files were on disk at the
+paths the diff named. On an external target the same drop would be unrecoverable.
+
+**The 100% resolution rate is NOT evidence that the §Path Root fix works.** It is evidence that
+the fix's failure MODE was absent: `cwd` is the repository on this target, so the authors had no
+root to invent and the `AptnerPass/`-class prefix could not arise. The fix stays unverified
+(§Path Root); a run against an external target is what would test it.
+
+**The disclosure chain held end to end.** Step 1.6 warned that 5 of 8 candidates carried
+`codeAnchor: none` (t4-t8); §3.9's code-evidence gate then fired on exactly `t4, t5, t6, t7, t8`.
+The gate-time warning and the post-render measurement agree, target for target — which is what
+the `codeAnchor` disclosure exists to make checkable (Step 1.5). `prose-self` 6 against
+`code + config` 6 did NOT trip the second clause; only the bare-topic clause fired.
