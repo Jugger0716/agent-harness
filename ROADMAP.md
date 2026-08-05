@@ -1,13 +1,15 @@
 # Agent Harness Roadmap
 
-## In development — `/study` skill
+## v8.9 — Shipped (2026-08-05) — `/study` skill + `/handoff` write-immediately
 
-> Note: the two "In development" headers below (`v8.8`, `v8.7`) are pre-existing stale
-> headers — both have already shipped (see `## v8.x — Shipped`) but were not retitled at
-> release time. That cleanup is a separate, already-scoped concern (tracked alongside this
-> skill's own scope) and is intentionally left untouched here to keep this change reviewable
-> on its own.
-
+- **`/handoff generate` no longer asks before saving** — Step 3 resolves the path, Step 4 writes.
+  The gate guarded a write that is safe by construction (the filename convention never
+  overwrites; the write touches no git state, no `.harness/`, nothing outward-facing; and
+  `generate` is already an explicit user action). The correction affordance it provided is
+  preserved by inverting the order — the file is the preview, and the write report always names
+  how to correct it. `Cancel` is given up and documented as given up; the Progress Ledger's
+  broken-chain warning moved into the write report. `resume` keeps its own gate.
+  See `skills/handoff/SKILL.md`.
 - **`/study` — 9th multi-path skill** — turns a `/harness` output directory, a whole project,
   or a git diff into a 7-section, 3-tier study guide (concept explanation / real code excerpts
   / interview Q&A / hands-on exercises / design rationale / anti-patterns / glossary) for
@@ -22,7 +24,7 @@
   marker groups (`§Ambiguity Prompt`, `§agent-harness-defaults`, `§Ad-hoc Dispatch Contract`);
   `scripts/verify_sync_markers.py` floors raised accordingly. See `skills/study/SKILL.md`.
 
-## v8.8 — In development (Anthropic best-practices gap analysis — epic continuity)
+## v8.8 — Shipped (2026-07-28) — Anthropic best-practices gap analysis — epic continuity
 
 Scope selected from a gap analysis against Anthropic's official Claude Code best-practices
 document (`docs/harness/anthropic-best-practices-skill-improvements/anthropic-best-practices.md`),
@@ -69,7 +71,7 @@ subsystems.
 | **P2-2** — state-machine-level distinction between the 3 different roads that all currently converge on `phase: "completed"` (QA PASS / Accept-as-is / Max-rounds-reached) | The Session Boundary block (v8.8, above) already derives a display-only `Reason` label from existing fields without a schema change; a true state-machine fork would require a `state.json` version bump, which is out of scope until real usage shows the display-only mitigation is insufficient |
 | **P2-3** — top-of-file invariant summary in `skills/harness/SKILL.md` (the file is ~75KB/1,090 lines with Key Rules/Architecture Principles at the bottom — a compact-survival risk) | Needs to re-evaluate alongside M3 (template compression, below) rather than as an isolated insertion; the fixed SKILL.md section-order convention means this needs its own design pass, not a drive-by edit |
 
-## v8.7 — In development (`feature/v8.7-tiering-continuity`)
+## v8.7 — Shipped (2026-07-24) — model tiering + session continuity
 
 Scope selected from the 2026-07-24 three-project usage audit (25-agent workflow; evidence: the user
 operates primarily as a free-form ultracode orchestrator — the plugin's highest-value additions are
