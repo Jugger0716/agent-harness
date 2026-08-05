@@ -633,6 +633,35 @@ rendered heading text. And §3.4's fingerprint is **exact-after-trim**, not mere
 whitespace-tolerant: a quote that drops a line's trailing comment fails as `content-mismatch`.
 "Whitespace-normalized" absorbs indentation and CRLF, nothing else.
 
+**The label fix, measured A/B on a second C# target (`--harness guardtec-sse-d1-v1-compat`,
+2026-08-05).** Same skill, same models, same orchestrator; the only change is that the evidence
+block now labels the prose sections with their repo-relative paths (Step 1.3(6)).
+
+| | run 1 (bare label) | run 2 (repo-relative label) |
+|---|---|---|
+| repo-basis claims resolving | 7 / 29 (24%) | **22 / 37 (59%)** |
+| broken because the ref was a bare `spec.md` | **11** | **0** |
+| a claim citing the new full label | — | **1, and it resolves** |
+| broken because of an `AptnerPass/` prefix | 11 | 15 |
+| excerpts verified / downgraded | 5 / 6 | 9 / 5 |
+
+The label class went to zero; the prefix class did not move, which is the correct outcome — the
+prefix is cwd-relative confusion on an external target and the fix never addressed it. **The
+prefix is an unstated contract, not a slip**: the SAME file was cited both ways in one run —
+`LocalCommonSection.cs` resolves 8 times root-relative and breaks 9 times prefixed — so
+independent bucket authors each guessed a different root. `path`/`evidenceRef` are documented as
+"repo-relative" without saying which directory is the repository; when `cwd` is the repository
+that is unambiguous, and when it is not, nothing in the payload says so.
+
+Two more things this run showed. The authors again read files that were not in `sharedEvidence`
+(`EnumDefine.cs`, `GatePresenter.cs`) and quoted them correctly — those excerpts were downgraded
+by the prefix, not by their content. And the evidence block's own labels are cap-consuming
+overhead: making them repo-relative added 78 characters, and the assembler that had omitted the
+prose headers from the overhead sum put the payload **177 characters over the cap** on this
+target. Run 1 had survived the same omission only because its slack was smaller. **A slack return
+that fills to the ceiling is exactly when an under-counted overhead becomes a violation** — the
+corollary above describes the condition, and this is its first observed cost.
+
 **The auto-detect ranking branch is still unexecuted — the premise that it would run here was
 wrong.** `docs/harness/` in this repository is matched by `.gitignore:148` (`**/docs/harness/`);
 the only two tracked paths under it sit in a directory that is not a candidate. Of 32 directories,
