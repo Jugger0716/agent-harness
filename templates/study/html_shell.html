@@ -1,0 +1,199 @@
+<!--
+  agent-harness /study — static HTML shell (author-time asset).
+
+  THIS FILE IS NOT A SUB-AGENT PERSONA TEMPLATE. It is never dispatched to an agent and
+  never filled with {placeholder} substitution by a prompt-rendering call. The ORCHESTRATOR
+  (skills/study/SKILL.md Step 3 "Render") reads this file, escapes and splices topic content
+  into it, and writes the result to docs/harness/<slug>/study_guide[_round<N>].html. All CSS
+  and JS below are inline and self-contained — zero external requests (fonts/CDN/scripts) —
+  written once here so no run pays authoring tokens for chrome.
+
+  Content insertion point (appears EXACTLY ONCE in the body below). Written here WITHOUT its
+  comment delimiters so this documentation block does not itself create a second literal
+  match when the orchestrator greps for the real sentinel:
+      STUDY_CONTENT
+
+  Placeholders the orchestrator fills by a literal find-and-replace of ALL occurrences, BEFORE
+  the content splice (title/meta text only — never used for topic content, which goes through
+  the sentinel above). Named here WITHOUT their leading/trailing underscore delimiters, same
+  reason as STUDY_CONTENT above: writing them verbatim would make THIS comment an occurrence,
+  so a "replace once" pass would consume the comment and leave the real markup untouched.
+      STUDY_TITLE       (delimited form appears at <title> and <h1> — TWO occurrences)
+      STUDY_GENERATED   (delimited form appears once, in the .meta line: target, mode,
+                         tier counts, round, date)
+      STUDY_DISCLOSURE  (delimited form appears once, in the .disclosure line directly under
+                         .meta — this is the header-banner surface for the canonical
+                         link-disclosure sentence required by skills/study/SKILL.md Step 3.3)
+  Because STUDY_TITLE legitimately occurs twice in the markup, replace-ALL is required, not
+  replace-once.
+
+  Completion sentinel — appended by the orchestrator as the LAST line of the file, once, only
+  after ALL topic content has been written (used to detect a truncated write; the orchestrator
+  re-reads only the file's tail to confirm it, per skills/study/SKILL.md Step 3). Written here
+  WITHOUT its comment delimiters, same reason as STUDY_CONTENT above (an embedded closing
+  delimiter would prematurely terminate THIS documentation comment):
+      study-guide: topics=N sections=M complete   (wrapped in its own HTML comment when written)
+-->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>__STUDY_TITLE__</title>
+<style>
+  :root {
+    --bg: #ffffff; --fg: #1a1a1a; --muted: #5b6270; --border: #d8dce2;
+    --card: #f7f8fa; --accent: #2f6fed; --code-bg: #f0f2f5; --code-fg: #1a1a1a;
+    --badge-repo: #1a7f37; --badge-fail: #b3261e; --badge-model: #8a5a00; --badge-link: #6e6e6e;
+    --badge-inference: #6d3fa3;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #14161a; --fg: #e6e8eb; --muted: #9aa3b2; --border: #2c313a;
+      --card: #1b1e23; --accent: #7aa2ff; --code-bg: #0e1013; --code-fg: #e6e8eb;
+      --badge-repo: #4fbf67; --badge-fail: #ff6b64; --badge-model: #e0a63a; --badge-link: #9aa3b2;
+      --badge-inference: #c3a6ff;
+    }
+  }
+  :root[data-theme="light"] {
+    --bg: #ffffff; --fg: #1a1a1a; --muted: #5b6270; --border: #d8dce2;
+    --card: #f7f8fa; --accent: #2f6fed; --code-bg: #f0f2f5; --code-fg: #1a1a1a;
+    --badge-repo: #1a7f37; --badge-fail: #b3261e; --badge-model: #8a5a00; --badge-link: #6e6e6e;
+    --badge-inference: #6d3fa3;
+  }
+  :root[data-theme="dark"] {
+    --bg: #14161a; --fg: #e6e8eb; --muted: #9aa3b2; --border: #2c313a;
+    --card: #1b1e23; --accent: #7aa2ff; --code-bg: #0e1013; --code-fg: #e6e8eb;
+    --badge-repo: #4fbf67; --badge-fail: #ff6b64; --badge-model: #e0a63a; --badge-link: #9aa3b2;
+    --badge-inference: #c3a6ff;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--fg);
+    font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  header { padding: 24px 20px 16px; border-bottom: 1px solid var(--border); }
+  header h1 { margin: 0 0 6px; font-size: 1.5rem; }
+  .meta { margin: 0 0 6px; color: var(--muted); font-size: 0.9rem; }
+  /* Header banner for the canonical link-disclosure sentence (SKILL.md Step 3.3 surface 1). */
+  .disclosure { margin: 0 0 14px; color: var(--badge-link); font-size: 0.82rem; line-height: 1.5; }
+  /* Related-topic nav rendered at the end of a topic section from relatedTopicIds[]. */
+  nav.related { margin-top: 16px; font-size: 0.85rem; color: var(--muted); }
+  nav.related a { margin-right: 10px; }
+  .filter-bar { display: flex; flex-wrap: wrap; gap: 8px; }
+  button.tier-btn {
+    font: inherit; font-size: 0.85rem; padding: 6px 12px; border-radius: 999px;
+    border: 1px solid var(--border); background: var(--card); color: var(--fg); cursor: pointer;
+  }
+  button.tier-btn[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+  button.tier-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  main { max-width: 880px; margin: 0 auto; padding: 20px; }
+  section.topic {
+    border: 1px solid var(--border); border-radius: 10px; background: var(--card);
+    padding: 18px 20px; margin-bottom: 18px;
+  }
+  section.topic h2 { margin: 0 0 4px; font-size: 1.15rem; display: flex; align-items: center; gap: 8px; }
+  section.topic h3 { font-size: 0.95rem; text-transform: uppercase; letter-spacing: 0.03em; color: var(--muted); margin: 18px 0 8px; }
+  section.topic h3:first-of-type { margin-top: 10px; }
+  .badge {
+    display: inline-block; font-size: 0.72rem; font-weight: 600; padding: 2px 8px;
+    border-radius: 999px; border: 1px solid currentColor; white-space: nowrap;
+  }
+  .badge.tier { color: var(--accent); }
+  .badge.repo { color: var(--badge-repo); }
+  .badge.fail { color: var(--badge-fail); }
+  .badge.model { color: var(--badge-model); }
+  /* Narrative claim whose basis is `inference` (declared, or auto-downgraded because its
+     evidenceRef did not resolve). Its own kind on purpose: `fail` would assert a failure
+     that did not happen, `model` already means "model-generated code example". */
+  .badge.inference { color: var(--badge-inference); }
+  .badge.link { color: var(--badge-link); }
+  .excerpt, .claim { margin-bottom: 14px; }
+  .excerpt:last-child, .claim:last-child { margin-bottom: 0; }
+  pre.code {
+    background: var(--code-bg); color: var(--code-fg); border-radius: 6px; padding: 10px 0;
+    overflow-x: auto; font: 13px/1.5 ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+    counter-reset: line;
+  }
+  pre.code .line { display: block; padding: 0 12px 0 48px; position: relative; white-space: pre; }
+  pre.code .line::before {
+    counter-increment: line; content: counter(line); position: absolute; left: 0; width: 36px;
+    text-align: right; color: var(--muted); padding-right: 8px; user-select: none;
+  }
+  details { margin: 6px 0; border: 1px solid var(--border); border-radius: 6px; padding: 8px 12px; background: var(--bg); }
+  details > summary { cursor: pointer; font-weight: 600; }
+  details[open] > summary { margin-bottom: 6px; }
+  .further-reading-note { color: var(--muted); font-size: 0.85rem; margin: 0 0 10px; }
+  #empty-state { text-align: center; color: var(--muted); padding: 40px 20px; }
+  footer { text-align: center; color: var(--muted); font-size: 0.8rem; padding: 24px 20px 32px; }
+  a { color: var(--accent); }
+  code, pre { font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace; }
+</style>
+</head>
+<body>
+<header>
+  <h1>__STUDY_TITLE__</h1>
+  <p class="meta">__STUDY_GENERATED__</p>
+  <p class="disclosure">__STUDY_DISCLOSURE__</p>
+  <div class="filter-bar" role="group" aria-label="Tier filter">
+    <button type="button" class="tier-btn" data-filter="all" aria-pressed="true">All <span class="count"></span></button>
+    <button type="button" class="tier-btn" data-filter="basic">Basic <span class="count"></span></button>
+    <button type="button" class="tier-btn" data-filter="practice">Practice <span class="count"></span></button>
+    <button type="button" class="tier-btn" data-filter="advanced">Advanced <span class="count"></span></button>
+  </div>
+</header>
+<main id="content">
+<!-- STUDY_CONTENT -->
+</main>
+<p id="empty-state" hidden>No items at this difficulty level.</p>
+<footer>
+  <p>Generated by agent-harness /study. Self-contained page — no external requests.</p>
+</footer>
+<script>
+(function () {
+  var buttons = Array.prototype.slice.call(document.querySelectorAll('.tier-btn'));
+  var topics = Array.prototype.slice.call(document.querySelectorAll('section.topic'));
+  var emptyState = document.getElementById('empty-state');
+
+  function countFor(tier) {
+    if (tier === 'all') return topics.length;
+    var n = 0;
+    for (var i = 0; i < topics.length; i++) {
+      if (topics[i].getAttribute('data-tier') === tier) n++;
+    }
+    return n;
+  }
+
+  buttons.forEach(function (btn) {
+    var tier = btn.getAttribute('data-filter');
+    var n = countFor(tier);
+    var countEl = btn.querySelector('.count');
+    if (countEl) countEl.textContent = '(' + n + ')';
+    if (n === 0 && tier !== 'all') btn.disabled = true;
+  });
+
+  function applyFilter(tier) {
+    var visible = 0;
+    topics.forEach(function (t) {
+      var show = tier === 'all' || t.getAttribute('data-tier') === tier;
+      t.style.display = show ? '' : 'none';
+      if (show) visible++;
+    });
+    emptyState.hidden = visible !== 0;
+    buttons.forEach(function (b) {
+      b.setAttribute('aria-pressed', b.getAttribute('data-filter') === tier ? 'true' : 'false');
+    });
+  }
+
+  buttons.forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      if (btn.disabled) return;
+      applyFilter(btn.getAttribute('data-filter'));
+    });
+  });
+
+  applyFilter('all');
+})();
+</script>
+</body>
+</html>

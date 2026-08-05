@@ -1,0 +1,19 @@
+# Native Workflow segment scripts MUST be checked out with LF endings.
+#
+# Why this is load-bearing, not cosmetic: Claude Code's permission layer rejects a
+# `Workflow` invocation whose `scriptPath` file contains carriage returns —
+# "script contains control characters that would be hidden in the approval dialog".
+# On a Windows checkout with core.autocrlf=true these files arrive CRLF, so every
+# workflow-path skill (harness / spec / debug / deep-review / codebase-audit /
+# migrate / refactor / test-gen) fails to launch. Reproduced 2026-08-03: the same
+# script rejected as CRLF launched successfully as a byte-identical LF copy.
+#
+# Limits, stated honestly:
+#   - Effective for NEW clones/checkouts only. The index blobs are already LF
+#     (`git ls-files --eol` -> `i/lf w/crlf`), so `git add --renormalize` is a
+#     no-op and produces no diff.
+#   - An ALREADY-INSTALLED plugin cache is not fixed retroactively; that copy
+#     needs a re-clone or a plugin reinstall.
+#   - To fix an existing worktree in place: remove the files and re-check them out
+#     (`rm workflows/*.workflow.js && git checkout -- workflows/`).
+*.workflow.js text eol=lf

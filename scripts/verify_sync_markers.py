@@ -19,6 +19,12 @@ This is a marker-and-token consistency check, not a semantic diff: it proves the
 enum tokens co-exist in each marked file, not that surrounding prose is identical.
 Add a SYNC_GROUPS entry whenever a new SYNC-WITH contract is introduced.
 
+It ALSO runs a section-reference check (see SECTION_REF_TARGETS): every
+`<file>` §<Section> pointer into a listed side-file must resolve to a real
+`## §<Section>` heading there. A renamed heading otherwise rots every pointer
+silently -- the same failure mode this repository already fixed twice for absolute
+line-number citations.
+
 Exit codes:
   0  all known groups consistent
   1  a referential break, too-few sites, or a missing token
@@ -67,7 +73,17 @@ SYNC_GROUPS = [
         "section": "Ambiguity Prompt",        # NO leading § — MARKER_RE captures the text AFTER §
         "target_anchor": "§Ambiguity Prompt",  # substring that must exist in target_file (§ kept)
         "tokens": ["§Ambiguity Prompt"],       # every marked site must contain this token
-        "min_sites": 7,                        # 7 skills reference the SHARED §Ambiguity Prompt
+        # min_sites is a RAW OCCURRENCE floor, NOT a file-count floor (site count != file
+        # count — this scan does not dedupe by file). As of /study: 9 multi-path skills
+        # carry the marker (debug, deep-review, harness, migrate, refactor, spec, study,
+        # test-gen = 8 files, + migrate and refactor EACH carrying the marker twice = 2 extra
+        # raw sites -> 10 total). codebase-audit references §Ambiguity Prompt in prose only
+        # and carries NO marker — a pre-existing gap (skills/codebase-audit/SKILL.md §Mode
+        # Gate), tracked separately, not part of this floor. Prior value (7) was a floor
+        # BELOW the already-measured 9 raw sites (slack 2) — a /study marker omission would
+        # have silently passed; 10 = 9 (measured before /study) + 1 (this skill), so removing
+        # /study's marker now actually fails this check (AC-22 verification method).
+        "min_sites": 10,
     },
     {
         "id": "project-defaults",
@@ -75,7 +91,12 @@ SYNC_GROUPS = [
         "section": "agent-harness-defaults",   # NO leading § — MARKER_RE captures the text AFTER §
         "target_anchor": "agent-harness-defaults:",
         "tokens": ["agent-harness-defaults:"],
-        "min_sites": 8,                        # all 8 multi-path skills carry the project-defaults wiring
+        # 9 multi-path skills (codebase-audit, debug, deep-review, harness, migrate,
+        # refactor, spec, study, test-gen) each carry exactly ONE marker in this group — raw
+        # site count equals file count here (no duplicate-marker skill, unlike
+        # ambiguity-prompt above). Prior value (8) was measured with zero slack before
+        # /study; 9 = 8 + 1 (this skill).
+        "min_sites": 9,
     },
     {
         "id": "adhoc-dispatch",
@@ -83,7 +104,10 @@ SYNC_GROUPS = [
         "section": "Ad-hoc Dispatch Contract",  # NO leading § — MARKER_RE captures the text AFTER §
         "target_anchor": "Ad-hoc Dispatch Contract",
         "tokens": ["§Ad-hoc Dispatch Contract"],
-        "min_sites": 11,                       # 8 multi-path skills + ship + md-generate + md-optimize
+        # 9 multi-path skills + ship + md-generate + md-optimize = 12 files, one marker each
+        # (raw site count equals file count in this group too). Prior value (11) was measured
+        # with zero slack before /study; 12 = 11 + 1 (this skill).
+        "min_sites": 12,
     },
     {
         "id": "handoff-state-record",
@@ -96,6 +120,77 @@ SYNC_GROUPS = [
         "min_sites": 2,                        # skills/handoff/SKILL.md (self) + skills/harness/SKILL.md
     },
 ]
+
+
+# Files whose `<path>` §<Section> references must resolve to a real `## §<Section>`
+# heading in that file. Deliberately scoped to `workflows/_reference/` rather than
+# generic: many §references in this repository legitimately point at something that is
+# NOT an exact `## §` heading -- a bullet (skills/study/SKILL.md documents `§Allowed
+# Writes` as a Key Rules bullet), a prefix-matched heading (`§Mode Gate` vs the full
+# `## Mode Gate -- path & mode resolution ...`), or a section of the citing file itself
+# (`§3.4a`). A generic check would fail on all of those, so it would be turned off.
+#
+# What this DOES guard is the one case with no other guard at all: a skill that moved its
+# measurement record into a side file and now cites it by section name. Rename a heading
+# there and every pointer rots silently -- the same failure this repository already fixed
+# twice for absolute line-number citations.
+SECTION_REF_TARGETS = ["workflows/_reference/study_measurements.md"]
+
+# `## §Section Name` (the anchor form section pointers use)
+SECTION_HEADING_RE = re.compile(r"^## (§[^\n]+?)\s*$", re.M)
+
+
+def check_section_refs() -> int:
+    """Return the number of unresolved `<target>` §Section references."""
+    bad = 0
+    for target_rel in SECTION_REF_TARGETS:
+        target = ROOT / target_rel
+        if not target.exists():
+            # Not an error: the referencing skill may not be present in every checkout.
+            # An unresolved reference to a missing file is caught below instead.
+            headings: set[str] = set()
+        else:
+            headings = set(SECTION_HEADING_RE.findall(target.read_text(encoding="utf-8")))
+
+        basename = target_rel.rsplit("/", 1)[-1]
+        # A pointer may be wrapped across `// ` comment continuation lines; flatten those
+        # so a wrapped path still resolves (and so wrapping is not a silent failure).
+        # One regex, anchored on the path mention, optionally capturing a second section
+        # ("... §A and §B"). Anchoring matters: a free-floating "§A and §B" pattern would
+        # both admit §references that belong to some other file and silently DROP a
+        # renamed second element, which is the opposite of what a guard should do.
+        section = r"§[A-Z][A-Za-z]*(?: [A-Z][A-Za-z]*)*"
+        ref_re = re.compile(
+            re.escape(basename) + rf"`?\s+({section})(?:\s+and\s+({section}))?"
+        )
+        total = 0
+        for p in iter_files():
+            if p == target:
+                continue
+            try:
+                text = p.read_text(encoding="utf-8")
+            except (OSError, UnicodeDecodeError):
+                continue
+            if basename not in text:
+                continue
+            flat = re.sub(r"\n\s*//\s*", " ", text)
+            refs = [g for match in ref_re.findall(flat) for g in match if g]
+            for ref in refs:
+                total += 1
+                if ref not in headings:
+                    bad += 1
+                    print(
+                        f"[verify_sync_markers] FAIL section-ref: "
+                        f"{p.relative_to(ROOT)} cites {target_rel} {ref!r}, "
+                        f"which is not a `## {ref}` heading there",
+                        file=sys.stderr,
+                    )
+        if not bad:
+            print(
+                f"[verify_sync_markers] OK: {total} section ref(s) -> "
+                f"{target_rel} ({len(headings)} heading(s))"
+            )
+    return bad
 
 
 def iter_files():
@@ -187,6 +282,8 @@ def main() -> int:
                     f"missing token(s): {missing}",
                     file=sys.stderr,
                 )
+
+    bad += check_section_refs()
 
     if missing_group:
         return 2
