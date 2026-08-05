@@ -46,6 +46,7 @@
 - §Gate Condition — why the first §1.6 dense-target condition was unreachable
 - §Dead Escape Clauses — the two clauses proven unreachable on the harness-slug branch
 - §C# Target — the third language: what the extension set missed, and what one target measured
+- §Citation Resolution — how much of what the documents cite actually exists, across 16 targets
 
 ## §Repudiated Figures
 
@@ -670,3 +671,77 @@ the only two tracked paths under it sit in a directory that is not a candidate. 
 Three repositories, three mtime fallbacks: the git-tracked ranking branch has never run.
 (Independent of that, an explicit `--harness <slug>` bypasses auto-detect altogether, so this
 branch cannot be exercised by a flagged invocation at all.)
+
+## §Citation Resolution
+
+Measured 2026-08-05 against `AptnerPass` (`v1_develop` @ `1d0705264b8cb405f63e00820171f2e3e48b0852`),
+across **all 16** auto-detect candidate slugs (both `spec.md` and `changes.md` present). Step 1.3(2)
+extraction plus Step 1.3(3) exclusions and basename recovery were run as a script, with no repairs:
+`bin/`/`obj/`/`artifacts/` stay out of the §Exclusion List, as §C# Target records.
+
+`N` = distinct tokens extracted, `R` = tokens reaching an existing admissible file (recovery
+included), `D` = dropped as non-existent, `rcv` = of `R`, how many needed basename recovery.
+The two rightmost columns weight the same question by citation count instead of by distinct path.
+
+| slug | N | R | R/N | D | rcv | cites | cites resolved |
+|---|---|---|---|---|---|---|---|
+| `guardtec-sse-unittest-recovery` | 19 | 14 | **74%** | 5 | 7 | 33 | 25 (76%) |
+| `guardtec-sse-device-id-string` | 51 | 26 | 51% | 25 | 2 | 74 | 38 (51%) |
+| `guardtec-sse-d1-v1-compat` | 14 | 7 | 50% | 7 | 7 | 40 | 25 (62%) |
+| `guardtec-sse-r-bundle` | 18 | 8 | 44% | 10 | 5 | 48 | 23 (48%) |
+| `guardtec-sse-b2-relogin` | 23 | 10 | 43% | 13 | 3 | 38 | 19 (50%) |
+| `guardtec-sse-integration` | 37 | 16 | 43% | 21 | 4 | 52 | 24 (46%) |
+| `guardtec-sse-relogin` | 17 | 7 | 41% | 10 | 3 | 36 | 13 (36%) |
+| `cafe-pos-print-race` | 15 | 6 | 40% | 9 | 3 | 25 | 11 (44%) |
+| `guardtec-sse-r1-token-errorcode` | 13 | 5 | 38% | 8 | 3 | 23 | 9 (39%) |
+| `dining-ticket-print` | 22 | 8 | 36% | 14 | 2 | 31 | 12 (39%) |
+| `guardtec-sse-critical-fix` | 20 | 7 | 35% | 13 | 3 | 35 | 14 (40%) |
+| `cafe-receipt-dong-ho` | 20 | 7 | 35% | 13 | 7 | 34 | 9 (26%) |
+| `guardtec-sse-review-fixes` | 43 | 14 | **33%** | 29 | 6 | 108 | 34 (31%) |
+| `guardtec-sse-fast-follow` | 16 | 5 | 31% | 11 | 1 | 34 | 15 (44%) |
+| `guardtec-sse-cleanup-2` | 5 | 1 | 20% | 4 | 1 | 13 | 3 (23%) |
+| `gate-control-sse` | 30 | 6 | **20%** | 24 | 1 | 49 | 10 (20%) |
+| **total** | **363** | **147** | **40%** | 206 | 55 | **673** | **284 (42%)** |
+
+`guardtec-sse-review-fixes` reproduces §C# Target exactly — 43 distinct tokens, 108 citations,
+29 dropped, 14 resolved — which is what makes the other 15 rows trustworthy.
+
+**Why this forbids a threshold rather than supplying one.** The band is continuous from 20% to 74%
+with no gap. The one target whose checkout mismatch is DOCUMENTED (`review-fixes`, work on
+`epic/guardtec-sse` read against `v1_develop` — §C# Target) sits at 33%, and three targets score at
+or below it with their checkout status never established either way — undocumented, not sound. Nor
+is the low band an artifact of that one epic: the four
+slugs outside it (`cafe-pos-print-race`, `dining-ticket-print`, `cafe-receipt-dong-ho`,
+`gate-control-sse`) span 20–40%, squarely inside the same range. **A rate this low is the normal
+state of a `--harness` target**, because a spec names files the work will create (§C# Target's
+config-bucket gap is the same effect seen from the other side), abbreviates deep paths past what
+recovery will accept, and spells one file two ways. So every candidate cut-off either fires on the
+majority of sound targets or misses the real one. Step 1.6 therefore prints the number and draws
+no conclusion from it.
+
+**An ordering trap found while measuring, and it is not hypothetical.** Deciding `resolve ⊆ cwd` by
+resolving the token — rather than by looking for a `..` segment — misroutes elision tokens. On
+Windows, `Path(".../CommonSection.cs").resolve()` leaves the repository, so the token is dropped as
+an escape **before** the recovery paragraph can run, and recovery is precisely what that shape
+exists for. Measured: 5 such tokens in `d1-v1-compat` and 3 in `fast-follow`; correcting the order
+moved `d1-v1-compat` from 21% to 50% by distinct token (52% → 62% by citation weight) and left
+`fast-follow` unchanged, because its elision basenames (`FaceAuthSseService.cs`,
+`FaceAuthSsePresenterCoordinator.cs`, `SseLineReader.cs`) do not exist on this branch at all and
+are correctly dropped either way. Pinned in Step 1.3(3).
+
+**`§C# Target` cannot be cited from a skill file, and that is a lint limitation, not a naming
+choice.** `scripts/verify_sync_markers.py`'s section-reference pattern is
+`§[A-Z][A-Za-z]*(?: [A-Z][A-Za-z]*)*`, which stops at the `#` and captures `§C`, then fails because
+no `## §C` heading exists. Adding the first such citation to `skills/study/SKILL.md` broke the lint
+immediately; the citation was redirected here instead. **Cite this section for anything a skill file
+needs from §C# Target** until the pattern admits `#`. Recorded rather than repaired: widening a lint
+regex is its own change with its own re-measurement, and no rule currently depends on it.
+
+**Two figures carried in a handoff did not reproduce, and the handoff was the only record.** A
+session note quoted this set as `82% d1-v1-compat / 76% unittest-recovery / 64% device-id-string /
+31% review-fixes / 20% gate-control-sse`. Three of the five reproduce exactly; `d1-v1-compat`
+measures 62% by citation weight (50% by distinct token) and `device-id-string` 51% by both. The
+discrepancy is unexplained — the underlying run was never written down here, so there is nothing to
+re-derive it from. **This is the case for the ledger, stated by its own absence**: a figure that
+lives only in a handoff is a figure that cannot be checked, and per the header rule the reproduced
+numbers above supersede it.
