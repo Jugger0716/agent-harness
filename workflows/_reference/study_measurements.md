@@ -48,6 +48,7 @@
 - §C# Target — the third language: what the extension set missed, and what one target measured
 - §Citation Resolution — how much of what the documents cite actually exists, across 16 targets
 - §Path Root — where the `AptnerPass/` prefix comes from, and why a clearer label does not remove it
+- §Rung Four — the first executed `--diff` reduction: what it dropped, and in what order
 
 ## §Repudiated Figures
 
@@ -794,3 +795,63 @@ The comparable precedent is the label fix, which moved its own class 11 → 0 (�
 is a precedent and not a result. The failure stays safe either way: §3.5 resolves `evidenceRef`
 against the repository and downgrades what does not exist, so a re-rooted path is downgraded rather
 than believed.
+
+## §Rung Four
+
+The first execution of the `--diff` reduction rung, 2026-08-05, range
+`f50e02f77f3bad85467f2b9bc1b4621e178b6a25..67bb5f34ba418d632f0d75b66c6b91ecd7af201e`
+(v8.7.0 → v8.8.0 on this repository). Until now this rung had never run in any mode; the four
+harness-slug rungs had all been exercised, rung 4 had not.
+
+**Inputs.** Unified diff **75,894** characters / 904 lines / 10 files; `git diff --stat` **638**
+characters / 11 lines. Undiminished payload 76,601 = **2.2×** the 35,000 cap.
+
+**Both of the branch's own caps are dead here, and that is now measured rather than argued.** The
+`--diff` branch caps at "first ~3000 lines / ~150 files"; this range is 904 lines and 10 files, so
+neither binds while the character cap is exceeded 2.2-fold. Step 2-W already said the line cap "has
+never once bound on a real range here" — this is the first range where the assertion was tested
+against an executed reduction rather than against a diff that was simply too large to dispatch.
+
+**The reduction behaved exactly as specified.** `--stat` was kept whole (638, all 11 lines), the
+unified diff was cut at file boundaries, and whole per-file diffs were dropped from the BOTTOM of
+`--stat`'s file order: **7 of 10 kept**, payload **34,542 / 35,000**. Every kept per-file diff ends
+on a line terminator — no partial hunk, which is the property §3.4's quote re-verification depends
+on. Per-file sizes in `--stat` order: 1,426 / 942 / 9,536 / 5,308 / 4,650 / 1,015 / 10,755 /
+**11,571** / **19,418** / **11,273**, the last three being the dropped ones.
+
+**Finding 1 — the drop order carries no relevance signal, and on this repository it is
+anti-correlated with relevance.** `--stat` orders files by path, so "the bottom" is alphabetical
+tail, not least-important. The three dropped diffs are `skills/handoff/SKILL.md`,
+`skills/harness/SKILL.md` (the single largest at 19,418) and `skills/spec/SKILL.md` — i.e. the
+entire substance of what v8.8.0 did — while a 942-character version bump in
+`.claude-plugin/plugin.json` survived because `.claude-plugin/` sorts first. What remains is
+CHANGELOG, README, ROADMAP and one 1,015-character script change. The harness-slug branch ranks its
+evidence by citation count before dropping from the bottom (§Fill Rule); this branch has no
+equivalent, so "bottom" means whatever `git diff` printed last. **Report this as the rung working
+as specified and the ORDERING being uninformed** — the same distinction §C# Target draws for the
+fill. A relevance order for `--diff` (by hunk count, by insertion count, or by `--stat` magnitude)
+is an unmeasured change and is NOT made here.
+
+**Finding 2 — rung 4 leaves slack and has nowhere to return it.** 458 characters went unspent,
+because the drop granularity is a whole file and the next candidate was 11,273. On the harness-slug
+branch the slack-return rule hands leftovers back to the prose prefixes; on this branch PROSE_CAP
+does not apply and there is no prose to return anything to, so the slack is simply lost. Small here,
+but it scales with the size of the smallest dropped file, and nothing in Step 2-W says so.
+
+**Defect found by running it: `git diff --stat -- <range>` is silently empty.** Step 1.3's `--diff`
+branch specified the `--` separator, which makes git read the range as a PATHSPEC. Measured on this
+range, the literal form exits **0 with zero lines** while the correct `git diff --stat <range>`
+prints 11. The separator disambiguates paths, and this call passes none. This is the gate's own
+evidence line — the user would have been shown nothing while the run proceeded. Fixed in Step 1.3.
+Same family as §Outline Patterns' escaped-`\|` case: a command that reads correctly in the document
+and dies without an error in the tool the step tells you to use.
+
+**Second defect, and it was one hour old.** The §1.6 citation-resolution line added earlier the same
+day (§Citation Resolution) said "unconditionally", but its input is the tally Step 1.3(3) produces —
+and Step 1.3(3) lives in the harness-slug sub-procedure. `--diff` and `--project` extract no cited
+paths at all, so on two of three branches the line had no denominator to print. Running the branch
+found it in one step; three careful readings of the same bullet had not. Scoped to harness-slug
+targets, with the reason stated inline so it is not "fixed" back into an unconditional rule. **The
+general lesson is the one this whole ledger keeps re-learning**: a rule written while looking at one
+branch acquires that branch's assumptions silently, exactly as the `.java` outline row did for
+`.cs` (§Outline Patterns).
