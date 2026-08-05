@@ -148,7 +148,7 @@ claude plugin install agent-harness@agent-harness-marketplace
 /team-memory clean                                      # remove stale/completed records
 /team-memory search authentication                      # search across knowledge base
 
-/handoff                                           # capture this session -> gated HANDOFF document
+/handoff                                           # capture this session -> HANDOFF document (written immediately)
 /handoff resume                                    # prime a fresh session from the newest handoff (+ git drift check)
 
 /codebase-audit                                    # auto-recommends mode based on project size

@@ -174,8 +174,14 @@ chance to correct a fact before it became durable; that is preserved by writing 
 reporting after — **the file is the preview**, and correcting it means editing it in place or
 re-running (which yields `-2`, never an overwrite). Step 4 says both.
 
-Everything the gate used to surface is now surfaced by Step 4's report instead — nothing is
-dropped, only re-ordered relative to the write.
+**Not all of it survives, and the difference is written down rather than glossed.** Of what the
+gate did: the broken-chain warning and the resolved path **moved** to Step 4's report; the
+full-document preview is **replaced** — by the written file itself, not by anything Step 4
+prints; and `Cancel` is **removed outright**, so there is no longer any path through `generate`
+that writes nothing. A handoff created by mistake is corrected by deleting the file (Step 4).
+**Do not describe this change as lossless** — an earlier revision of this paragraph claimed
+"nothing is dropped, only re-ordered", which is false on both the preview and `Cancel`, and
+would let a later audit conclude the removal cost nothing.
 
 ### Step 4 — Write & report
 
@@ -191,13 +197,19 @@ dropped, only re-ordered relative to the write.
      preview to here, and it is the one line whose omission the removal of the gate could
      actually cost.
    - The path that was written, plus the resume one-liner below.
-   - One line telling the user how to correct it: edit the file directly, or re-run `/handoff
-     generate` (a re-run writes a NEW `-2` file — prior handoffs are never modified).
+   - One line telling the user how to correct it — **three ways, and the third is the one that
+     replaces `Cancel`**: edit the file directly; re-run `/handoff generate` (a re-run writes a
+     NEW `-2` file — prior handoffs are never modified); or **delete the file**, which is a
+     legitimate correction and not a repair of anything, since a handoff is a plain local
+     document that no state, no lint and no other skill reads. **Say so explicitly**: with no
+     gate, an unwanted `generate` — including a bare `/handoff`, which IS `generate` per the
+     dispatch table — can only be undone by deleting, and until it is deleted a path-less
+     `/handoff resume` will select it, because `resume` Step 1 picks the NEWEST document.
 
 ```
 [handoff] Saved : docs/harness/handoff/YYYY-MM-DD-<slug>.md
   Ledger  : <"no carry-forward source found for Epic <epic> — started a new ledger" | omit the line entirely>
-  Correct : edit that file, or re-run `/handoff generate` (writes a new `-2` file — nothing is overwritten)
+  Correct : edit that file / re-run `/handoff generate` (writes a new `-2` file — nothing is overwritten) / delete it if unwanted (until then a path-less `resume` picks it, being newest)
   Next session → /handoff resume docs/harness/handoff/YYYY-MM-DD-<slug>.md
 ```
 
@@ -360,8 +372,10 @@ Scan `docs/harness/handoff/*.md` (only files whose first line starts with `# HAN
   `generate` calls only — no automatic status detection, no automatic slice transitions.
   Keeping `/handoff` stateless and inline-only is deliberate; anything more starts to
   re-implement an epic state machine, which is explicitly out of scope (see spec D-4/D-5).
-- **No save confirmation on `generate`** — the document is written as soon as it is composed
-  (Step 3). This is not a weakened safety property: writes never overwrite (the `-2`/`-3`
-  collision rule), never touch git or `.harness/`, and never leave the machine, and `generate`
-  is itself an explicit user action per the bullet above. `resume` keeps its Step 5 gate,
-  which guards *starting work*, not writing a file — do not "harmonize" the two.
+- **No save confirmation on `generate`** — Step 2 composes, Step 3 resolves the path, Step 4
+  writes, and nothing in between asks. Writes never overwrite (the `-2`/`-3` collision rule),
+  never touch git or `.harness/`, and never leave the machine, and `generate` is itself an
+  explicit user action per the bullet above. **The one thing this genuinely gives up is the
+  `Cancel` option** — there is no longer a way to invoke `generate` and write nothing, so an
+  unwanted document is undone by deleting the file (Step 3, Step 4). `resume` keeps its Step 5
+  gate, which guards *starting work*, not writing a file — do not "harmonize" the two.
