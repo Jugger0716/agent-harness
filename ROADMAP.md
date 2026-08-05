@@ -1,5 +1,27 @@
 # Agent Harness Roadmap
 
+## In development — `/study` skill
+
+> Note: the two "In development" headers below (`v8.8`, `v8.7`) are pre-existing stale
+> headers — both have already shipped (see `## v8.x — Shipped`) but were not retitled at
+> release time. That cleanup is a separate, already-scoped concern (tracked alongside this
+> skill's own scope) and is intentionally left untouched here to keep this change reviewable
+> on its own.
+
+- **`/study` — 9th multi-path skill** — turns a `/harness` output directory, a whole project,
+  or a git diff into a 7-section, 3-tier study guide (concept explanation / real code excerpts
+  / interview Q&A / hands-on exercises / design rationale / anti-patterns / glossary) for
+  post-hoc learning. Quick (inline, full path — the Windows CRLF safety net) or deep/thorough
+  (3 evidence lenses + per-topic-bucket authors + a thorough-only reproducibility critic +
+  assemble, native Workflow path, opt-in gated). Provenance is machine-checked, not a prompt
+  promise: every repo-sourced code excerpt is re-read against the actual file before
+  publishing, and every narrative claim carries a `repo`/`inference` basis that auto-downgrades
+  when its evidence path does not resolve. Ships a self-contained static HTML report (inline
+  CSS/JS, dark/light aware, tier-filterable, zero external requests) — the first non-`.md`
+  skill asset in this repository (`templates/study/html_shell.html`). Carries all 3 SYNC-WITH
+  marker groups (`§Ambiguity Prompt`, `§agent-harness-defaults`, `§Ad-hoc Dispatch Contract`);
+  `scripts/verify_sync_markers.py` floors raised accordingly. See `skills/study/SKILL.md`.
+
 ## v8.8 — In development (Anthropic best-practices gap analysis — epic continuity)
 
 Scope selected from a gap analysis against Anthropic's official Claude Code best-practices

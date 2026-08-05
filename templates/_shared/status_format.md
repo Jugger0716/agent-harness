@@ -1,6 +1,9 @@
 # Standard Status Format — Shared (single source)
 
-Read `.harness/state.json` and print the status block. Render per each skill's Output
+Read `.harness/state.json` and print the status block — **stateless skills (no `state.json`
+at all, e.g. `/study`) skip that read and fill the block from in-session values instead**; only
+the block shape and the label rules below are shared here, never the source of the values.
+Render per each skill's Output
 Language Contract / Print Translation Pattern: the **labels stay English raw** for
 monospace alignment; **values** follow the Preserved-English Glossary.
 
@@ -19,7 +22,9 @@ monospace alignment; **values** follow the Preserved-English Glossary.
 **Label rules:**
 - The label set above (`Task/Mode/Model/Style/Phase/Round/Branch/Scope` — plus, where a
   skill uses them, `Directory/Verifier/Language/Test/Build/Lint/TypeCheck/Output`) is
-  **English raw** regardless of `user_lang`, for monospace alignment.
+  **English raw** regardless of `user_lang`, for monospace alignment. The list is **open, not
+  closed**: a skill may add its own labels (e.g. `/study` uses `Skill/Target/Path/Topics`) and
+  the same English-raw rule applies to them — document any addition in the consuming skill.
 - **Omit the `Branch` line if `has_git == false`.**
 - **Prefix is per-skill.** Most skills use `[harness]`; others use their own token (e.g.
   `[debug]`, `[team-memory save]`). Document the prefix token in the consuming skill — only the
