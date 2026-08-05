@@ -279,8 +279,13 @@ Collect the authored topics into the same `studyGuide = { topics: [...] }` shape
          //      the inline path fills its full line budget and ignores this entire section.
          // **The remainder is `35,000 − <reserved> − this block's own overhead`, not `35,000 −
          // <reserved>`.** The cap applies to the whole `sharedEvidence` string, so the
-         // `## Cited Source Files` heading, every `path (lines a-b of T, cited N times)` header line
-         // and any truncation notice consume it too. Two readers who ignore the overhead compute
+         // `## Cited Source Files` heading, every `path (lines a-b of T, cited N times)` header line,
+         // **the two prose-document labels Step 1.3(6) requires**, and any truncation notice consume
+         // it too. The prose labels are easy to forget precisely because they are not code: measured
+         // 2026-08-05, omitting them from this sum put a payload 177 characters OVER the cap, and
+         // making them repo-relative (which Step 1.3(6) now requires) had just added 78 characters to
+         // them. An under-counted overhead only becomes a violation once the slack return fills to
+         // the ceiling — which is why the earlier target survived the same omission. Two readers who ignore the overhead compute
          // two different remainders, which is the same class of non-determinism step 3 exists to
          // remove. **And do this arithmetic with a script, not by eye** — the standing rule from
          // Step 1.3 sub-procedure step 1 applies unchanged here: character counting and
