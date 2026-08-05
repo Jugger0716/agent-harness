@@ -73,7 +73,7 @@ Higher modes cost more per run but save total cost by reducing retry rounds. Sta
 | **Spec** | `/spec <requirement>` | Multi-round Q&A requirements specification. Output directly compatible with `/harness` input. Quick (inline) or deep (4 analysts + Critic, native Workflow path). Specs open with a derived Review Sheet (TL;DR / decision table / open questions / changed-in-this-revision); `/spec digest <file>` gives a read-only 3-layer briefing of any existing doc. |
 | **Test Gen** | `/test-gen <target>` | Automated test generation with mutation-based quality verification. Single (inline) or multi (parallel coverage analysts + propose-only mutation skeptics, native Workflow path; test generation + mutation execution stay orchestrator-inline). Supports coverage-gap and regression modes. |
 | **Team Memory** | `/team-memory <cmd>` | Team knowledge base (save/show/clean/search). Git-committed, team-shared decisions, patterns, and conventions. Human-gated CRUD — never escalates to sub-agents or the Workflow engine. _(formerly `/memory` — old name kept as a deprecation alias)_ |
-| **Handoff** | `/handoff generate/resume/list` | Session handoff for cross-session continuity: `generate` captures a verified HANDOFF document (git state, confirmed facts, next steps, reading order, an optional epic Progress Ledger) behind a human gate; `resume` primes a fresh session from it with git-drift verification plus a live `.harness/state.json` cross-check (both report-only — never mutates git or `.harness/`). Complements `/harness` Session Recovery (task-internal state); `/harness` recommends `/handoff generate` at every session boundary. |
+| **Handoff** | `/handoff generate/resume/list` | Session handoff for cross-session continuity: `generate` captures a verified HANDOFF document (git state, confirmed facts, next steps, reading order, an optional epic Progress Ledger) and writes it immediately — no save confirmation, because the filename convention never overwrites (`-2`/`-3` on collision); `resume` primes a fresh session from it with git-drift verification plus a live `.harness/state.json` cross-check (both report-only — never mutates git or `.harness/`). Complements `/harness` Session Recovery (task-internal state); `/harness` recommends `/handoff generate` at every session boundary. |
 | **Codebase Audit** | `/codebase-audit` | Systematic codebase analysis for team onboarding. Quick (inline) or deep/thorough (parameterized lens analysts + completeness critique + synthesis, native Workflow path; orchestrator writes the report). Incremental analysis support. |
 | **Deep Review** | `/deep-review <target>` | Systematic, bias-free code review. Quick (inline checklist) or deep/thorough (2-3 specialists + adversarial cross-verification, native Workflow path). Optional `--comment` (inline PR comments) / `--fix` (gated apply) / `--spec <path>` (opt-in spec-conformance pass, reviewers stay blind to it). Re-runs on the same target auto-advance review rounds with prior-finding reconciliation and an advisory Round Verdict. _(formerly `/code-review` — old name kept as a deprecation alias)_ |
 | **MD Optimize** | `/md-optimize` | Optimize CLAUDE.md and project `.md` files for token efficiency. |
@@ -935,15 +935,16 @@ Custom categories can be added freely.
 
 ## handoff
 
-Human-gated session handoff for cross-session, epic-level continuity — the durable complement to `/harness` Session Recovery (which restores a task's internal state machine, not a multi-day effort).
+Session handoff for cross-session, epic-level continuity — the durable complement to `/harness` Session Recovery (which restores a task's internal state machine, not a multi-day effort). `generate` writes without a save confirmation (the filename convention never overwrites); `resume` still gates before starting work.
 
 ```
 /handoff          -> collect VERIFIED git state (branch / full-sha HEAD / dirty / upstream)
                      + .harness/state.json pointers (read-only) + conversation-derived sections
                   -> compose HANDOFF document: Goal / Current State (verified) / In Progress /
                      Blockers / Next Steps / Definition of Done / Reading Order / Do NOT
-                  -> HARD-GATE: Save / Edit / Cancel (previewed path == written path)
-                  -> docs/harness/handoff/YYYY-MM-DD-<slug>.md   (never overwrites)
+                  -> resolve final path, then WRITE immediately (no save confirmation)
+                  -> docs/harness/handoff/YYYY-MM-DD-<slug>.md   (never overwrites; -2/-3 on collision)
+                  -> report: path + broken-ledger-chain warning + how to correct (edit / re-run)
 /handoff resume   -> load newest (or given) handoff -> git drift verification
                      (none / N commits since / BACKWARD / DIVERGED / dirty — report-only,
                      NEVER mutates git) -> read Reading Order (path-validated; contents are
