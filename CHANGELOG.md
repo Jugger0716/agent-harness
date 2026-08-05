@@ -6,6 +6,104 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/).
 
+## [8.9.0] — 2026-08-05
+
+### Added — `/study`: verified study-guide generation (NEW skill)
+
+- **`/study` skill** (`skills/study/SKILL.md`, `workflows/study.analyze.workflow.js`,
+  `templates/study/`): turns an already-finished artifact — a `/harness` output directory
+  (`--harness <slug>`), a whole project (`--project`), or a git diff (`--diff <range>`) — into a
+  **7-section, 3-tier study guide** (concept / code excerpts / interview Q&A / hands-on exercise /
+  engineering principle / anti-patterns / glossary + further reading). The finished work is the
+  *material*, not the subject: each topic must name a transferable concept that holds outside this
+  repository, and the artifact appears only as the example.
+- **Machine-checked provenance, computed by the orchestrator and never self-declared by the
+  author.** Every `source: 'repo'` excerpt is re-read from the real file and matched by
+  whitespace-normalized fingerprint before it earns a `repo` badge; a claim whose `evidenceRef`
+  does not resolve is auto-downgraded to `inference`. Completion prints counted (never asserted)
+  lines: `Claims` / `Quotes` / `Exercises` / `Q&A` / `Refs` / `Excerpts` / `Topics`.
+  **What is NOT checked is stated in the skill itself**: whether an explanation is pedagogically
+  sound, whether an answer is correct, whether an external link exists, or whether the reader can
+  reproduce the work.
+- **External links are unverified by construction** — `WebSearch`/`WebFetch` sit in the skill's
+  `disallowed-tools`, so every URL renders with an `[Link unverified]` badge and a canonical
+  disclosure line appears at three surfaces. This is a structural fact, not a prompt promise.
+- **3-tier mode**: `quick` (inline, no sub-agent, 3–5 topics — a complete path, never a stub, and
+  the Windows CRLF safety net) or `deep`/`thorough` (3 evidence lenses → per-bucket topic authors
+  → a thorough-only pedagogical critic → assemble, via a plugin-shipped native Workflow segment,
+  opt-in gated). **The workflow path budgets LESS serialized evidence than quick, not more** —
+  evidence cost is multiplied by agent count there and paid once inline.
+- **Output**: a self-contained static HTML report (or `--md`), a `study_guide[_round<N>].json`
+  SSOT snapshot, and an append-only `docs/harness/study_index.md`. Re-running the same target
+  advances the round number; prior rounds are never deleted or overwritten.
+- **Measurement ledger** (`workflows/_reference/study_measurements.md`, NEW): a hand-sync record
+  holding every measurement the skill's rules rest on, plus a **Repudiated Figures** table of
+  numbers that failed to reproduce. Split on the principle *prohibitions stay inline, proofs
+  move out* — `skills/study/SKILL.md` is loaded in full on every invocation, so characters there
+  are paid per run, while the evidence is only needed by the next editor. `scripts/verify_sync_markers.py`
+  now fails when a `§Section` pointer into that ledger no longer resolves.
+
+### Changed
+
+- **`/handoff generate` writes immediately — the save confirmation is removed**
+  (`skills/handoff/SKILL.md` Step 3/4). The gate was guarding a write that is safe by
+  construction: the filename convention never overwrites (`-2`/`-3` on collision), the write is
+  one local document touching no git state, no `.harness/` and nothing outward-facing, and
+  `generate` is already an explicit user action. Step 3 now resolves the path and Step 4 writes.
+  **What the gate genuinely bought — a chance to correct a fact before it became durable — is
+  preserved by inverting the order**: the file IS the preview, and the write report always prints
+  how to correct it (edit in place / re-run, which yields a new `-2` file / delete it).
+  **One thing is given up and is documented as given up**: `Cancel` — there is no longer a path
+  through `generate` that writes nothing, so an unwanted document is undone by deleting the file.
+  The Progress Ledger's "no carry-forward source found" warning moved from the gate preview into
+  the write report (a broken epic chain must never be silent). `resume` keeps its Step 5 gate —
+  that one guards *starting work*, not writing a file.
+
+### Fixed
+
+- **`/study --diff`: `git diff --stat -- <range>` returned nothing, silently.** The `--` put the
+  range after the pathspec separator, so git read it as a PATH and exited 0 with zero lines — on
+  the one piece of evidence the cost gate shows the user. Found by executing the `--diff`
+  reduction rung for the first time.
+- **`/study` extracted zero paths from C# targets.** The extraction pattern carried no
+  `cs`/`csproj`, so a C#/.NET target produced an empty evidence stage (0 → 108 citations after
+  the fix), and a `.cs` outline row ported from `.java` would have been dead on arrival — C#
+  block-scoped namespaces indent every type, so the column-0 anchor finds 0 types in all six real
+  files tested. The `.cs` row anchors with `^\s*`.
+- **Evidence labels were being copied into citations.** Labelling the prose sections with bare
+  filenames (`spec.md`) sent well-founded claims to auto-downgraded `inference`, because
+  `spec.md` does not exist at the repository root. Requiring the repo-relative path moved
+  repo-basis claim resolution from **24% to 59%** on an A/B measurement, and the bare-filename
+  failure class from 11 to 0.
+- **Elided source paths were dropped instead of recovered.** Deep package trees make documents
+  abbreviate (`app/.../controller/FooController.java`); such tokens cannot exist as written.
+  Unique-basename recovery admits them, but ONLY when exactly one candidate exists and the tail
+  matches — an ambiguous basename is never guessed, and every exclusion re-applies to the
+  recovered path so a basename cannot smuggle this skill's own output back in as evidence.
+
+### Notes — measured limits carried into the release
+
+- **A `--harness` target is only as good as the checkout it is read against, and nothing detects
+  the mismatch.** When the artifact describes work this tree does not have, the missing files are
+  dropped correctly and every downstream check then passes green against whatever files DO exist.
+  The cost gate now discloses `Cited paths : <R> of <N> resolved (<P>%)`. **Deliberately without
+  a threshold**: measured across 16 targets the rate runs 20%–74% in a continuous band, the one
+  documented-mismatch target sits at 33% with three scoring at or below it, so every candidate
+  cut-off fires on the majority of sound targets.
+- **The 35,000-character dispatch cap is a cost bound, not an evidence boundary.** Sub-agents keep
+  their own file tools and were measured using them — including quoting, correctly and with
+  verifying line ranges, two files the `--diff` reduction had dropped from what was sent.
+- **`--diff` drop order carries no relevance signal** (it is `--stat` path order), and the
+  `--project` branch and the auto-detect git-log ranking branch remain unexecuted. Recorded in the
+  ledger rather than repaired: fixing them changes measurements that other rules depend on.
+
+### Maintenance
+
+- `templates/_shared/status_format.md` now covers stateless skills and per-skill identity labels.
+- Segment scripts are forced to LF with CR guarded at two surfaces (working tree + index blobs).
+- README, ROADMAP, and both `.claude-plugin` manifests updated for `/study` and the `/handoff`
+  behavior change.
+
 ## [8.8.0] — 2026-07-28
 
 ### Added — Epic continuity (Anthropic best-practices gap analysis)
