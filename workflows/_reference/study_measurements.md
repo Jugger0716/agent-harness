@@ -591,6 +591,48 @@ kept lines are the two Presenter file heads (§Named By Name); the 138-line `csp
 kept file that is squarely about what the artifact did (`<Compile Include>` add/remove). Report
 this as the fill working exactly as specified and the SELECTION being weak, not as a fill bug.
 
+**The first executed deep run on a C# target (2026-08-05, `--harness guardtec-sse-device-id-string`).**
+The dispatch carried **34,958 characters** of `sharedEvidence` and ran — the cap's first live
+exercise, against a documented failure point of ~56,000 that remains unmeasured in between.
+7 agents, 3/3 lenses, 8/8 topics, `missingSections` empty, `deviations` empty. Accounting:
+`Claims 7 repo-backed / 41 inference`, `Quotes 5 verified / 6 downgraded (path-invalid 6)`,
+`Exercises 8/0`, `Q&A 24/0`, `Refs 12 valid / 28 broken`,
+`Excerpts 11 code / 0 config / 0 prose / 0 self-doc / 0 unknown`, no topic without a code excerpt.
+
+**The 28 broken references are one defect wearing two coats, and only one of them is about the
+external target.** Repo-basis claims, by the `evidenceRef` the author wrote:
+
+| `evidenceRef` | count | resolves |
+|---|---|---|
+| `spec.md` (bare filename) | 11 | **no** |
+| `AptnerPass/…` (solution-dir prefix) | 11 | **no** |
+| repo-root-relative path | 7 | yes |
+
+Excerpt paths split the same way: 5 root-relative (verified) against 6 prefixed (downgraded). The
+prefix half is an artifact of running against a repository that is not `cwd` — real, but specific
+to external-target use. **The bare-`spec.md` half is not, and it would fire on every target**: the
+orchestrator labelled the prose sections of the evidence block `# spec.md (kept K of T …)`,
+following the shape of Step 2-W's reduction notice, and the authors copied that label into
+`evidenceRef` — where §3.5 resolves it against the repository root and finds nothing, because the
+file lives at `docs/harness/<slug>/spec.md`. Eleven well-founded claims were relabelled
+`inference` by a heading. Fixed by requiring the repo-relative path in the label (Step 1.3(6)).
+
+**`sharedEvidence` is a cost bound, not an evidence boundary.** Topic t4 quoted the real body of
+`ExtentionMethods.cs` — `where T : IComparable, IConvertible, IEquatable<T>`, with a line range —
+and that file appears nowhere in the 34,958 characters that were sent. The authors kept their own
+file tools and used them. This is the better failure mode (a real quote beats an invented one, and
+§3.4 re-reads anyway), but every sentence in Step 2-W that reasons from "the authors receive
+exactly this" is describing the transmission, not the evidence. Corrected in place rather than
+deleted, because the cap's cost argument is unaffected and still holds.
+
+**Two checks were measured against each other, and one of them is weaker than it reads.** §3.6's
+`<`-vs-`&lt;` cross-check passed at 34/34 on a render that carried an **unescaped `&`** in the
+localized `Interview Q&A` heading label — a string §3.6 itself names as an escape target. The
+check counts `<` only. §3.8's non-empty section-key equality caught it, because it matches on the
+rendered heading text. And §3.4's fingerprint is **exact-after-trim**, not merely
+whitespace-tolerant: a quote that drops a line's trailing comment fails as `content-mismatch`.
+"Whitespace-normalized" absorbs indentation and CRLF, nothing else.
+
 **The auto-detect ranking branch is still unexecuted — the premise that it would run here was
 wrong.** `docs/harness/` in this repository is matched by `.gitignore:148` (`**/docs/harness/`);
 the only two tracked paths under it sit in a directory that is not a candidate. Of 32 directories,
