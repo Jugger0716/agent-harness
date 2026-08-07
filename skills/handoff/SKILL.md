@@ -336,11 +336,40 @@ Then STOP and ask via AskUserQuestion (in `user_lang`):
   header: "Resume"
   question: "Handoff loaded. How should we proceed?"
   options:
-    - label: "Start next step" / description: "<Next Steps item 1, verbatim>"
+    - label: "Show next command" / description: "<short next-step identifier> — printed for you to run in a new message"
     - label: "Adjust plan" / description: "Discuss changes before starting"
     - label: "Briefing only" / description: "Stop here — I just wanted the context"
 
-NEVER start executing work before this gate is answered.
+**`resume` never starts work.** The gate chooses between showing the next command, discussing
+it, and stopping — none of the three executes anything. (Earlier revisions said "NEVER start
+executing work *before this gate is answered*", which implied answering it would start work.
+It never did and now cannot: this skill's `disallowed-tools` blocks `Task, Agent, Workflow`,
+so a skill launched from here would run without sub-agents or the Workflow engine at best.)
+
+On **"Show next command"**: print the block below, then STOP the turn. Do NOT invoke the
+command yourself — not directly, and not via the `Skill` tool.
+
+```
+[handoff] Next step — run this yourself in a NEW message:
+
+  <the next command — the Next Steps item shown in the briefing above>
+
+  Why not here: /handoff blocks Task/Agent/Workflow (`disallowed-tools`), so a skill started
+  in this turn may lose its sub-agents and the Workflow engine.
+```
+
+The wording is deliberately hedged: the exact runtime scoping of `disallowed-tools` is
+**unverified** — see `templates/_shared/mode_gate.md` rule 3, cause (a), which is the single
+source for that claim and records both the one observation supporting it and the fact that
+nothing in this repository documents the behavior. Do not restate the mechanism here, and do
+not upgrade "may lose" to a certainty.
+
+> **Partial pre-implementation of AC-25 (epic `harness-handoff-coldreview-epic-slice`).** This
+> block implements only AC-25 clause (iv) ("첫 옵션은 표시일 뿐 실행하지 않는다"). Clauses
+> (i) generate Step 1 item 4 convention, (ii) item 5 cross-reference, and (iii) the
+> `Next :` / `Next cmd :` role split remain **open** and belong to `slice-f-handoff-sync-docs`.
+> When slice-f lands, the carrier above becomes `Next cmd :` — it is left neutral here
+> precisely so the two do not collide. The slice ledger must not report AC-25 as complete.
 
 ---
 
@@ -365,6 +394,10 @@ Scan `docs/harness/handoff/*.md` (only files whose first line starts with `# HAN
 - No `.harness/` mutations, ever — `generate` and `resume` (Step 3.5, NEW P0-4) both only READ
   `.harness/state.json`; neither writes to, deletes, nor otherwise touches `.harness/`.
 - No background agents, no Workflow engine, no web access (see `disallowed-tools`).
+- **No chaining into the next skill.** `resume` never invokes the command it recommends —
+  not directly, not via the `Skill` tool. The user runs it in a NEW message. See §Step 5 —
+  Resume Briefing + gate (and `templates/_shared/mode_gate.md` rule 3, the single source for
+  why a chained skill may lose `Task`/`Agent`/`Workflow`).
 - No automatic generation on session end — generate is always an explicit user action.
 - Not a replacement for `/harness` Session Recovery; when `.harness/state.json` exists, the
   handoff POINTS at it (read-only) rather than duplicating its phase machine.

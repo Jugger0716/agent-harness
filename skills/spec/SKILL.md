@@ -69,7 +69,7 @@ Apply the shared opt-in convention in `templates/_shared/mode_gate.md`. /spec-sp
 | no `--mode`, no opt-in | quick | **inline** (interactive + engine available → asks first, §Ambiguity Prompt) |
 
 - **Deep mode exists ONLY on the workflow path** — the engine's `parallel()` fan-out replaces the old hand-rolled "Launch 4 sub-agents in parallel" prose (pilot precedent: /harness standard/multi). The inline path is the preserved quick mode (Phase 2-Q: orchestrator writes spec.md directly).
-- **Graceful fallback:** if a `Workflow` invocation errors at any step, print `[harness] ⚠ Workflow engine unavailable — falling back to the inline quick path.` (in `user_lang`), set `path_resolved → "inline"`, `mode → "quick"`, and continue the CURRENT step on the quick path (see Phase 2-D fallback rules). Never error out.
+- **Graceful fallback:** if a `Workflow` invocation errors at any step (launch failure, script error, schema-invalid result), print `[harness] ⚠ Workflow engine unavailable — falling back to the inline quick path.` (in `user_lang`), set `path_resolved → "inline"`, `mode → "quick"`, and continue the CURRENT step on the quick path (see Phase 2-D fallback rules). Never error out. **A permission denial is NOT one of those errors** — route it to the denial branch of `templates/_shared/mode_gate.md` rule 3 (single source: disclose it, never downgrade silently).
 - Record `path_resolved` in state.json and show `Path` in the status format.
 
 ## Standard Status Format
@@ -456,7 +456,7 @@ Print status in the standard format, prefixed with `[harness] Spec draft ready.`
 
 > Deep mode exists ONLY on the workflow path (§Mode Gate). The engine's `parallel()` fan-out replaces the old hand-rolled 4-sub-agent dispatch, the per-analyst retry × 2 loops, the 1-line parsing, and the `— no findings —` sentinel scan. All human gates (Critic Gate, 2nd Critic Gate, Spec Approval HARD GATE) are rendered by THIS orchestrator BETWEEN segment runs — never inside a script.
 >
-> **Graceful fallback (applies to every segment invocation below):** if a `Workflow` call errors:
+> **Graceful fallback (applies to every segment invocation below):** if a `Workflow` call errors (launch failure, script error, schema-invalid result — **a permission denial is NOT one of these**; route that to the denial branch of `templates/_shared/mode_gate.md` rule 3, which discloses instead of downgrading):
 > - **Plan segment failed** → print the §Mode Gate fallback notice, set `path_resolved → "inline"`, `mode → "quick"`, and produce spec.md via Phase 2-Q (quick synthesis). Set `state.critic = { "applied": "approved", "round": 0, "last_findings_path": null, "failure_reason": "dispatch_failed" }` (single atomic write) and surface the Critic-skipped banner at the Final HARD GATE (the quick path has no Critic stage).
 > - **Eval segment failed** → handled locally by Phase 2c-D step 2 ("Workflow segment errored") — auto-approve with a prominent banner; do NOT downgrade the rest of the session.
 
