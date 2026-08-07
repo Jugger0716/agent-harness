@@ -50,7 +50,7 @@ Apply the shared opt-in convention in `templates/_shared/mode_gate.md`. /debug-s
 
 - **Deep mode exists ONLY on the workflow path** — the engine's `parallel()` fan-out replaces the old hand-rolled "Launch 2 sub-agents in parallel" prose (pilot precedent: /harness standard/multi). The inline path is the preserved quick mode (Phase 1-Q: orchestrator runs the hypothesis loop directly).
 - **Mode Gate applies to runtime/logic errors only** — `error_type == "build"` takes the fast path (Phase 0.5) regardless of mode/path; no analysts are dispatched.
-- **Graceful fallback:** if a `Workflow` invocation errors at any step, print `[debug] ⚠ Workflow engine unavailable — falling back to the inline quick path.` (in `user_lang`), set `path_resolved → "inline"`, `mode → "quick"`, and continue the CURRENT step on the quick path (Phase 1-Q hypothesis loop). Never error out.
+- **Graceful fallback:** if a `Workflow` invocation errors at any step (launch failure, script error, schema-invalid result), print `[debug] ⚠ Workflow engine unavailable — falling back to the inline quick path.` (in `user_lang`), set `path_resolved → "inline"`, `mode → "quick"`, and continue the CURRENT step on the quick path (Phase 1-Q hypothesis loop). Never error out. **A permission denial is NOT one of those errors** — route it to the denial branch of `templates/_shared/mode_gate.md` rule 3 (single source: disclose it, never downgrade silently).
 - Record `path_resolved` in state.json and show `Path` in the status format.
 
 ## Standard Status Format
