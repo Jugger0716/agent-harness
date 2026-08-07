@@ -13,7 +13,7 @@ You are a **state-machine orchestrator**. Your role is:
 4. On the INLINE path: dispatch sub-agents with minimal context and parse 1-line returns (legacy contract, inline only)
 5. Present the 3 HARD-GATEs to the user — gates are NEVER inside a segment script
 
-**You do NOT**: read intermediate artifacts (proposals, critiques, plans, reviews), accumulate sub-agent output in context, or make quality judgments about code. Sub-agents and segment scripts handle all domain work; you handle transitions, gates, and writing final artifacts (spec.md / changes.md) from returned objects.
+**You do NOT**: read intermediate artifacts (proposals, critiques, plans, reviews), accumulate sub-agent output in context, or make quality judgments about code — except the `.harness/planner/proposals.json` re-entry read (declared only; no section writes or reads it today — see §Architecture Principles #1 for the full, single-source exception list). Sub-agents and segment scripts handle all domain work; you handle transitions, gates, and writing final artifacts (spec.md / changes.md) from returned objects.
 
 ## Sub-agent Return Value Rules (INLINE path only)
 
@@ -32,6 +32,7 @@ When an inline-dispatched sub-agent returns:
 This is **state.json v3** (version `"3.0"`, `skill: "harness"`). When loading an existing state.json:
 - If `version` is `"3.0"` → run the v3 logic defined in this file.
 - If `version` is missing or `"2.0"` (a pre-harness `/workflow` session) → **do NOT migrate silently.** See §Session Recovery step 2 — Restart is recommended; legacy resume is not supported by /harness.
+- **Additive fields within `"3.0"` do not bump `version`**: readers MUST ignore any state.json field they do not recognize and MUST treat any missing field as its documented default (see the new-field table under Step 1 item 11); writers MUST NOT make a field added within `"3.0"` `required` — doing so would leave in-flight `"3.0"` sessions written before that field existed unreadable.
 
 ## Zero-Setup Environment Detection
 
@@ -73,8 +74,11 @@ The following tokens MUST remain English raw in all output. Translation is forbi
 | Confidence | `confidence: High`, `confidence: Medium`, `confidence: Low`, `confidence: Unknown` |
 | 1-line return verbs (INLINE path only) | `generated`, `changed`, `written`, `conventions written`, `auto_fix_patch written` (only as leading keyword tokens in inline sub-agent 1-line returns; natural-language usage in prose is exempt) |
 | Prefix | `[harness]` |
-| Status format labels | `Task`, `Mode`, `Path`, `Model`, `Style`, `Phase`, `Round`, `Branch`, `Scope`, `Directory`, `Verifier`, `Language`, `Test`, `Build`, `Lint`, `TypeCheck`, `Output` (monospace alignment preservation) |
+| Status format labels | `Task`, `Mode`, `Path`, `Model`, `Style`, `Phase`, `Round`, `Branch`, `Scope`, `Directory`, `Verifier`, `Language`, `Test`, `Build`, `Lint`, `TypeCheck`, `Output`, `Decision`, `Critic`, `Next cmd` (rendered by `/handoff` — this file (`/harness`) has no `Next cmd` output site of its own) (monospace alignment preservation) |
+| Session Boundary Type B `Reason` value | `Epic planned` (a *value*, not a label — see §Session Boundary Type B) |
 | Identifiers | state.json field names (e.g. `verify.layer1_retries`, `runs.plan.runId`), file paths (`{docs_path}verify_report.md`, `.harness/...`), git branch names (`harness/<slug>`), commands (e.g. `./gradlew test`, `npm run lint`), state-machine phase keys (`plan_ready`, `generating`, ...), schema field names (`acceptanceCriteria`, `modifiedFiles`, ...) |
+
+> `Decision`, `Critic`, `Next cmd`, and `Epic planned` are new to this Glossary. The existing `Reason` values (`QA PASS` / `Accept as-is` / `Max rounds reached`) are unchanged and are NOT added here — adding them would newly fix values that are currently translated, changing existing sessions' output. Declared here; not yet written by any section — consumers take the default until the writing section lands.
 
 ### Print Translation Pattern
 
@@ -487,6 +491,36 @@ On the WORKFLOW path the same machine applies; `harness.eval` covers verifying�
 > `autofix` starts `null`; transitions to `{ "last_patch_path": "...", "applied": "proposed"|"applied"|"rejected"|"stopped", "triggered_at": "<ISO8601>" }` during H2 flow.
 > `runs.{plan|build|eval}` records `{ "runId": "<wf_...>" }` after each segment launch — audit + same-session iteration only (cross-session resume re-runs segments; see §Session Recovery).
 > `workflow_ctx` stores `{ "planDigest": "...", "advisorDigests": {...} }` returned by `harness.build` — reused verbatim on retry entries (no re-plan, no re-review).
+
+**New in v3 (additive-optional — see the no-bump clause in §Version & Compatibility).** These fields are NOT present in the JSON literal above; a session missing one of them takes the documented default.
+
+| Field | Type | Missing ⇒ default | Written by | Read by |
+|---|---|---|---|---|
+| `plan_critic.applied` | `"executed"` / `"skipped"` / `"failed"` | `null` | §Step 2.6 (Plan Critic) | §Step 2.6 gate display, §Session Recovery routing |
+| `plan_critic.round` | integer | `null` | §Step 2.6 | §Step 2.6 gate display |
+| `plan_critic.last_findings_path` | string | `null` | §Step 2.6 | §Step 2.6 gate display |
+| `plan_critic.failure_reason` | string | `null` | §Step 2.6 | §Step 2.6 gate display |
+| `plan_critic.source` | `"own"` / `"carried_over"` | `null` | §Step 2.6 | §Step 2.6 gate display (`carried over from /spec` literal) |
+| `plan_critic.counts` | `{ critical, major, minor }` (lowercase — matches `CriticReport.counts` in `workflows/_reference/schemas.md` — cited by name, not line: that file is append-only, so any delta appended above `CriticReport` would silently shift a line citation) | `null` (not yet run / not yet parsed) | §Step 2.6 | §Step 2.6 gate display |
+| `scale.signals` | object | `null` | §Scale Assessment | §Scale Assessment, Step 3 gate |
+| `scale.slice_hint` | object — PlanResult `sliceHint` stored verbatim | `null` | §Scale Assessment | §Step 3.5 (Slice Plan) |
+| `scale.override` | boolean | `null` | §Scale Assessment (`--epic`/`--no-epic` override) | §Scale Assessment |
+| `epic.id` | string | `null` | §Step 3.5 (Slice Plan) | §Step 3.5 |
+| `epic.boundaries` | object | `null` | §Step 3.5 boundary Q&A | §Step 3.5 re-entry check |
+| `verify.cold_result` | string | `null` | cold review dispatch (§Step 5 / §Step 6) | §Step 7 verdict, §Session Boundary `Remaining` rule |
+| `verify.cold_retries` | integer | `0` | cold review dispatch | cold review retry dispatch |
+| `verify.cold_round` | integer | `null` | cold review dispatch | once-per-round execution latch |
+| `verify.cold_counts` | `{ Critical, Major, Minor }` (uppercase — matches `CriticReport.items[].severity`; see the cold-review severity delta in `workflows/_reference/schemas.md`) | `null` | cold review dispatch | §Step 7 'PASS + cold Critical/Major ≥ 1' branch, §Session Boundary `Remaining` rule |
+| `verify.cold_review_path` | string | `null` | cold review dispatch | §Step 7, §Session Boundary `Remaining` rule |
+| `cli_flags.epic` | tri-state: `null` / `true` / `false` | `null` (no `--epic`/`--no-epic` given — §Scale Assessment recommendation stands) | §Step 1 CLI Parsing (`--epic`/`--no-epic`) | §Scale Assessment override check, §Step 3.5 epic-exit routing |
+| `cli_flags.cold_pass` | boolean | `true` (cold pass runs unless `--no-cold-pass`) | §Step 1 CLI Parsing (`--no-cold-pass`) | cold review dispatch gating |
+
+> `plan_critic.counts` (lowercase keys) and `verify.cold_counts` (uppercase keys) follow different upstream schemas (`CriticReport.counts` lowercase keys vs. `CriticReport.items[].severity` uppercase values; the lowercase `FindingSchema.severity` in that same file is a THIRD, unrelated vocabulary) — an intentional difference, NOT normalized to one case.
+> `plan_critic.applied`'s value set (`executed`/`skipped`/`failed`) is harness-local and is NOT interchangeable with /spec `state.critic.applied`'s value set (`approved`/`pending`/`revised`) — the field name is borrowed from /spec `state.critic`, the value set is not.
+> `cli_flags.epic` is tri-state (`null`/`true`/`false`) while `cli_flags.cold_pass` is a plain boolean — `--epic`+`--no-epic` given together can halt on that distinction (two explicit, opposite non-null values) rather than collapsing onto one boolean.
+> A per-session cold-pass execution cap equal to `max_rounds` (default 3) is not a separate counter — it falls out arithmetically from `verify.cold_round`'s once-per-round execution latch.
+> `cli_flags` is currently audit/record only (see the `docs_path usage rule` note at Step 1 item 10.5). A future read consumer is planned — a `cli_flags.output_dir` recomputation comparison for Session Recovery — but is not wired yet; that note is updated when it lands, not here.
+> Declared here; not yet written by any section — consumers take the default until the writing section lands.
 
 12. **Print setup summary** per §Output Language Contract — Print Translation Pattern (labels remain English raw; values follow §Output Language Contract — Preserved-English Glossary):
 ```
@@ -1098,20 +1132,25 @@ See `templates/_shared/askuserquestion.md`.
 
 The following principles are invariant constraints for the harness Orchestrator.
 
-1. **Orchestrator reads no intermediate files.** Exceptions:
-   - spec.md at plan gate (and the orchestrator WRITES spec.md/changes.md from returned objects — writing final artifacts is not reading intermediates)
-   - qa_report.md at verdict gate (INLINE path; WORKFLOW path on session resume — verdict reconstruction)
-   - changes.md path-extraction on WORKFLOW-path resume when `workflow_ctx` is null (changedFilesList reconstruction — repo-relative paths only, reasons stripped; no content analysis). See §Step 5 — WORKFLOW path `changedFilesList` source priority.
-   - verify_report.md path for user message
-   - **verify_report.md failing-file extraction for Auto-fix Proposer dispatch**:
+1. **Orchestrator reads no intermediate files.** Exceptions — reads only, exactly 7 (writes are a separate category, not counted in this list — see the `>` notes below; three follow, of which the second covers writes):
+   - (1) spec.md at plan gate and at the After-Plan boundary (§Scale Assessment signal computation, including the INLINE fallback) — the orchestrator also WRITES spec.md/changes.md/cold_review.md/slice_plan.md from returned objects; writing final artifacts (spec.md / changes.md / cold_review.md / slice_plan.md) is not reading intermediates.
+   - (2) qa_report.md at verdict gate (INLINE path; WORKFLOW path on session resume — verdict reconstruction)
+   - (3) changes.md path-extraction on WORKFLOW-path resume when `workflow_ctx` is null (changedFilesList reconstruction — repo-relative paths only, reasons stripped; no content analysis). See §Step 5 — WORKFLOW path `changedFilesList` source priority.
+   - (4) verify_report.md path (for the user message) and verify_report.md failing-file extraction for Auto-fix Proposer dispatch:
      Orchestrator reads verify_report.md to extract failing file paths only (no content analysis).
      Extracted paths pass through Path Validator (kind=file_reference) and are capped at 5.
      See §Step 5 — Auto-fix dispatch for the exact procedure.
-   - Apply-before `--- a/` / `+++ b/` diff header lines (2 metadata lines per file — hunk body is delegated to Edit tool). This is NOT a violation of this principle.
+   - (5) Step 2's Discovery Notes Injection reads (`qa_notes.md` / `critic_findings.md` content passed to the planner). Not a newly introduced exception — this documents an existing read that this list previously omitted; see `skills/harness/SKILL.md:658-664`.
+   - (6) `plan_critic_findings.md` Summary parsing + `.harness/planner/proposals.json` re-entry read.
+   - (7) Gate-display critic count parsing (the carried-over branch's `{docs_path}critic_findings.md`; the resume redisplay's `plan_critic_findings.md`) — distinct in purpose from (5)'s planner-injection read.
+
+   > Apply-before `--- a/` / `+++ b/` diff header lines (2 metadata lines per file — hunk body is delegated to Edit tool). This is NOT a violation of this principle.
+   > `.harness/planner/proposals.json` write: an intermediate file, but the orchestrator writes it as a direct serialization of the segment's returned proposals object — no content analysis. Writing it is not "reading intermediates" either.
+   > Entries (1), (6) and (7) name sections and artifacts that do not exist yet — `§Scale Assessment`, `§Step 2.6`, `plan_critic_findings.md`, `cold_review.md`, `slice_plan.md`, `.harness/planner/proposals.json`. Declared here; not yet written by any section — consumers take the default until the writing section lands. Until then those reads never fire, and this list grants the permission rather than describing current behavior.
 
 2. **Auto-fix Proposer is the only sub-agent that directly Reads source files among orchestrator-dispatched agents.** (Segment-script agents explore the codebase themselves by design — they run inside the engine's autonomous span.) Other inline sub-agents receive content only through template variables.
 
-3. **Paths only to sub-agents; never file contents** (ephemeral digests passed inside a segment run excepted — they never enter the orchestrator's context beyond `workflow_ctx` storage).
+3. **Paths only to sub-agents; never file contents** (ephemeral digests passed inside a segment run excepted — they never enter the orchestrator's context beyond `workflow_ctx` storage; `specContent` passed as a Build segment arg (`:765`) and as an Eval segment arg (`:834`) is also an explicit exception — spec.md content, not a path, crosses into segment `args` because size, not path-vs-content, is the actual constraint).
 
 4. **Session-wide invariants** (see §State Machine — Auto-fix State Transition Table):
    - Auto-fix: at most 1 attempt per session (`verify.autofix_attempted` once-only — not reset on round increment).
