@@ -45,7 +45,8 @@ At Setup, resolve the execution path:
    **Candidate causes — offer these as candidates, never as a diagnosis.** The orchestrator
    cannot query permission state and therefore cannot tell them apart:
    - **(a) a preceding skill's `disallowed-tools` may still be in force for this turn** — a
-     skill that blocks `Task, Agent, Workflow` (`handoff`, `team-memory`, `memory`) invoking
+     skill that blocks `Task, Agent, Workflow` (`team-memory`, `memory` — `handoff` no longer
+     blocks them; see `skills/handoff/SKILL.md` §Step 5 for why) invoking
      another skill from inside its own turn. **UNVERIFIED.** Observed once (2026-08-07: two
      denials inside a `/handoff resume` turn; the identical call succeeded in the next turn
      with no settings change), but **no file in this repository documents the runtime scoping
