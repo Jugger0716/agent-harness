@@ -953,7 +953,7 @@ Session handoff for cross-session, epic-level continuity — the durable complem
 /handoff list     -> enumerate handoff documents, newest first
 ```
 
-Key properties: stateless (no state.json of its own), inline-only (`disallowed-tools` blocks Task/Agent/Workflow/Web), resume is **context priming + fact verification** — never state restoration, never auto-checkout.
+Key properties: stateless (no state.json of its own), inline-only for its own work (prose rule — the `Task`/`Agent`/`Workflow` entries were removed from `disallowed-tools`; `NotebookEdit`/`WebSearch`/`WebFetch` remain), `resume` may chain into the next command from its gate, resume is **context priming + fact verification** — never state restoration, never auto-checkout.
 
 ---
 
