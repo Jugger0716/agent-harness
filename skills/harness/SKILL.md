@@ -13,7 +13,7 @@ You are a **state-machine orchestrator**. Your role is:
 4. On the INLINE path: dispatch sub-agents with minimal context and parse 1-line returns (legacy contract, inline only)
 5. Present the 3 HARD-GATEs to the user — gates are NEVER inside a segment script
 
-**You do NOT**: read intermediate artifacts (proposals, critiques, plans, reviews), accumulate sub-agent output in context, or make quality judgments about code — except the `.harness/planner/proposals.json` re-entry read (declared only; no section writes or reads it today — see §Architecture Principles #1 for the full, single-source exception list). Sub-agents and segment scripts handle all domain work; you handle transitions, gates, and writing final artifacts (spec.md / changes.md) from returned objects.
+**You do NOT**: read intermediate artifacts (proposals, critiques, plans, reviews), accumulate sub-agent output in context, or make quality judgments about code — the exceptions (including `.harness/planner/proposals.json`'s write and Auto-revise re-entry read) are enumerated exhaustively, and ONLY, in §Architecture Principles #1; this line does not restate them. Sub-agents and segment scripts handle all domain work; you handle transitions, gates, and writing final artifacts (spec.md / changes.md) from returned objects.
 
 ## Sub-agent Return Value Rules (INLINE path only)
 
@@ -78,7 +78,7 @@ The following tokens MUST remain English raw in all output. Translation is forbi
 | Session Boundary Type B `Reason` value | `Epic planned` (a *value*, not a label — see §Session Boundary Type B) |
 | Identifiers | state.json field names (e.g. `verify.layer1_retries`, `runs.plan.runId`), file paths (`{docs_path}verify_report.md`, `.harness/...`), git branch names (`harness/<slug>`), commands (e.g. `./gradlew test`, `npm run lint`), state-machine phase keys (`plan_ready`, `generating`, ...), schema field names (`acceptanceCriteria`, `modifiedFiles`, ...) |
 
-> `Decision`, `Critic`, `Next cmd`, and `Epic planned` are new to this Glossary. The existing `Reason` values (`QA PASS` / `Accept as-is` / `Max rounds reached`) are unchanged and are NOT added here — adding them would newly fix values that are currently translated, changing existing sessions' output. Declared here; not yet written by any section — consumers take the default until the writing section lands.
+> `Decision`, `Critic`, `Next cmd`, and `Epic planned` are new to this Glossary. The existing `Reason` values (`QA PASS` / `Accept as-is` / `Max rounds reached`) are unchanged and are NOT added here — adding them would newly fix values that are currently translated, changing existing sessions' output. `Decision` (§Scale Assessment §3 override display) and `Critic` (§Step 2.6 gate display) are now written by this file (this slice). `Next cmd` (rendered by `/handoff`, not this file) and `Epic planned` (§Session Boundary Type B epic variant — §Step 3.5, slice D) remain declared here only, not yet written by any section — consumers take the default until the writing section lands.
 
 ### Print Translation Pattern
 
@@ -171,13 +171,13 @@ Before starting a new task, check if `.harness/state.json` exists:
 
    Actions:
    - **Resume**: Before jumping to any step, run Safety Guard re-validation:
-     - Read `docs_path` directly from state.json. **Do NOT recompute from `cli_flags.output_dir`** — `cli_flags` is for audit/record only.
+     - Read `docs_path` directly from state.json. **Do NOT recompute from `cli_flags.output_dir`** — `cli_flags.output_dir` is for audit/record only (this does NOT generalize to every `cli_flags.*` field — see the Step 1 item 10.5 docs_path usage rule).
      - Run `validate_path(docs_path, kind=output_dir)`: slug validation + relative path + reserved name check.
      - If validation fails: print `[harness] ⚠ Recovered docs_path failed validation: <path>` and treat as Restart.
 
      Then jump to the state matching `phase` (segments are re-RUN, not runId-resumed, across sessions):
      - `plan_ready` → Step 1.5 (Convention Scan) if `conventions` is `null` (not yet executed), else Step 2 (Plan). Note: `"skipped"` means user already decided — go to Step 2. If `conventions` starts with `"file:"` but the file does not exist, treat as `null` and re-run Step 1.5.
-     - `planning` / `plan_done` → Step 3 (Gate) if spec.md exists, else Step 2
+     - `planning` / `plan_done` → apply the §Step 2.6 Plan Critic routing predicate (defined there as the single source; the three branches are NOT restated here). **A resume landing on Step 3 by this rule right after an Auto-revise re-synthesis was interrupted mid-loop is expected** — see §Step 3 Pass A's stale/mtime handling, which is what actually resolves that case (not an automatic jump back to Step 2.6).
      - `generate_ready` → Step 4 (Generate)
      - `generating` / `generate_done` → Step 5 (Verify) — do NOT re-run the build segment (edits may already be applied)
      - `verify_ready` / `verifying` → Step 5 (Verify), reset retries to 0
@@ -216,6 +216,9 @@ Three execution styles control how phases progress:
 /harness --mode single "task"            → auto + single mode (inline forced)
 /harness --mode multi "task"             → auto + multi mode (workflow path)
 /harness --model-config balanced "task"  → auto + balanced preset
+/harness plan "task" --epic              → phase mode + cli_flags.epic=true (§Scale Assessment override, display-only this slice)
+/harness plan "task" --no-epic           → phase mode + cli_flags.epic=false (§Scale Assessment override, display-only this slice)
+/harness "task" --no-cold-pass           → auto (default) + cli_flags.cold_pass=false (stored only this slice — slice E consumer)
 ```
 
 When state.json exists and `/harness` is called with no arguments:
@@ -306,6 +309,134 @@ full contract — this file (`/harness`) has no further obligation beyond being 
 
 ---
 
+> The comparison-operator prohibition below applies to every rendered line in §1–§4 /
+> §Signal Domain / §INLINE Fallback of the §Scale Assessment section that follows: never
+> phrase a rendered line as a numeric threshold comparison (no ">=", "이상", "초과", "미만").
+> This note is placed OUTSIDE that section on purpose — a grep restricted to the section's
+> line range must return 0 hits, and stating the prohibition INSIDE the range it governs
+> would trip its own grep.
+
+## Scale Assessment
+
+> Single source for the scale/slice recommendation block. Referenced by name (never
+> restated) at exactly 3 sites: **(1) compute** — §Step 2 (Plan Phase), immediately after
+> the Plan segment/sub-agent completes on BOTH the INLINE and WORKFLOW branches, run
+> exactly once per Plan pass and frozen into `state.scale.*`; **(2) render** — §After Plan
+> Phase, the phase/step-run_style halt path (before Step 3 is ever reached this session);
+> **(3) render** — §Step 3 Pass B, the auto-run_style path. Renders (2) and (3) are
+> MUTUALLY EXCLUSIVE per session: a `phase`/`step` session that ends at Step 2 only ever
+> reaches (2); an `auto` session runs straight through Step 2 → Step 2.6 → Step 3 without
+> stopping and only ever reaches (3) — never both in the same session.
+
+### Compute-once / freeze / render-by-reference
+
+Computed exactly ONCE, immediately after Step 2 (Plan Phase) completes — on **both** the
+INLINE and WORKFLOW branches, and again on an Auto-revise re-entry (§Step 2 WORKFLOW path
+— Auto-revise re-entry re-runs Step 2's shape, so it re-freezes `state.scale.*` from the
+fresh return) — before phase advances to `plan_done`. The four elements below are derived
+from the in-context `PlanResult` (WORKFLOW) or spec.md (INLINE fallback) at THAT moment and
+written to `state.scale.signals` / `state.scale.slice_hint` / `state.scale.override` in a
+single read-modify-write. Every render site after that reads `state.scale.*` — it never
+re-derives.
+
+**On cross-session resume, do NOT recompute** — the in-context `PlanResult` no longer
+exists, so a resume-time recompute would always degrade to the §INLINE Fallback below and
+could disagree with the value already shown once this session. **If `state.scale` is
+missing entirely** (e.g. a pre-this-slice session resuming into Step 3, or any session that
+somehow reaches Step 3 without ever computing it), treat every signal as `absent` and
+render per §INLINE Fallback below — never error, never block the gate on a missing block.
+
+### 1. Raw signal counts
+
+Four raw signals, each independently tagged with its own measurement state (`ok` /
+`absent` / `malformed` — see §Signal Domain below) rather than a bare number: AC count
+(`acceptanceCriteria.length`), steps count (`steps.length`), in-scope count
+(`scope.inScope.length`), risks count (`risks.length`).
+
+### 2. Recommendation (verbatim render)
+
+Render `sliceHint.recommendation` and `sliceHint.rationale` **verbatim** — copy the
+strings, do not summarize, requote, or re-derive them. **The orchestrator does NOT derive
+the recommendation from the counts in §1 above** — §1 is informational context only; the
+recommendation comes exclusively from `sliceHint`, which the Synthesis sub-agent already
+produced with full qualitative judgment (see `workflows/harness.plan.workflow.js` `##
+Scale Hint`, which itself forbids numeric-threshold phrasing). This one rule is what makes
+the "no comparison operator next to a count" requirement below structural rather than a
+style guideline — there is no code path here that computes a threshold, so there is nothing
+for a comparison phrase to attach to.
+
+### 3. Override state
+
+If `cli_flags.epic` is non-null, render the override: `true` → "epic 강제 적용 (사용자
+지정 `--epic`)"; `false` → "single-slice 강제 적용 (사용자 지정 `--no-epic`)" (render in
+`user_lang` per §Output Language Contract — these are natural-language values, not Glossary
+tokens). If `cli_flags.epic == null`, render "override 없음 — 위 권고안이 그대로 유효".
+
+**When an override is active, §1's raw signal counts and §2's verbatim recommendation still
+render unchanged** — an override never suppresses the measured signal, it only changes which
+choice ultimately wins at Step 3 Pass B. In that case append one more Status-Format-style
+line, using the ONE place in this section where §Standard Status Format's aligned
+`Label     : value` convention (unlike the unaligned `Critic:` gate literals in §Step 2.6)
+applies literally:
+```
+Decision : forced by --epic     ← or "forced by --no-epic", matching whichever flag was given
+```
+
+### 4. Confirmation ownership
+
+Always render a closing line: the recommendation/override above is informational only —
+the actual epic-vs-single decision is confirmed by the user, at Step 3 Pass B (or, for a
+`phase`/`step` session, at whichever future `/harness` invocation next reaches Step 3).
+§Scale Assessment never itself advances the state machine or makes the epic/single choice.
+
+### Signal Domain (`ok` / `absent` / `malformed`)
+
+Each of the 4 raw signals in §1 is stored in `state.scale.signals` as one of three states —
+never collapsed to a bare count:
+
+- **`ok`** — the field is present AND `Array.isArray(field) == true`; render its `.length`.
+- **`absent`** — the field is missing (`undefined`/`null`) from `PlanResult`. Render
+  "measured: 없음" (never `0` — a plan that omits `steps` and a plan with an empty
+  `steps: []` are different facts and must not collapse to the same rendered value).
+- **`malformed`** — the field is present but `Array.isArray(field) == false` (e.g. `scope`
+  collapsed into the `background` string — the failure actually observed during slice B
+  measurement; `PlanResultSchema.required` does not cover `scope`, so this passes schema
+  validation). Render "measured: 손상됨 (배열 아님)".
+
+**Rule**: never call `.length` on a field without first confirming `Array.isArray(field) ==
+true`. A `malformed` field's `.length` (a string has one too) is NOT an item count and MUST
+NOT be rendered as one — that is exactly the failure this rule exists to prevent (a string
+that absorbed `scope` would render its character count as an "in-scope item count",
+deterministically biasing the assessment toward "epic").
+
+If any of the 4 signals is `absent` or `malformed`, append one closing line: "결측되거나
+손상된 신호가 있음 — 위 권고는 그만큼 불완전한 근거에 기반함" (qualitative disclosure
+only — no numbers, no comparison).
+
+### INLINE Fallback (degraded, 1-signal mode)
+
+The INLINE path (and any resume that lands in §INLINE Fallback per the rule above) has no
+`sliceHint` — `planner_single.md` never produces one — and no structured
+`acceptanceCriteria`/`steps`/`scope`/`risks` fields to measure. Render as a **1-signal
+degraded mode**, not a silent 3-of-4 failure:
+
+- The ONLY `ok` signal: a language-independent scan of spec.md for GFM checkbox lines
+  matching the literal pattern `- [ ]` (used under `### Completion Criteria` — see §Step 2
+  WORKFLOW path spec.md render mapping) — count occurrences. **Do NOT parse the heading
+  TEXT** (`### Completion Criteria` or any other) to locate the section — spec.md headings
+  are rendered in `user_lang` per §Output Language Contract, so an English heading match
+  silently returns 0 in every non-English session. The checkbox glyph itself is
+  language-independent.
+- The other 3 signals: `absent` (steps/scope/risks have no INLINE spec.md equivalent to
+  scan for).
+- Recommendation: render "없음 (INLINE 경로 — 권고를 만드는 sliceHint가 이 경로에는 없음)"
+  — state the degradation explicitly, never omit the recommendation line silently.
+- Append the closing disclosure line above AND one more: "이 폴백은 독립적인 2차 방어가
+  아니라 spec.md 자체(§Step 2 INLINE 산출물)의 하류임 — spec.md가 이미 손상된 scope를
+  반영했다면 이 신호도 같은 오염을 반영함".
+
+---
+
 ## State Machine
 
 ### State Transition Diagram
@@ -381,6 +512,8 @@ On the WORKFLOW path the same machine applies; `harness.eval` covers verifying�
      - **Step 4** Reserved first segment: `path.split("/")[0]` ∈ `{memory, spec, planner, generator, evaluator, verify, harness, .harness}` → halt with error: "output-dir value starts with a reserved directory name." (first segment only — trailing slash stripped first; full-path comparison is NOT performed)
      - **Step 4.5** `docs` first-segment exception for `/spec → /harness` slug-safe handoff: if `path.split("/")[0] == "docs"`, the second segment MUST be `harness` (i.e. path starts with `docs/harness/...`). Otherwise halt with error: "output-dir under docs/ must be docs/harness/..." Rationale: the default `output_base = "docs/harness"` always writes under this tree, so the standard /spec handoff value `docs/harness/<slug>/` is the only legitimate `docs/...` override; any other `docs/<other>/` first-segment override is rejected to prevent accidental writes outside the harness namespace.
      - If valid: normalize with trailing slash stripped, store in `cli_flags.output_dir`.
+   - `--epic` / `--no-epic` → store `cli_flags.epic` as `true` / `false` (tri-state; unset stays `null` — §Scale Assessment's own recommendation stands). **Validation**: if BOTH `--epic` AND `--no-epic` are given, halt with error: "Cannot combine --epic and --no-epic." **This halt fires HERE, in item 2 (pure parsing) — before item 7 creates `.harness/`/`{docs_path}` and item 8 creates the git branch** (same placement reasoning as the `--verifier-model` halt above: a halt placed after those side effects would leave a ghost `.harness/` + empty branch for the next Session Recovery to mistakenly offer to Resume). Consumers: §Scale Assessment's override display (this slice) and §Step 3.5 Slice Plan's epic-exit routing (**not yet landed — slice D**). `--epic` does NOT change what the Plan phase produces in this slice — it changes only what §Scale Assessment DISPLAYS (the override line) and, later, which option a not-yet-landed §Step 3.5 offers. Do not present it to the user as producing `slice_plan.md` today.
+   - `--no-cold-pass` → store `cli_flags.cold_pass = false` (default `true` — cold pass runs unless this flag is given). **Storage only in this slice** — no section reads this field yet; the consumer (cold-review dispatch gating) lands in slice E.
 3. **Slugify the task:** lowercase, transliterate non-ASCII to ASCII, remove non-word chars except hyphens, replace spaces with hyphens, truncate to 50 chars. Store as `<slug>`.
 4. **Auto-detect project language and commands.** Scan the working directory.
 5. **Auto-detect lint command** (skip if `--lint-cmd` provided).
@@ -430,7 +563,7 @@ On the WORKFLOW path the same machine applies; `harness.eval` covers verifying�
 
 10.5. **Verifier model determination:** `model_config.verifier = cli_flags.verifier_model ?? project_default.verifier_model ?? "haiku"` (CLI flag > `agent-harness-defaults:` project default > `haiku`; preset default is always `haiku`). Store resolved value in `model_config.verifier`.
 
-    **docs_path usage rule**: Always read `docs_path` directly from state.json. Do NOT recompute from `cli_flags.output_dir`. `cli_flags` is for audit/record purposes only. Safety Guard in Session Recovery also uses `docs_path` directly (not recomputed).
+    **docs_path usage rule**: Always read `docs_path` directly from state.json. Do NOT recompute from `cli_flags.output_dir`. `cli_flags.output_dir` itself is for audit/record purposes only (this is what this rule is about — it does NOT generalize to every `cli_flags.*` field; `cli_flags.epic`/`cli_flags.cold_pass` are written and read elsewhere in this file starting this slice — see the new-field table note above). Safety Guard in Session Recovery also uses `docs_path` directly (not recomputed).
 
 11. **Write `.harness/state.json`:**
 
@@ -503,7 +636,7 @@ On the WORKFLOW path the same machine applies; `harness.eval` covers verifying�
 | `plan_critic.source` | `"own"` / `"carried_over"` | `null` | §Step 2.6 | §Step 2.6 gate display (`carried over from /spec` literal) |
 | `plan_critic.counts` | `{ critical, major, minor }` (lowercase — matches `CriticReport.counts` in `workflows/_reference/schemas.md` — cited by name, not line: that file is append-only, so any delta appended above `CriticReport` would silently shift a line citation) | `null` (not yet run / not yet parsed) | §Step 2.6 | §Step 2.6 gate display |
 | `scale.signals` | object | `null` | §Scale Assessment | §Scale Assessment, Step 3 gate |
-| `scale.slice_hint` | object — PlanResult `sliceHint` stored verbatim | `null` | §Scale Assessment | §Step 3.5 (Slice Plan) |
+| `scale.slice_hint` | object — PlanResult `sliceHint` stored verbatim | `null` | §Scale Assessment | §Step 3 Pass B (this slice), §Step 3.5 (Slice Plan) |
 | `scale.override` | boolean | `null` | §Scale Assessment (`--epic`/`--no-epic` override) | §Scale Assessment |
 | `epic.id` | string | `null` | §Step 3.5 (Slice Plan) | §Step 3.5 |
 | `epic.boundaries` | object | `null` | §Step 3.5 boundary Q&A | §Step 3.5 re-entry check |
@@ -519,8 +652,8 @@ On the WORKFLOW path the same machine applies; `harness.eval` covers verifying�
 > `plan_critic.applied`'s value set (`executed`/`skipped`/`failed`) is harness-local and is NOT interchangeable with /spec `state.critic.applied`'s value set (`approved`/`pending`/`revised`) — the field name is borrowed from /spec `state.critic`, the value set is not.
 > `cli_flags.epic` is tri-state (`null`/`true`/`false`) while `cli_flags.cold_pass` is a plain boolean — `--epic`+`--no-epic` given together can halt on that distinction (two explicit, opposite non-null values) rather than collapsing onto one boolean.
 > A per-session cold-pass execution cap equal to `max_rounds` (default 3) is not a separate counter — it falls out arithmetically from `verify.cold_round`'s once-per-round execution latch.
-> `cli_flags` is currently audit/record only (see the `docs_path usage rule` note at Step 1 item 10.5). A future read consumer is planned — a `cli_flags.output_dir` recomputation comparison for Session Recovery — but is not wired yet; that note is updated when it lands, not here.
-> Declared here; not yet written by any section — consumers take the default until the writing section lands.
+> `cli_flags.output_dir` remains audit/record only (see the `docs_path usage rule` note at Step 1 item 10.5) — no section recomputes from it, only `docs_path` itself is read directly. `cli_flags.epic` and `cli_flags.cold_pass` are NOT audit-only: `cli_flags.epic` is written by §Step 1 CLI Parsing and read by §Scale Assessment's override check and §Step 3 Pass B (this slice); `cli_flags.cold_pass` is written by §Step 1 CLI Parsing but has no reader yet — its consumer (cold-review dispatch gating) lands in slice E.
+> `plan_critic.*`, `scale.*`, and `cli_flags.epic`/`cli_flags.cold_pass` are now written by the sections named in the table above (this slice). `epic.*` (§Step 3.5 — slice D) and `verify.cold_*` (cold review dispatch — slice E) remain declared here only, not yet written by any section — consumers take the default until those slices land.
 
 12. **Print setup summary** per §Output Language Contract — Print Translation Pattern (labels remain English raw; values follow §Output Language Contract — Preserved-English Glossary):
 ```
@@ -673,7 +806,8 @@ Before the plan dispatch/segment, prepare:
    - Model: if preset ≠ "default", use `model_config.advisor`.
 4. Parse return → extract first line. Print: `  ✓ {first line}`
 5. Verify `spec.md` exists.
-6. Update phase → `"plan_done"`, `updated_at → now`.
+6. **Compute and freeze §Scale Assessment** (that section's compute site) — the INLINE path has no `sliceHint`, so apply its §INLINE Fallback degraded mode against the just-written spec.md. Single read-modify-write into `state.scale.signals` / `state.scale.slice_hint` (`null` on this path) / `state.scale.override` (from `cli_flags.epic`).
+7. Update phase → `"plan_done"`, `updated_at → now`.
 
 #### Step 2 — WORKFLOW path (mode: standard | multi)
 
@@ -693,8 +827,9 @@ Before the plan dispatch/segment, prepare:
    }
    ```
 3. Record the returned run id: `runs.plan → { "runId": "<id>" }`, `updated_at → now`.
-4. The segment returns `{ plan: PlanResult, stats }` (schema-validated — no file re-reads, no 1-line parsing). Print per OLC: `  ✓ Plan segment: {stats.proposalsSucceeded}/{stats.proposalsRequested} proposals → synthesis`
-5. **Orchestrator writes `{docs_path}spec.md` from the PlanResult object** (headings in `user_lang`):
+4. The segment returns `{ plan: PlanResult, proposals, stats }` (schema-validated — no file re-reads, no 1-line parsing; this corrects the prior "`{ plan, stats }`" description here — the segment has returned `proposals` since slice B). Print per OLC: `  ✓ Plan segment: {stats.proposalsSucceeded}/{stats.proposalsRequested} proposals → synthesis`
+5. **Persist `proposals`**: write `.harness/planner/proposals.json` ← the returned `proposals` array, serialized directly (`.harness/planner/` already exists — Step 1 item 7). A direct serialization of the segment's returned object, not content analysis (§Architecture Principles #1 note). Do this BEFORE phase advances to `plan_done` (item 9 below) — a crash between this write and the phase update leaves `phase != "plan_done"`, so the session simply re-enters Step 2 on resume instead of landing in a half-written re-entry state.
+6. **Orchestrator writes `{docs_path}spec.md` from the PlanResult object** (headings in `user_lang`):
    - `### Goal` ← `goal` ; `### Background` ← `background`
    - `### Scope` ← `scope.inScope` / `scope.outOfScope` bullet lists
    - `### Approach` ← `approach`
@@ -702,39 +837,487 @@ Before the plan dispatch/segment, prepare:
    - `### Testing Strategy` ← `testingStrategy[]` ; `### Edge Cases` ← `edgeCases[]` (omit if empty)
    - `### Risks` ← `risks[]` as `- (source, likelihood) risk — mitigation`
    - `### Implementation Steps` ← `steps[]` (omit if absent)
-6. Verify `spec.md` exists (orchestrator-written).
-7. Update phase → `"plan_done"`, `updated_at → now`.
-8. **On Workflow error** (launch failure, script error, schema-invalid result): apply §Mode Gate graceful fallback → re-run this step on the INLINE path.
+7. Verify `spec.md` exists (orchestrator-written).
+8. **Compute and freeze §Scale Assessment** (that section's compute site) from the in-context `PlanResult` — §1 raw signals from `acceptanceCriteria`/`steps`/`scope.inScope`/`risks`, each `Array.isArray`-guarded per that section's Signal Domain rule; §2 verbatim `sliceHint.recommendation`/`sliceHint.rationale`; §3 override from `cli_flags.epic`. Single read-modify-write into `state.scale.*`.
+9. Update phase → `"plan_done"`, `updated_at → now`.
+10. **On Workflow error** (launch failure, script error, schema-invalid result): apply §Mode Gate graceful fallback → re-run this step on the INLINE path.
+
+**Auto-revise re-entry (dispatched only from §Step 2.6 / §Step 3 Pass A "Auto-revise")** —
+re-runs this same segment in re-synthesis form, skipping Propose:
+```
+Workflow {
+  scriptPath: "${CLAUDE_PLUGIN_ROOT}/workflows/harness.plan.workflow.js",
+  args: {
+    task, repoPath, lang, scope, userLang, conventions,
+    qaNotes: <qa_discovery_notes>,
+    criticFindings: <the CONTENT of {docs_path}plan_critic_findings.md — read it only when
+      plan_critic.applied is a recorded, non-null state AND plan_critic.last_findings_path
+      is non-null AND the file exists; never use a bare file-existence check (mirrors
+      skills/spec/SKILL.md's re-synthesis criticFindings guard). This is a DIFFERENT
+      document from the FIRST dispatch's `criticFindings` above, which carries the CONTENT
+      of {docs_path}critic_findings.md (the /spec requirements critique) — both dispatches
+      of this one segment pass file CONTENT (never a bare path string) under the same
+      `criticFindings` arg name; do not confuse the two source files. `harness.plan.workflow.js`
+      substitutes this value directly into the synthesis prompt text via render() — it does
+      NOT Read a path itself, so passing a path string here silently ships an unusable
+      literal into the prompt instead of the findings.>,
+    mode, reSynthesisOnly: true,   ← a REAL boolean; the string "false" is truthy and
+                                      silently skips Propose (measured wf_6631e9c1-dcd) —
+                                      never stringify this value,
+    priorProposals: <JSON.parse() of .harness/planner/proposals.json — passed only after
+      the proposals.json validity check below passes>,
+    models: { ... as above }
+  }
+}
+```
+
+| Arg | Value | 주의 |
+|---|---|---|
+| `reSynthesisOnly` | `true` | 진짜 boolean 리터럴 — 문자열 `"false"`는 truthy로 평가되어 Propose를 조용히 건너뛴다(실측 `wf_6631e9c1-dcd`). 절대 stringify하지 않는다. |
+| `priorProposals` | `.harness/planner/proposals.json`을 `JSON.parse()`한 배열 | proposals.json validity check를 통과한 뒤에만 전달한다. |
+| `criticFindings` | `{docs_path}plan_critic_findings.md`의 **CONTENT**(경로 문자열이 아니다) | 최초 디스패치의 `criticFindings`(= `{docs_path}critic_findings.md`, /spec 요구사항 비평)와는 다른 문서다 — 같은 arg 이름을 공유하지만 서로 다른 소스 파일을 가리킨다. |
+
+Record `runs.plan → { "runId": "<id>" }` (overwrites the first dispatch's runId — one slot,
+no separate re-entry slot). Re-render `{docs_path}spec.md` from the returned `plan` (same
+step-6 mapping above), overwrite `.harness/planner/proposals.json` with the returned
+`proposals` (kept authoritative even though unchanged on this path), and re-freeze
+`state.scale.*` from the returned `PlanResult` (same step-8 procedure above — an Auto-revise
+re-entry is a fresh Step-2-shaped run, not the cross-session "do NOT recompute" case). Then
+immediately re-run §Step 2.6's own-critic dispatch (see §Step 2.6 below) — this bypasses the
+skip-vs-run decision inside §Step 2.6 entirely, the same entry point Pass A's "Run Critic
+anyway" option uses (§Step 3) — in the SAME turn, against the freshly re-rendered spec.md;
+this is how a low-cost Auto-revise round actually re-checks the revision, with no separate
+user gate in between.
+
+**Before dispatching this re-entry**, the orchestrator runs the proposals.json validity
+check itself (named and defined once, at §Step 3's Auto-revise Exposure Predicate — applied
+HERE by the orchestrator before dispatch, not only as a gate-display condition). If it fails
+on ANY point, do NOT dispatch with `reSynthesisOnly: true`; instead dispatch a FULL re-run
+(`reSynthesisOnly: false`, no `priorProposals`) and print a warning banner (in `user_lang`):
+"[harness] ⚠ proposals.json invalid or unusable — re-running full Plan (Propose + Synthesize)
+instead of the low-cost re-synthesis." This failure does NOT degrade the path to inline
+single — only a genuine Workflow engine error (item 10 above) does that.
+
+#### Step 2.6: Plan Critic
+
+*Runs after Step 2, on BOTH paths — a step common to both, not a third path alternative (the
+INLINE/WORKFLOW split above is a path branch; this heading sits one level deeper only
+because AC-4 fixes its exact text, not because it is a third branch).*
+
+**Plan Critic routing predicate (single source — §Session Recovery's `planning`/`plan_done`
+row below cites this by name; it does not restate the conditions):** evaluated in this
+fixed order —
+- **(a)** `{docs_path}spec.md` does NOT exist → route to Step 2 (nothing to critique yet).
+- **(b)** spec.md exists AND `state.plan_critic` has no recorded `applied` value → route to
+  Step 2.6, here.
+- **(c)** spec.md exists AND `state.plan_critic.applied` IS recorded (`"executed"`,
+  `"skipped"`, OR `"failed"` — any of the three, not only success) → route to Step 3.
+
+  **The predicate is "a record exists", never "the record says success"**: using
+  `applied == "executed"` here would re-charge a `"failed"` session's critic on every resume;
+  using bare file-existence on `plan_critic_findings.md` would reproduce the exact
+  "first run permanently skips" failure this predicate exists to prevent (AC-6).
+
+**Skip-vs-run decision (this step's own — separate from the routing predicate above, which
+only decides whether to REACH this step):** on entry, check whether
+`{docs_path}critic_findings.md` (the **/spec** requirements critique — NOT this step's own
+findings file) already exists (a sanctioned read — §Architecture Principles #1 (7)).
+
+- **Exists** → this task was handed off from /spec with its own critique already produced;
+  do not spend a second cold-review pass duplicating it. Set `plan_critic.applied =
+  "skipped"`, `plan_critic.source = "carried_over"`, `plan_critic.last_findings_path = null`,
+  `plan_critic.failure_reason = null`, `plan_critic.counts = null`, and leave
+  `plan_critic.round` UNCHANGED at its existing value — a carried-over skip does not consume
+  a revision round (all 6 fields, per the single read-modify-write rule below). Gate display
+  (§Step 3 Pass A row ③) parses counts FROM `{docs_path}critic_findings.md`'s `## Summary`
+  line for this session (Architecture Principles #1 (7)'s "carried-over branch" read) and
+  shows the `carried over from /spec` literal.
+- **Does not exist** → dispatch this step's own critic below (WORKFLOW or INLINE, per
+  `path_resolved`); `plan_critic.source = "own"` in that case.
+
+**WORKFLOW branch** (`path_resolved == "workflow"`) — reuse `workflows/spec.eval.workflow.js`
+with ZERO code changes (that file is out of scope for this slice):
+```
+Workflow {
+  scriptPath: "${CLAUDE_PLUGIN_ROOT}/workflows/spec.eval.workflow.js",
+  args: {
+    task: <task>, userLang: <user_lang>, specContent: <{docs_path}spec.md content>,
+    qaNotes: <qa_discovery_notes>,
+    criticFindingsPath: "{docs_path}plan_critic_findings.md",
+    models: { advisor: <model_config.advisor or null>, evaluator: <model_config.evaluator or null> }
+  }
+}
+```
+The segment returns a schema-validated `CriticReport` (`counts`/`items`/`summary` — see
+`workflows/_reference/schemas.md`). Print per OLC: `  Critic: workflow (schema-validated) — {report.summary}`.
+
+**INLINE branch** (`path_resolved == "inline"`) — dispatch `templates/spec/critic_inline.md`
+with `{spec_path}` = `{docs_path}spec.md` (a PATH, not content — see that template's header),
+`{critic_findings_path}` = `{docs_path}plan_critic_findings.md`, `{user_lang}`,
+`{task_description}`.
+   - Model: if preset ≠ "default", use `model_config.advisor`.
+
+Parse the 1-line return per §Sub-agent Return Value Rules: expect the leading keyword
+`critic_findings written` followed by `Critical=N, Major=M, Minor=K`. Print per OLC:
+`  Critic: inline (1-line parse) — {first line}`. **Parsing note (a declared gap, not solved
+here)**: `critic_findings written` is not one of §OLC's listed 1-line return verbs
+(`generated`/`changed`/`written`/`conventions written`/`auto_fix_patch written`) — recorded
+in this slice's changes.md, not closed by inventing a new Glossary entry (`name_manifest.md`
+§3 reserves only `Decision`/`Critic`/`Next cmd`/`Epic planned` for this epic).
+
+**Latching `applied = "executed"`** (either branch above): only after confirming
+`{docs_path}plan_critic_findings.md` (a) exists AND (b) has an mtime STRICTLY AFTER
+`{docs_path}spec.md`'s mtime. Point (b) closes a WORKFLOW-specific gap: a segment can return
+a schema-valid `CriticReport` while the underlying agent never actually wrote the file this
+pass (`workflows/spec.eval.workflow.js`'s own contract comment defers that verification to
+the orchestrator — "verify existence orchestrator-side before gate display"). If either check
+fails, treat it exactly like an inline parse failure — see failure branch (iii) below.
+
+**Single read-modify-write** — `plan_critic` (all 6 fields: `applied`, `round`,
+`last_findings_path`, `failure_reason`, `source`, `counts`) + `phase` are written together,
+once, per Step 2.6 entry (covering the carried-over branch above and each failure branch
+below):
+- On success: `applied = "executed"`, `source = "own"`, `last_findings_path =
+  "{docs_path}plan_critic_findings.md"`, `counts = report.counts` (WORKFLOW) or the parsed
+  `{critical, major, minor}` (INLINE), `failure_reason = null`.
+  `round`: unset (`null`, read as 0) on the FIRST Step 2.6 run this session. On a re-run
+  immediately following an Auto-revise re-entry (§Step 2 WORKFLOW path — Auto-revise
+  re-entry, same turn), THIS write also carries `round: 0 → 1` — **the only place `round` is
+  ever incremented** (mirrors `skills/spec/SKILL.md`'s `critic.round: 0 → 1` precedent:
+  prepared logically between re-synthesis and re-critic, written atomically with this
+  re-critic transition). `round` is bounded at 1 by design — §Step 3 Pass A's Auto-revise
+  option disappears once `round == 1` (see the Auto-revise Exposure Predicate, §Step 3).
+- Gate display (§Step 3) null-safe-guards `counts == null` / `last_findings_path == null` /
+  file-not-found independently (mirrors `skills/spec/SKILL.md:166`'s precedent) — never
+  dereferences without checking first.
+
+**Failure handling — 3-way** (applies to the "own" dispatch only; the carried-over branch
+above never reaches this):
+- **(i) Workflow engine error** (launch failure, script error, schema-invalid result) →
+  apply §Mode Gate graceful fallback (re-attempt inline, same as Step 2's own error
+  handling) — a genuine engine fault, not a policy decision. This branch itself does NOT
+  write `plan_critic` — only the inline re-attempt's own outcome (success above, or a
+  failure branch below) performs the single write.
+- **(ii) Permission denial is NOT an engine error** → route to
+  `templates/_shared/mode_gate.md` rule 3's denial branch (disclose, never downgrade
+  silently) — the same banner this file already uses at §Mode Gate:
+  `[harness] ⚠ Workflow denied (not an engine error) — path NOT auto-downgraded.` Step 2.6's
+  own denial handling does NOT rewrite `path_resolved` — that field is set once at §Step 1
+  item 9 (re-resolved only by §Session Recovery step 6); a mid-Step-2.6 denial leaves it
+  exactly as it already was. `plan_critic.applied` is NOT recorded by this branch — the
+  record stays unwritten this pass. **Turn control**: this branch does NOT halt — control
+  proceeds to §After Plan Phase exactly as failure branch (iii) below does (same "progress is
+  not blocked" policy). What happens next depends on `run_style`: under `run_style ==
+  "phase"`, §After Plan Phase's own halt fires before Step 3 is ever reached, so the NEXT
+  session's §Session Recovery re-enters via routing predicate (b) by name (the routing
+  predicate defined above — not restated here) — landing back on Step 2.6, not Step 3. Under
+  `run_style == "auto"`, §After Plan Phase does not halt, so Step 3 is reached in THIS SAME
+  turn with `plan_critic` still unrecorded — §Step 3 Pass A row ④ (failed / unrecorded /
+  unknown, defined below) is what renders in that case. If the user then picks "Proceed as-is"
+  there instead of "Retry Critic", `phase` advances to `generate_ready` and no later session
+  re-enters Step 2.6 for this task — `plan_critic` stays permanently unrecorded for it (a
+  disclosed audit gap, not a silent one: row ④'s banner states this).
+- **(iii) 1-line parse failure** (INLINE only) or the latching check above fails → set
+  `plan_critic.applied = "failed"`, `plan_critic.failure_reason = "parse_failed"` (INLINE
+  parse) or `"findings_file_missing"` (latch check), `plan_critic.last_findings_path = null`,
+  `plan_critic.source = "own"`, `plan_critic.counts = null`, `plan_critic.round` UNCHANGED
+  (all 6 fields, matching the success and carried-over branches' enumeration format above) —
+  banner shown (`[harness] ⚠ Plan Critic failed — fallback: skipped, spec unreviewed`).
+  **Progress is NOT blocked** — proceed to §After Plan Phase / Step 3 regardless. **Known
+  gap**: leaving `round` UNCHANGED means a failed re-critic dispatched right after an
+  Auto-revise re-entry does not consume the single increment a successful re-critic would have
+  (§Step 2.6's single-write note above) — the Auto-revise Exposure Predicate's point 3 can
+  therefore still hold on a later "Retry Critic" attempt. Recorded here as a known gap, not
+  closed in this slice.
+
+**Interruption cost**: if the SAME-turn re-critic dispatch this section describes (triggered
+from §Step 2 WORKFLOW path's Auto-revise re-entry) is itself interrupted before its write
+completes, resume lands on §Step 3 Pass A row ①-b (stale — spec.md's mtime now postdates the
+FIRST pass's `last_findings_path`); choosing "Run Critic anyway" there re-charges one critic
+dispatch (idempotent — it simply re-runs this same own-critic dispatch again).
+
+**Why no `runs` slot is recorded here**: `state.runs` has exactly `{plan, build, eval}` — no
+reserved fourth slot for Step 2.6. Recording under `runs.eval` would silently clobber Step
+5's own record (`runs.eval` is Step 5 — WORKFLOW path item 3, below). Step 2.6's own run id
+(WORKFLOW branch only) is therefore NOT persisted in `state.runs` — a known, accepted gap
+(recorded in this slice's changes.md), not an oversight.
 
 #### After Plan Phase
 
 Print: `[harness] Plan complete.`
 
-**If `run_style == "phase"` or (`run_style == "step"` and requested step was `plan`):** Print the §Session Boundary block (Type A: After Plan). Halt.
+**If `run_style == "phase"` or (`run_style == "step"` and requested step was `plan`):** Print
+the `## Scale Assessment` block (its After-Plan render site — the other render site is §Step
+3 Pass B; the two are mutually exclusive, see that section's header) using the values frozen
+in `state.scale.*` at the end of Step 2. Then print the §Session Boundary block (Type A:
+After Plan). Halt.
 
-**If `run_style == "auto"`:** Continue to Step 3 (Gate).
+**If `run_style == "auto"`:** Continue to Step 3 (Gate) — do NOT render `## Scale Assessment`
+here; it renders once, at Step 3 Pass B.
 
 ---
 
 ### Step 3: HARD GATE #1 — Spec Confirmation
 
-> Rendered by the orchestrator BETWEEN the `harness.plan` and `harness.build` segment runs — never inside a script.
+> Rendered by the orchestrator BETWEEN the `harness.plan` and `harness.build` segment runs
+> — never inside a script. This gate renders as up to TWO SEQUENTIAL PASSES (Pass A, then
+> Pass B) inside ONE `<HARD-GATE>` tag — see the §Architecture Principles #6 note this
+> slice adds: the gate count stays 3, a pass is not a fourth gate.
 
 <HARD-GATE>
-Read and show spec.md to the user. Ask via AskUserQuestion (in `user_lang`):
-- header: "Spec"
-- question: "Review the spec above. Implementation consumes significant tokens. Confirm to proceed."
-- options:
-  - "Proceed" / "Start implementation as specified"
-  - "Modify" / "Edit the spec, then re-confirm"
-  - "Stop" / "Halt the workflow"
+Read and show spec.md to the user.
 
-If "Modify": update spec.md and re-present.
-If "Stop": halt.
-Only "Proceed" advances.
+Every AskUserQuestion call in this gate (Pass A and Pass B alike) stays within the
+option-count guidance in `templates/_shared/askuserquestion.md` — referenced by name here,
+not restated (that file is the single source for the actual limit).
+
+#### Stale Determination (single source — computed fresh every time this gate is about to
+render, including on a §Session Recovery re-entry into Step 3; never a turn-local fact)
+
+If `plan_critic.last_findings_path == null` (no findings file recorded — covers the
+carried-over and failed branches): render as **stale-unknown**.
+Otherwise, compare filesystem mtimes: `mtime({docs_path}spec.md)` vs.
+`mtime(plan_critic.last_findings_path)`.
+- spec.md's mtime is STRICTLY LATER → **stale** ("critic 이후 spec.md가 변경됨" — phrased
+  subject-neutral; this covers BOTH a user Modify edit and an Auto-revise re-synthesis that
+  was interrupted before Step 2.6's re-critic pass completed — the mechanism cannot and does
+  not need to tell those two apart, since the safe action is identical either way).
+- Equal mtimes (same-second collision) → treat as **stale** (conservative tie-break,
+  consistent with every other unknown-defaults-to-conservative rule in this slice).
+- mtime retrieval fails for either file (I/O error, tool unavailable) → **fail closed**,
+  treat as **stale**. A silently-skipped check would re-expose Auto-revise on exactly the
+  input this rule exists to protect (a user's un-recorded manual spec.md edit).
+- Only when spec.md's mtime is NOT later, and retrieval succeeded for both → **not stale**.
+
+This determination applies unchanged whether Pass A is rendered for the first time this
+turn, re-presented after a same-turn Modify loop, or reached via §Session Recovery routing
+predicate (c) after a session boundary — see that predicate's note about the
+interrupted-Auto-revise case.
+
+#### Auto-revise Exposure Predicate (single source — Pass A rows ①-a/①-b/①-c and the
+pre-dispatch check in §Step 2 WORKFLOW path — Auto-revise re-entry both cite this by name;
+neither restates it)
+
+Auto-revise is offered ONLY when ALL of:
+1. `path_resolved == "workflow"` AND `runs.plan.runId != null` — this session currently has a
+   live, resolvable Workflow path AND a WORKFLOW-path Plan run is on record (`runs.plan.runId`
+   persists across sessions in state.json, so a non-null value does NOT by itself prove "this
+   session" — session-scoping is carried entirely by the `path_resolved` reinterpretation at
+   §Session Recovery step 6, not by this field; two distinct facts, combined, not substitutes
+   for one another). Step 2.6's permission-denial branch does NOT re-record `path_resolved`.
+2. **proposals.json validity check** passes — `.harness/planner/proposals.json` (a) exists,
+   (b) parses as JSON, (c) parses to an array, (d) the array is non-empty, (e) every element
+   has non-empty `persona` and `summary` fields. All 5 points, not merely "the file exists"
+   — a present-but-malformed file must NOT expose Auto-revise only to fail at dispatch time.
+3. `plan_critic.round` is unset or `0` (below its bound of 1 — see §Step 2.6's single-write
+   note).
+4. The Stale Determination above resolved to **not stale**.
+
+If Auto-revise is not exposed, the gate still functions fully — see Pass A's row-by-row
+option sets below, none of which depend on Auto-revise being available.
+
+#### Well-formedness Determination (single source — computed fresh once per gate render,
+frozen for the remainder of that render; referenced by NAME — never restated — by every Pass A
+row condition below and by §State-Space Derivation just below it)
+
+Applies only when `plan_critic.applied == "executed"` (the carried-over, `"failed"`, and
+unrecorded states never reach this check — see §State-Space Derivation). A record is
+**well-formed** when ALL of:
+- `plan_critic.counts.critical` and `plan_critic.counts.major` are both present and are
+  non-negative integers (this is also what makes the dirty condition's literal `>= 1` exactly
+  the negation of `== 0` below — no third case is possible), AND
+- `plan_critic.last_findings_path != null`, AND
+- the file at that path actually exists on disk — an I/O check, evaluated exactly ONCE per
+  gate render and never re-checked per row, so a filesystem change mid-render cannot make two
+  rows match or none match.
+
+If the existence check's I/O fails for any reason (permission error, path unavailable, tool
+error) → **fail closed**, treat as malformed (the same fail-closed direction as the Stale
+Determination above — an unreadable "yes it's there" must never be read as a pass). A record
+that is `"executed"` but NOT well-formed is **malformed**.
+
+#### State-Space Derivation (single source — Pass A's seven rows below implement exactly what
+this table derives; re-run this derivation, don't patch individual rows, if a future change
+adds a `plan_critic.applied` value or a new Step 2.6 failure branch)
+
+**Top axis — `plan_critic.applied`, 4 values, exhaustive and mutually exclusive** (slice A
+fixed the recorded value set to exactly `"executed"` / `"skipped"` / `"failed"`; the 4th value
+is the absence of a record, `unrecorded`):
+
+| `applied` | Reachable via | → Row |
+|---|---|---|
+| unrecorded | no Step 2.6 write yet, OR failure branch (ii) (the only branch that reaches Step 3 without writing `plan_critic` — same-turn, `run_style == "auto"` only; see branch (ii) above) | ④ |
+| `"skipped"` | §Step 2.6 Skip-vs-run's carried-over branch — the sole writer of `"skipped"`, which always co-writes `source = "carried_over"` in the SAME write (see that branch above); `applied == "skipped"` therefore structurally implies `source == "carried_over"`, not an independent condition | ③ |
+| `"failed"` | failure branch (iii) | ④ |
+| `"executed"` | success path, or a fresh "Run Critic anyway" / "Retry Critic" / Auto-revise re-dispatch | split below |
+
+**`"executed"` splits on the Well-formedness Determination** (above): **malformed** → row ④
+(joins unrecorded and `"failed"` there via an explicit OR — not a fallthrough default). Row ④
+is therefore also expressible as the plain complement: every state that is neither row ③
+(`applied == "skipped"`) nor rows ①-a/①-b/①-c/②/②-b (`applied == "executed"` AND
+well-formed) — this equivalent phrasing is what keeps row ④ closed even against a future
+`applied` value outside today's 3-plus-unrecorded set.
+
+**Well-formed** splits clean/dirty: `counts.critical == 0 AND counts.major == 0` → **clean**;
+otherwise → **dirty** (well-formedness already guarantees both counts are non-negative
+integers, so "otherwise" here is exactly `critical >= 1 OR major >= 1` — the literal condition
+rows ①-a/①-b/①-c use; the two phrasings are equivalent by construction).
+
+- **Clean** then splits on the Stale Determination alone (AC-C22: staleness applies to clean
+  exactly as it applies to dirty) — **not stale** → row ②; **stale** → row ②-b.
+  (Well-formedness guarantees `last_findings_path != null` and file existence, so the Stale
+  Determination's **stale-unknown** outcome — which fires only when `last_findings_path ==
+  null` — cannot occur inside "well-formed"; only its stale/not-stale range is reachable here.
+  This is a consequence of well-formedness, not a redefinition of the Stale Determination
+  itself, which keeps its full 3-value range as the single source.)
+- **Dirty** splits on the Stale Determination first — **stale** → row ①-b (Exposure Predicate
+  points 1–3 are moot here: point 4 alone already closes Auto-revise, regardless of 1–3).
+  **Not stale** then splits on the Auto-revise Exposure Predicate's points 1–3 — **all three
+  hold** → row ①-a; **one or more fails** → row ①-c.
+
+**Coverage — 9 cells → 7 rows, 0 overlap · 0 gap** (each axis above is total and mutually
+exclusive over its own domain, so this holds independent of evaluation order; first-match-wins
+at Pass A below remains the rendering rule but is redundant with, not load-bearing for, this
+proof):
+
+| `applied` | well-formed? | clean/dirty | stale? | Exposure pts 1-3 | → Row |
+|---|---|---|---|---|---|
+| unrecorded | — | — | — | — | ④ |
+| `"skipped"` | — | — | — | — | ③ |
+| `"failed"` | — | — | — | — | ④ |
+| `"executed"` | malformed | — | — | — | ④ |
+| `"executed"` | well-formed | clean | not stale | — | ② |
+| `"executed"` | well-formed | clean | stale | — | ②-b |
+| `"executed"` | well-formed | dirty | stale | — | ①-b |
+| `"executed"` | well-formed | dirty | not stale | all 3 hold | ①-a |
+| `"executed"` | well-formed | dirty | not stale | ≥1 fails | ①-c |
+
+Row ④ absorbs 3 cells (unrecorded / `"failed"` / malformed); row ③ absorbs 1; the remaining 5
+cells are each their own row — 9 cells, 7 rows.
+
+**Equal-mtime asymmetry (by design, both conservative)**: the `applied = "executed"` latch
+(§Step 2.6 above) requires the findings file's mtime STRICTLY AFTER spec.md's, so a same-second
+tie there fails the latch (→ failure branch (iii) → row ④; the record never gets a chance to
+be evaluated for well-formedness). The Stale Determination — a separate check, evaluated at
+Pass A render time — treats a same-second tie as **stale** (→ row ①-b / ②-b). These are two
+different mtime comparisons at two different moments, not one check reused twice — the
+asymmetry does not create a gap because each is independently exhaustive on its own axis.
+
+#### Pass A (conditional — row ② renders NOTHING; row ②-b DOES render)
+
+When `plan_critic.source == "own"` AND `plan_critic.applied == "executed"` AND the record is
+well-formed (§Well-formedness Determination above), render this status line immediately before
+the table below — never when `source == "carried_over"`, `applied == "failed"`, `applied` is
+unrecorded, or the record is malformed (rows ③/④ carry their own literal instead, so this line
+never duplicates them and never dereferences a null `counts`):
+`Critic: <workflow (schema-validated) | inline (1-line parse)> — C=<counts.critical>
+M=<counts.major>` — the bracketed alternative is whichever branch Step 2.6's own dispatch
+used (`path_resolved` at that time), and the literal is the exact same string Step 2.6
+already prints (§Step 2.6's WORKFLOW/INLINE branches above); single space after the colon,
+unaligned — do NOT apply §Standard Status Format's aligned convention here, or AC-4's
+`grep -F` check breaks. This re-render exists because a `run_style == "phase"` session halts
+right after §Step 2.6's own print, and the session that reaches Step 3 is a DIFFERENT one,
+routed here by routing predicate (c) — without this line the assurance-level literal would
+never reach the user in that later session.
+
+Rows are evaluated top-to-bottom — **first match wins**.
+
+| Row | Condition | Options |
+|---|---|---|
+| ①-a dirty, predicate holds | `plan_critic.applied == "executed"` AND well-formed (§Well-formedness Determination) AND (`counts.critical >= 1` OR `counts.major >= 1`) AND the Auto-revise Exposure Predicate holds on ALL 4 points | `{"Auto-revise", "Proceed as-is", "Modify", "Stop"}` |
+| ①-b dirty, stale | well-formed (§Well-formedness Determination) AND same counts condition as ①-a, and the Stale Determination says stale (Exposure Predicate point 4 fails — regardless of whether points 1–3 also fail) | `{"Run Critic anyway", "Proceed as-is", "Modify", "Stop"}` — same option swap as row ③; a badge line "⚠ critic 이후 spec.md가 변경됨 — 아래 카운트는 그 이전 spec 기준" precedes the question. **This is how an interrupted Auto-revise loop actually resolves on resume**: §Session Recovery routes here per routing predicate (c); this row detects the staleness and offers the equivalent of a fresh Step 2.6 pass via "Run Critic anyway", instead of an automatic phase jump back to Step 2.6. |
+| ①-c dirty, not stale, predicate fails on 1/2/3 | well-formed (§Well-formedness Determination) AND same counts condition, the Stale Determination says NOT stale (point 4 holds), but the Exposure Predicate fails on point 1 (no WORKFLOW-path Plan run on record), point 2 (proposals.json invalid or missing), and/or point 3 (`round` already at its bound) | `{"Run Critic anyway", "Proceed as-is", "Modify", "Stop"}` — same option set as row ①-b, but the banner names the actual non-exposure reason instead of staleness: "⚠ Auto-revise unavailable — <no WORKFLOW-path Plan run on record / proposals.json invalid or missing / revision round limit reached>" (never silently blank; required even though the option labels match row ①-b, because the underlying cause differs and a user comparing sessions should be able to tell which one applies). |
+| ② clean, not stale | `plan_critic.applied == "executed"` AND well-formed (§Well-formedness Determination) AND `counts.critical == 0` AND `counts.major == 0` AND the Stale Determination says NOT stale | **Pass A does NOT render** — the "clean AND not stale ⇒ exactly one interrupt" case (AC-7's clean case). Go straight to Pass B. Clean AND stale is a DIFFERENT case — see row ②-b, which AC-C22 requires to render even though the record itself is clean. |
+| ②-b clean, stale | `plan_critic.applied == "executed"` AND well-formed (§Well-formedness Determination) AND `counts.critical == 0` AND `counts.major == 0` AND the Stale Determination says stale | `{"Run Critic anyway", "Proceed as-is", "Modify", "Stop"}` — badge line reused VERBATIM from row ①-b ("⚠ critic 이후 spec.md가 변경됨 — 아래 카운트는 그 이전 spec 기준"; no separate `(C=0 M=0)` suffix — the status line immediately above this table already prints the current counts, and repeating them in the badge would be a second, driftable copy of the same string). This is AC-C22's clean+stale case: the 0/0 shown is the count as of the PRE-edit spec.md, not the current one — without this row that fact would be silently lost, exactly the gap AC-C22 clause 1 exists to close. |
+| ③ carried-over | `plan_critic.applied == "skipped"` AND `plan_critic.source == "carried_over"` | `{"Run Critic anyway", "Proceed as-is", "Modify", "Stop"}`. Counts for display are parsed from `{docs_path}critic_findings.md`'s `## Summary` line — if that parse fails (the file is `(none)`-only, absent from a prior `dispatch_failed`, hand-edited without a `## Summary` line, or a stale leftover from a different `--output-dir` reuse), render `C=? M=?` (never `0`); show the `carried over from /spec` literal either way. |
+| ④ failed / unrecorded / unknown | `plan_critic.applied == "failed"` OR `state.plan_critic` has no recorded `applied` value (unrecorded — §Step 2.6 failure branch (ii) is the only source of this state; see §State-Space Derivation) OR (`plan_critic.applied == "executed"` AND the record is malformed — §Well-formedness Determination above); equivalently, every state that is neither row ③ (`applied == "skipped"`) nor rows ①-a/①-b/①-c/②/②-b (`applied == "executed"` AND well-formed) | `{"Retry Critic", "Proceed as-is", "Modify", "Stop"}` + a banner showing `plan_critic.failure_reason` if present, or — when `applied` is unrecorded (`failure_reason` is absent-or-null there, since branch (ii) never writes it; null-safe per the guard rule above) — the default banner "critic 미실행 — Workflow 권한 거부 등" (never silently blank either way). Counts render as `C=? M=?` (unknown, never `0`). **"Retry Critic" dispatches on the INLINE branch only** whenever `failure_reason` indicates a permission denial OR `applied` is unrecorded (both are footprints of branch (ii), which never leaves a distinguishing `failure_reason` behind) — it never re-issues the same denied Workflow call inside this turn (`templates/_shared/mode_gate.md` rule 3: retry only after the user states in a NEW message that something changed). Choosing anything other than "Retry Critic" here while `applied` is unrecorded leaves `plan_critic` permanently unrecorded for this task (see failure branch (ii) above). |
+
+**Exhaustiveness**: rows ①-a/①-b/①-c/②/②-b/③/④ — seven rows covering all four `applied`
+states (`executed` well-formed: clean × stale-or-not, dirty × stale-or-not × Exposure-points
+1–3; `executed` malformed; `skipped`; `failed`; unrecorded). See §State-Space Derivation above
+for the full axis-by-axis derivation and the 9-cell → 7-row coverage table proving 0 overlap
+and 0 gap — it is not re-derived here.
+
+"Run Critic anyway" / "Retry Critic" (rows ①-b / ①-c / ②-b / ③ / ④): dispatch §Step 2.6's
+own-critic dispatch again (a fresh single write to `plan_critic`, `source = "own"`), then
+re-present starting at Pass A — this re-presentation observes the FRESH `plan_critic` state,
+landing on whichever row now matches (typically ①-a or ②; never re-landing on the same
+①-b/①-c/②-b/③ row for the same spec.md, since a completed own dispatch always writes a
+non-null `last_findings_path` with a mtime fresher than that spec.md — row ④ CAN recur if the
+fresh dispatch itself fails again, e.g. a second permission denial or a second parse failure).
+
+"Auto-revise" (row ①-a only): dispatch §Step 2 WORKFLOW path's Auto-revise re-entry,
+which itself re-runs Step 2.6 in the same turn before control returns here — so the NEXT
+thing the user sees is a fresh Pass A render against the revised spec.md (never a stale
+badge for a revision Auto-revise itself just produced, since Step 2.6's own write always
+lands a fresher mtime than the spec.md it just critiqued).
+
+"Modify" (every row): update spec.md, then re-present **starting at Pass A** — its
+condition table is re-evaluated fresh, including the Stale Determination (which will now
+find spec.md's mtime newer than any existing `last_findings_path` and render the
+row-①-b / row-②-b / row-③ shape as appropriate, depending on which side of the record's
+clean/dirty split applies — row ④ is not on this list, since malformed/unrecorded/`"failed"`
+records never consult the Stale Determination at all). See Modify Interaction below for the
+contract shared with Pass B's own "Modify".
+
+"Proceed as-is" (every row) / "Stop" (every row): same semantics as Pass B's identical
+options — "Proceed as-is" does NOT itself advance the phase; control falls through to Pass
+B, which is where the phase actually advances. "Stop" halts immediately, here, without
+reaching Pass B.
+
+#### Pass B (unconditional — always renders exactly once, immediately after Pass A resolves
+with "Proceed as-is" or is skipped by row ② — row ②-b does NOT skip: it renders Pass A like
+any other row and only reaches Pass B via a subsequent "Proceed as-is")
+
+Which of "Proceed as single" / "Plan as epic" leads is set by §Scale Assessment
+(recommendation and/or `cli_flags.epic` override) — never re-derived here:
+
+| Condition | Leading option |
+|---|---|
+| `cli_flags.epic` is non-null (a `--epic`/`--no-epic` override was given) | the OVERRIDDEN choice — "Plan as epic" if `true`, "Proceed as single" if `false`. Must never contradict the override the user explicitly gave (§Scale Assessment §3). |
+| `cli_flags.epic == null` AND `state.scale.slice_hint` is present (a recommendation exists) | whichever of single/epic `sliceHint.recommendation` favors (§Scale Assessment §2, verbatim — never re-derived from counts) |
+| `cli_flags.epic == null` AND `state.scale.slice_hint` is absent (INLINE path, or any degraded resume with no recommendation to lead with) | plain "Proceed" — undecorated, no recommendation framing (there is nothing to recommend) |
+
+Print the `## Scale Assessment` block (its Step 3 render site — the other render site is
+§After Plan Phase; the two are mutually exclusive, see that section's header) immediately
+before this question, using the values frozen in `state.scale.*` at the end of Step 2.
+
+- "Proceed as single" / "Proceed" / "Continue implementation as one slice" → advances
+  `phase → "generate_ready"` — the ONLY option across BOTH passes that advances the phase.
+- "Plan as epic" / "Split this task via a dedicated Slice Plan" → **§Step 3.5 (Slice Plan)
+  has not landed in this codebase yet (slice D).** Print one disclosure line (in
+  `user_lang`): "[harness] ⚠ Epic planning (§Step 3.5) is not implemented yet — continuing
+  as a single slice." Then fall through to the SAME `phase → "generate_ready"` transition as
+  "Proceed as single". This is the one temporary stub this slice ships — slice D replaces it
+  with the real §Step 3.5 entry point; slice C and slice D are not released independently of
+  each other (see this slice's changes.md).
+- "Modify" / "Edit the spec, then re-confirm" → update spec.md, then re-present **starting
+  at Pass A** (not Pass B) — see Modify Interaction below.
+- "Stop" / "Halt the workflow" → halt.
+
+#### Modify Interaction (shared contract — both passes' "Modify" option)
+
+1. Whichever pass is re-presented after a Modify always shows critic-related counts
+   (Pass A rows ①-a/①-b/①-c/②-b/③/④) computed against the spec.md version that was current
+   BEFORE this Modify's edit, until a fresh Step 2.6 / "Run Critic anyway" dispatch updates
+   them — the Stale Determination above is exactly what surfaces this ("critic 이후 spec.md가
+   변경됨").
+2. Once a Modify has changed spec.md, Auto-revise is NEVER offered on the immediate
+   re-presentation — the Stale Determination's mtime check (point 4 of the Auto-revise
+   Exposure Predicate) already enforces this structurally; no separate flag is needed. This
+   holds whether the re-presentation happens in the SAME turn (the ordinary Modify loop) or
+   after a §Session Recovery re-entry into Step 3 across a session boundary (routing
+   predicate (c)) — the mtime comparison is recomputed fresh either way (see the Stale
+   Determination header note), so the rule cannot silently expire at a session boundary.
+3. Re-presentation after Modify ALWAYS restarts at Pass A (never Pass B directly) — even
+   when the edit was made from Pass B's own "Modify" — so the fresh staleness state gets a
+   chance to render its row before Pass B is reached again.
 </HARD-GATE>
 
-Update state.json: `phase → "generate_ready"`, `updated_at → now`.
+Update state.json: `phase → "generate_ready"`, `updated_at → now` (written by whichever
+option actually advanced the phase — "Proceed as single"/"Proceed", or the "Plan as epic"
+stub fallthrough; never by "Modify"/"Stop"/"Auto-revise"/"Run Critic anyway"/"Retry Critic",
+which all either halt or loop back inside the gate).
 
 ---
 
@@ -1140,17 +1723,17 @@ The following principles are invariant constraints for the harness Orchestrator.
      Orchestrator reads verify_report.md to extract failing file paths only (no content analysis).
      Extracted paths pass through Path Validator (kind=file_reference) and are capped at 5.
      See §Step 5 — Auto-fix dispatch for the exact procedure.
-   - (5) Step 2's Discovery Notes Injection reads (`qa_notes.md` / `critic_findings.md` content passed to the planner). Not a newly introduced exception — this documents an existing read that this list previously omitted; see `skills/harness/SKILL.md:658-664`.
+   - (5) Step 2's Discovery Notes Injection reads (`qa_notes.md` / `critic_findings.md` content passed to the planner). Not a newly introduced exception — this documents an existing read that this list previously omitted; see §Step 2 (Plan Phase) — Discovery Notes Injection.
    - (6) `plan_critic_findings.md` Summary parsing + `.harness/planner/proposals.json` re-entry read.
    - (7) Gate-display critic count parsing (the carried-over branch's `{docs_path}critic_findings.md`; the resume redisplay's `plan_critic_findings.md`) — distinct in purpose from (5)'s planner-injection read.
 
    > Apply-before `--- a/` / `+++ b/` diff header lines (2 metadata lines per file — hunk body is delegated to Edit tool). This is NOT a violation of this principle.
    > `.harness/planner/proposals.json` write: an intermediate file, but the orchestrator writes it as a direct serialization of the segment's returned proposals object — no content analysis. Writing it is not "reading intermediates" either.
-   > Entries (1), (6) and (7) name sections and artifacts that do not exist yet — `§Scale Assessment`, `§Step 2.6`, `plan_critic_findings.md`, `cold_review.md`, `slice_plan.md`, `.harness/planner/proposals.json`. Declared here; not yet written by any section — consumers take the default until the writing section lands. Until then those reads never fire, and this list grants the permission rather than describing current behavior.
+   > Of entries (1), (6) and (7): `§Scale Assessment`, `§Step 2.6`, `plan_critic_findings.md`, and `.harness/planner/proposals.json` are now real, written sections/artifacts (this slice) — those reads fire today. `cold_review.md` and `slice_plan.md` remain declared only, not yet written by any section (slice E and slice D respectively) — consumers take the default until those slices land.
 
-2. **Auto-fix Proposer is the only sub-agent that directly Reads source files among orchestrator-dispatched agents.** (Segment-script agents explore the codebase themselves by design — they run inside the engine's autonomous span.) Other inline sub-agents receive content only through template variables.
+2. **Auto-fix Proposer is the only sub-agent that directly Reads SOURCE files among orchestrator-dispatched agents.** (Segment-script agents explore the codebase themselves by design — they run inside the engine's autonomous span.) Other inline sub-agents receive content only through template variables, with one narrower exception: an inline sub-agent MAY instead receive a `{docs_path}` artifact PATH that the orchestrator explicitly hands it (e.g. `templates/spec/critic_inline.md`'s `{spec_path}`) and read that one file itself — this is distinct from "source files" (the Auto-fix Proposer's exclusive carve-out above covers repository source, not `{docs_path}` artifacts) and does not enlarge §Architecture Principles #1's exception list, which stays at 7 items (AC-27).
 
-3. **Paths only to sub-agents; never file contents** (ephemeral digests passed inside a segment run excepted — they never enter the orchestrator's context beyond `workflow_ctx` storage; `specContent` passed as a Build segment arg (`:765`) and as an Eval segment arg (`:834`) is also an explicit exception — spec.md content, not a path, crosses into segment `args` because size, not path-vs-content, is the actual constraint).
+3. **Paths only to sub-agents; never file contents** (ephemeral digests passed inside a segment run excepted — they never enter the orchestrator's context beyond `workflow_ctx` storage; `specContent` passed as a Build segment arg (§Step 4 — WORKFLOW path) and as an Eval segment arg (§Step 5 — WORKFLOW path) is also an explicit exception — spec.md content, not a path, crosses into segment `args` because size, not path-vs-content, is the actual constraint; the same exception now also covers `specContent` passed to `workflows/spec.eval.workflow.js` at §Step 2.6's WORKFLOW branch).
 
 4. **Session-wide invariants** (see §State Machine — Auto-fix State Transition Table):
    - Auto-fix: at most 1 attempt per session (`verify.autofix_attempted` once-only — not reset on round increment).
@@ -1158,7 +1741,7 @@ The following principles are invariant constraints for the harness Orchestrator.
 
 5. **All external paths pass through Path Validator before use** (see §Path Validator below).
 
-6. **Gates never enter segment scripts.** The 3 HARD-GATEs (spec-confirm / verify-fail / auto-fix-apply) are rendered by this orchestrator between segment runs. `scripts/verify_meta_literal.py` guards this at lint time by rejecting gate-marker tokens — the `<HARD-GATE>` tag form, `AskUserQuestion`, and the `Apply patch` option label — inside any segment script. This is a marker-based tripwire, not a proof of gate-freedom: it deliberately does NOT flag the spaced prose form `HARD GATE #N`, which segment scripts legitimately use in comments to note that gates live here in the orchestrator.
+6. **Gates never enter segment scripts.** The 3 HARD-GATEs (spec-confirm / verify-fail / auto-fix-apply) are rendered by this orchestrator between segment runs. `scripts/verify_meta_literal.py` guards this at lint time by rejecting gate-marker tokens — the `<HARD-GATE>` tag form, `AskUserQuestion`, and the `Apply patch` option label — inside any segment script. This is a marker-based tripwire, not a proof of gate-freedom: it deliberately does NOT flag the spaced prose form `HARD GATE #N`, which segment scripts legitimately use in comments to note that gates live here in the orchestrator. The spec-confirm gate (§Step 3) renders as up to two sequential passes (Pass A, Pass B) inside ONE `<HARD-GATE>` tag — a pass is not a separate gate, so the count above stays 3.
 
 ### Path Validator
 
