@@ -78,7 +78,7 @@ The following tokens MUST remain English raw in all output. Translation is forbi
 | Session Boundary Type B `Reason` value | `Epic planned` (a *value*, not a label — see §Session Boundary Type B) |
 | Identifiers | state.json field names (e.g. `verify.layer1_retries`, `runs.plan.runId`), file paths (`{docs_path}verify_report.md`, `.harness/...`), git branch names (`harness/<slug>`), commands (e.g. `./gradlew test`, `npm run lint`), state-machine phase keys (`plan_ready`, `generating`, ...), schema field names (`acceptanceCriteria`, `modifiedFiles`, ...) |
 
-> `Decision`, `Critic`, `Next cmd`, and `Epic planned` are new to this Glossary. The existing `Reason` values (`QA PASS` / `Accept as-is` / `Max rounds reached`) are unchanged and are NOT added here — adding them would newly fix values that are currently translated, changing existing sessions' output. `Decision` (§Scale Assessment §3 override display) and `Critic` (§Step 2.6 gate display) are now written by this file (this slice). `Next cmd` (rendered by `/handoff`, not this file) and `Epic planned` (§Session Boundary Type B epic variant — §Step 3.5, slice D) remain declared here only, not yet written by any section — consumers take the default until the writing section lands.
+> `Decision`, `Critic`, `Next cmd`, and `Epic planned` are new to this Glossary. The existing `Reason` values (`QA PASS` / `Accept as-is` / `Max rounds reached`) are unchanged and are NOT added here — adding them would newly fix values that are currently translated, changing existing sessions' output. `Decision` (§Scale Assessment §3 override display), `Critic` (§Step 2.6 gate display), and `Epic planned` (§Session Boundary Type B epic variant — §Step 8's epic-exit branch) are now written by this file (this slice). `Next cmd` (rendered by `/handoff`, not this file) remains declared here only, not yet written by any section — its consumer takes the default until the writing section lands.
 
 ### Print Translation Pattern
 
@@ -161,13 +161,49 @@ Before starting a new task, check if `.harness/state.json` exists:
 4. Restore `model_config` from state.json. Apply to all subsequent sub-agent launches and Workflow `args.models`.
 5. Restore `conventions` from state.json. If value starts with `"file:"`, verify the referenced file exists. If file missing, set `conventions → null` (will trigger Step 1.5 on resume).
 6. If `has_git` is not in state.json, re-detect and store. Re-resolve §Mode Gate (the new session may lack the Workflow tool or the opt-in) and update `path_resolved` — a session that started on the workflow path may legitimately resume on the inline path. On resume, do NOT re-fire §Ambiguity Prompt — reuse the stored `mode` + `path_resolved`; only the workflow→inline downgrade (engine now absent) may change `path_resolved`. The stored `mode` already preserves the chosen tier (single/standard/multi).
-7. Ask the user via AskUserQuestion (in `user_lang`):
-   - header: "Session"
-   - question: "[harness] Previous session detected. [standard status]. Resume, restart, or stop?"
-   - options:
-     - "Resume" / "Continue from {phase}"
-     - "Restart" / "Delete .harness/ and start fresh"
-     - "Stop" / "Delete .harness/ and halt"
+
+6.5. **docs_path drift check** (feeds the resume-suppression check in item 7; does not act by
+     itself): if THIS invocation supplies **both** `--output-dir` and a task string, recompute
+     a candidate `docs_path` from those two arguments only — never the stored
+     `cli_flags.output_dir` — via §Step 1 item 2's normalization (by name) on `--output-dir`
+     and item 3's slugify rule (by name) on the task, reassembled per item 7's `docs_path`
+     formula (by name), then compare against the stored `docs_path`. Missing either argument →
+     **skip entirely** (an incomplete pair risks a false mismatch more than it protects). A
+     malformed recomputation is "comparison not possible", never a mismatch, never a halt.
+     **Not a contradiction of "do NOT recompute"**: this uses only THIS invocation's own
+     arguments, never the stored field — its audit/record-only status (item 10.5, by name) is
+     unchanged, and no result here is ever assigned back into state.json.
+
+7. **Resume-suppression check** (priority order, evaluated before any question in this item
+   renders):
+   - **(a) Epic residue** — `state.epic.boundaries != null AND state.phase == "completed"`: do
+     not render "Resume". `completed` is not epic-exit-only — §Step 7 "If PASS" (and its
+     Accept-as-is / Max-rounds-reached siblings) already writes it before Step 8 starts, and
+     §Step 8 "Commit code only" step 3's commit-failure path guarantees resumability from that
+     exact state, so this check stays narrowed to the epic case. Print one disclosure line (in
+     `user_lang`), then ask via AskUserQuestion with the same header as below, question:
+     "[harness] Epic session residue detected. Restart or stop?", options
+     `{"Restart" / "Delete .harness/ and start fresh", "Stop" / "Delete .harness/ and halt"}`
+     (same labels/actions as below, minus "Resume"). This makes §Step 8's
+     `phase → "completed"`-before-delete ordering an actual 3rd defense layer — a failed delete
+     there leaves exactly this state, which is what this check detects.
+   - **(b) docs_path drift** — checked only if (a) did not fire (an epic-exit remnant already
+     explains the stale `.harness/`, so the drift framing would be redundant there) — item 6.5
+     found a mismatch: do not render "Resume". Ask via AskUserQuestion (in `user_lang`):
+     - header: "Session"
+     - question: "[harness] docs_path drift detected. Keep the existing session, or restart?"
+     - options:
+       - "Keep & stop (Recommended)" / "Keep the existing session and halt — `.harness/` is NOT deleted (unlike the usual Stop)"
+       - "Restart" / "⚠ Delete `.harness/` and start fresh — the existing session cannot be recovered"
+     `Stop` is not a label here. "Keep & stop" halts without deleting `.harness/`; "Restart" acts
+     like the "Restart" branch below.
+   - Otherwise, ask the user via AskUserQuestion (in `user_lang`), unchanged:
+     - header: "Session"
+     - question: "[harness] Previous session detected. [standard status]. Resume, restart, or stop?"
+     - options:
+       - "Resume" / "Continue from {phase}"
+       - "Restart" / "Delete .harness/ and start fresh"
+       - "Stop" / "Delete .harness/ and halt"
 
    Actions:
    - **Resume**: Before jumping to any step, run Safety Guard re-validation:
@@ -177,7 +213,17 @@ Before starting a new task, check if `.harness/state.json` exists:
 
      Then jump to the state matching `phase` (segments are re-RUN, not runId-resumed, across sessions):
      - `plan_ready` → Step 1.5 (Convention Scan) if `conventions` is `null` (not yet executed), else Step 2 (Plan). Note: `"skipped"` means user already decided — go to Step 2. If `conventions` starts with `"file:"` but the file does not exist, treat as `null` and re-run Step 1.5.
-     - `planning` / `plan_done` → apply the §Step 2.6 Plan Critic routing predicate (defined there as the single source; the three branches are NOT restated here). **A resume landing on Step 3 by this rule right after an Auto-revise re-synthesis was interrupted mid-loop is expected** — see §Step 3 Pass A's stale/mtime handling, which is what actually resolves that case (not an automatic jump back to Step 2.6).
+     - `planning` / `plan_done` → **first check `state.epic.boundaries != null`** (meaningful
+       only once `phase == "plan_done"` — that combination cannot exist before the boundary
+       Q&A completes, so it is itself a Q&A-completion mark): if true, route to §Step 3.5
+       (Slice Plan) by name — it renders its own re-entry disclosure line (its boundary Q&A
+       contract) and continues straight to the table write; Step 4 is never reached this way.
+       If `epic.boundaries == null`, apply the §Step 2.6 Plan Critic routing predicate
+       (defined there as the single source; the three branches are NOT restated here) —
+       unchanged from existing behavior. **A resume landing on Step 3 by this rule right after
+       an Auto-revise re-synthesis was interrupted mid-loop is expected** — see §Step 3 Pass
+       A's stale/mtime handling, which is what actually resolves that case (not an automatic
+       jump back to Step 2.6).
      - `generate_ready` → Step 4 (Generate)
      - `generating` / `generate_done` → Step 5 (Verify) — do NOT re-run the build segment (edits may already be applied)
      - `verify_ready` / `verifying` → Step 5 (Verify), reset retries to 0
@@ -216,8 +262,9 @@ Three execution styles control how phases progress:
 /harness --mode single "task"            → auto + single mode (inline forced)
 /harness --mode multi "task"             → auto + multi mode (workflow path)
 /harness --model-config balanced "task"  → auto + balanced preset
-/harness plan "task" --epic              → phase mode + cli_flags.epic=true (§Scale Assessment override, display-only this slice)
-/harness plan "task" --no-epic           → phase mode + cli_flags.epic=false (§Scale Assessment override, display-only this slice)
+/harness plan "task" --epic              → phase mode + cli_flags.epic=true (§Scale Assessment override); halts at the plan boundary, then a bare-args resume runs §Step 2.6's routing predicate → Step 3 → §Step 3.5, with no in-context PlanResult
+/harness plan "task" --no-epic           → phase mode + cli_flags.epic=false (§Scale Assessment override)
+/harness "task" --epic                    → auto (no `plan` prefix) + cli_flags.epic=true; Step 2 → §Step 2.6 → Step 3 → §Step 3.5 all run in this one call, in-context PlanResult still live
 /harness "task" --no-cold-pass           → auto (default) + cli_flags.cold_pass=false (stored only this slice — slice E consumer)
 ```
 
@@ -241,9 +288,10 @@ When state.json exists and `/harness` is called with no arguments:
 > by name (never restated) at: the 4 phase/step-mode phase-boundary sites in §Workflow Steps
 > 2/4/5/6 (After Plan / After Generate / After Verify / After Evaluate), the Step 5 L1
 > max-retry 1st HARD-GATE "Stop" branch, and the Step 8 end-of-session summary (all 3 commit
-> branches + `has_git == false`; excludes the commit-failure abort path, which does not end the
-> session). Shape + label rules mirror Setup Summary (§Output Language Contract — Print
-> Translation Pattern: labels English raw, values per Preserved-English Glossary).
+> branches + `has_git == false` + the epic-exit branch; excludes the commit-failure abort
+> path, which does not end the session). Shape + label rules mirror Setup Summary
+> (§Output Language Contract — Print Translation Pattern: labels English raw, values per
+> Preserved-English Glossary).
 
 ### Type A — phase-boundary (mid-task; session can resume next time)
 
@@ -268,26 +316,61 @@ When state.json exists and `/harness` is called with no arguments:
 ### Type B — Step 8 end-of-session summary (task complete)
 
 Applies at the end of every Step 8 branch that concludes the session: all 3 commit options
-("Commit code only" / "Commit all" / "No commit") and the `has_git == false` branch. Does
-**NOT** apply to the commit-failure abort path (§Step 8 "Commit code only" step 3, "If the
-commit FAILS") — that path leaves the session open/resumable, so no closing summary is printed.
+("Commit code only" / "Commit all" / "No commit"), the `has_git == false` branch, and the
+epic-exit branch (see the epic variant below). Does **NOT** apply to the
+commit-failure abort path (§Step 8 "Commit code only" step 3, "If the commit FAILS") — that
+path leaves the session open/resumable, so no closing summary is printed.
 
 ```
 [harness] Session boundary — Task complete.
   Task      : <task>
-  Reason    : <QA PASS | Accept as-is | Max rounds reached>
-  Remaining : <none | see {docs_path}qa_report.md>
+  Reason    : <QA PASS | Accept as-is | Max rounds reached | Epic planned>
+  Remaining : <none | see {docs_path}qa_report.md | see {docs_path}slice_plan.md>
   Output    : <docs_path>     (preserved — see §Step 8)
   Branch    : <state.json.branch>     ← omit if has_git == false
-  Commit    : <sha>                   ← omit if has_git == false or "No commit" was selected
+  Commit    : <sha>                   ← omit if has_git == false, "No commit" was selected, or epic-exit (no commit stage ever runs)
   Handoff   : Run `/handoff generate` to capture this session for cross-session continuity.
 ```
 
 - `Reason` is derived from §Step 7 without a new state.json field (P2-2 deferred — see
   ROADMAP.md): `QA PASS` (Step 7 "If PASS"), `Accept as-is` (Step 7 Layer 2 or Layer 3
   "Accept as-is" branch), `Max rounds reached` (Step 7 "If FAIL and max rounds reached").
-- `Remaining` is `none` only for `QA PASS`; both `Accept as-is` and `Max rounds reached` point
-  at `{docs_path}qa_report.md`.
+  The epic-exit branch does not go through §Step 7 at all — it sets `Epic planned` directly.
+- `Remaining`'s full derivation is a priority table, below — it is no longer a flat
+  enumeration now that a 4th `Reason` value exists.
+
+**Epic variant** (§Step 8's epic-exit branch): this branch's own rendering of the block
+above sets `Reason : Epic planned` and `Remaining : see {docs_path}slice_plan.md`, omits
+`Commit` entirely (no commit stage ever runs), and replaces the `Handoff` row:
+
+```
+  Handoff   : Run the Command from {docs_path}slice_plan.md's row for the next slice to start
+              it — `/handoff generate` is not offered here, because this branch has already
+              deleted `.harness/` by the time this block prints.
+```
+
+(`Handoff` printing after `.harness/` is already deleted is a pre-existing defect shared by
+all 4 other branches too, not unique to epic-exit — out of scope here, see changes.md; only
+this row's *content* is replaced.) Branch note: no code changed this session, so
+`harness/<slug>` sits at the same commit it was cut from — cleanup is optional (§Step 1 item 8
+already reuses an empty branch like it silently); the real caveat is switching to the intended
+base branch **before** starting the first slice, not deleting this one. If deleted, use
+`git branch -d` (never `-D`; the checked-out branch cannot be deleted anyway).
+
+**`Remaining` derivation** (priority table — the single source for this value, superseding any
+flat enumeration):
+
+| `Reason` | cold state | `Remaining` |
+|---|---|---|
+| `Epic planned` | any | `see {docs_path}slice_plan.md` |
+| `QA PASS` | `verify.cold_counts == null` (cold rule not applicable — never compare `null` to a number) | `none` |
+| `QA PASS` | cold counts present, 0 Critical/Major | `none` |
+| `QA PASS` | cold counts present, ≥ 1 Critical/Major | `see {docs_path}qa_report.md` |
+| `Accept as-is` / `Max rounds reached` | any | `see {docs_path}qa_report.md` |
+
+`Epic planned` combined with a non-null cold state is **unreachable** (epic-exit never runs
+Steps 5–7, so no cold-review pass exists in that session). The cold-review rows are a slice E
+forward reference — not yet written by any section — kept ready for when that dispatch lands.
 
 ### `/handoff generate` field contract (P0-4)
 
@@ -447,6 +530,8 @@ plan_ready → planning → plan_done → [User Gate] → generate_ready
   → evaluate_ready → evaluating → evaluate_done → [Verdict Gate]
   → completed
 
+plan_done → completed (epic exit only — §Step 8's epic-exit branch; Steps 4–7 not executed)
+
 Retry loops:
   verify_done(FAIL) + retries<3 → generating → generate_done → verifying → ...
   evaluate_done(FAIL) + user Fix → generating → generate_done → verifying → ...
@@ -460,6 +545,9 @@ On the WORKFLOW path the same machine applies; `harness.eval` covers verifying�
 - `*ing` → `*_done`: sub-agent / segment completion
 - `*_done` → next `*_ready`: auto mode = automatic / phase mode = next session
 - Phase mode can end session at: `plan_done`, `generate_done`, `verify_done`, `evaluate_done`
+- `plan_done` → `completed` directly, skipping `generate_ready` through `evaluate_done`: the
+  one epic-exit exception, taken only via §Step 8's epic-exit branch (by name) — never any
+  other transition skips a state.
 
 ### Auto-fix State Transition Table
 
@@ -512,7 +600,7 @@ On the WORKFLOW path the same machine applies; `harness.eval` covers verifying�
      - **Step 4** Reserved first segment: `path.split("/")[0]` ∈ `{memory, spec, planner, generator, evaluator, verify, harness, .harness}` → halt with error: "output-dir value starts with a reserved directory name." (first segment only — trailing slash stripped first; full-path comparison is NOT performed)
      - **Step 4.5** `docs` first-segment exception for `/spec → /harness` slug-safe handoff: if `path.split("/")[0] == "docs"`, the second segment MUST be `harness` (i.e. path starts with `docs/harness/...`). Otherwise halt with error: "output-dir under docs/ must be docs/harness/..." Rationale: the default `output_base = "docs/harness"` always writes under this tree, so the standard /spec handoff value `docs/harness/<slug>/` is the only legitimate `docs/...` override; any other `docs/<other>/` first-segment override is rejected to prevent accidental writes outside the harness namespace.
      - If valid: normalize with trailing slash stripped, store in `cli_flags.output_dir`.
-   - `--epic` / `--no-epic` → store `cli_flags.epic` as `true` / `false` (tri-state; unset stays `null` — §Scale Assessment's own recommendation stands). **Validation**: if BOTH `--epic` AND `--no-epic` are given, halt with error: "Cannot combine --epic and --no-epic." **This halt fires HERE, in item 2 (pure parsing) — before item 7 creates `.harness/`/`{docs_path}` and item 8 creates the git branch** (same placement reasoning as the `--verifier-model` halt above: a halt placed after those side effects would leave a ghost `.harness/` + empty branch for the next Session Recovery to mistakenly offer to Resume). Consumers: §Scale Assessment's override display (this slice) and §Step 3.5 Slice Plan's epic-exit routing (**not yet landed — slice D**). `--epic` does NOT change what the Plan phase produces in this slice — it changes only what §Scale Assessment DISPLAYS (the override line) and, later, which option a not-yet-landed §Step 3.5 offers. Do not present it to the user as producing `slice_plan.md` today.
+   - `--epic` / `--no-epic` → store `cli_flags.epic` as `true` / `false` (tri-state; unset stays `null` — §Scale Assessment's own recommendation stands). **Validation**: if BOTH `--epic` AND `--no-epic` are given, halt with error: "Cannot combine --epic and --no-epic." **This halt fires HERE, in item 2 (pure parsing) — before item 7 creates `.harness/`/`{docs_path}` and item 8 creates the git branch** (same placement reasoning as the `--verifier-model` halt above: a halt placed after those side effects would leave a ghost `.harness/` + empty branch for the next Session Recovery to mistakenly offer to Resume). Consumers: §Scale Assessment's override display and §Step 3 Pass B's leading-option table — both real as of this slice. Neither §Step 3.5 nor §Step 8's epic-exit predicate reads this field (that predicate uses `state.epic.boundaries` + `state.phase` only); a `--epic` session can still choose "Proceed as single" at Pass B.
    - `--no-cold-pass` → store `cli_flags.cold_pass = false` (default `true` — cold pass runs unless this flag is given). **Storage only in this slice** — no section reads this field yet; the consumer (cold-review dispatch gating) lands in slice E.
 3. **Slugify the task:** lowercase, transliterate non-ASCII to ASCII, remove non-word chars except hyphens, replace spaces with hyphens, truncate to 50 chars. Store as `<slug>`.
 4. **Auto-detect project language and commands.** Scan the working directory.
@@ -638,22 +726,22 @@ On the WORKFLOW path the same machine applies; `harness.eval` covers verifying�
 | `scale.signals` | object | `null` | §Scale Assessment | §Scale Assessment, Step 3 gate |
 | `scale.slice_hint` | object — PlanResult `sliceHint` stored verbatim | `null` | §Scale Assessment | §Step 3 Pass B (this slice), §Step 3.5 (Slice Plan) |
 | `scale.override` | boolean | `null` | §Scale Assessment (`--epic`/`--no-epic` override) | §Scale Assessment |
-| `epic.id` | string | `null` | §Step 3.5 (Slice Plan) | §Step 3.5 |
-| `epic.boundaries` | object | `null` | §Step 3.5 boundary Q&A | §Step 3.5 re-entry check |
+| `epic.id` | string | `null` | §Step 3.5 (Slice Plan) | no reader yet — written for the `Command` column's display; its derivation is defined once, in §Step 3.5 |
+| `epic.boundaries` | object | `null` | §Step 3.5 (Q&A and no-Q&A paths alike), §Step 3 Pass B "Proceed as single" (reset to `null`) | §Step 3.5 re-entry check, §Session Recovery item 7 (a) + `plan_done` jump-table row, §Step 8 epic-exit predicate |
 | `verify.cold_result` | string | `null` | cold review dispatch (§Step 5 / §Step 6) | §Step 7 verdict, §Session Boundary `Remaining` rule |
 | `verify.cold_retries` | integer | `0` | cold review dispatch | cold review retry dispatch |
 | `verify.cold_round` | integer | `null` | cold review dispatch | once-per-round execution latch |
 | `verify.cold_counts` | `{ Critical, Major, Minor }` (uppercase — matches `CriticReport.items[].severity`; see the cold-review severity delta in `workflows/_reference/schemas.md`) | `null` | cold review dispatch | §Step 7 'PASS + cold Critical/Major ≥ 1' branch, §Session Boundary `Remaining` rule |
 | `verify.cold_review_path` | string | `null` | cold review dispatch | §Step 7, §Session Boundary `Remaining` rule |
-| `cli_flags.epic` | tri-state: `null` / `true` / `false` | `null` (no `--epic`/`--no-epic` given — §Scale Assessment recommendation stands) | §Step 1 CLI Parsing (`--epic`/`--no-epic`) | §Scale Assessment override check, §Step 3.5 epic-exit routing |
+| `cli_flags.epic` | tri-state: `null` / `true` / `false` | `null` (no `--epic`/`--no-epic` given — §Scale Assessment recommendation stands) | §Step 1 CLI Parsing (`--epic`/`--no-epic`) | §Scale Assessment override check, §Step 3 Pass B leading-option table (never §Step 3.5 or the epic-exit predicate — that predicate reads `state.epic.boundaries` + `state.phase` only) |
 | `cli_flags.cold_pass` | boolean | `true` (cold pass runs unless `--no-cold-pass`) | §Step 1 CLI Parsing (`--no-cold-pass`) | cold review dispatch gating |
 
 > `plan_critic.counts` (lowercase keys) and `verify.cold_counts` (uppercase keys) follow different upstream schemas (`CriticReport.counts` lowercase keys vs. `CriticReport.items[].severity` uppercase values; the lowercase `FindingSchema.severity` in that same file is a THIRD, unrelated vocabulary) — an intentional difference, NOT normalized to one case.
 > `plan_critic.applied`'s value set (`executed`/`skipped`/`failed`) is harness-local and is NOT interchangeable with /spec `state.critic.applied`'s value set (`approved`/`pending`/`revised`) — the field name is borrowed from /spec `state.critic`, the value set is not.
 > `cli_flags.epic` is tri-state (`null`/`true`/`false`) while `cli_flags.cold_pass` is a plain boolean — `--epic`+`--no-epic` given together can halt on that distinction (two explicit, opposite non-null values) rather than collapsing onto one boolean.
 > A per-session cold-pass execution cap equal to `max_rounds` (default 3) is not a separate counter — it falls out arithmetically from `verify.cold_round`'s once-per-round execution latch.
-> `cli_flags.output_dir` remains audit/record only (see the `docs_path usage rule` note at Step 1 item 10.5) — no section recomputes from it, only `docs_path` itself is read directly. `cli_flags.epic` and `cli_flags.cold_pass` are NOT audit-only: `cli_flags.epic` is written by §Step 1 CLI Parsing and read by §Scale Assessment's override check and §Step 3 Pass B (this slice); `cli_flags.cold_pass` is written by §Step 1 CLI Parsing but has no reader yet — its consumer (cold-review dispatch gating) lands in slice E.
-> `plan_critic.*`, `scale.*`, and `cli_flags.epic`/`cli_flags.cold_pass` are now written by the sections named in the table above (this slice). `epic.*` (§Step 3.5 — slice D) and `verify.cold_*` (cold review dispatch — slice E) remain declared here only, not yet written by any section — consumers take the default until those slices land.
+> `cli_flags.output_dir` remains audit/record only (see the `docs_path usage rule` note at Step 1 item 10.5) — no section recomputes from it, only `docs_path` itself is read directly (§Session Recovery's docs_path drift check does not read this field either). `cli_flags.epic` and `cli_flags.cold_pass` are NOT audit-only: `cli_flags.epic` is written by §Step 1 CLI Parsing and read by §Scale Assessment's override check and §Step 3 Pass B (this slice); `cli_flags.cold_pass` is written by §Step 1 CLI Parsing but has no reader yet — its consumer (cold-review dispatch gating) lands in slice E.
+> `plan_critic.*`, `scale.*`, `cli_flags.epic`/`cli_flags.cold_pass`, and `epic.*` are now written by the sections named in the table above (this slice). `verify.cold_*` (cold review dispatch — slice E) remains declared here only, not yet written by any section — its consumer takes the default until that slice lands.
 
 12. **Print setup summary** per §Output Language Contract — Print Translation Pattern (labels remain English raw; values follow §Output Language Contract — Preserved-English Glossary):
 ```
@@ -1050,7 +1138,11 @@ Print: `[harness] Plan complete.`
 the `## Scale Assessment` block (its After-Plan render site — the other render site is §Step
 3 Pass B; the two are mutually exclusive, see that section's header) using the values frozen
 in `state.scale.*` at the end of Step 2. Then print the §Session Boundary block (Type A:
-After Plan). Halt.
+After Plan). Halt. **If this session carries `cli_flags.epic` or a §Scale Assessment epic
+recommendation**, the halt here means the NEXT `/harness` invocation's §Session Recovery
+routes through the §Step 2.6 predicate to Step 3 and on to §Step 3.5 with no in-context
+`PlanResult` — see that section's degraded restore order, by name, for how it fills the table
+without one.
 
 **If `run_style == "auto"`:** Continue to Step 3 (Gate) — do NOT render `## Scale Assessment`
 here; it renders once, at Step 3 Pass B.
@@ -1284,13 +1376,13 @@ before this question, using the values frozen in `state.scale.*` at the end of S
 
 - "Proceed as single" / "Proceed" / "Continue implementation as one slice" → advances
   `phase → "generate_ready"` — the ONLY option across BOTH passes that advances the phase.
-- "Plan as epic" / "Split this task via a dedicated Slice Plan" → **§Step 3.5 (Slice Plan)
-  has not landed in this codebase yet (slice D).** Print one disclosure line (in
-  `user_lang`): "[harness] ⚠ Epic planning (§Step 3.5) is not implemented yet — continuing
-  as a single slice." Then fall through to the SAME `phase → "generate_ready"` transition as
-  "Proceed as single". This is the one temporary stub this slice ships — slice D replaces it
-  with the real §Step 3.5 entry point; slice C and slice D are not released independently of
-  each other (see this slice's changes.md).
+  Also, if `epic.boundaries` is currently non-null, reset it to `null` in the same write —
+  clears any boundary Q&A answer a prior §Step 3.5 visit this task recorded, so no ghost
+  boundary state survives choosing single-slice instead (so §Step 8's epic-exit predicate cannot fire for a single-slice session).
+- "Plan as epic" / "Split this task via a dedicated Slice Plan" → hand control to §Step 3.5
+  (Slice Plan), by name — that section owns everything from here. It does NOT advance
+  `phase` (stays `plan_done`, per its own entry contract below), so this gate's own
+  `phase → "generate_ready"` write does not apply to this option.
 - "Modify" / "Edit the spec, then re-confirm" → update spec.md, then re-present **starting
   at Pass A** (not Pass B) — see Modify Interaction below.
 - "Stop" / "Halt the workflow" → halt.
@@ -1315,9 +1407,122 @@ before this question, using the values frozen in `state.scale.*` at the end of S
 </HARD-GATE>
 
 Update state.json: `phase → "generate_ready"`, `updated_at → now` (written by whichever
-option actually advanced the phase — "Proceed as single"/"Proceed", or the "Plan as epic"
-stub fallthrough; never by "Modify"/"Stop"/"Auto-revise"/"Run Critic anyway"/"Retry Critic",
-which all either halt or loop back inside the gate).
+option actually advanced the phase — "Proceed as single"/"Proceed" only; never by "Plan as
+epic" (control passes to §Step 3.5 below, `phase` stays `plan_done`), nor by
+"Modify"/"Stop"/"Auto-revise"/"Run Critic anyway"/"Retry Critic", which all either halt or
+loop back inside the gate).
+
+#### Step 3.5: Slice Plan
+
+*Reached two ways: §Step 3 Pass B's "Plan as epic" option (first entry), and §Session Recovery item 7's plan_done
+jump-table row when epic.boundaries is non-null (re-entry after an interruption). Its own AskUserQuestion is (a) data
+collection about a deliverable's shape, not approval before an irreversible action; (b) not one of §Architecture
+Principles #6's 3 counted HARD-GATEs; (c) this path ends the session — it does not resume into Step 4.*
+
+**Entry & routing** (single source — §Step 3 Pass B, §Step 8, and §Session Recovery cite this by name, never restated):
+entered from Pass B's "Plan as epic" option, or — on a resume with epic.boundaries already recorded — directly from
+§Session Recovery item 7's plan_done row (by name); never from `cli_flags.epic` directly, on either path.
+`phase == "plan_done"` on entry and stays that way throughout — this section never advances `phase`. The boundary Q&A
+below (skipped on a re-entry that already recorded an answer) determines the rows written to `{docs_path}slice_plan.md`,
+per the format below. Immediately after that write, control passes to §Step 8's epic-exit branch by name — Step 4
+through Step 7 are **not** executed this session (that branch defines its own fail-closed re-confirmation predicate
+independently).
+
+**State-space** (axes — `cli_flags.epic` excluded: Pass B's choice is already
+authority by the time control reaches here, so the flag has no further effect):
+
+| `epic.boundaries` | `slice_hint` | `candidates.length` | Action |
+|---|---|---|---|
+| non-null (re-entry) | any | any | Skip the Q&A — render the re-entry disclosure line, go straight to the table write. Absorbs the other 2 cells beneath it (first-match-wins, as §Step 3 Pass A's rows do). |
+| null | absent | — | True degradation — no Q&A, whole-task 1-row table; still records the boundary. |
+| null | present | 0 | Same — a schema-legal but degenerate `candidates: []`; still records the boundary. |
+| null | present | ≥ 1 | Open the Q&A once: candidate selected (mapped by array position) or `Other` free text (below, by name) — its two independent outcomes. |
+
+Column-fill (in-context `PlanResult` present or not) is a second tier under the last row
+only: present (same-turn `auto` entry) fills `In scope`/`AC ids` per the column-source table below; absent (a `phase`
+resume) falls to the restore order below.
+
+**Degraded restore order** (`In scope`/`AC ids`, first that succeeds): ①
+`state.scale.slice_hint` — frozen before `plan_done`, survives resume, always available
+for `Goal`/candidates/recommendation. ② the in-context `PlanResult`, when this turn is
+live. ③ a language-independent `- [ ] AC-` scan of the spec.md content §Step 3's
+`<HARD-GATE>` already read this turn — **not a new read site**, reuses §Architecture
+Principles #1 entry (1)'s `spec.md at plan gate` read verbatim (its body unedited, no 8th
+exception added); never parse heading TEXT — headings render in `user_lang`, same basis as
+§Scale Assessment's INLINE Fallback. ④ whatever is still unfilled renders `—` with one
+degradation-disclosure line — never invent a value.
+
+**True degradation** is narrower than "any resume": only when `slice_hint` is absent OR
+`candidates` is empty. Then skip the Q&A and write one whole-task row — mirroring the
+synthesis template's own degenerate-case rule ("if splitting is unnecessary, still return
+exactly one candidate describing the whole task as a single slice"); the disclosure states the
+row came from spec.md alone, no value invented. Both no-Q&A paths — this one, and `Other`'s zero-piece case below — still write `state.epic.boundaries` in the same single, immediate write (the degenerate whole-task boundary, not a user choice), so §Step 8's epic-exit predicate — what actually routes this session — holds on every path that reaches it.
+
+**Boundary Q&A:** one AskUserQuestion call, one question — it asks only how to split work already agreed at the §Step 3 gate, never re-opening requirements (that's §Step 3 Pass B's "Modify" option, not this call). Labels start from
+`candidates[].label`, rendered per `templates/_shared/askuserquestion.md`'s
+translate-everything rule — NOT fixed English raw (that needs a new §Output Language
+Contract — Preserved-English Glossary row plus a `name_manifest.md` entry; neither added).
+Selection maps to a candidate by **position in the returned array** (never translated-label
+matching) — the orchestrator keeps render order identical to `candidates[]`. `description` is
+that candidate's `slices[]` (`user_lang`). The option-count ceiling is that file's per-call
+recommended cap, by name; above it render only that many from the front of the returned order
+and disclose the truncation in one line.
+
+The response writes `state.epic.boundaries` in one single, immediate write, together with
+`epic.id` (computed, not asked — see `Command` below) in the same write. On re-entry with a
+value already recorded, skip the question: render "이전 세션에서 기록된 경계 사용: <선택
+요약>. 다시 정하려면 Restart 필요" and go to the table write. This field's lifetime is narrow —
+only between this Q&A and `.harness/`'s deletion by §Step 8's epic-exit branch, not a general
+re-entry guarantee.
+
+**`Other` free text** (AC-6a — the framework appends this automatically; normal usage, not an
+edge case): the position-mapping rule has no position for `Other` — its stated exception.
+(a) split on newlines first; exactly one line → split on commas instead; trim, drop empty
+pieces. (b) each surviving piece is one row, `Goal` verbatim — neither row count nor wording
+is invented. (c) zero pieces → fall to True Degradation above, no value invented — including its `state.epic.boundaries` write, by name. (d) a piece
+count over the ceiling is **not** truncated (that ceiling bounds the question render, not
+table rows). (e) each piece's `Slice` id uses the same rule below. (f) `In scope`/`AC ids`
+are `—` for every such row (no `PlanResult` correspondence), disclosed like any all-or-nothing
+case. This is the Q&A row's second, independent outcome above.
+
+**`slice_plan.md` format:** 6 columns `| Slice | Goal | In scope | AC ids | Depends on |
+Command |`. `Slice` id and `Command` text are English raw; `Goal` alone is `user_lang`.
+Reproduce only the reference implementation's
+(`docs/harness/harness-handoff-coldreview-epic-slice/slice_plan.md`) column set and language
+contract — never its prose or its absolute line-number citations (this file cites by
+§Section Name only).
+
+`Slice` id: `"slice-" + <position letter a,b,c,…> + "-" + <English raw kebab summary>`,
+≤50 chars, `[a-z0-9-]` only. The same row's `Command` task string is byte-identical, so
+`slugify(task) == task == Slice` **by construction**. On violation (empty, disallowed char,
+too long, duplicate): never ask — regenerate deterministically (shrink the summary, then
+`-2`/`-3`); disclose the generation fact and that hand-edits must keep `Slice`/`Command` in
+sync.
+
+Reserved-word basis (name reference only): a slice session applies
+`templates/_shared/safety_guard.md` step 3's slug constraint, satisfied structurally by the
+`slice-` prefix plus the `[a-z0-9-]`/length filter — separate from §Path Validator's reserved
+first-segment names, which govern `--output-dir` values, not slice ids. `Command`'s
+`--output-dir` value is `docs_path` minus its trailing slash; `epic.id` is defined — once,
+here only — as that value's last segment (`docs/harness/<epic-id>` is just the
+default-`output_base` shape of it).
+
+| Column | Source | If unavailable |
+|---|---|---|
+| `Goal` | selected candidate's `slices[i]` verbatim (or the `Other` piece) | — (always available once a row exists) |
+| `In scope` | in-context `PlanResult.steps[]`, split into `n` contiguous ranges | every row `—` + disclosure, never partial |
+| `AC ids` | ① in-context `acceptanceCriteria[].id`, else ② the already-read spec.md's `- [ ] AC-` scan (same site as restore-order ③) | `—` only when both are absent |
+| `Depends on` | linear chain — row 1 `—`, row N = row N-1's `Slice` (no measured graph exists; conservative, loses only parallelism — user may relax by hand, disclosed) | — |
+
+`AC ids` assignment: each id goes to the row whose `In scope` range contains the step first
+mentioning it; unmentioned ids go to an **unassigned list** (disclosed, never forced into a
+row). When `In scope` is all `—`, `AC ids` is too, same disclosure.
+
+Self-check (disclosed under the table): (i) every `Depends on` is `—` or some row's `Slice`,
+no cycle; (ii) `In scope` fully partitions 1..N with no gap/overlap, or is all `—`; (iii)
+`AC ids` union plus the unassigned list equals the source id set — an id spanning multiple
+rows is allowed and goes in a **spanning list**, so (iii) reads "zero missing, duplicates
+disclosed", not "zero duplicates".
 
 ---
 
@@ -1655,9 +1860,38 @@ Proceed to Step 8.
 
 ### Step 8: Cleanup & Finalize
 
+Routing priority (checked in this order, epic-aware first): epic exit → `has_git == true` →
+`has_git == false` — explicit because an epic session is usually also `has_git == true`, so
+document order alone would be ambiguous.
+
 #### Artifact Cleanup Safety Guard
 
 Cleanup safety rules: see `templates/_shared/safety_guard.md`.
+
+#### If epic exit:
+
+Re-confirms, fail-closed: `state.epic.boundaries != null AND state.phase == "plan_done"` —
+sole definition of this predicate in this file (§Step 3.5 and §Session Recovery cite it by
+name, never restate it). `cli_flags.epic` is not read here: a session that started with
+`--epic` can still choose "Proceed as single" at §Step 3 Pass B, and that choice already
+resets `epic.boundaries` to `null`, which alone makes this predicate false — falling through
+to the `has_git` routing below.
+
+Fail-closed order: 1. `{docs_path}slice_plan.md` was already written by §Step 3.5, the
+section that just handed control here — §Architecture Principles #1 entry (1)'s "the
+orchestrator just wrote this final artifact" case, not a fresh write. 2. Confirm it exists and
+is non-empty; on failure do **not** delete `.harness/` — halt with a disclosure (existence/
+size only, never content — outside "reads no intermediate files"'s reach, and does not enlarge
+§Architecture Principles #1's exception list, which stays at 7 items — same phrasing #2 uses).
+3. Run the Safety Guard above; on ABORT do not delete `.harness/` — disclose. 4. Write
+`phase → "completed"` **before** step 5 — the 3rd layer of a 3-layer defense (2nd layer:
+§Session Recovery's Resume-suppression condition, by name): a delete failure at step 5 leaves
+`phase == "completed"` with `epic.boundaries` still non-null, exactly what that condition
+detects. 5. Delete `.harness/`. 6. Delete failure → print `[harness] ⚠` with manual-deletion
+guidance, never retry silently. 7. Print the §Session Boundary Type B epic variant (by name).
+
+No commit step exists on this path — "delete regardless of commit outcome" is the absence of
+a commit step, not a relaxation of the `has_git == true` branch's rule below.
 
 #### If has_git == true:
 
@@ -1678,6 +1912,18 @@ Actions (apply Safety Guard before each delete):
      - `{docs_path}qa_notes.md`
      - `{docs_path}critic_findings.md`
      - `{docs_path}conventions.md`
+     - `{docs_path}slice_plan.md`
+     - `{docs_path}cold_review.md`
+     - `{docs_path}plan_critic_findings.md`
+
+     `{docs_path}slice_plan.md` is always missing from this list on an epic-exit session —
+     not because this branch is skipped, but because the epic-exit branch (§Step 8, by name)
+     never reaches a staging step at all; that branch's own fail-closed order handles that
+     artifact on its own. `{docs_path}cold_review.md` is a slice E forward reference — not yet
+     written by any section — listed here so staging is ready once it lands. This repository's
+     `docs/` is gitignored, so `git add` on any listed `{docs_path}` artifact that does exist will fail —
+     that failure is handled by the warn-and-continue rule immediately below, never by the
+     silent-skip rule above (which applies only when the source file itself does not exist).
 
      **(s4) Per-file staging failure handling**: if `git add <file>` fails for a specific artifact file (permission, `.gitignore` conflict, etc.), warn the user (in `user_lang`): "Failed to stage `<file>`: <error>. Artifact may not be in git history — it remains on disk at `{docs_path}` regardless (this path never deletes `{docs_path}`)." Continue with remaining files — do NOT abort the whole sequence on a single staging failure. The code commit (step 3) is more critical than any individual artifact preservation. Because `{docs_path}` is never deleted here, a staging failure can never strand a file — it stays on disk even when `git add` failed for it (e.g. `docs/` is `.gitignore`d, the common case in this repo itself — `.gitignore:7`).
   3. **Commit** the staged code changes plus artifacts, then **confirm the commit succeeded** (git exit 0 / a new commit object exists). **If the commit FAILS** (pre-commit hook rejection, signing failure, locked index, disk error, nothing-to-commit): **STOP without deleting anything** — `.harness/` and `{docs_path}` stay intact so the session is resumable and all artifacts recoverable. Surface the git error (in `user_lang`) and tell the user to resolve it and re-run, or commit manually. Do NOT proceed to step 4. **This sub-path does not end the session** — do NOT print the §Session Boundary block here.
@@ -1729,7 +1975,7 @@ The following principles are invariant constraints for the harness Orchestrator.
 
    > Apply-before `--- a/` / `+++ b/` diff header lines (2 metadata lines per file — hunk body is delegated to Edit tool). This is NOT a violation of this principle.
    > `.harness/planner/proposals.json` write: an intermediate file, but the orchestrator writes it as a direct serialization of the segment's returned proposals object — no content analysis. Writing it is not "reading intermediates" either.
-   > Of entries (1), (6) and (7): `§Scale Assessment`, `§Step 2.6`, `plan_critic_findings.md`, and `.harness/planner/proposals.json` are now real, written sections/artifacts (this slice) — those reads fire today. `cold_review.md` and `slice_plan.md` remain declared only, not yet written by any section (slice E and slice D respectively) — consumers take the default until those slices land.
+   > Of entries (1), (6) and (7): `§Scale Assessment`, `§Step 2.6`, `plan_critic_findings.md`, `.harness/planner/proposals.json`, and `slice_plan.md` are now real, written sections/artifacts (this slice) — those reads fire today. `cold_review.md` remains declared only, not yet written by any section (slice E) — its consumer takes the default until that slice lands.
 
 2. **Auto-fix Proposer is the only sub-agent that directly Reads SOURCE files among orchestrator-dispatched agents.** (Segment-script agents explore the codebase themselves by design — they run inside the engine's autonomous span.) Other inline sub-agents receive content only through template variables, with one narrower exception: an inline sub-agent MAY instead receive a `{docs_path}` artifact PATH that the orchestrator explicitly hands it (e.g. `templates/spec/critic_inline.md`'s `{spec_path}`) and read that one file itself — this is distinct from "source files" (the Auto-fix Proposer's exclusive carve-out above covers repository source, not `{docs_path}` artifacts) and does not enlarge §Architecture Principles #1's exception list, which stays at 7 items (AC-27).
 
@@ -1784,7 +2030,9 @@ validate_path(path, kind) where kind ∈ {output_dir, file_reference, diff_targe
 
 ## Key Rules
 
-- **Never skip phases.** Always Plan → Generate → Verify → Evaluate.
+- **Never skip phases.** Always Plan → Generate → Verify → Evaluate. The `plan_done →
+  completed` epic-exit transition (§State Transition Diagram, by name) is a deliberate,
+  by-design exception to this rule, not a violation of it.
 - **Confirmation gates are non-negotiable.** No implicit approval. Gates live ONLY in this orchestrator — never in a segment script.
 - **Stay within scope.** Do not modify files outside scope.
 - **Evaluator must be isolated.** Anchor-free input. Never pass Generator reasoning.
