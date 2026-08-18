@@ -65,11 +65,16 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
   full item-1 text exactly as before this change). The extraction rule that used to compare
   against the briefing's own printed value now compares against the source document instead —
   closing a self-referential gap a prior draft of this change would have introduced.
-- **9-point cross-reference traversal + 3 pre-scan corrections** (slice F) — a before/after,
+- **9-point cross-reference traversal + 3 pre-scan corrections** (slice F) — an after-only,
   5-value-vocabulary diff table covering Session Boundary, State Transition Diagram, Auto-fix
   invariants, Step Mode Prerequisites, Architecture Principles #1, CLI Parsing examples, Key
   Rules, and the OLC Preserved-English Glossary, plus (new for this epic) absolute line-number
-  citations inside blocks edited this slice. Two real pre-existing inconsistencies were closed:
+  citations inside blocks edited this slice. Nothing fills the pre-edit column: no pre-edit
+  pass over the 9 points was captured, so those cells all read as unmeasured and not
+  reconstructible, and the criterion that required that pass is reported unmet rather than
+  backfilled afterwards. Two of the inconsistencies the table records are called out here
+  under different verdicts — the first pre-existing and left open (deferred), the second
+  introduced by this slice's own edit and closed in the same landing:
   `/harness generate` bypassing §Step 2.6/§Step 3/§Step 3.5 when typed directly after Plan
   (Session Boundary's "After Plan" row now recommends bare `/harness`; **the underlying
   §Step Mode Prerequisites gap is not closed** — direct `/harness generate` entry still skips
