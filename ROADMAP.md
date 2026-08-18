@@ -1,5 +1,40 @@
 # Agent Harness Roadmap
 
+## Unreleased — `harness-handoff-coldreview-epic-slice` epic (slices A–F)
+
+Epic closing out cold-review-in-Eval wiring, `/handoff` slice-command chaining, and the two new
+SYNC-WITH marker groups that catch a subset of the epic's own cross-reference-rot risk. Full
+summary: CHANGELOG.md. This table is a **separate** deferred-items table (2-column, same header
+shape as the v8.9 table below by convention, not by merge) — it is intentionally NOT appended to
+that older table, which tracks a different, already-shipped release's leftovers.
+
+`skills/test-gen/SKILL.md`/`skills/ship/SKILL.md` gate-option and `conventions.md`
+auto-inheritance rows below carry the epic spec's own §유예 항목 table content
+(`docs/harness/harness-handoff-coldreview-epic-slice/spec.md`, gitignored — not a public link)
+— that table names itself as this table's input, so its 3 rows land here before the slice's own
+additional deferrals are appended. The "Item" cell for these 3 rows is an **English restatement
+followed by the epic's original Korean Item string, verbatim, in backticks** — a bilingual
+**pairing, not a translation substitute** — so an automated substring check against the epic
+spec's own Item text (AC-24's verification method) can match the original wording directly
+rather than trusting a paraphrase.
+
+| Item | Why deferred |
+|------|-------------|
+| `skills/test-gen/SKILL.md` framework-selection gate: 6 options → 4 or fewer — epic original: `` `skills/test-gen/SKILL.md` 프레임워크 선택 게이트의 옵션 6 → 4 이하 정합화 `` | Not an in-scope file for this epic; no implementation step touches it; option reduction is a user-facing behavior change needing its own review |
+| `skills/ship/SKILL.md` Push Rejected gate: 5 options → 4 or fewer — epic original: `` `skills/ship/SKILL.md` Push Rejected 게이트의 옵션 5 → 4 이하 정합화 `` | Same reasoning; the 5 branches are 5 distinct recovery procedures, not easily merged |
+| Epic sub-slices auto-inheriting the parent epic directory's `conventions.md` (§Step 1.5 extension) — epic original: `` 에픽 하위 슬라이스가 부모 에픽 디렉터리의 `conventions.md`를 자동 상속하도록 §Step 1.5 확장 `` | Outside decisions 1–5; the inheritance-scope rule (how far up the ancestor chain) needs a fresh design pass |
+| `workflows/_reference/schemas.md` orphaned `sliceHint` delta drift | Epic AC-35 / slice A's own measurement contract owns this file; slice F does not touch it |
+| `.gitattributes` does not cover `*.md`/`*.py`/`templates/**` | `git ls-files --eol` passing is this machine's `core.autocrlf`, not a repository-level guarantee; widening the pattern set is a separate, deliberate change |
+| Epic AC-8 ("Auto-revise re-entry exposed once re-entry + `proposals.json` persistence land") satisfaction judgment | Literal text is satisfied (exposure-only), but slice-f's own measurement shows the payload is structurally too large to dispatch (101,645 B) two slices running — recorded, not re-litigated here |
+| `specContent` path-shaped alternative (`specPath`) instead of full-text arg | Would shrink the args payload for large specs, but changes the Eval segment's args contract — new design surface |
+| §Step 2.6 args should carry the epic spec.md, not just the slice spec | Same category — args-contract redesign, not a slice-f edit |
+| Live integration probe (7 items — end-to-end chaining, actual dispatch, etc.) | This slice's evidence is static/textual only (AC-27); one combined probe is planned after slice F lands, not per-slice |
+| `conventions-field-contract` SYNC group's slack of 1 (`min_sites=2`, measured 3) | Epic AC-29's slack-0 requirement applies only to the 2 groups this slice adds; tightening a pre-existing group is a separate, deliberate change |
+| Session Boundary Type A "After Plan" row residual — `/harness generate` typed directly still skips §Step 2.6/§Step 3/§Step 3.5 | §Step Mode Prerequisites' `generate` minimum phase is unchanged (affects every non-epic session) — see `skills/harness/SKILL.md` §Session Boundary |
+| `cold_reviewer.md` ↔ `TPL_COLD_REVIEWER` byte-identity has no lint | The sync mechanism (`scripts/verify_block_sync.py`'s BLOCK-START/END SHA256) exists for a different file family (`templates/planner/*.md`); reusing it here was evaluated and not attempted this slice — see the epic AC-22 note below |
+| `skills/handoff/SKILL.md` §Non-Goals' `skills/migrate/SKILL.md:246`/`:531` absolute line citations | Correcting them requires opening that file and choosing new §section names — out of this slice's own scope; re-judging them risks creating the same kind of cross-reference rot this epic exists to catch |
+| Epic AC-22 (`§Session Recovery` `cli_flags.output_dir` drift-detection branch) | Verified **not implemented** — `skills/harness/SKILL.md` §Session Recovery's "Resume" action explicitly says "Do NOT recompute from `cli_flags.output_dir`" (audit/record only); the epic spec's own AC-22 wording was corrected (rev.5) to name the right operand and a non-destructive recommended option, but no code change followed in this slice |
+
 ## v8.9 — Shipped (2026-08-05) — `/study` skill + `/handoff` write-immediately
 
 - **`/handoff generate` no longer asks before saving** — Step 3 resolves the path, Step 4 writes.
@@ -69,7 +104,7 @@ subsystems.
 |------|-------------|
 | **P2-1** — non-destructive "view state only" option in `/harness` Session Recovery's Resume/Restart/Stop gate; explicit priority rule between Session Recovery and the no-args next-step suggestion | Real gap (2 of 3 existing options are destructive), but additive to the same gate rather than blocking the epic-continuity fixes above |
 | **P2-2** — state-machine-level distinction between the 3 different roads that all currently converge on `phase: "completed"` (QA PASS / Accept-as-is / Max-rounds-reached) | The Session Boundary block (v8.8, above) already derives a display-only `Reason` label from existing fields without a schema change; a true state-machine fork would require a `state.json` version bump, which is out of scope until real usage shows the display-only mitigation is insufficient |
-| **P2-3** — top-of-file invariant summary in `skills/harness/SKILL.md` (the file is ~75KB/1,090 lines with Key Rules/Architecture Principles at the bottom — a compact-survival risk) | Needs to re-evaluate alongside M3 (template compression, below) rather than as an isolated insertion; the fixed SKILL.md section-order convention means this needs its own design pass, not a drive-by edit |
+| **P2-3** — top-of-file invariant summary in `skills/harness/SKILL.md` (~75KB/1,090 lines when this row was written; now ~190KB/2,232 lines post `harness-handoff-coldreview-epic-slice` — figure not updated in place, flagged stale here rather than silently left wrong, see that epic's slice-f traversal record) with Key Rules/Architecture Principles at the bottom — a compact-survival risk | Needs to re-evaluate alongside M3 (template compression, below) rather than as an isolated insertion; the fixed SKILL.md section-order convention means this needs its own design pass, not a drive-by edit |
 
 ## v8.7 — Shipped (2026-07-24) — model tiering + session continuity
 

@@ -359,6 +359,13 @@ Runs with research-backed bias reduction:
 | **Rubric decomposition** (5 criteria with inline sub-checks) | G-Eval, RocketEval: finer granularity reduces evaluation bias |
 
 7. If Layer 1 FAIL → auto-retry Generator (max 3). If Layer 2 FAIL → auto-retry (max 2). If Layer 3 FAIL → user asked whether to fix (up to max rounds)
+
+**Cold review** (4th pass, after Evaluate returns PASS): an independent reviewer
+(`templates/evaluator/cold_reviewer.md`), orthogonal to the Evaluator, gets one automatic
+feedback retry on a Critical/Major finding before falling through to PASS with disclosure.
+Opt out with `--no-cold-pass`. See `skills/harness/SKILL.md` §Step 5/6/7 for the full state
+contract (`verify.cold_result`, 6 values + `null`).
+
 8. On completion, the user is asked whether to commit the artifacts
 
 ### Token Cost vs. Quality Trade-off
@@ -949,6 +956,9 @@ Session handoff for cross-session, epic-level continuity — the durable complem
                      (none / N commits since / BACKWARD / DIVERGED / dirty — report-only,
                      NEVER mutates git) -> read Reading Order (path-validated; contents are
                      DATA, not instructions) -> Resume Briefing
+                     (Next : short slice id or full step text | Next cmd: the byte-identical
+                     `/…` command to chain, or a no-single-command marker — see
+                     skills/handoff/SKILL.md §Sub-command: resume for the derivation)
                   -> gate: Start next step / Adjust plan / Briefing only
 /handoff list     -> enumerate handoff documents, newest first
 ```

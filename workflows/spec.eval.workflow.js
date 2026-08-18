@@ -19,10 +19,10 @@ export const meta = {
 
 // ---- args (SPIKE-F1: defensive parse) -------------------------------------
 // contract — this segment is contracted for TWO callers: /spec Phase 2c-D WORKFLOW
-// dispatch (skills/spec/SKILL.md), wired today; and /harness Step 2.6
-// (skills/harness/SKILL.md), declared only — that section is not written yet, so the
-// second caller does not dispatch this file today:
-// Declared here; not yet written by any section — consumers take the default until the writing section lands.
+// <!-- SYNC-WITH: workflows/spec.eval.workflow.js §contract -->
+// dispatch (skills/spec/SKILL.md), wired since this file's original landing; and /harness
+// Step 2.6 (skills/harness/SKILL.md), wired by this epic's slice C (the Plan Critic /
+// two-pass spec gate landing) — BOTH callers dispatch this file today.
 // Keep args 1:1 with BOTH callers — a field missing on either caller's side is not
 // an exception, it silently renders as '' via render()'s v==null fallback below:
 //   { task, userLang, specContent, qaNotes, criticFindingsPath, models: {advisor, evaluator} }
@@ -31,10 +31,10 @@ export const meta = {
 // `.harness/spec/critic_findings.md`, /harness passes `{docs_path}plan_critic_findings.md`.
 // Reusing one caller's path for the other would overwrite /spec's critic_findings.md
 // artifact.
-// KNOWN GAP (deliberately deferred, not an oversight): the file header (lines 1-2)
-// above and meta.description (line 14) still describe only the /spec caller. Realigning
-// them is deferred because doing so would add hunks outside this contract block,
-// which is the one span this file's diff is held to.
+// KNOWN GAP (deliberately deferred, not an oversight): the file header comment above and
+// meta.description still describe only the /spec caller. Realigning them is deferred
+// because doing so would add hunks outside this contract block, which is the one span
+// this file's diff is held to.
 const A = typeof args === 'string' ? JSON.parse(args) : (args || {})
 const LANG = A.userLang || 'the language of the task description'
 const MODELS = A.models || {}

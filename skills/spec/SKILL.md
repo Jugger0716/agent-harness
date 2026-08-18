@@ -511,6 +511,8 @@ Print status in the standard format, prefixed with `[harness] Spec draft ready.`
 
 ##### Phase 2c-D: Eval segment + Critic Gate (`spec.eval.workflow.js`)
 
+<!-- SYNC-WITH: workflows/spec.eval.workflow.js §contract -->
+
 `phase → "critic_active"`.
 
 1. **Run the Eval segment** via the Workflow tool (field set = 1:1 contract with the script's `// contract` comment):
