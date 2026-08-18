@@ -119,6 +119,45 @@ SYNC_GROUPS = [
         "tokens": ["Skill :", "Task :", "Phase :", "Mode :", "Docs :"],
         "min_sites": 2,                        # skills/handoff/SKILL.md (self) + skills/harness/SKILL.md
     },
+    {
+        # harness-handoff-coldreview-epic-slice slice-f, group (b): the workflows/spec.eval.workflow.js
+        # `// contract` comment declares it is dispatched by TWO callers -- this group makes sure
+        # neither caller's args wiring can silently drift from that declared contract without a
+        # min_sites/token failure. Pre-slice-f baseline occurrence counts (measured with the
+        # §접근 방식 ①-b snippet, harness / spec / workflow order):
+        #   criticFindingsPath 1/1/3, specContent 5/1/2, qaNotes 3/3/2
+        # (each file already carried all 3 tokens -- this group adds no new literal, only the
+        # marker + min_sites floor; see spec §접근 방식 ④).
+        "id": "spec-eval-dual-caller",
+        "target_file": "workflows/spec.eval.workflow.js",
+        "section": "contract",
+        "target_anchor": "contracted for TWO callers",
+        "tokens": ["criticFindingsPath", "specContent", "qaNotes"],
+        "min_sites": 3,                        # harness §Step 2.6 + spec Phase 2c-D + the workflow's own `// contract` block
+    },
+    {
+        # harness-handoff-coldreview-epic-slice slice-f, group (a): /handoff's slice-command
+        # convention (generate Step 1 item 4) and its Next :/Next cmd: derivation (resume Step 5)
+        # both point at skills/harness/SKILL.md §Step 3.5: Slice Plan as their format SSOT --
+        # this group fails when a marker is removed outright; it does NOT catch a pointer whose
+        # prose rots while its marker stays (see the HONEST COVERAGE NOTE below -- effective
+        # tokens are 2). Claim the narrower guarantee, never the broader one.
+        # Pre-slice-f baseline occurrence counts (harness / handoff order): §Step 3.5 16/0,
+        # slice_plan.md 12/1, Next cmd 5/1 -- handoff's `§Step 3.5` count was 0 until slice-f's
+        # own edit seeded it (a section name-citation, not a restated format -- see spec
+        # §접근 방식 ④); `--output-dir` alone is never used as a token (epic AC-29 bans that form).
+        "id": "slice-command-format",
+        "target_file": "skills/harness/SKILL.md",
+        "section": "Step 3.5: Slice Plan",
+        "target_anchor": "slugify(task) == task == Slice",
+        # HONEST COVERAGE NOTE: the token `§Step 3.5` is itself a substring of this group's
+        # marker text (`<!-- SYNC-WITH: skills/harness/SKILL.md §Step 3.5: Slice Plan -->`), so at
+        # any site that carries the marker it can never fail -- the effective token set is 2
+        # (`slice_plan.md`, `Next cmd`), not 3. Recorded rather than silently counted as 3;
+        # replacing the token needs an epic AC-6 literal revision, which is out of slice-f scope.
+        "tokens": ["§Step 3.5", "slice_plan.md", "Next cmd"],
+        "min_sites": 2,                        # skills/harness/SKILL.md (self) + skills/handoff/SKILL.md
+    },
 ]
 
 
