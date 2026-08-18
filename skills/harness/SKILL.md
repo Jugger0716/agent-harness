@@ -1722,9 +1722,12 @@ Auto-fix re-verify call; `true` at the L1-max-fail "Continue" call; from
        desyncs the two is still caught): apply
        `validate_path(kind=file_reference)` to each `coldFindings[].file`, drop failures with
        a per-path warning and recompute `coldCounts` from the survivors ("recount" below means
-       that recomputed `coldCounts`, never the raw survivor count). The outcomes must stay
+       that recomputed `coldCounts`, never the raw survivor count). Whenever that drop ran,
+       the value the single write above records into `verify.cold_counts` is the recomputed
+       one, on whichever `coldStatus` it ran under; of the ①②③ branches below, only ①
+       departs from this rule, keeping the PRE-drop values instead. The outcomes must stay
        distinct **in state**, not only in a banner — a banner is transient output, while
-       `Remaining` is re-rendered from state in the NEXT session. These ①②③ branches fire only when `coldStatus == "findings"` — otherwise (`coldStatus` is `"clean"` or `"failed"`), the drop/recompute above still runs (banner only) and `verify.cold_result` stays `coldStatus` unchanged regardless of survivor count (promoting `clean` → `failed` here is the scenario §엣지 케이스 forbids). When it is `"findings"`, evaluate in this fixed order,
+       `Remaining` is re-rendered from state in the NEXT session. These ①②③ branches fire only when `coldStatus == "findings"`. On `"clean"` the drop/recompute above can still run — a Minor-only cold pass reaches `clean` with a non-empty `coldFindings` — and the recompute rule stated above applies here too, so `verify.cold_counts` and the report written below are both drawn from the survivors; `verify.cold_result` stays `"clean"` regardless of survivor count (promoting `clean` → `failed` here is the scenario §엣지 케이스 forbids). On `"failed"` neither path that sets it — the segment's `catch`, and the `else if` that fires when `coldFilesList` fails its non-empty-string re-check — assigns `coldFindings` or `coldCounts`, so normally there is nothing to drop. That is a fact about those two code paths, not a guarantee attached to the data, so the `coldCounts`-undefined guard above remains defense in depth rather than a dead branch, and the non-empty-array test above keeps checking the data rather than the label. When it is `"findings"`, evaluate in this fixed order,
        first match wins, so the branches cannot overlap: **① zero survivors** (EVERY finding
        dropped) → `verify.cold_result → "failed"`, `verify.cold_counts` kept at the PRE-drop
        values, plus a distinct "all cold findings hidden by path validation" banner; **② ≥1

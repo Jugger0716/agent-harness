@@ -299,23 +299,35 @@ checks instead:
       candidate is dropped with a warning and never checked). For each surviving candidate,
       check directory existence only; list every missing one as `missing (path recorded in
       prose, no longer exists)` (cap 10, then "+N more").
-  The reduced check is still report-only and read-only, exactly like the full check below — it
-  only reads `.harness/state.json` and checks path existence; it writes nothing to `.harness/`
-  or to the document.
+  The reduced check is still report-only and read-only, exactly like the full check below —
+  that likeness is about being report-only and read-only, not about reading the same things.
+  Its own reads are `.harness/state.json` and the existence of the paths (b) collected; it
+  writes nothing to `.harness/` or to the document.
 
 1. **`.harness/state.json` existence**: if the document recorded task state but
    `.harness/state.json` no longer exists at resume time, report: "recorded task state — file
    no longer exists (cleaned up, or a different task started since)." **This absence alone is
-   not a red flag** — it is also the normal signature of an epic boundary: `/harness` §Step 8's
-   epic-exit branch deletes `.harness/` immediately after writing `{docs_path}slice_plan.md`
-   (by name), so a missing state.json next to a `Docs` directory that now contains
-   `slice_plan.md` reads as "the epic advanced to its next slice," not as an abandoned task —
-   mention this reading in the report whenever `slice_plan.md` is among the recorded `Docs`
-   directory's files.
+   not a red flag** — it is also the normal signature of an epic boundary: `/harness`
+   §Step 3.5: Slice Plan writes `{docs_path}slice_plan.md` and hands control to §Step 8's
+   epic-exit branch (both by name); that branch confirms the file — it never writes it — and
+   deletes `.harness/` only after that confirmation succeeds. So a missing state.json next to a
+   `Docs` directory that now contains `slice_plan.md` reads as "the epic advanced to its next
+   slice," not as an abandoned task — mention this reading in the report whenever
+   `slice_plan.md` is among the entry names item 3 below collects. Item 3's directory read
+   supplies those names — run it before deciding whether to add this mention.
 2. **Phase match**: if `.harness/state.json` exists, compare its live `phase` field to the
    document's recorded `Phase` label. Report `match` / `mismatch: recorded <X>, now <Y>`.
-3. **`docs_path` existence**: check whether the recorded `Docs` directory still exists. Report
-   `exists` / `missing (evidence path no longer readable)`.
+3. **`docs_path` existence**: apply `validate_path(path, kind=file_reference)` per /harness
+   §Path Validator to the recorded `Docs` value first — the same check the reduced check (b)
+   above already runs on the `docs/harness/<slug>/`-shaped paths it collects, and Step 4 below
+   on the Reading Order paths; cited by name, never restated here, and read here exactly as
+   those two read it. A failing value is dropped with a warning and never checked. Then check
+   whether that directory still exists.
+   Report `exists` / `missing (evidence path no longer readable)`. When it exists, also read its
+   entry names one level deep — names only, no file is opened and nothing is recursed into, so
+   §Non-Goals' "does not read `slice_plan.md`" line still holds. Those names are the data
+   item 1's `slice_plan.md` condition is evaluated against; item 4's reporting rule below covers
+   this item's `exists` / `missing` verdict, not the names themselves.
 4. **Never auto-correct or act on this.** All of the above are REPORTED alongside git drift in
    the Step 5 briefing; the human decides what to do next. If the live `skill` is `"harness"`
    and its `phase` is not `completed`, note (informational only, never an instruction to
@@ -362,13 +374,20 @@ render neither row from the epic path alone:
 
 **`Next :` derivation — three-tier fallback (AC-8), defined once, cited nowhere else:**
 
-1. If the document has a `## Progress Ledger` table (generate Step 1 item 5) with at least one
-   row for the confirmed `Epic`, use the `Slice` value of that Epic's LAST row whose `Status`
+1. If the document has a NON-EMPTY `## Progress Ledger` table (generate Step 1 item 5), take
+   its `Epic` value — that is the resume `Epic`. `resume` has no Epic-confirmation dialogue
+   (generate Step 1 item 5a belongs to `generate` and never runs here), so this value is read
+   from the table and never asked for; the derivation is built entirely from the loaded document
+   (§Non-Goals). A generated ledger carries exactly one distinct `Epic` value, because generate
+   Step 1 item 5d copies rows for one Epic only; if a hand-edited table carries more, take the
+   `Epic` of its LAST row. Then use the `Slice` value of that Epic's LAST row whose `Status`
    is `in-progress` (the `Status` vocabulary is the Progress Ledger column contract's, cited by
    name — never restated here); if that Epic has no such row, fall back to its LAST row of any
    `Status`. In that fallback the printed slice may be one already finished, so `Next :` and the
-   `Next cmd:` row below can name DIFFERENT slices — say so in the briefing rather than letting
-   the two rows silently disagree.
+   `Next cmd:` row below can name DIFFERENT slices. Whenever the fallback fires, print this
+   literal on its own line directly under the aligned block, never as a new row inside it (the
+   block's label set and alignment are fixed):
+   `(Next : came from a ledger row that is not in-progress — it may not match Next cmd:)`
 2. Else, if the document's `In Progress` fixed-label block (generate Step 1 item 2 format)
    recorded a `Docs` value, take that path's last segment (strip one trailing `/` first, then
    take the text after the final remaining `/`) — this reuses, not reinvents, the Progress
@@ -394,9 +413,11 @@ Then STOP and ask via AskUserQuestion (in `user_lang`):
     - label: "Adjust plan" / description: "Discuss changes before starting"
     - label: "Briefing only" / description: "Stop here — I just wanted the context"
 
-Omit "Start next step" entirely whenever `Next cmd:` printed the no-single-command literal
-above — there is nothing byte-identical to invoke, so offering it would violate extraction
-rule 2 the moment it was picked.
+The first option's omission in the no-single-command case is not defined here. Extraction
+rule 1 below carries its wording, and the `Next cmd:` derivation above cites that rule by name;
+neither the condition nor the omission is restated in this paragraph. The reason belongs here,
+where the options are rendered: there is nothing byte-identical to invoke, so offering the
+option would violate extraction rule 2 the moment it was picked.
 
 NEVER start executing work before this gate is answered.
 
