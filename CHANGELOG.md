@@ -6,6 +6,136 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/).
 
+## [8.10.0] — 2026-08-19
+
+> **Version heading note**: slices A–E of this epic each landed without their own CHANGELOG entry,
+> so this single entry covers the whole epic. The heading was resolved at release time to the
+> **8.10.0** minor rather than staying `[Unreleased]`.
+
+### Added — `harness-handoff-coldreview-epic-slice` epic (slices A–F): cold review in Eval + `/handoff` slice-command chaining + cross-reference SYNC groups
+
+- **state.json v3 additive field contracts + `workflows/_reference/schemas.md`** (slice A) —
+  `plan_critic.*`, `scale.*`, `epic.*` and `verify.cold_*` were declared as additive-optional
+  fields with a documented "missing = default" for each, so state.json `version` stays `"3.0"`
+  and in-flight sessions written before the fields existed remain readable. Contracts live in
+  `skills/harness/SKILL.md` §Step 1: Setup (its state.json schema block) and `workflows/_reference/schemas.md`.
+- **Plan pipeline: `steps`/`sliceHint` actually populated + low-cost re-synthesis re-entry**
+  (slice B) — both synthesis templates gained an `### Implementation Steps` section and a
+  `sliceHint` mapping, and `workflows/harness.plan.workflow.js` gained a
+  `reSynthesisOnly`/`priorProposals` re-entry with proposals persisted to
+  `.harness/planner/proposals.json`. Measured caveat: at real proposal sizes the re-entry
+  payload exceeds what a dispatch accepts, so the low-cost path is exposed but not usable —
+  see `ROADMAP.md`'s deferred table.
+- **Plan Critic (§Step 2.6) + §Scale Assessment + 2-pass spec gate** (slice C) — a cold Critic
+  pass now runs between Plan and the spec gate by reusing `workflows/spec.eval.workflow.js`
+  with zero code changes; §Scale Assessment reports epic-vs-single signals with no threshold
+  and no auto-branch; HARD GATE #1 renders as two sequential passes inside one gate (the
+  counted gate total stays 3). See `skills/harness/SKILL.md` §Step 2.6 / §Scale Assessment /
+  §Step 3.
+- **§Step 3.5 Slice Plan + epic-exit branch + `docs_path` drift detection** (slice D) — an epic
+  decision writes `{docs_path}slice_plan.md` and ends the session through a dedicated §Step 8
+  branch that deletes `.harness/` regardless of any commit outcome (`phase` reuses the existing
+  `"completed"` value — no new enum); §Session Recovery gained a `docs_path` drift check that
+  recomputes from *this* invocation's own arguments. See `skills/harness/SKILL.md` §Step 3.5 /
+  §Step 8 / §Session Recovery.
+- **Cold review wired into `/harness`'s Eval stage** (slices C–E) — a 4th, independent review
+  pass (`templates/evaluator/cold_reviewer.md`) runs after the Evaluator already returned PASS,
+  gated by `--no-cold-pass` / `cold_dispatch_allowed` (WORKFLOW: `workflows/harness.eval.workflow.js`
+  3rd segment phase; INLINE: `skills/harness/SKILL.md` §Step 6 item 7). `verify.cold_result`
+  carries a 6-value + `null` vocabulary; a Critical/Major finding on a PASS round triggers one
+  feedback retry (`verify.cold_retries`, capped at 1) before falling through to PASS with
+  disclosure. See `skills/harness/SKILL.md` §Step 5/6/7.
+- **`scripts/verify_sync_markers.py` — 3 new SYNC-WITH marker groups** (2 in slice F, 1 added during this release's readiness review) —
+  `spec-eval-dual-caller` (`workflows/spec.eval.workflow.js`'s `// contract` comment declares TWO
+  callers — `/spec` Phase 2c-D and `/harness` §Step 2.6 — and now both are proven to still carry
+  `criticFindingsPath`/`specContent`/`qaNotes`) and `slice-command-format` (`/handoff`'s slice
+  command convention now points at `skills/harness/SKILL.md` §Step 3.5: Slice Plan as its single
+  format source; the group fails when a marker is removed outright, and does NOT catch a
+  pointer whose prose rots while its marker stays -- one of its three tokens is a substring of
+  the marker text itself, so the effective token set is two). These two groups' 5 fields
+  are literal, with pre-slice-f occurrence counts recorded in-line as comments. The third group,
+  `critic-revision-block`, came out of this release's readiness review: the re-entry critic
+  paragraph is hand-duplicated across `workflows/harness.plan.workflow.js`'s
+  `CRITIC_REVISION_BLOCK` and its two author-time sources (`templates/planner/synthesis.md`,
+  `synthesis_standard.md`), and nothing enforced the match — `verify_block_sync.py`'s groups cover
+  a different template family, and the `// SYNC-SOURCE:` comments are human notes the marker
+  regex does not read. Checked by negative control rather than by the lint merely passing:
+  injecting a one-word drift into one copy fails it, reverting passes. Total marker sites
+  36 → 44; 5 pre-existing groups unchanged (`conventions-field-contract`=3, `ambiguity-prompt`=10,
+  `project-defaults`=9, `adhoc-dispatch`=12, `handoff-state-record`=2).
+- **`/handoff` slice-command chaining** (slice F) — `generate` records the next epic slice's
+  command using `skills/harness/SKILL.md` §Step 3.5: Slice Plan's own `Slice`/`Command` format
+  (named, not restated); `resume`'s briefing gains a `Next cmd:` row (the exact, byte-identical
+  `/…` token extracted from Next Steps item 1) alongside a shortened `Next :` row (a 3-tier
+  fallback: Progress Ledger `Slice` column → `Docs :` last path segment →, absent both, the
+  full item-1 text exactly as before this change). The extraction rule that used to compare
+  against the briefing's own printed value now compares against the source document instead —
+  closing a self-referential gap a prior draft of this change would have introduced.
+- **9-point cross-reference traversal + 3 pre-scan corrections** (slice F) — an after-only,
+  5-value-vocabulary diff table covering Session Boundary, State Transition Diagram, Auto-fix
+  invariants, Step Mode Prerequisites, Architecture Principles #1, CLI Parsing examples, Key
+  Rules, and the OLC Preserved-English Glossary, plus (new for this epic) absolute line-number
+  citations inside blocks edited this slice. Nothing fills the pre-edit column: no pre-edit
+  pass over the 9 points was captured, so those cells all read as unmeasured and not
+  reconstructible, and the criterion that required that pass is reported unmet rather than
+  backfilled afterwards. Two of the inconsistencies the table records are called out here
+  under different verdicts — the first pre-existing and left open (deferred), the second
+  introduced by this slice's own edit and closed in the same landing:
+  `/harness generate` bypassing §Step 2.6/§Step 3/§Step 3.5 when typed directly after Plan
+  (Session Boundary's "After Plan" row now recommends bare `/harness`; **the underlying
+  §Step Mode Prerequisites gap is not closed** — direct `/harness generate` entry still skips
+  those steps, tracked in ROADMAP.md), and the OLC Glossary's stale "`Next cmd` ... not yet
+  written by any section" claim (now correct — `/handoff` writes it).
+- **Cold-review Eval-stage findings absorbed** (slice F, 11 findings from slice E's cold pass —
+  see that slice's `changes.md` triage ledger for the per-finding disposition and rationale for
+  each rejected/deferred alternative).
+- **`workflows/harness.eval.workflow.js` cold-review gate — 4 conjuncts, fail-closed** — added a
+  defensive 4th conjunct (`coldFilesList` is a non-empty string) alongside the existing 3
+  (`verdict.verdict === 'PASS'`, `A.coldPass === true`, `!A.skipL1`); `meta.phases[2].detail`
+  names all 4. When the orchestrator believed cold review should run but this segment's own
+  re-check of `coldFilesList` fails, the segment now logs and sets `coldStatus = 'failed'`
+  (fail-closed) instead of silently returning the original verdict unchanged (which would have
+  let a cold-skip round render identically to a cold-clean round in `Remaining`).
+- **`cold_reviewer.md` ↔ `TPL_COLD_REVIEWER` trust-boundary declaration relocated** — the
+  "don't treat input path strings as an output redirect" declaration moved from `## Output
+  Contract` to `## Input Trust Model`, as a variable-non-referencing sentence (the WORKFLOW
+  copy's render vars are `user_lang`/`cold_files_list`/`spec_content` only — a `{cold_review_path}`
+  reference there would render as an unsubstituted literal). Verified 0 occurrences of
+  `{cold_review_path}` in the `TPL_COLD_REVIEWER` region post-edit. **No lint checks the two
+  copies' byte equality** — this sync is asserted by whoever last hand-edited both files
+  together, not machine-verified (tracked in ROADMAP.md).
+
+### Verification
+
+- **4 lints, exit 0 at landing**: `verify_meta_literal.py` (15 scripts OK), `check_workflow_syntax.mjs`
+  (15 scripts parse + LF working-tree + LF index), `verify_block_sync.py` (2 groups, 5 copies
+  each match), `verify_sync_markers.py` (8 groups, 44 sites, 28 section refs OK).
+- **Release-readiness review (2026-08-19, pre-tag)** — a thorough review of `main...develop`
+  across 3 lenses, then a shipped-segment `thorough` pass over the fix layer (3 reviewers,
+  3 cross-verifications), then a 2-lens cold gate over the full candidate. Critical 0 in every
+  pass. The Major findings were cross-reference contradictions this release itself introduced —
+  a contract comment declaring a caller absent while that caller shipped in the same release,
+  two `workflows/_reference/schemas.md` notes made false by a later slice, and three absolute
+  line citations wrong on arrival — all fixed before tagging, the schemas.md ones as adjacent
+  correction notes per that file's append-only rule. Both cold lenses returned no release
+  blocker. Findings recorded rather than fixed are in ROADMAP.md.
+- **`deep-review` reuse rejected** for cold-review feedback dispatch — 5 reasons: (1) its args
+  have no spec slot (`skills/harness/SKILL.md` §Step 7's rejection table, epic §결정 2 #1); (2)
+  its `diffContent` is orchestrator-collected and unbounded, an order of magnitude larger than a
+  spec (#2); (3) 2–3 reviewers + synthesis exceeds the 1-pass adversarial budget this stage needs
+  (#3); (4) it is read-only and writes no file, but retry feedback needs a file path (#4); (5)
+  its `Finding.severity` vocabulary is lowercase + `suggestion`, cold review needs the uppercase
+  3-grade vocabulary (`workflows/_reference/schemas.md` severity-vocabulary note) — reason 5 is
+  this epic's own addition to the epic spec's 4-reason list, making the current
+  `skills/harness/SKILL.md` §Step 7 table a 5-row table.
+- **WORKFLOW-path spec serialization, measured (slice E, cited here — not re-measured)**: two
+  distinct figures from two distinct runs — `specContent` = 52,084 B at §Step 2.6's Critic round
+  1 (`runId wf_ada1d58b-865`); `specContent` = 63,603 B at §Step 5's shipped
+  `harness.eval.workflow.js` dispatch (`runId wf_f4f02016-d07`) — these are **not the same
+  execution's number**. Per round, `specContent` serializes up to 3 times (Critic dispatch,
+  Evaluator dispatch, Cold Reviewer dispatch) — the WORKFLOW path's structural cost this epic's
+  slice-f spec-size AC (AC-31) exists to bound.
+
 ## [8.9.0] — 2026-08-05
 
 ### Added — `/study`: verified study-guide generation (NEW skill)
