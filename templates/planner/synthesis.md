@@ -26,10 +26,11 @@ Write all output in **{user_lang}**.
      see CRITIC_REVISION_BLOCK). This .md copy is documentation-only and is never dispatched
      directly, so it shows the section unconditionally here to keep both prompt shapes
      visible in one file. On the standard path this heading is absent entirely. -->
+<!-- SYNC-WITH: templates/planner/synthesis.md §Critic Findings (re-entry only) -->
 ### Critic Findings (re-entry only)
 {critic_findings}
 
-Revise the prior synthesis to resolve each finding above. This is the /spec requirements critique carried over via criticFindings — redirecting it to a Plan-specific critique file is slice C's concern, not this template's. If this section is empty, no critic input was supplied — do not invent findings; re-synthesize from the proposals only.
+Revise the prior synthesis to resolve each finding above. These findings reach you as criticFindings; on this re-entry path the caller supplies the Plan-specific critique. If this section is empty, no critic input was supplied — do not invent findings; re-synthesize from the proposals only.
 
 ## Synthesis Rules
 

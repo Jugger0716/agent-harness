@@ -6,12 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/).
 
-## [Unreleased]
+## [8.10.0] — 2026-08-19
 
-> **Version heading note**: no `[Unreleased]` precedent exists in this file — slices A–E of this
-> epic each landed without their own entry, so this single entry covers the whole epic. The final
-> heading (stay `[Unreleased]`, or roll into a new minor) is a **user decision, not made here** —
-> it interacts with `/ship`'s 2-pass version bump, which this document does not run.
+> **Version heading note**: slices A–E of this epic each landed without their own CHANGELOG entry,
+> so this single entry covers the whole epic. The heading was resolved at release time to the
+> **8.10.0** minor rather than staying `[Unreleased]`.
 
 ### Added — `harness-handoff-coldreview-epic-slice` epic (slices A–F): cold review in Eval + `/handoff` slice-command chaining + cross-reference SYNC groups
 
@@ -19,7 +18,7 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
   `plan_critic.*`, `scale.*`, `epic.*` and `verify.cold_*` were declared as additive-optional
   fields with a documented "missing = default" for each, so state.json `version` stays `"3.0"`
   and in-flight sessions written before the fields existed remain readable. Contracts live in
-  `skills/harness/SKILL.md` §State Fields and `workflows/_reference/schemas.md`.
+  `skills/harness/SKILL.md` §Step 1: Setup (its state.json schema block) and `workflows/_reference/schemas.md`.
 - **Plan pipeline: `steps`/`sliceHint` actually populated + low-cost re-synthesis re-entry**
   (slice B) — both synthesis templates gained an `### Implementation Steps` section and a
   `sliceHint` mapping, and `workflows/harness.plan.workflow.js` gained a
@@ -46,16 +45,23 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
   carries a 6-value + `null` vocabulary; a Critical/Major finding on a PASS round triggers one
   feedback retry (`verify.cold_retries`, capped at 1) before falling through to PASS with
   disclosure. See `skills/harness/SKILL.md` §Step 5/6/7.
-- **`scripts/verify_sync_markers.py` — 2 new SYNC-WITH marker groups** (slice F) —
+- **`scripts/verify_sync_markers.py` — 3 new SYNC-WITH marker groups** (2 in slice F, 1 added during this release's readiness review) —
   `spec-eval-dual-caller` (`workflows/spec.eval.workflow.js`'s `// contract` comment declares TWO
   callers — `/spec` Phase 2c-D and `/harness` §Step 2.6 — and now both are proven to still carry
   `criticFindingsPath`/`specContent`/`qaNotes`) and `slice-command-format` (`/handoff`'s slice
   command convention now points at `skills/harness/SKILL.md` §Step 3.5: Slice Plan as its single
   format source; the group fails when a marker is removed outright, and does NOT catch a
   pointer whose prose rots while its marker stays -- one of its three tokens is a substring of
-  the marker text itself, so the effective token set is two). Both groups' 5 fields
-  are literal, with pre-slice-f occurrence counts recorded in-line as comments. Total marker sites
-  36 → 41; 5 pre-existing groups unchanged (`conventions-field-contract`=3, `ambiguity-prompt`=10,
+  the marker text itself, so the effective token set is two). These two groups' 5 fields
+  are literal, with pre-slice-f occurrence counts recorded in-line as comments. The third group,
+  `critic-revision-block`, came out of this release's readiness review: the re-entry critic
+  paragraph is hand-duplicated across `workflows/harness.plan.workflow.js`'s
+  `CRITIC_REVISION_BLOCK` and its two author-time sources (`templates/planner/synthesis.md`,
+  `synthesis_standard.md`), and nothing enforced the match — `verify_block_sync.py`'s groups cover
+  a different template family, and the `// SYNC-SOURCE:` comments are human notes the marker
+  regex does not read. Checked by negative control rather than by the lint merely passing:
+  injecting a one-word drift into one copy fails it, reverting passes. Total marker sites
+  36 → 44; 5 pre-existing groups unchanged (`conventions-field-contract`=3, `ambiguity-prompt`=10,
   `project-defaults`=9, `adhoc-dispatch`=12, `handoff-state-record`=2).
 - **`/handoff` slice-command chaining** (slice F) — `generate` records the next epic slice's
   command using `skills/harness/SKILL.md` §Step 3.5: Slice Plan's own `Slice`/`Command` format
@@ -103,7 +109,16 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
 
 - **4 lints, exit 0 at landing**: `verify_meta_literal.py` (15 scripts OK), `check_workflow_syntax.mjs`
   (15 scripts parse + LF working-tree + LF index), `verify_block_sync.py` (2 groups, 5 copies
-  each match), `verify_sync_markers.py` (7 groups, 41 sites, 28 section refs OK).
+  each match), `verify_sync_markers.py` (8 groups, 44 sites, 28 section refs OK).
+- **Release-readiness review (2026-08-19, pre-tag)** — a thorough review of `main...develop`
+  across 3 lenses, then a shipped-segment `thorough` pass over the fix layer (3 reviewers,
+  3 cross-verifications), then a 2-lens cold gate over the full candidate. Critical 0 in every
+  pass. The Major findings were cross-reference contradictions this release itself introduced —
+  a contract comment declaring a caller absent while that caller shipped in the same release,
+  two `workflows/_reference/schemas.md` notes made false by a later slice, and three absolute
+  line citations wrong on arrival — all fixed before tagging, the schemas.md ones as adjacent
+  correction notes per that file's append-only rule. Both cold lenses returned no release
+  blocker. Findings recorded rather than fixed are in ROADMAP.md.
 - **`deep-review` reuse rejected** for cold-review feedback dispatch — 5 reasons: (1) its args
   have no spec slot (`skills/harness/SKILL.md` §Step 7's rejection table, epic §결정 2 #1); (2)
   its `diffContent` is orchestrator-collected and unbounded, an order of magnitude larger than a

@@ -21,11 +21,16 @@ export const meta = {
 //             priorProposals: AnalysisResult[]|null,
 //             models: {executor,advisor,evaluator,verifier} }
 //   - reSynthesisOnly/priorProposals: re-entry re-synthesis, structurally mirroring
-//     spec.plan.workflow.js. No caller sets these today — wiring the orchestrator to pass
-//     them on a Critic-Gate-style re-entry is a separate, later change (slice C), not this one.
-//   - criticFindings carries {docs_path}critic_findings.md — the /spec requirements-spec
-//     critique, not a Plan-specific one. Re-pointing it at a dedicated plan_critic_findings.md
-//     is slice C's concern, not this script's.
+//     spec.plan.workflow.js. Caller: skills/harness/SKILL.md §Step 2 — WORKFLOW path,
+//     "Auto-revise re-entry". (That section names its own trigger sites; they are not
+//     restated here.) An earlier revision of this comment said no caller set these yet and
+//     deferred the wiring to a later slice; that was accurate when written and stopped being
+//     accurate in the same release, so it is corrected here rather than left as current.
+//   - criticFindings is dispatch-dependent, and the caller section above names both documents:
+//     the FIRST dispatch carries {docs_path}critic_findings.md (the /spec requirements-spec
+//     critique), while the Auto-revise re-entry carries {docs_path}plan_critic_findings.md
+//     (the Plan-specific critique). An earlier revision of this comment named the first
+//     document without that distinction and deferred the Plan-specific file to a later slice.
 //   - The empty-priorProposals throw guard in the Propose `else` branch below has no
 //     counterpart in spec.plan.workflow.js — it is an addition, not a ported behavior.
 //   - Both re-entry gates are TRUTHY checks and must stay that way: Propose is gated on
@@ -41,16 +46,23 @@ export const meta = {
 //     them strict TOGETHER (`!== true` / `=== true`), which sends malformed input down the
 //     normal full-Propose path — but that diverges from the spec.plan port AC-B9 requires.
 //   - Template section order (Approach -> Implementation Steps -> Completion Criteria -> ...)
-//     does not match skills/harness/SKILL.md:697-704's spec.md render order (which renders
-//     Implementation Steps last). Deliberate and harmless — the orchestrator renders from the
-//     returned PlanResult object's fields, never from template line order.
-//   - sliceHint sub-shape source: workflows/_reference/schemas.md's prose delta note
-//     (:127-158) — its PlanResult CODE BLOCK is append-only and predates this delta, so the
-//     shape below is copied from the note, not the block.
+//     does not match the spec.md render order in skills/harness/SKILL.md §Step 2 — WORKFLOW
+//     path, the item carrying the `### Implementation Steps` ← `steps[]` mapping (that order
+//     renders Implementation Steps last). The mismatch is harmless — the orchestrator renders
+//     from the returned PlanResult object's fields, never from template line order. The
+//     citation quotes the mapping literal rather than the item's ordinal on purpose: an
+//     ordinal shifts whenever a list item is inserted, the same way a line number does.
+//   - sliceHint sub-shape source: workflows/_reference/schemas.md's prose note
+//     §Contract delta — `sliceHint` (whose factual claims are superseded by the adjacent
+//     §`sliceHint` delta correction note in that same file) — its PlanResult CODE BLOCK is
+//     append-only and predates this delta, so the shape below is copied from the note, not
+//     the block.
 //   - sliceHint is now schema-required (see PlanResultSchema.required below): a single missing
-//     field triggers SKILL.md:707's schema-invalid fallback to the INLINE path for the WHOLE
-//     Plan step, and planner_single.md (the INLINE template) never produces sliceHint at all —
-//     a slice C consumer of `scale.slice_hint` must handle its absence.
+//     field triggers the schema-invalid fallback to the INLINE path in SKILL.md §Step 2 —
+//     WORKFLOW path, its "On Workflow error" item, for the WHOLE Plan step, and
+//     planner_single.md (the INLINE
+//     template) never produces sliceHint at all — so a `scale.slice_hint` consumer must handle
+//     its absence, which SKILL.md §Step 3's Scale Assessment gate table does.
 //   - This PlanResultSchema is a DIFFERENT shape from spec.plan.workflow.js's same-named
 //     schema (that copy has no sliceHint and different required fields) — same type name, two
 //     independent shapes, by design (each script inlines its own copy per C1).
@@ -69,6 +81,10 @@ const mopt = (m) => (m ? { model: m } : {}) // null/undefined -> inherit parent 
 // Substitution order = vars insertion order. Keep STRUCTURAL keys first and
 // user-influenced payload keys LAST (task last of all): a payload substituted
 // early could otherwise hijack later {placeholders} with injected literals.
+// Ordering is basic hygiene here, not a sufficient guard. On the re-entry path
+// `all_proposals` is itself user-influenced — it is built from `priorProposals`, which
+// the caller reads off disk — and ordering cannot separate two mutually untrusted
+// payloads. The synthesis call site below records what that leaves open.
 const render = (tpl, vars) =>
   Object.entries(vars).reduce(
     (t, [k, v]) => t.split('{' + k + '}').join(v == null ? '' : String(v)),
@@ -76,7 +92,9 @@ const render = (tpl, vars) =>
   )
 
 // ---- schemas (inlined per C1; canonical hand-sync copy: workflows/_reference/schemas.md) ----
-// sliceHint delta note: schemas.md:127-158 (prose note, NOT its PlanResult code block).
+// sliceHint delta note: schemas.md §Contract delta — `sliceHint` (prose note, NOT its
+// PlanResult code block; its factual claims are superseded by that file's adjacent
+// §`sliceHint` delta correction note).
 const AnalysisResultSchema = {
   type: 'object',
   required: ['persona', 'summary', 'keyPoints'],
@@ -608,10 +626,16 @@ const synthTplBase = A.mode === 'multi' ? TPL_SYNTHESIS_MULTI : TPL_SYNTHESIS_ST
 let synthTpl = synthTplBase
 if (A.reSynthesisOnly) {
   const CRITIC_ANCHOR = '## Synthesis Rules'
+  // The block below is hand-duplicated in templates/planner/synthesis.md and
+  // synthesis_standard.md (author-time sources; only THIS copy is dispatched). The marker
+  // puts all three under a verify_sync_markers.py group so a drift fails the lint instead of
+  // being caught by eye. Marker lives in a JS line comment, never inside the template
+  // literal — text inside the literal is dispatched into the prompt.
+  // <!-- SYNC-WITH: templates/planner/synthesis.md §Critic Findings (re-entry only) -->
   const CRITIC_REVISION_BLOCK = `### Critic Findings (re-entry only)
 {critic_findings}
 
-Revise the prior synthesis to resolve each finding above. This is the /spec requirements critique carried over via criticFindings — redirecting it to a Plan-specific critique file is slice C's concern, not this template's. If this section is empty, no critic input was supplied — do not invent findings; re-synthesize from the proposals only.
+Revise the prior synthesis to resolve each finding above. These findings reach you as criticFindings; on this re-entry path the caller supplies the Plan-specific critique. If this section is empty, no critic input was supplied — do not invent findings; re-synthesize from the proposals only.
 
 `
   const spliced = synthTpl.split(CRITIC_ANCHOR).join(CRITIC_REVISION_BLOCK + CRITIC_ANCHOR)
@@ -628,10 +652,13 @@ Revise the prior synthesis to resolve each finding above. This is the /spec requ
 // same pre-existing ordering risk already present between all_proposals and task_description
 // (proposal/analysis text is model output, not raw untrusted input — not a new exposure).
 // That "model output, not untrusted input" reasoning holds for the STANDARD path only. On the
-// re-entry path `priorProposals` arrives from the caller, and the planned slice C wiring reads
-// it from disk (`.harness/planner/proposals.json`), which a human can edit between rounds — so
-// a `{critic_findings}` or `{task_description}` literal placed there IS substitutable. slice C
-// owns deciding whether that file needs sanitizing before it is passed back in.
+// re-entry path `priorProposals` arrives from the caller, and that wiring — landed, not planned
+// — reads it from disk (`.harness/planner/proposals.json`), which a human can edit between
+// rounds, so a `{critic_findings}` or `{task_description}` literal placed there IS
+// substitutable. SKILL.md §Auto-revise Exposure Predicate's proposals.json validity check
+// covers existence, JSON parse, array shape, non-emptiness and per-element persona/summary; it
+// does not sanitize template placeholders, so this exposure is current and the decision on
+// whether that file needs sanitizing before it is passed back in is still open.
 const plan = await agent(
   render(synthTpl, {
     user_lang: A.userLang,
