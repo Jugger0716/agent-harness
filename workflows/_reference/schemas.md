@@ -124,6 +124,89 @@ const PlanResultSchema = {
 }
 ```
 
+> **Contract delta — `sliceHint` (declared here; not yet produced by any script).**
+> `PlanResultSchema` will gain a `sliceHint` field carrying the plan-segment
+> synthesis's scale-assessment recommendation for whether/how to split the work: a
+> one-line recommendation, the candidate slice groupings the user can choose between,
+> and the rationale. Sub-shape (declared here first, per this file's own "append here
+> first, then copy into scripts" header discipline above):
+>
+> ```js
+> // sliceHint sub-shape — declared only; NOT yet added to PlanResultSchema.properties
+> // or PlanResultSchema.required in the code block above (that block is unedited, per
+> // this file's append-only rule).
+> sliceHint: { type: 'object', required: ['recommendation', 'candidates', 'rationale'],
+>   properties: {
+>     recommendation: { type: 'string', description: `one-line scale recommendation, render in ${A.userLang}` },
+>     candidates: { type: 'array', items: {
+>       type: 'object', required: ['label', 'slices'],
+>       properties: {
+>         label: { type: 'string', description: 'candidate grouping identifier, English raw' },
+>         slices: { type: 'array', items: { type: 'string', description: `one candidate slice description, render in ${A.userLang}` } } } },
+>       description: 'candidate slice groupings the user can choose between' },
+>     rationale: { type: 'string', description: `why this recommendation, render in ${A.userLang}` }
+>   } }
+> ```
+>
+> **Ownership and timing:** this delta declares the `sliceHint` sub-shape only.
+> `harness.plan.workflow.js`'s inline copy of `PlanResultSchema` (including the
+> `.properties`/`.required` addition), and the consumer that reads
+> `PlanResult.sliceHint` on the resume path, are a separate, later change — not part
+> of this delta. Until that change lands, `sliceHint` is simply absent from every
+> `PlanResult` returned today, and every consumer takes the absence as "no
+> scale-assessment recommendation available" (same additive-optional discipline as an
+> unwritten state field: declared, not yet backed by a writer).
+
+> **`steps` comment correction — supersedes the "Pilot deltas" note above.** (That
+> note is left unmodified, per this file's append-only rule; this is a new, adjacent
+> note.) The "Pilot deltas" note's claim that "the synthesis spec deliberately avoids
+> implementation detail" is no longer an accurate account of why `steps` stays out of
+> `required`. Verified by reading the code: the render side already exists and is
+> real — `### Implementation Steps` ← `steps[]` at `skills/harness/SKILL.md:704` —
+> and only the **producer** side is missing: `harness.plan.workflow.js`'s
+> `FRAG_SYNTHESIS_OUTPUT` template has no `### Implementation Steps` section and no
+> mapping into `steps[]`. The accurate description is therefore not "intentional
+> omission" but "renderer present, producer absent, so in practice the field is
+> always empty." Whether to add the producer mapping (and promote `steps` toward
+> `required`) is left to a later change; this note only corrects the record.
+
+> **`steps` producer correction — supersedes the "`steps` comment correction" note above.**
+> (That note is left unmodified, per this file's append-only rule; this is a new, adjacent
+> note. It also supersedes that note's `skills/harness/SKILL.md:704` line-number citation,
+> which had already rotted — line 704 now holds a `state.json` literal. Cite the renderer as
+> `skills/harness/SKILL.md` §Step 2 — WORKFLOW path, the `` `### Implementation Steps` ← ``
+> `` `steps[]` `` mapping line; quoting that literal survives renumbering, which an item
+> ordinal does not.) The superseded note says the **producer** side is missing. Verified by
+> reading the code on 2026-08-19, it is present, in two separate places:
+>
+> - the **mapping** is in `harness.plan.workflow.js`'s `FRAG_SYNTHESIS_OUTPUT` fragment —
+>   `` - `steps` ← Implementation Steps, as [{n, description, files, testImpact}, ...] ``.
+> - the **`### Implementation Steps` section** is in `TPL_SYNTHESIS_MULTI` and
+>   `TPL_SYNTHESIS_STANDARD`, and in their `templates/planner/synthesis.md` /
+>   `synthesis_standard.md` source copies.
+>
+> So "renderer present, producer absent, so in practice the field is always empty" is false
+> as of this note. The producer landed in the same epic that wrote the superseded note (the
+> note was accurate when written and stopped being accurate a few commits later — recorded
+> here rather than silently rewritten). What remains open is narrower and unchanged: whether
+> to promote `steps` into `PlanResultSchema.required`.
+
+> **`sliceHint` delta correction — supersedes the "Contract delta — `sliceHint`" note above.**
+> (Append-only, as above: that note is left unmodified.) Two of its claims are false as of
+> 2026-08-19. Its header says `sliceHint` is "declared here; not yet produced by any script",
+> and its body says `sliceHint` is "absent from every `PlanResult` returned today" and that
+> adding it to `.properties`/`.required` is "a separate, later change". Verified by reading
+> `harness.plan.workflow.js`: `PlanResultSchema.required` lists `sliceHint` alongside `goal`,
+> `acceptanceCriteria` and `risks`, and `FRAG_SYNTHESIS_OUTPUT` carries a
+> `` `sliceHint` ← Scale Hint `` mapping marked `MANDATORY`. The consumers exist too —
+> `skills/harness/SKILL.md` §Step 3 and §Step 3.5 read `scale.slice_hint`.
+>
+> What is still true, and is the part worth carrying forward: the INLINE path
+> (`templates/planner/planner_single.md`) does not produce `sliceHint`, so a consumer still
+> has to handle its absence — §Step 3's Scale Assessment gate table has a row for exactly
+> that case. ROADMAP.md tracks this note's drift as a deferred item; this correction closes
+> the factual half of it and leaves the file-ownership question there.
+
 ## ChangeSet
 
 Returned by the build-segment implementation step. The orchestrator writes
@@ -363,6 +446,44 @@ const FindingSetSchema = {
   }
 }
 ```
+
+> **Contract delta — cold-review Finding severity vocabulary (declared here; not yet
+> produced by any script).** A future cold-review extension carries findings shaped
+> like `Finding` above but with an **uppercase** severity enum —
+> `severity: { enum: ['Critical', 'Major', 'Minor'] }` — matching
+> `CriticReport.items[].severity` above, NOT this section's lowercase
+> `FindingSchema.severity`. The extension is declared as an optional `coldFindings`
+> array carried on a `VerifyVerdict`-shaped return (see `VerifyVerdictSchema` above);
+> that field is not yet added to `VerifyVerdictSchema.properties` — this note only
+> fixes the vocabulary the eventual field must use.
+>
+> **Do not normalize — this is an intentional divergence, not drift to clean up.**
+> Three different severity vocabularies already coexist in this file by design:
+> `VerifyVerdictSchema.failures[].severity` is lowercase (above),
+> `CriticReport.items[].severity` is uppercase (above), and `FindingSchema.severity`
+> (immediately above) is lowercase plus a `suggestion` grade. The cold-review
+> extension deliberately follows `CriticReport`'s uppercase vocabulary, because it
+> feeds the same `Critical`/`Major`/`Minor` counts a Critic gate displays. If a later
+> "cleanup" commit unifies these into one casing, a branch that gates on something
+> like "PASS + cold Critical/Major ≥ 1" would silently stop firing on a
+> string-casing mismatch — the cold pass keeps running and keeps costing tokens, but
+> its findings stop feeding back. This is the failure mode this note exists to
+> prevent.
+
+> **cold-review severity delta correction — supersedes the "Contract delta — cold-review
+> Finding severity vocabulary" note above.** (Append-only, as elsewhere in this file: that note
+> is left unmodified.) Its header says the vocabulary is "declared here; not yet produced by any
+> script", and its body says the optional `coldFindings` field "is not yet added to
+> `VerifyVerdictSchema.properties`". Both were accurate when written and are false as of
+> 2026-08-19: `workflows/harness.eval.workflow.js` defines `ColdFindingSchema` and
+> `ColdFindingSetSchema` and dispatches the cold reviewer with the latter, so the shape is
+> produced by a shipped script today.
+>
+> **The part that has NOT changed is the one the note exists for**: the uppercase
+> `Critical`/`Major`/`Minor` enum is still an intentional divergence from this section's
+> lowercase `FindingSchema.severity`, and normalising the casing would silently stop the
+> "PASS + cold Critical/Major >= 1" feedback branch from firing. Read the "Do not normalize"
+> paragraph above as current; read its "not yet produced" framing as historical.
 
 ## CrossVerifyReport
 

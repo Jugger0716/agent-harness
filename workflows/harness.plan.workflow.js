@@ -1,5 +1,5 @@
 // harness.plan.workflow.js — Plan segment of /harness (WORKFLOW path).
-// Autonomous span: independent persona proposals -> synthesis. Returns { plan: PlanResult, stats }.
+// Autonomous span: independent persona proposals -> synthesis. Returns { plan: PlanResult, proposals, stats }.
 // Ends BEFORE HARD GATE #1 (spec confirmation) — gates live in the orchestrator (SKILL.md), never here.
 //
 // Engine shape (per docs/superpowers/specs/2026-06-05-ultracode-phase1-engine-spike.md):
@@ -17,7 +17,61 @@ export const meta = {
 
 // ---- args (SPIKE-F1: defensive parse) -------------------------------------
 // contract: { task, repoPath, lang, scope, userLang, conventions, qaNotes,
-//             criticFindings, mode: 'standard'|'multi', models: {executor,advisor,evaluator,verifier} }
+//             criticFindings, mode: 'standard'|'multi', reSynthesisOnly: bool,
+//             priorProposals: AnalysisResult[]|null,
+//             models: {executor,advisor,evaluator,verifier} }
+//   - reSynthesisOnly/priorProposals: re-entry re-synthesis, structurally mirroring
+//     spec.plan.workflow.js. Caller: skills/harness/SKILL.md §Step 2 — WORKFLOW path,
+//     "Auto-revise re-entry". (That section names its own trigger sites; they are not
+//     restated here.) An earlier revision of this comment said no caller set these yet and
+//     deferred the wiring to a later slice; that was accurate when written and stopped being
+//     accurate in the same release, so it is corrected here rather than left as current.
+//   - criticFindings is dispatch-dependent, and the caller section above names both documents:
+//     the FIRST dispatch carries {docs_path}critic_findings.md (the /spec requirements-spec
+//     critique), while the Auto-revise re-entry carries {docs_path}plan_critic_findings.md
+//     (the Plan-specific critique). An earlier revision of this comment named the first
+//     document without that distinction and deferred the Plan-specific file to a later slice.
+//   - The empty-priorProposals throw guard in the Propose `else` branch below has no
+//     counterpart in spec.plan.workflow.js — it is an addition, not a ported behavior.
+//   - Both re-entry gates are TRUTHY checks and must stay that way: Propose is gated on
+//     `!A.reSynthesisOnly` (AC-B9 pins that form verbatim from spec.plan.workflow.js) and the
+//     critic-block splice below on `A.reSynthesisOnly`. Because they share one truthiness
+//     semantics they cannot disagree. Do NOT "harden" the splice to `=== true` on its own:
+//     measured 2026-08-10 (run wf_6631e9c1-dcd, 0 agents, 16ms) — `reSynthesisOnly: "false"`
+//     (a truthy string) already skips Propose, so a `=== true` splice would skip the critic
+//     block for that same input and synthesis would silently run on prior proposals with no
+//     critic input. An earlier revision of this comment claimed the opposite; it described a
+//     `=== true` splice this file never had.
+//   - Callers SHOULD still pass a boolean literal. If both gates are ever made strict, make
+//     them strict TOGETHER (`!== true` / `=== true`), which sends malformed input down the
+//     normal full-Propose path — but that diverges from the spec.plan port AC-B9 requires.
+//   - Template section order (Approach -> Implementation Steps -> Completion Criteria -> ...)
+//     does not match the spec.md render order in skills/harness/SKILL.md §Step 2 — WORKFLOW
+//     path, the item carrying the `### Implementation Steps` ← `steps[]` mapping (that order
+//     renders Implementation Steps last). The mismatch is harmless — the orchestrator renders
+//     from the returned PlanResult object's fields, never from template line order. The
+//     citation quotes the mapping literal rather than the item's ordinal on purpose: an
+//     ordinal shifts whenever a list item is inserted, the same way a line number does.
+//   - sliceHint sub-shape source: workflows/_reference/schemas.md's prose note
+//     §Contract delta — `sliceHint` (whose factual claims are superseded by the adjacent
+//     §`sliceHint` delta correction note in that same file) — its PlanResult CODE BLOCK is
+//     append-only and predates this delta, so the shape below is copied from the note, not
+//     the block.
+//   - sliceHint is now schema-required (see PlanResultSchema.required below): a single missing
+//     field triggers the schema-invalid fallback to the INLINE path in SKILL.md §Step 2 —
+//     WORKFLOW path, its "On Workflow error" item, for the WHOLE Plan step, and
+//     planner_single.md (the INLINE
+//     template) never produces sliceHint at all — so a `scale.slice_hint` consumer must handle
+//     its absence, which SKILL.md §Step 3's Scale Assessment gate table does.
+//   - This PlanResultSchema is a DIFFERENT shape from spec.plan.workflow.js's same-named
+//     schema (that copy has no sliceHint and different required fields) — same type name, two
+//     independent shapes, by design (each script inlines its own copy per C1).
+//   - sliceHint.candidates may legitimately be an empty array (no minItems is declared here,
+//     matching the "do not invent minItems" constraint) — a consumer must defend against that.
+//   - stats.proposalsRequested reports PERSONAS.length (the mode's nominal fan-out) even on
+//     the reSynthesisOnly re-entry path, where Propose did not run — it is NOT a count of
+//     priorProposals actually supplied. Re-entering with a different `mode` than the run that
+//     produced priorProposals can show `proposalsSucceeded` exceeding `proposalsRequested`.
 const A = typeof args === 'string' ? JSON.parse(args) : (args || {})
 const LANG = A.userLang || 'the language of the task description'
 const MODELS = A.models || {}
@@ -27,6 +81,10 @@ const mopt = (m) => (m ? { model: m } : {}) // null/undefined -> inherit parent 
 // Substitution order = vars insertion order. Keep STRUCTURAL keys first and
 // user-influenced payload keys LAST (task last of all): a payload substituted
 // early could otherwise hijack later {placeholders} with injected literals.
+// Ordering is basic hygiene here, not a sufficient guard. On the re-entry path
+// `all_proposals` is itself user-influenced — it is built from `priorProposals`, which
+// the caller reads off disk — and ordering cannot separate two mutually untrusted
+// payloads. The synthesis call site below records what that leaves open.
 const render = (tpl, vars) =>
   Object.entries(vars).reduce(
     (t, [k, v]) => t.split('{' + k + '}').join(v == null ? '' : String(v)),
@@ -34,6 +92,9 @@ const render = (tpl, vars) =>
   )
 
 // ---- schemas (inlined per C1; canonical hand-sync copy: workflows/_reference/schemas.md) ----
+// sliceHint delta note: schemas.md §Contract delta — `sliceHint` (prose note, NOT its
+// PlanResult code block; its factual claims are superseded by that file's adjacent
+// §`sliceHint` delta correction note).
 const AnalysisResultSchema = {
   type: 'object',
   required: ['persona', 'summary', 'keyPoints'],
@@ -48,7 +109,7 @@ const AnalysisResultSchema = {
 
 const PlanResultSchema = {
   type: 'object',
-  required: ['goal', 'acceptanceCriteria', 'risks'],
+  required: ['goal', 'acceptanceCriteria', 'risks', 'sliceHint'],
   properties: {
     goal: { type: 'string', description: `render in ${LANG}` },
     background: { type: 'string', description: `render in ${LANG}` },
@@ -99,6 +160,26 @@ const PlanResultSchema = {
       },
     },
     summary: { type: 'string', description: `one-line progress msg, render in ${LANG}` },
+    sliceHint: {
+      type: 'object',
+      required: ['recommendation', 'candidates', 'rationale'],
+      properties: {
+        recommendation: { type: 'string', description: `one-line scale recommendation, render in ${LANG}` },
+        candidates: {
+          type: 'array',
+          items: {
+            type: 'object',
+            required: ['label', 'slices'],
+            properties: {
+              label: { type: 'string', description: 'candidate grouping identifier, English raw' },
+              slices: { type: 'array', items: { type: 'string', description: `one candidate slice description, render in ${LANG}` } },
+            },
+          },
+          description: 'candidate slice groupings the user can choose between',
+        },
+        rationale: { type: 'string', description: `why this recommendation, render in ${LANG}` },
+      },
+    },
   },
 }
 
@@ -294,7 +375,9 @@ Be concise — focus on key findings, not exhaustive analysis.
 ${FRAG_PROPOSAL_OUTPUT}`
 
 // Shared synthesis output note.
-// AUTHOR-TIME TRANSFORM: replaces 'Write spec.md to {spec_path}' + '## Output Contract' —
+// SYNC-SOURCE: templates/planner/synthesis.md + synthesis_standard.md '## Output' (the two
+// .md bodies are byte-identical there, backtick escaping aside — this is the third copy).
+// AUTHOR-TIME TRANSFORMS: replaces 'Write spec.md to {spec_path}' + '## Output Contract' —
 // the ORCHESTRATOR writes spec.md from the returned object.
 const FRAG_SYNTHESIS_OUTPUT = `## Output
 
@@ -302,12 +385,14 @@ Return the spec as a structured object (the dispatching engine enforces the shap
 - \`goal\` ← Goal; \`background\` ← Background; \`scope.inScope\` / \`scope.outOfScope\` ← Scope
 - \`approach\` ← Approach
 - \`acceptanceCriteria\` ← Completion Criteria, as [{id: "AC-1", text}, ...] (ids English raw)
+- \`steps\` ← Implementation Steps, as [{n, description, files, testImpact}, ...] (n sequential integers starting at 1; files are repo-relative paths)
 - \`testingStrategy\` ← Testing Strategy, one string per scenario
 - \`risks\` ← Risks, as [{risk, likelihood: low|med|high, mitigation, source}]
 - \`edgeCases\` ← boundary conditions that must be explicitly handled (extract from the proposals' risk/boundary analyses — there is no dedicated section above)
+- \`sliceHint\` ← Scale Hint, as {recommendation, candidates: [{label, slices}], rationale} — MANDATORY; if the task does not need splitting, still return exactly one candidate describing the whole task as a single slice
 - \`summary\` ← one line: "{N} acceptance criteria, {M} edge cases"
 
-Free-text fields in **{user_lang}**; ids and enum values English raw.
+English raw (not translated): \`acceptanceCriteria[].id\`, \`risks[].likelihood\`, \`sliceHint.candidates[].label\`, \`steps[].files\`. Every other free-text field renders in **{user_lang}**.
 Do NOT write spec.md or any other file yourself — the orchestrator writes spec.md from this object.`
 
 // SYNC-SOURCE: templates/planner/synthesis.md (multi mode)
@@ -354,7 +439,10 @@ High-level approach and design decisions. Incorporate:
 - Practical feasibility insights from the Senior Developer
 - Safeguards and boundary handling from the QA Specialist
 
-Do NOT specify exact function signatures, SQL, or other implementation details.
+Do NOT specify exact function signatures or SQL statements. Use \`### Implementation Steps\` below for the step/file/test-impact level of detail instead.
+
+### Implementation Steps
+Break the approach into an ordered implementation sequence. For each step, state what changes, in which files, and the test impact. The same boundary applies here as in \`### Approach\`: exact function signatures and SQL statements are still out of scope — step/file/test-impact detail only. Do NOT inflate the step count to look thorough; use as many steps as the change actually needs, no more.
 
 ### Completion Criteria
 A checklist of verifiable acceptance criteria. Include criteria from all three perspectives where applicable.
@@ -373,6 +461,13 @@ All identified risks from the proposals. For each risk:
 - Do NOT invent requirements not grounded in the proposals. Do NOT modify any source files.
 - The spec must be actionable by an implementer who has NOT seen the proposals.
 - Be concise — focus on synthesis, not restating proposals.
+
+## Scale Hint (return-only)
+
+- Always produce this assessment, even for a task small enough that splitting would be silly.
+- If splitting is unnecessary, still return exactly one candidate describing the whole task as a single slice — never zero candidates.
+- Offer 1 to 3 candidate groupings, never more.
+- Describe scale qualitatively (e.g. "single module, low risk" vs "spans several subsystems"); do NOT phrase it as a numeric threshold comparison (no "> N files" / "≥ M steps" rules) — judgment only, no comparison operators.
 
 ${FRAG_SYNTHESIS_OUTPUT}`
 
@@ -417,7 +512,10 @@ High-level approach and design decisions. Incorporate:
 - Architectural recommendations from the System Architect
 - Practical feasibility insights from the Senior Developer
 
-Do NOT specify exact function signatures, SQL, or other implementation details.
+Do NOT specify exact function signatures or SQL statements. Use \`### Implementation Steps\` below for the step/file/test-impact level of detail instead.
+
+### Implementation Steps
+Break the approach into an ordered implementation sequence. For each step, state what changes, in which files, and the test impact. The same boundary applies here as in \`### Approach\`: exact function signatures and SQL statements are still out of scope — step/file/test-impact detail only. Do NOT inflate the step count to look thorough; use as many steps as the change actually needs, no more.
 
 ### Completion Criteria
 A checklist of verifiable acceptance criteria. Include criteria from both perspectives where applicable.
@@ -437,11 +535,16 @@ All identified risks from both proposals. For each risk:
 - The spec must be actionable by an implementer who has NOT seen the proposals.
 - Be concise — focus on synthesis, not restating proposals.
 
+## Scale Hint (return-only)
+
+- Always produce this assessment, even for a task small enough that splitting would be silly.
+- If splitting is unnecessary, still return exactly one candidate describing the whole task as a single slice — never zero candidates.
+- Offer 1 to 3 candidate groupings, never more.
+- Describe scale qualitatively (e.g. "single module, low risk" vs "spans several subsystems"); do NOT phrase it as a numeric threshold comparison (no "> N files" / "≥ M steps" rules) — judgment only, no comparison operators.
+
 ${FRAG_SYNTHESIS_OUTPUT}`
 
 // ---- Phase 1: independent proposals (anchoring-free fan-out) ---------------
-phase('Propose')
-
 const PERSONAS =
   A.mode === 'multi'
     ? [
@@ -454,51 +557,113 @@ const PERSONAS =
         { id: 'senior_developer', tpl: TPL_SENIOR_DEVELOPER },
       ]
 
-// Structural keys first; user-influenced payloads last (task_description last of all).
-const commonVars = {
-  repo_path: A.repoPath,
-  lang: A.lang,
-  scope: A.scope,
-  user_lang: A.userLang,
-  conventions: A.conventions,
-  qa_discovery_notes: A.qaNotes,
-  critic_findings: A.criticFindings,
-  task_description: A.task,
-}
+let proposals = Array.isArray(A.priorProposals) ? A.priorProposals.filter(Boolean) : []
 
-const rawProposals = await parallel(
-  PERSONAS.map((p) => () =>
-    agent(render(p.tpl, { persona_id: p.id, ...commonVars }), {
-      schema: AnalysisResultSchema,
-      label: p.id,
-      phase: 'Propose',
-      ...mopt(MODELS.advisor),
-    }),
-  ),
-)
-const proposals = rawProposals.filter(Boolean)
-log(`Propose: ${proposals.length}/${PERSONAS.length} proposals (${PERSONAS.map((p) => p.id).join(', ')})`)
-if (proposals.length === 0) {
-  throw new Error('harness.plan: all proposal agents failed — orchestrator should fall back to the inline path')
+if (!A.reSynthesisOnly) {
+  phase('Propose')
+
+  // Structural keys first; user-influenced payloads last (task_description last of all).
+  const commonVars = {
+    repo_path: A.repoPath,
+    lang: A.lang,
+    scope: A.scope,
+    user_lang: A.userLang,
+    conventions: A.conventions,
+    qa_discovery_notes: A.qaNotes,
+    critic_findings: A.criticFindings,
+    task_description: A.task,
+  }
+
+  const rawProposals = await parallel(
+    PERSONAS.map((p) => () =>
+      agent(render(p.tpl, { persona_id: p.id, ...commonVars }), {
+        schema: AnalysisResultSchema,
+        label: p.id,
+        phase: 'Propose',
+        ...mopt(MODELS.advisor),
+      }),
+    ),
+  )
+  proposals = rawProposals.filter(Boolean)
+  log(`Propose: ${proposals.length}/${PERSONAS.length} proposals (${PERSONAS.map((p) => p.id).join(', ')})`)
+  if (proposals.length === 0) {
+    throw new Error('harness.plan: all proposal agents failed — orchestrator should fall back to the inline path')
+  }
+} else {
+  log(`Re-synthesis re-entry: skipping Propose (${proposals.length} prior proposals supplied)`)
+  // Extra guard beyond spec.plan.workflow.js's re-entry pattern: an empty priorProposals on
+  // the reSynthesisOnly path means synthesis would have nothing to synthesize from.
+  if (proposals.length === 0) {
+    throw new Error('harness.plan: reSynthesisOnly requested but priorProposals is empty — re-run with reSynthesisOnly:false to regenerate proposals')
+  }
 }
 
 // ---- Phase 2: synthesis into a single PlanResult ----------------------------
 phase('Synthesize')
 
-const fmtList = (title, items) =>
-  items && items.length ? `\n\n**${title}:**\n${items.map((s) => `- ${s}`).join('\n')}` : ''
+// Array guard AND per-element guard: a disk-sourced `keyPoints: [null, undefined]` would
+// otherwise render as literal `- undefined` bullets in the prompt (AC-B11's second clause).
+const fmtList = (title, items) => {
+  const clean = Array.isArray(items) ? items.filter((s) => s != null) : []
+  return clean.length ? `\n\n**${title}:**\n${clean.map((s) => `- ${s}`).join('\n')}` : ''
+}
 const allProposals = proposals
   .map(
     (p) =>
-      `## ${p.persona}\n\n${p.summary}${fmtList('Key points', p.keyPoints)}${fmtList('Risks', p.risks)}${fmtList('Recommendations', p.recommendations)}`,
+      `## ${p.persona || '(unknown persona)'}\n\n${p.summary || '(no summary provided)'}${fmtList('Key points', p.keyPoints)}${fmtList('Risks', p.risks)}${fmtList('Recommendations', p.recommendations)}`,
   )
   .join('\n\n---\n\n')
 
-const synthTpl = A.mode === 'multi' ? TPL_SYNTHESIS_MULTI : TPL_SYNTHESIS_STANDARD
+// Critic input is injected ONLY on the reSynthesisOnly re-entry path. The two .md copies show
+// the '### Critic Findings (re-entry only)' section unconditionally (documentation-only, never
+// dispatched — see their "RE-ENTRY ONLY" HTML comment); here the gating is real code.
+// CRITIC_ANCHOR appears exactly once inside whichever synthTplBase is selected below (each of
+// TPL_SYNTHESIS_MULTI/TPL_SYNTHESIS_STANDARD has exactly one '## Synthesis Rules' heading), so
+// split()/join() is an unambiguous single splice — never .replace() (its $&/$' substitution
+// patterns would corrupt a payload containing them; irrelevant here since no payload is passed
+// to replace(), but split/join is this file's own established idiom, see render() above).
+const synthTplBase = A.mode === 'multi' ? TPL_SYNTHESIS_MULTI : TPL_SYNTHESIS_STANDARD
+let synthTpl = synthTplBase
+if (A.reSynthesisOnly) {
+  const CRITIC_ANCHOR = '## Synthesis Rules'
+  // The block below is hand-duplicated in templates/planner/synthesis.md and
+  // synthesis_standard.md (author-time sources; only THIS copy is dispatched). The marker
+  // puts all three under a verify_sync_markers.py group so a drift fails the lint instead of
+  // being caught by eye. Marker lives in a JS line comment, never inside the template
+  // literal — text inside the literal is dispatched into the prompt.
+  // <!-- SYNC-WITH: templates/planner/synthesis.md §Critic Findings (re-entry only) -->
+  const CRITIC_REVISION_BLOCK = `### Critic Findings (re-entry only)
+{critic_findings}
+
+Revise the prior synthesis to resolve each finding above. These findings reach you as criticFindings; on this re-entry path the caller supplies the Plan-specific critique. If this section is empty, no critic input was supplied — do not invent findings; re-synthesize from the proposals only.
+
+`
+  const spliced = synthTpl.split(CRITIC_ANCHOR).join(CRITIC_REVISION_BLOCK + CRITIC_ANCHOR)
+  if (spliced === synthTpl) {
+    throw new Error('harness.plan: critic-block splice anchor not found in synthesis template — re-entry aborted rather than silently dropping critic input')
+  }
+  synthTpl = spliced
+}
+
+// Substitution order: structural keys first, critic_findings/task_description last
+// (task_description last of all) — matches this file's render() convention above and
+// spec.plan.workflow.js's synthesis call. all_proposals substitutes before critic_findings, so
+// a literal "{critic_findings}" inside proposal text would get filled on this pass; this is the
+// same pre-existing ordering risk already present between all_proposals and task_description
+// (proposal/analysis text is model output, not raw untrusted input — not a new exposure).
+// That "model output, not untrusted input" reasoning holds for the STANDARD path only. On the
+// re-entry path `priorProposals` arrives from the caller, and that wiring — landed, not planned
+// — reads it from disk (`.harness/planner/proposals.json`), which a human can edit between
+// rounds, so a `{critic_findings}` or `{task_description}` literal placed there IS
+// substitutable. SKILL.md §Auto-revise Exposure Predicate's proposals.json validity check
+// covers existence, JSON parse, array shape, non-emptiness and per-element persona/summary; it
+// does not sanitize template placeholders, so this exposure is current and the decision on
+// whether that file needs sanitizing before it is passed back in is still open.
 const plan = await agent(
   render(synthTpl, {
     user_lang: A.userLang,
     all_proposals: allProposals,
+    critic_findings: A.criticFindings,
     task_description: A.task,
   }),
   { schema: PlanResultSchema, label: 'synthesis', phase: 'Synthesize', ...mopt(MODELS.advisor) },
@@ -506,7 +671,14 @@ const plan = await agent(
 
 // PlanResult is schema-validated -> no 1-line parsing. The orchestrator writes
 // spec.md from this object, then renders HARD GATE #1 (spec confirmation).
+// `proposals` is returned AS IS for the orchestrator to persist (re-synthesis + resume
+// source, spec.plan.workflow.js precedent) — do NOT analyze or print its contents here.
 return {
   plan,
-  stats: { proposalsRequested: PERSONAS.length, proposalsSucceeded: proposals.length },
+  proposals,
+  stats: {
+    proposalsRequested: PERSONAS.length,
+    proposalsSucceeded: proposals.length,
+    reSynthesisOnly: !!A.reSynthesisOnly,
+  },
 }
