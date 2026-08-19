@@ -1345,10 +1345,18 @@ and 0 gap — it is not re-derived here.
 "Run Critic anyway" / "Retry Critic" (rows ①-b / ①-c / ②-b / ③ / ④): dispatch §Step 2.6's
 own-critic dispatch again (a fresh single write to `plan_critic`, `source = "own"`), then
 re-present starting at Pass A — this re-presentation observes the FRESH `plan_critic` state,
-landing on whichever row now matches (typically ①-a or ②; never re-landing on the same
-①-b/①-c/②-b/③ row for the same spec.md, since a completed own dispatch always writes a
+landing on whichever row now matches (typically ①-a or ②). For rows ①-b/②-b/③ it does not
+re-land on the same row for the same spec.md, since a completed own dispatch writes a
 non-null `last_findings_path` with a mtime fresher than that spec.md — row ④ CAN recur if the
-fresh dispatch itself fails again, e.g. a second permission denial or a second parse failure).
+fresh dispatch itself fails again, e.g. a second permission denial or a second parse failure.
+
+**Exception — row ①-c.** That row's non-exposure cause may be §Auto-revise Exposure Predicate
+point 3 (`plan_critic.round` already at its bound), and a critic re-run does not reset it — so
+①-c DOES re-land whenever point 3 is the cause, at which point Auto-revise stays unavailable
+for that spec.md. The staleness reasoning above closes the mtime axis only. Observed
+2026-08-19: the run predicted the re-landing before pressing the option and then saw it. A
+full pass over this file's other blanket `never`/`always` claims is tracked separately in
+ROADMAP.md rather than done here.
 
 "Auto-revise" (row ①-a only): dispatch §Step 2 WORKFLOW path's Auto-revise re-entry,
 which itself re-runs Step 2.6 in the same turn before control returns here — so the NEXT

@@ -31,7 +31,7 @@ At Setup, resolve the execution path:
      human choose the path. Do NOT write `path_resolved` before they answer — its enum is
      `"inline" | "workflow"` (rule 5) and there is no third value, so leave the field at its
      previous value (unset on a fresh run) rather than inventing one. §Path Transparency
-     prints `Path : (unresolved — Workflow denied)` for this branch only.
+     prints the unresolved-path literal it defines for this branch only (that section carries the exact string; it is not restated here).
    - **Non-interactive** (headless / cron / subagent — §Ambiguity Prompt 5) → fall back to
      INLINE, record it, and print the denial banner anyway. "Never block an automated run"
      outranks "ask the human"; "never downgrade silently" is still honored by the banner.

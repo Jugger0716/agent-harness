@@ -158,6 +158,26 @@ SYNC_GROUPS = [
         "tokens": ["§Step 3.5", "slice_plan.md", "Next cmd"],
         "min_sites": 2,                        # skills/harness/SKILL.md (self) + skills/handoff/SKILL.md
     },
+    {
+        # release-readiness review 2026-08-19, working-tree round 1 finding [7]: the
+        # re-entry critic paragraph is hand-duplicated in three places -- the dispatched copy
+        # (workflows/harness.plan.workflow.js CRITIC_REVISION_BLOCK) and its two author-time
+        # sources (templates/planner/synthesis.md, synthesis_standard.md). The measured drift
+        # at the time this group was added was 0 (the three copies matched), but nothing
+        # enforced it: verify_block_sync.py's GROUPS cover templates/planner/{architect,
+        # planner_single,qa_specialist,senior_developer}.md only, and the `// SYNC-SOURCE:`
+        # comments in the script are human notes MARKER_RE never matches. The JS marker sits
+        # in a line comment (spec.eval.workflow.js precedent) so it is not dispatched.
+        "id": "critic-revision-block",
+        "target_file": "templates/planner/synthesis.md",
+        "section": "Critic Findings (re-entry only)",  # NO leading § -- MARKER_RE captures after §
+        "target_anchor": "Critic Findings (re-entry only)",
+        "tokens": [
+            "These findings reach you as criticFindings",
+            "re-synthesize from the proposals only",
+        ],
+        "min_sites": 3,                        # the 2 .md sources + the dispatched JS copy (slack 0)
+    },
 ]
 
 
