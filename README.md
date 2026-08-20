@@ -225,7 +225,7 @@ Key interaction points:
 - **Confirmation gates**: Proceed / Modify / Stop (replaces freeform text approval)
 - **QA retry**: Fix / Accept as-is
 - **Commit**: 3 options — "Commit code only" (recommended) / "Commit all with artifacts" / "No commit" (git environments only; non-git environments skip commit)
-- **Session recovery**: Resume / Restart / Stop
+- **Session recovery**: Resume / Restart / Stop — `/harness` adds a 4th, non-destructive **View state only** (prints the recorded session state and halts; `.harness/` is NOT deleted). The other skills sharing this gate shape keep the 3 options
 
 Falls back to text-based input when AskUserQuestion is unavailable.
 
