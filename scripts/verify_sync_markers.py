@@ -65,7 +65,23 @@ SYNC_GROUPS = [
         "target_anchor": "conventions` field contract",
         # canonical enum tokens every marked site must declare (literal substrings)
         "tokens": ["`null`", '"skipped"', '"file:.harness/conventions.md"'],
-        "min_sites": 2,
+        # 3 real marker sites, zero slack: skills/harness/SKILL.md §Conventions
+        # injection rule (the genuine cross-file sync site) + skills/spec/SKILL.md
+        # §Step 1 step 7 schema doc (the state.json `conventions` field bullet) +
+        # skills/spec/SKILL.md §Step 1.5 conventions field contract itself, whose
+        # own explanatory prose quotes the marker HTML comment inside a backtick
+        # code-span as a documented example of what the marker looks like. That
+        # third site adds ZERO value-consistency coverage -- it is the SSOT
+        # describing itself, not an independent site that could drift from it --
+        # it only raises the floor. HONEST COVERAGE NOTE: rewording that
+        # explanatory sentence so it no longer quotes the marker literally drops
+        # the site count 3 -> 2, and this group then FAILs with "2 marker
+        # site(s), expected >= 3" -- a message that reads as a broken sync site,
+        # not as "an SSOT example sentence was reworded." A future maintainer
+        # seeing that failure with no sync site actually broken may be tempted
+        # to lower min_sites back to 2; don't -- re-quote the marker literally
+        # in the SSOT prose instead.
+        "min_sites": 3,
     },
     {
         "id": "ambiguity-prompt",
