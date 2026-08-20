@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/).
 
-## [Unreleased]
+## [8.11.0] — 2026-08-20
 
 > **Version heading note — follows 8.10.0's actual precedent.** An earlier revision of this
 > entry carried a fixed `## [8.11.0] — 2026-08-19` heading and claimed it matched 8.10.0's
