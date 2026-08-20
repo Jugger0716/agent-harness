@@ -184,7 +184,9 @@ Before starting a new task, check if `.harness/state.json` exists:
      `user_lang`), then ask via AskUserQuestion with the same header as below, question:
      "[harness] Epic session residue detected. Restart or stop?", options
      `{"Restart" / "Delete .harness/ and start fresh", "Stop" / "Delete .harness/ and halt"}`
-     (same labels/actions as below, minus "Resume"). This makes §Step 8's
+     (same labels/actions as below, minus "Resume" and minus "View state only" — this branch
+     is unchanged by the new option below; see that option's own scope note). This makes
+     §Step 8's
      `phase → "completed"`-before-delete ordering an actual 3rd defense layer — a failed delete
      there leaves exactly this state, which is what this check detects.
    - **(b) docs_path drift** — checked only if (a) did not fire (an epic-exit remnant already
@@ -197,13 +199,15 @@ Before starting a new task, check if `.harness/state.json` exists:
        - "Restart" / "⚠ Delete `.harness/` and start fresh — the existing session cannot be recovered"
      `Stop` is not a label here. "Keep & stop" halts without deleting `.harness/`; "Restart" acts
      like the "Restart" branch below.
-   - Otherwise, ask the user via AskUserQuestion (in `user_lang`), unchanged:
+   - Otherwise, ask the user via AskUserQuestion (in `user_lang`) — the first three options are
+     unchanged, "View state only" is new (see its Actions entry below for scope):
      - header: "Session"
-     - question: "[harness] Previous session detected. [standard status]. Resume, restart, or stop?"
+     - question: "[harness] Previous session detected. [standard status]. Resume, restart, stop, or view state only?"
      - options:
        - "Resume" / "Continue from {phase}"
        - "Restart" / "Delete .harness/ and start fresh"
        - "Stop" / "Delete .harness/ and halt"
+       - "View state only" / "Print the recorded session state and halt — `.harness/` is NOT deleted (unlike the usual Stop). Calling `/harness` again re-renders this gate."
 
    Actions:
    - **Resume**: Before jumping to any step, run Safety Guard re-validation:
@@ -238,6 +242,20 @@ Before starting a new task, check if `.harness/state.json` exists:
      - `completed` → no active session, proceed to Step 1
    - **Restart**: Delete `.harness/` and proceed to Step 1
    - **Stop**: Delete `.harness/` and halt
+   - **View state only** (offered ONLY from the "Otherwise" branch's options list above — (a)
+     Epic residue and (b) docs_path drift do NOT offer this option, and are unchanged by it):
+     print the standard status block (§Standard Status Format, cited by name — its shape is
+     not restated here; that block's `Path` row already carries `path_resolved`, so it is not
+     repeated in the list below) plus the fields that block does not carry: `docs_path`,
+     `verify.layer1_retries` and `verify.layer2_retries`, `autofix.applied`,
+     whether `epic.boundaries` is set (presence only — `set` / `not set`, never the object's
+     content), and `plan_critic.applied` plus `plan_critic.counts`. This is strictly more than
+     item 3's earlier standard-status print, never a duplicate of it. Any field state.json does
+     not currently carry (8.10.0 declared several of these additive-optional, missing = default)
+     prints as `(none recorded)` — never invented. If `state.json` itself fails to parse, print
+     only its path and the parse error, then halt — do not attempt a partial field-by-field
+     recovery. Either way, this action **writes nothing to state.json** and then halts — no
+     loop back to this gate. Calling `/harness` again re-renders it from the top.
 
 If `.harness/state.json` does not exist, proceed to Step 1.
 
@@ -728,17 +746,17 @@ On the WORKFLOW path the same machine applies; `harness.eval` covers verifying�
 
 | Field | Type | Missing ⇒ default | Written by | Read by |
 |---|---|---|---|---|
-| `plan_critic.applied` | `"executed"` / `"skipped"` / `"failed"` | `null` | §Step 2.6 (Plan Critic) | §Step 2.6 gate display, §Session Recovery routing |
+| `plan_critic.applied` | `"executed"` / `"skipped"` / `"failed"` | `null` | §Step 2.6 (Plan Critic) | §Step 2.6 gate display, §Session Recovery routing, §Session Recovery item 7 "View state only" |
 | `plan_critic.round` | integer | `null` | §Step 2.6 | §Step 2.6 gate display |
 | `plan_critic.last_findings_path` | string | `null` | §Step 2.6 | §Step 2.6 gate display |
 | `plan_critic.failure_reason` | string | `null` | §Step 2.6 | §Step 2.6 gate display |
 | `plan_critic.source` | `"own"` / `"carried_over"` | `null` | §Step 2.6 | §Step 2.6 gate display (`carried over from /spec` literal) |
-| `plan_critic.counts` | `{ critical, major, minor }` (lowercase — matches `CriticReport.counts` in `workflows/_reference/schemas.md` — cited by name, not line: that file is append-only, so any delta appended above `CriticReport` would silently shift a line citation) | `null` (not yet run / not yet parsed) | §Step 2.6 | §Step 2.6 gate display |
+| `plan_critic.counts` | `{ critical, major, minor }` (lowercase — matches `CriticReport.counts` in `workflows/_reference/schemas.md` — cited by name, not line: that file is append-only, so any delta appended above `CriticReport` would silently shift a line citation) | `null` (not yet run / not yet parsed) | §Step 2.6 | §Step 2.6 gate display, §Session Recovery item 7 "View state only" |
 | `scale.signals` | object | `null` | §Scale Assessment | §Scale Assessment, Step 3 gate |
 | `scale.slice_hint` | object — PlanResult `sliceHint` stored verbatim | `null` | §Scale Assessment | §Step 3 Pass B (this slice), §Step 3.5 (Slice Plan) |
 | `scale.override` | boolean | `null` | §Scale Assessment (`--epic`/`--no-epic` override) | §Scale Assessment |
 | `epic.id` | string | `null` | §Step 3.5 (Slice Plan) | no reader yet — written for the `Command` column's display; its derivation is defined once, in §Step 3.5 |
-| `epic.boundaries` | object | `null` | §Step 3.5 (Q&A and no-Q&A paths alike), §Step 3 Pass B "Proceed as single" (reset to `null`) | §Step 3.5 re-entry check, §Session Recovery item 7 (a) + `plan_done` jump-table row, §Step 8 epic-exit predicate |
+| `epic.boundaries` | object | `null` | §Step 3.5 (Q&A and no-Q&A paths alike), §Step 3 Pass B "Proceed as single" (reset to `null`) | §Step 3.5 re-entry check, §Session Recovery item 7 (a) + item 7 "View state only" (presence only) + `plan_done` jump-table row, §Step 8 epic-exit predicate |
 | `verify.cold_result` | string | `null` | §Step 5 (WORKFLOW) / §Step 6 (INLINE); §Step 7 feedback branch (`retried_dispatching` → `retried_unverified`); §Session Recovery (same transition, on resume) | §Step 7 cold feedback branch (single definition there), §Session Boundary `Remaining` rule, §Session Recovery re-entry |
 | `verify.cold_retries` | integer | `0` | §Step 5 / §Step 6 (never changed there, only initialized); §Step 7 feedback branch (`+= 1`); reset to `0` on round increment (§Step 7 "If Fix") | §Step 7 feedback-branch condition |
 | `verify.cold_round` | integer | `null` | §Step 5 / §Step 6; reset to `null` on round increment (§Step 7 "If Fix") | §Step 5 `cold_dispatch_allowed` predicate, §Step 7 `cold_ran_this_round` derivation, §Session Boundary `Remaining` skip-reason derivation |
@@ -927,7 +945,7 @@ Before the plan dispatch/segment, prepare:
    ```
 3. Record the returned run id: `runs.plan → { "runId": "<id>" }`, `updated_at → now`.
 4. The segment returns `{ plan: PlanResult, proposals, stats }` (schema-validated — no file re-reads, no 1-line parsing; this corrects the prior "`{ plan, stats }`" description here — the segment has returned `proposals` since slice B). Print per OLC: `  ✓ Plan segment: {stats.proposalsSucceeded}/{stats.proposalsRequested} proposals → synthesis`
-5. **Persist `proposals`**: write `.harness/planner/proposals.json` ← the returned `proposals` array, serialized directly (`.harness/planner/` already exists — Step 1 item 7). A direct serialization of the segment's returned object, not content analysis (§Architecture Principles #1 note). Do this BEFORE phase advances to `plan_done` (item 9 below) — a crash between this write and the phase update leaves `phase != "plan_done"`, so the session simply re-enters Step 2 on resume instead of landing in a half-written re-entry state.
+5. **Persist `proposals`**: write `.harness/planner/proposals.json` ← the returned `proposals` array, serialized directly (`.harness/planner/` already exists — Step 1 item 7). A direct serialization of the segment's returned object, not content analysis (§Architecture Principles #1 note). Do this BEFORE phase advances to `plan_done` (item 9 below) — a crash between this write and the phase update leaves `phase != "plan_done"`, so the session simply re-enters Step 2 on resume instead of landing in a half-written re-entry state. This write rule applies only to this first dispatch and to a FULL re-run — the Auto-revise re-entry paragraph below (this same §Step 2 — WORKFLOW path) excludes a `reSynthesisOnly: true` re-entry from it.
 6. **Orchestrator writes `{docs_path}spec.md` from the PlanResult object** (headings in `user_lang`):
    - `### Goal` ← `goal` ; `### Background` ← `background`
    - `### Scope` ← `scope.inScope` / `scope.outOfScope` bullet lists
@@ -978,9 +996,20 @@ Workflow {
 
 Record `runs.plan → { "runId": "<id>" }` (overwrites the first dispatch's runId — one slot,
 no separate re-entry slot). Re-render `{docs_path}spec.md` from the returned `plan` (same
-step-6 mapping above), overwrite `.harness/planner/proposals.json` with the returned
-`proposals` (kept authoritative even though unchanged on this path), and re-freeze
-`state.scale.*` from the returned `PlanResult` (same step-8 procedure above — an Auto-revise
+step-6 mapping above). **Do NOT rewrite `.harness/planner/proposals.json` on this path** — a
+`reSynthesisOnly: true` re-entry is scoped to that narrowing exactly: the FIRST dispatch's
+file (§Step 2 — WORKFLOW path item 5, which persists `proposals.json` as a direct
+serialization of the segment's returned object) stays the sole authoritative copy for the
+whole session. This is deliberately narrower than "never write again on any re-entry" — the FULL
+re-run branch (this same §Step 2 — WORKFLOW path's proposals.json validity-check failure path)
+is the case where §Step 2 item 5's write rule still applies in full and MUST run. Cited by
+name rather than by relative position. (Code-confirmed basis for why skipping the write here loses
+nothing: the segment's returned `proposals` on this path is exactly `A.priorProposals` with
+only falsy elements removed — `.filter(Boolean)`, not further mutated — so persisting it
+would at best re-write the same content the first dispatch already wrote, and at worst
+silently drop whatever falsy noise the file already lacks; skipping the write is a no-op
+either way, not a loss.) Re-freeze `state.scale.*` from the returned `PlanResult` (same
+step-8 procedure above — an Auto-revise
 re-entry is a fresh Step-2-shaped run, not the cross-session "do NOT recompute" case). Then
 immediately re-run §Step 2.6's own-critic dispatch (see §Step 2.6 below) — this bypasses the
 skip-vs-run decision inside §Step 2.6 entirely, the same entry point Pass A's "Run Critic
@@ -995,7 +1024,24 @@ on ANY point, do NOT dispatch with `reSynthesisOnly: true`; instead dispatch a F
 (`reSynthesisOnly: false`, no `priorProposals`) and print a warning banner (in `user_lang`):
 "[harness] ⚠ proposals.json invalid or unusable — re-running full Plan (Propose + Synthesize)
 instead of the low-cost re-synthesis." This failure does NOT degrade the path to inline
-single — only a genuine Workflow engine error (item 10 above) does that.
+single — only a genuine Workflow engine error (item 10 above) does that. **On this FULL
+re-run branch, §Step 2 — WORKFLOW path item 5's write rule applies in full and MUST run**:
+Propose actually runs and produces genuinely new proposals, so
+`.harness/planner/proposals.json` MUST be overwritten with them (the Auto-revise re-entry
+paragraph's "Do NOT rewrite `.harness/planner/proposals.json` on this path" narrowing applies
+ONLY to the `reSynthesisOnly: true` case — cited by name, not by position) — skipping the write here would
+silently strand the session on a stale file instead of the write-loss this paragraph's sibling
+rule was written to close.
+
+**If the re-entry dispatch itself fails or is interrupted** (Workflow engine error, or the
+session ends before the segment returns): `{docs_path}spec.md` is NOT re-rendered,
+`.harness/planner/proposals.json` is NOT touched (neither branch above has written yet), and
+`plan_critic.round` is NOT incremented — the session simply resumes at the same gate that
+offered Auto-revise, and the Auto-revise Exposure Predicate re-evaluates against the
+still-unmodified files. (Observed, not re-derived here: a 2026-08-19 run recorded the
+first-dispatch `proposals.json` shrinking from 15,807 bytes to 10,793 bytes across a
+resume — the mechanism was never reproduced, so this is cited only as a dated measurement,
+not as evidence for how this paragraph's rules behave.)
 
 #### Step 2.6: Plan Critic
 
