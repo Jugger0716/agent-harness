@@ -30,8 +30,9 @@ defect.
 | Workflow syntax + CR guard | `node scripts/check_workflow_syntax.mjs` |
 
 Run all four after changing anything under `skills/`, `templates/`, `workflows/`, or `scripts/`.
-Nothing runs them automatically — `.github/` holds issue and PR templates only, and every script's
-docstring states `run manually (pre-commit/CI wiring is a later-phase TODO)`.
+Nothing runs them automatically — `.github/` holds issue and PR templates only, and the three Python
+scripts' docstrings state `run manually (pre-commit/CI wiring is a later-phase TODO)`
+(`check_workflow_syntax.mjs` carries no such line).
 
 Exit codes: `0` pass, `1` violation found, `2` structural problem. One exception worth knowing:
 in `verify_sync_markers.py` a **missing target file is `1`**, and `2` means a declared SYNC group's

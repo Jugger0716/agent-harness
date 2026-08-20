@@ -1033,8 +1033,10 @@ ONLY to the `reSynthesisOnly: true` case — cited by name, not by position) —
 silently strand the session on a stale file instead of the write-loss this paragraph's sibling
 rule was written to close.
 
-**If the re-entry dispatch itself fails or is interrupted** (Workflow engine error, or the
-session ends before the segment returns): `{docs_path}spec.md` is NOT re-rendered,
+**If the re-entry dispatch is interrupted** (the session ends before the segment returns —
+**a Workflow engine error is NOT this case**: item 10 above owns that trigger and re-runs this
+step on the INLINE path, which DOES re-render `{docs_path}spec.md` and re-freeze
+`state.scale.*`, so none of the no-change guarantees below apply to it): `{docs_path}spec.md` is NOT re-rendered,
 `.harness/planner/proposals.json` is NOT touched (neither branch above has written yet), and
 `plan_critic.round` is NOT incremented — the session simply resumes at the same gate that
 offered Auto-revise, and the Auto-revise Exposure Predicate re-evaluates against the
