@@ -6,12 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/).
 
-## [8.11.0] — 2026-08-19
+## [Unreleased]
 
-> **Version heading note** (same precedent as 8.10.0's, below): the manifest (`plugin.json` /
-> `marketplace.json`) is still `8.10.0` as of this entry — the bump to `8.11.0` happens at the
-> next `/ship` run, not in this batch. This heading records what shipped in the repository, not
-> the manifest's current value.
+> **Version heading note — follows 8.10.0's actual precedent.** An earlier revision of this
+> entry carried a fixed `## [8.11.0] — 2026-08-19` heading and claimed it matched 8.10.0's
+> precedent. It did not: 8.10.0 kept `## [Unreleased]` through development and resolved the
+> heading **in its release commit**, which bumped the manifest in that same commit
+> (`plugin.json` / `marketplace.json`). Pre-fixing the version here would have created two
+> problems the fixed heading itself caused: `/ship` Stage 3 has no duplicate-heading check, so
+> approving its changelog draft would have produced a second `## [8.11.0]` and Stage 7 — which
+> extracts from the FIRST such heading to the next `## [` — would have published the generated
+> commit list as the release notes while this 179-line section sat below it, unread. The date
+> was wrong too (the batch's commits are dated 2026-08-20). `/ship` resolves this heading to
+> `## [8.11.0] — <release date>` and bumps the manifest's 3 key paths in the same commit.
 
 Closes 11 items from `ROADMAP.md`'s deferred tables — 9 from `## Unreleased` and 2 from the
 `## v8.8 — Shipped` table (P2-1, whose first half B7 closes, and the P2-3 row whose line-count
@@ -34,9 +41,13 @@ out-of-scope** — this batch closed only the rows its own spec named IMPLEMENTA
   It documents the Mode Gate opt-in, the `meta.phases` object-literal requirement, the
   zero-slack `min_sites` convention, the `TPL_*`/`FRAG_*` split, the `${CLAUDE_PLUGIN_ROOT}`
   dispatch path, the 3 version key paths, and the `/team-memory`-vs-`.gitignore` conflict this
-  repository actually has. It must ship in the same commit as
+  repository actually has. It must ship in the same **release** as
   `workflows/harness.plan.workflow.js`, whose new revision-notes section cites
   `CLAUDE.md §Conventions` by name — without it that citation points outside the tracked tree.
+  **Correction**: an earlier revision of this bullet said "the same commit" and the batch then
+  violated it — the workflow landed in `fe672a5` and this file in `b87354f`, so across
+  `fe672a5`..`b1263e4` the citation did point outside the tracked tree. It resolves at the
+  branch tip, which is what ships; the intra-branch window is disclosed rather than hidden.
 
 ### Fixed
 
@@ -44,11 +55,20 @@ out-of-scope** — this batch closed only the rows its own spec named IMPLEMENTA
   `.harness/planner/proposals.json`.** The re-entry paragraph instructed the orchestrator to
   overwrite `proposals.json` with the segment's returned `proposals` on every re-entry, "kept
   authoritative even though unchanged on this path" — but the segment returns the caller's
-  `priorProposals` with only falsy elements filtered out, so this was the orchestrator silently
-  re-serializing its own transcription over the original file (measured 2026-08-19: 15,807 B →
-  10,793 B on one run). Narrowed to exactly the case that caused the loss: a
+  `priorProposals` with only falsy elements filtered out, so on that path a rewrite can only
+  put the orchestrator's own serialisation back over the first dispatch's file. **Evidence level,
+  stated to match `skills/harness/SKILL.md`'s own wording**: a 2026-08-19 run recorded that file
+  shrinking 15,807 B → 10,793 B across a resume, but **the mechanism was never reproduced**, so
+  that figure is cited as a dated one-run observation, not as proof of cause. The fix rests on
+  the code fact above (the segment returns `A.priorProposals` with only falsy elements removed),
+  not on the measurement. Narrowed to exactly the path that can lose the file: a
   `reSynthesisOnly: true` re-entry no longer rewrites the file — the first dispatch's copy
-  (§Step 2 item 5) stays sole-authoritative. The FULL re-run branch (proposals.json validity check fails) is
+  (§Step 2 item 5) stays sole-authoritative. The same section also gains a paragraph stating
+  what an **interrupted** re-entry leaves untouched (`spec.md` not re-rendered,
+  `proposals.json` not written, `plan_critic.round` not incremented) and explicitly hands the
+  *Workflow engine error* trigger back to item 10, whose graceful fallback re-runs the step on
+  the INLINE path and therefore DOES re-render `spec.md` — the two triggers overlapped in an
+  earlier revision of that paragraph and gave opposite instructions. The FULL re-run branch (proposals.json validity check fails) is
   unaffected and still writes in full, since that branch's Propose step produces genuinely new
   proposals. All 5 B4 ripple points (the file's 'You do NOT' summary line, §Architecture
   Principles #1, §Step 3 Auto-revise Exposure Predicate point 2, §Step 2.6's 'interrupted before
@@ -57,8 +77,11 @@ out-of-scope** — this batch closed only the rows its own spec named IMPLEMENTA
   script's `proposals` **return** comment stated the orchestrator persists the returned array
   unconditionally, which B4 makes false, so it was narrowed in place to the first dispatch and
   the FULL re-run and now cites `skills/harness/SKILL.md` §Step 2 — WORKFLOW path by name. That
-  edit is part of this same commit — the `workflows/harness.plan.workflow.js` entry under
-  **Changed** below covers the revision-note relocation only, not this narrowing.
+  edit ships in this same release — **correction**: an earlier revision of this bullet said "this
+  same commit", which the batch's own 7-way commit split made false. The narrowing landed in
+  `fe672a5` (the revision-note relocation commit) and B4's `skills/harness/SKILL.md` change in
+  `6e86249`. The `workflows/harness.plan.workflow.js` entry under **Changed** below covers the
+  relocation only, not this narrowing.
 - **`skills/ship/SKILL.md` §Step 2: Stage — version_bump's `#### Pass 2 — Apply Updates` — an
   unachievable re-serialization instruction.** The step told the orchestrator to re-serialize
   `.claude-plugin/*.json` "preserving key order, indentation … CRLF, BOM and trailing-newline"
@@ -92,7 +115,9 @@ out-of-scope** — this batch closed only the rows its own spec named IMPLEMENTA
   that bullet's absolute line citation rotted **inside this same batch**; it now names
   `§6.5: Stage — merge_to_base`, step 7 "Push outcome handling" instead. The same bullet's
   `skills/test-gen/SKILL.md:142-150` citation is deliberately left alone (this batch's edits do
-  not disturb it) and is registered as its own deferred row.
+  not disturb it) and is registered as its own deferred row. The bullet's **self-citation**
+  (`` `:7` ``, pointing at a line of this same file) is also replaced — by naming the rule it
+  refers to instead, since a self-referential line number rots on any edit above it.
 - **`README.md` — §Interactive UX's session-recovery bullet updated for B7.** It listed
   `Resume / Restart / Stop`, which stopped being true for `/harness` once the 4th option landed;
   it now names `View state only` and states that the other skills sharing that gate shape keep
@@ -166,8 +191,8 @@ out-of-scope** — this batch closed only the rows its own spec named IMPLEMENTA
   `## Unreleased` mention and the `## v8.8` P2-3 row) now point future readers at `wc -l`
   instead of at a number that this same commit already moved once. **Re-measured a third time,
   after every body edit to that same file landed in this batch — the original B4+B7 edits plus
-  this batch's own QA rounds 1–5 fixes (round 3 = the Layer 3 pass, rounds 4–5 = two adversarial re-verification passes) (working tree, base `f32c3fb`, 2026-08-19):
-  2,291 lines** — this figure is valid only as of the last body edit to
+  this batch's own QA rounds 1–6 fixes (round 3 = the Layer 3 pass, rounds 4–5 = two adversarial re-verification passes, round 6 = the pre-ship cold review) (working tree, base `f32c3fb`, 2026-08-19):
+  2,293 lines** — this figure is valid only as of the last body edit to
   `skills/harness/SKILL.md` in this batch and rots the instant that file is edited again, which
   is exactly the mechanism that produced this entry's own prior correction. A4 (`schemas.md`
   orphaned `sliceHint` note): the factual half is closed by that file's own append-only correction note

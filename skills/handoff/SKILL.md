@@ -397,7 +397,8 @@ render neither row from the epic path alone:
    restated), and it has no effect on the `Next cmd:` byte-identical rule below. Tier-2 (point 2)
    is unaffected either way — it derives from the last segment of a `Docs` path, not a ledger
    cell, so there is no backtick to strip there. (The ledger's `Epic` cell can carry the same
-   backtick wrapping and is read elsewhere in this skill for carry-forward selection; this
+   backtick wrapping and is read by this very tier-1 rule as its row-grouping key (and again for
+   carry-forward selection), not only elsewhere in this skill; this
    reader-side rule does not extend to that read path — tracked as a separate ROADMAP deferred
    item, not fixed in this batch.)
 2. Else, if the document's `In Progress` fixed-label block (generate Step 1 item 2 format)
