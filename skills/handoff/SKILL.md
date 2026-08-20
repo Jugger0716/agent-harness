@@ -388,6 +388,19 @@ render neither row from the epic path alone:
    literal on its own line directly under the aligned block, never as a new row inside it (the
    block's label set and alignment are fixed):
    `(Next : came from a ledger row that is not in-progress — it may not match Next cmd:)`
+   **Backtick normalization (reader-side only):** if the `Slice` value taken above is wrapped in
+   a single pair of backticks, strip exactly that one outer pair before printing it — backticks
+   are a Markdown delimiter, not part of the value. If the value carries no backticks, use it
+   as-is; if the backticks are unbalanced (only one side present), do not guess — use the value
+   verbatim. This rule only affects how `resume` reads the cell here: it does not change the
+   format `generate` writes to the Progress Ledger (the column contract, cited by name, not
+   restated), and it has no effect on the `Next cmd:` byte-identical rule below. Tier-2 (point 2)
+   is unaffected either way — it derives from the last segment of a `Docs` path, not a ledger
+   cell, so there is no backtick to strip there. (The ledger's `Epic` cell can carry the same
+   backtick wrapping and is read by this very tier-1 rule as its row-grouping key (and again for
+   carry-forward selection), not only elsewhere in this skill; this
+   reader-side rule does not extend to that read path — tracked as a separate ROADMAP deferred
+   item, not fixed in this batch.)
 2. Else, if the document's `In Progress` fixed-label block (generate Step 1 item 2 format)
    recorded a `Docs` value, take that path's last segment (strip one trailing `/` first, then
    take the text after the final remaining `/`) — this reuses, not reinvents, the Progress
@@ -534,8 +547,10 @@ Scan `docs/harness/handoff/*.md` (only files whose first line starts with `# HAN
   (**UNVERIFIED** — see §Step 5). `NotebookEdit`, `WebSearch` and `WebFetch` stay blocked, and
   **that is not free for all three**: `NotebookEdit` is irrelevant to this skill, but if the
   turn-scope hypothesis holds, chaining into `/migrate` strips its external research step, and
-  `/migrate` absorbs that into a local-source fallback (`skills/migrate/SKILL.md:246`, `:531`)
-  — so the loss is **silent**, the exact failure shape this change objected to. They stay
+  `/migrate` absorbs that into a local-source fallback (`skills/migrate/SKILL.md`
+  §Step 2: Analysis Phase — the WebSearch-fails-fall-back-to-local-sources rule under its
+  INLINE path — and §Key Rules' WebSearch fallback bullet, which states the same rule at
+  skill scope) — so the loss is **silent**, the exact failure shape this change objected to. They stay
   blocked because `/handoff` itself must not reach the web; §Step 5 rule 5 keeps that cost off
   the chained skill by declining to chain into such a skill.
 - **Chaining into the next skill IS allowed, and only from `resume`'s gate.** `resume` invokes

@@ -23,14 +23,11 @@ export const meta = {
 //   - reSynthesisOnly/priorProposals: re-entry re-synthesis, structurally mirroring
 //     spec.plan.workflow.js. Caller: skills/harness/SKILL.md §Step 2 — WORKFLOW path,
 //     "Auto-revise re-entry". (That section names its own trigger sites; they are not
-//     restated here.) An earlier revision of this comment said no caller set these yet and
-//     deferred the wiring to a later slice; that was accurate when written and stopped being
-//     accurate in the same release, so it is corrected here rather than left as current.
+//     restated here.)
 //   - criticFindings is dispatch-dependent, and the caller section above names both documents:
 //     the FIRST dispatch carries {docs_path}critic_findings.md (the /spec requirements-spec
 //     critique), while the Auto-revise re-entry carries {docs_path}plan_critic_findings.md
-//     (the Plan-specific critique). An earlier revision of this comment named the first
-//     document without that distinction and deferred the Plan-specific file to a later slice.
+//     (the Plan-specific critique).
 //   - The empty-priorProposals throw guard in the Propose `else` branch below has no
 //     counterpart in spec.plan.workflow.js — it is an addition, not a ported behavior.
 //   - Both re-entry gates are TRUTHY checks and must stay that way: Propose is gated on
@@ -40,8 +37,7 @@ export const meta = {
 //     measured 2026-08-10 (run wf_6631e9c1-dcd, 0 agents, 16ms) — `reSynthesisOnly: "false"`
 //     (a truthy string) already skips Propose, so a `=== true` splice would skip the critic
 //     block for that same input and synthesis would silently run on prior proposals with no
-//     critic input. An earlier revision of this comment claimed the opposite; it described a
-//     `=== true` splice this file never had.
+//     critic input.
 //   - Callers SHOULD still pass a boolean literal. If both gates are ever made strict, make
 //     them strict TOGETHER (`!== true` / `=== true`), which sends malformed input down the
 //     normal full-Propose path — but that diverges from the spec.plan port AC-B9 requires.
@@ -72,6 +68,17 @@ export const meta = {
 //     the reSynthesisOnly re-entry path, where Propose did not run — it is NOT a count of
 //     priorProposals actually supplied. Re-entering with a different `mode` than the run that
 //     produced priorProposals can show `proposalsSucceeded` exceeding `proposalsRequested`.
+//   ---- revision notes (collected here verbatim from their original bullets above; anti-rot
+//        record — see CLAUDE.md §Conventions, "Correct a stale ... claim by appending the
+//        correction", the same append-only convention applied to a JS comment) ----
+//   - [reSynthesisOnly/priorProposals] An earlier revision of this comment said no caller set
+//     these yet and deferred the wiring to a later slice; that was accurate when written and
+//     stopped being accurate in the same release, so it is corrected here rather than left as
+//     current.
+//   - [criticFindings dual-doc] An earlier revision of this comment named the first document
+//     without that distinction and deferred the Plan-specific file to a later slice.
+//   - [both-gates truthy] An earlier revision of this comment claimed the opposite; it
+//     described a `=== true` splice this file never had.
 const A = typeof args === 'string' ? JSON.parse(args) : (args || {})
 const LANG = A.userLang || 'the language of the task description'
 const MODELS = A.models || {}
@@ -671,8 +678,10 @@ const plan = await agent(
 
 // PlanResult is schema-validated -> no 1-line parsing. The orchestrator writes
 // spec.md from this object, then renders HARD GATE #1 (spec confirmation).
-// `proposals` is returned AS IS for the orchestrator to persist (re-synthesis + resume
-// source, spec.plan.workflow.js precedent) — do NOT analyze or print its contents here.
+// `proposals` is returned AS IS for the orchestrator to persist on the first dispatch and on
+// a FULL re-run (re-synthesis + resume source, spec.plan.workflow.js precedent) — see
+// skills/harness/SKILL.md §Step 2 — WORKFLOW path for when persistence applies — do NOT
+// analyze or print its contents here.
 return {
   plan,
   proposals,
