@@ -17,3 +17,23 @@
 #   - To fix an existing worktree in place: remove the files and re-check them out
 #     (`rm workflows/*.workflow.js && git checkout -- workflows/`).
 *.workflow.js text eol=lf
+
+# Shell scripts and workflow YAML must be LF too. Two failure modes were measured on
+# 2026-08-21 in a CR-intolerant toolchain (Linux-native / WSL: GNU grep 3.11, bash
+# 5.2.21); both are NON-reproducible under Git Bash (GNU grep 3.0, bash 5.2.37-msys),
+# which swallows a trailing CR. That tolerance is the exception, not the rule, and the
+# CI runner is ubuntu-latest.
+#   - A line-oriented or `$`-anchored regex over a CRLF file stops matching: `grep -c`
+#     returns 0 where the byte-identical LF copy returns 1.
+#   - A CRLF shell script does not run at all. The first line `set -euo pipefail` picks
+#     up the CR as part of the option name -> `set: pipefail: invalid option name`,
+#     exit 2.
+#
+# Scope, as precisely as the block above: `text eol=lf` fixes the index on check-in and
+# the working tree on checkout. It does NOT rewrite a file already sitting in the
+# working tree, so a file this or any other session writes with CRLF still needs fixing
+# by hand -- `git ls-files --eol` is the detector.
+# The three existing `.github/ISSUE_TEMPLATE/*.yml` are already `i/lf` (measured), so
+# these lines produce no index diff for them.
+*.sh  text eol=lf
+*.yml text eol=lf
