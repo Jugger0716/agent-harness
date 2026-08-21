@@ -38,7 +38,8 @@ Exit codes:
 Usage:
   python scripts/verify_meta_literal.py
 
-Intended invocation: run manually (pre-commit/CI wiring is a later-phase TODO).
+Intended invocation: run manually and on push/PR via .github/workflows/lint.yml
+(pre-commit hook wiring is still a later-phase TODO).
 """
 
 from __future__ import annotations
