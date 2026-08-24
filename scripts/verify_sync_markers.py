@@ -246,6 +246,16 @@ SYNC_GROUPS = [
         #   * S5's read-only `doctor` carve-out must sit BEFORE item 1's branch table in
         #     skills/harness/SKILL.md, or the gate this slice added blocks a diagnostic that reads
         #     nothing.
+        #   * S7 must pick up the S3 row added to ROADMAP.md's Unreleased table (harness item 2's
+        #     legacy branch has no non-interactive default). It is deferred BECAUSE writing it
+        #     would edit item 2, and AC-S3.3's byte-unchanged comparison is the only evidence the
+        #     pre-harness path was not made unreachable. Recording it only in a commit message
+        #     would have been this repository's own "half-updated ledger" defect: a later slice
+        #     reads the ledger, not six commit messages.
+        # REVERT NOTE beyond the marker/floor set below: S3's final correction commit also
+        # resolved a contradiction between skills/harness/SKILL.md §Version & Compatibility and
+        # item 1's branch table. Reverting that commit alone reinstates the contradiction, which
+        # no check here detects -- both texts are prose and both literals survive either way.
         # REVERT ORDER: this group and its sites must be reverted together, newest commit
         # first. Reverting the marker insertion (or the SSOT) while leaving this group
         # registered drops site discovery to 0, which is exit 2 (MISSING), not exit 1.
