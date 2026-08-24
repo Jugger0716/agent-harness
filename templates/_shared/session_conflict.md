@@ -23,8 +23,9 @@ placeholder verbatim.
 
 2. **§Harness exception — the absent case is not universal.** A skill whose own recovery flow
    uses an absent `skill` field as the identifying mark of a pre-skill-field legacy session does
-   NOT route that case here; it keeps its own legacy branch instead. **Two skills carry that
-   pattern today:**
+   NOT route that case here; it keeps its own legacy branch instead. **Exactly two skills carry
+   that pattern today, and every other skill routes the absent case here like any other
+   mismatch** — do not read this exception as applying to one skill only:
    - `/harness` — `skills/harness/SKILL.md` §Session Recovery gates a MISMATCHED `skill` in
      item 1 and lets a MISSING `skill` fall through to item 2's `version` check, which offers
      Restart/Stop for a pre-harness session.
@@ -48,13 +49,16 @@ placeholder verbatim.
      - label: `"Delete and start"` / description: `"Delete .harness/ and proceed with /{current_skill}"`
      - label: `"Cancel"` / description: `"Keep existing session and halt"`
 
-   Render the header, the question, the labels and the descriptions per that single source; this
-   gate takes no exception to it. The literals written above are the ENGLISH SOURCE TEXT of this
-   contract, which is what the `session-conflict` sync group matches: the lint reads this file's
-   bytes, never a running session's rendered output, so whatever that single source says about
-   translation cannot break it. These are NOT Preserved-English Glossary tokens — that Glossary
-   lives in `skills/harness/SKILL.md` §Preserved-English Glossary and none of the three appear
-   in it.
+   **Output language.** Every user-facing string this gate renders — the header, the question,
+   both labels and both descriptions — is emitted in the session's `user_lang`, per that single
+   source. This gate takes no exception to it.
+
+   The literals written above are the ENGLISH SOURCE TEXT of this contract, which is what the
+   `session-conflict` sync group matches. That lint reads the CITING files' bytes — this file
+   carries no marker and so is never one of its sites — and never a running session's rendered
+   output, so rendering in `user_lang` cannot break it. These are NOT Preserved-English Glossary
+   tokens either: that Glossary lives in `skills/harness/SKILL.md` §Preserved-English Glossary
+   and none of the three appear in it.
 
 5. **Act.**
    - `"Cancel"` → **halt immediately**, before any directory creation, branch creation or
