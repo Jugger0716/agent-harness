@@ -17,12 +17,11 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
   plus an assertion that its OK line is present: `bash -e` does not trip errexit on a failing `if`
   condition, so a bare negative grep over a log that was never written would otherwise pass.
 - **`scripts/verify_manifest_sync.py`.** Compares `.claude-plugin/plugin.json` against
-  `.claude-plugin/marketplace.json` on the three fields duplicated between them — the plugin
-  description, the keyword set, and the version string at every one of its three key paths. The
-  marketplace entry is located by name rather than by index, so a second listed plugin cannot
-  shift the comparison onto the wrong entry. `metadata.description` and `owner` are deliberately
-  excluded, and the script's docstring is the only place either exclusion can be recorded,
-  because JSON carries no comments.
+  `.claude-plugin/marketplace.json` on the plugin description, the keyword set, and the version
+  string at every one of its three key paths. The marketplace entry is located by name rather
+  than by index, so a second listed plugin cannot shift the comparison onto the wrong entry.
+  `metadata.description`, `owner` and `author` are deliberately not compared, and the script's
+  docstring records each exclusion with its reason, because JSON carries no comments.
 - **`.github/scripts/check_lint_wiring.sh`.** Compares the lints that exist against the ones
   `lint.yml` actually runs, by name set rather than by count. A count is satisfied by duplicates:
   paste the same step twice while adding a lint and the check stays green while that lint executes
@@ -43,9 +42,11 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
   `check_workflow_syntax.mjs`; what changed is that they now run in CI and that a skipped
   index-blob guard fails instead of passing quietly.
 - **Documentation corrected where CI made it false.** The lint docstrings, `CLAUDE.md`,
-  `README.md`, `skills/spec/SKILL.md` and the planner templates all said the lints run manually
-  only, and `CLAUDE.md` said `.github/` holds issue and PR templates only. Those sentences now
-  name the workflow. A pre-commit hook is still not wired, and the corrected text says so.
+  `skills/spec/SKILL.md` and the planner templates all said the lints run manually only, and
+  `CLAUDE.md` said `.github/` holds issue and PR templates only. Those sentences now name the
+  workflow. `README.md`'s Repository Layout gained rows for `.claude-plugin/` and `.github/`,
+  and its `scripts/` row now lists the fifth lint. A pre-commit hook is still not wired, and
+  the corrected text says so.
 
 ## [8.11.0] — 2026-08-20
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Verify that .claude-plugin/plugin.json and .claude-plugin/marketplace.json agree
-on the three fields that are duplicated between them.
+on the plugin description, the keyword set, and the version string.
 
 Checked:
   1. Plugin description -- plugin.json `$.description` vs the marketplace entry's
@@ -16,12 +16,19 @@ Checked:
      `$.plugins[*].version` (EVERY element, using CLAUDE.md's own notation). A bump that
      edits only the first two is incomplete, and that is the failure this check exists for.
 
-Deliberately NOT checked, and why -- this docstring is the only place either exclusion can
-be written down, because JSON carries no comments:
+Deliberately NOT checked. JSON carries no comments, so each exclusion is recorded here with
+its reason:
   - `$.metadata.description` in marketplace.json is a SHORTER, marketplace-facing summary.
     It is intentionally not the plugin description and must not be forced to match it.
   - `$.owner` in marketplace.json is value policy, not a sync contract: what goes in the
     owner name or address is the maintainer's decision, so this script has no opinion on it.
+  - `$.author` IS carried by both files, with identical values today, and is still not
+    compared: like `$.owner` it is maintainer identity rather than a sync contract. Read this
+    as a known gap, not as an impossibility -- if it should be enforced, add a check here
+    rather than assuming one already runs.
+
+`$.name` is absent from that list because it is not an exclusion: it is the key this script
+joins the two files on, so a mismatch surfaces as exit 2 rather than passing unnoticed.
 
 Both manifests are opened with an EXPLICIT utf-8 encoding. On Windows the interpreter
 default is cp949 and both files contain U+2192 (the arrow in "Plan -> Generate -> Verify
