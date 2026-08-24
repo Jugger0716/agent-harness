@@ -69,6 +69,30 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
   proceeds to Setup with no prompt. **The gate is enforced as prose, not as code**: the new sync
   group proves the four skills carry the marker and the header and option literals, never that
   the gate actually fires. Only the pre-release live probe can show that.
+- **`/harness` now gates a `version: "3.0"` session that carries no `skill` field, and its
+  question names what is about to be deleted.** §Session Recovery item 1 was a two-way test where
+  "`harness` or missing" both continued; absent `skill` now routes on `version` instead. `"3.0"`
+  gates — a v3 file is defined as carrying both `version "3.0"` and `skill: "harness"`, so one
+  without the field is not a well-formed session — while a missing or non-`"3.0"` version still
+  reaches item 2's pre-harness branch with Restart/Stop and no Resume. **That third route is the
+  point**: sending every absent-`skill` file to the gate would have left item 2 intact and
+  unreachable, which no byte-comparison can detect. The gate's question now carries the task,
+  phase and docs_path of the session being deleted, as `/spec`'s already did.
+- **`/ship`'s conflict gate uses the shared labels and halts when nobody can answer.** Its
+  question was a bare Yes/No with no header and no reference to the shared source; it is now the
+  canonical `Session Conflict` / `Delete and start` / `Cancel` form, promoted to the top of
+  Session Recovery so it is evaluated before the `skill` check rather than nested inside it.
+  **The legacy branch's unattended behaviour was previously undefined** — not permissive,
+  undefined — and is now fixed at halt, matching the shared source's rule that a destructive
+  action never proceeds unanswered. `/ship` documents no headless usage anywhere, so no stated
+  promise changes.
+- **The `session-conflict` group's floor rose from 4 to 7** in the same change that added the
+  three markers, because adding sites without raising the floor fails nothing — the failure mode
+  is silent slack rather than a red build. **Its coverage claim is narrowed at the same time**:
+  `/spec` and `/harness` already contained both tokens before their markers existed, so at those
+  two sites the check can only notice a gate deleted wholesale, never wording that drifts from
+  the source. What is proven is that seven markers coexist and that `/ship` carries the literals;
+  that the seven gates still agree is not proven by any lint here.
 
 ## [8.11.0] — 2026-08-20
 
