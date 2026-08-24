@@ -69,6 +69,17 @@ Phase labels: `setup` → "Setup", `reproducing` → "Reproducing error", `analy
 
 ## Session Recovery
 
+**0. Cross-skill session conflict gate** — single source:
+`templates/_shared/session_conflict.md` §Gate Procedure (`{current_skill}` = `debug`). Cited by
+name; the full procedure, question text and non-interactive rule are NOT restated here.
+<!-- SYNC-WITH: templates/_shared/session_conflict.md §Gate Procedure -->
+Fires when `.harness/state.json` exists AND (`skill` is absent OR `skill != "debug"`) — another
+skill's live session, or an unmarked legacy file, holds this directory's single state.json slot.
+Ask via AskUserQuestion (in `user_lang`), header `"Session Conflict"`, options
+`"Delete and start"` / `"Cancel"`. `"Cancel"` halts **before** any directory creation,
+`git checkout -b`, or state.json write; a non-interactive session defaults to halt.
+`"Delete and start"` deletes `.harness/`, then proceeds to Step 1 as a fresh session.
+
 Before starting a new debug session, check if `.harness/state.json` already exists **and** `state.json.skill` equals `"debug"`:
 
 1. If it exists and matches, print status in the standard format (including Model line from `model_config`), prefixed with `[debug] Previous debug session detected.`
@@ -96,7 +107,7 @@ Before starting a new debug session, check if `.harness/state.json` already exis
    - **Restart**: Delete `.harness/` directory and proceed to Step 1
    - **Stop**: Delete `.harness/` directory and halt
 
-If `.harness/state.json` does not exist (or `state.json.skill` is not `"debug"`), proceed to Step 1 normally.
+If `.harness/state.json` does not exist, proceed to Step 1 normally. (The `skill` field mismatch case is now fully handled by gate 0 above — it no longer falls through here.)
 
 ## Workflow
 
