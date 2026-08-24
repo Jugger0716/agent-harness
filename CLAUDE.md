@@ -33,7 +33,7 @@ defect.
 
 Run all five after changing anything under `skills/`, `templates/`, `workflows/`, `scripts/`, or
 `.claude-plugin/`. Re-run `check_lint_wiring.sh` as well whenever `.github/workflows/lint.yml`
-changes or a `scripts/verify_*.py` is added or removed.
+changes or a file matching `scripts/verify_*.py` or `scripts/*.mjs` is added or removed.
 
 They also run on every push and pull request via `.github/workflows/lint.yml`; `.github/` holds that
 workflow, the wiring check under `.github/scripts/`, and the issue and PR templates. The Python
@@ -136,8 +136,9 @@ in `.github/workflows/lint.yml`, are the entire verification layer:
   `(tag, version, files, shared_source)`.
 - `verify_manifest_sync.py` — `.claude-plugin/plugin.json` and `marketplace.json`: the plugin
   description, the keywords set, and the version string at all three key paths.
-  `metadata.description` is a deliberate short summary and is excluded; the script's docstring is
-  the only place that exclusion is written down, because JSON cannot carry a comment.
+  `metadata.description` and `owner` are marketplace-only, and `author` is carried by both files
+  but not compared; the script's docstring records each exclusion with its reason, because JSON
+  cannot carry a comment.
 - `check_workflow_syntax.mjs` — compiles each script through `AsyncFunction` because `node --check`
   false-greens on ESM `export`, then guards CR in both the working tree and the index blob.
 - `.github/scripts/check_lint_wiring.sh` — compares the lint scripts that exist against the ones
