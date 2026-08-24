@@ -96,6 +96,47 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
   no coverage their own gate text did not already force. What is proven is that seven markers
   coexist and each site still carries both literals; that the seven gates still agree is not
   proven by any lint here.
+- **`/team-memory save` no longer writes into a gitignored store and calls it saved.** The save
+  flow ran no git command at all, so a store under an ignored path was written to and reported as
+  `Saved : N records` with nothing said — and this repository is exactly that case, since
+  `.gitignore` ignores `docs/`. A new §Step 1.5 evaluates the store's location once per
+  invocation, between Step 1 and Step 2; it cannot sit "just before Step 3", because Step 2 is
+  the per-item loop and calls Step 3 from inside it. The check covers the store, its README, each
+  category directory and one **record-shaped probe per category**, not the store directory alone:
+  a file glob under the store, a pattern on one category, and a store with a tracked descendant
+  each leave the directory reported as not-ignored while the record about to be written is
+  ignored — `git check-ignore` ignores the filesystem but consults the index, so only a new,
+  untracked probe path is a trustworthy signal. The multi-path form drops `-q`, which is rejected
+  outright once more than one path is passed. The work-tree test reads stdout rather than the exit
+  code, because inside a `.git/` directory the command exits 0 and prints `false`.
+- **The repair the gate offers is narrow by decision, and the narrowing is the point.** Which
+  branch applies is decided by MEASURING the store's ancestors, never by the shape of the reported
+  pattern. Only when an ancestor is itself ignored — this repository's `docs/` — is the ignoring
+  line replaced with the star cascade, its depth set by the shallowest ignored ancestor. Every
+  other shape (`*.md`, `**/memory/`, `docs/harness/memory/` itself, a per-category pattern, a
+  nested `.gitignore`, `.git/info/exclude`, a global excludes file, or two different source lines)
+  is reported with the exact lines to change and left alone. A delete-the-offending-line branch
+  was drafted and dropped: with `*.md` it was measured to newly track every `.md` in a repository,
+  and a one-directional side-effect check passes while it happens. Verification after an edit now
+  runs in **both** directions — a sample that was ignored and is now tracked fails exactly as the
+  reverse does — and any failure restores the line verbatim and re-asks instead of continuing on
+  the user's behalf. Rollback never uses `git checkout`/`stash`/`restore`, which would swallow
+  unrelated uncommitted work.
+- **The unconditional "git-committed" claim is now conditional at all four sites inside the two
+  skills that make it** — `/team-memory`'s frontmatter description and opening paragraph, and the
+  deprecated `/memory` stub's blockquote and the sentence it PRINTS to the user. The description
+  measures 412 UTF-8 characters, up from 400; that basis matters, because `awk length()` and
+  `wc -c` report bytes on this shell (414) and confusing the two produced a false "400 is really
+  402" correction during this slice. `README.md` (2 sites) and `CLAUDE.md` (1 site) carry the same
+  unconditional claim and are deliberately untouched — this batch assigns those files to later
+  slices — and are registered in `ROADMAP.md` rather than left to a commit message.
+- **Two limits stated rather than implied.** This repository's own `docs/`-vs-team-memory conflict
+  is made *visible* by this change, not resolved: `docs/` is thirteen skills' runtime output path
+  and stays ignored. And **no lint verifies any of the above** — `skills/team-memory/` and
+  `skills/memory/` carry no SYNC marker and no workflow script, so all five lints plus the wiring
+  check pass on these files whatever they say. Marker total is unchanged at 51. The gate's actual
+  behaviour is established only by the pre-release live probe, which itself cannot reach the
+  not-a-git-repository path (it runs inside this repository) — recorded in `ROADMAP.md`.
 
 ## [8.11.0] — 2026-08-20
 
