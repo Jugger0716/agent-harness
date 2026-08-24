@@ -107,7 +107,8 @@ Ask via AskUserQuestion (in `user_lang`):
 If "Cancel" → **halt before any directory creation or state.json write**; nothing under
 `.harness/` is changed. If "Delete and start" → delete `.harness/`, then proceed to Step 1 as a
 fresh session. A session that **cannot present an interactive prompt** (headless / cron /
-sub-agent) → **halt**, never a silent overwrite. Never emit a `{...}` token verbatim.
+sub-agent) → **halt**, never a silent overwrite. Never emit a `{...}` token verbatim — substitute
+from the conflicting session's own state.json before rendering.
 Full procedure: `templates/_shared/session_conflict.md` §Gate Procedure (`{current_skill}` =
 `ship`), cited by name and not restated here.
 
