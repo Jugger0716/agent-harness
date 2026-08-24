@@ -69,6 +69,28 @@ Phase labels: `setup` → "Setup", `reproducing` → "Reproducing error", `analy
 
 ## Session Recovery
 
+**0. Cross-skill session conflict gate — evaluate this FIRST, before the check below.**
+If `.harness/state.json` exists AND (`skill` is absent OR `skill != "debug"`), a different
+skill's live session — or an unmarked legacy file — occupies this directory's single
+`.harness/state.json` slot. **Do NOT fall through to Step 1, which would overwrite it ungated**,
+and do not proceed to the skill-match check below. A missing `skill` field is treated the SAME as
+a mismatched one.
+<!-- SYNC-WITH: templates/_shared/session_conflict.md §Gate Procedure -->
+Ask via AskUserQuestion (in `user_lang`):
+  header: "Session Conflict"
+  question: "A `/{skill|'unknown'}` session exists in this directory (task: `{task}`, phase: `{phase}`, docs: `{docs_path}`). Starting /debug here will delete it. Delete it and start /debug?"
+  options:
+    - label: "Delete and start" / description: "Delete .harness/ and proceed with /debug"
+    - label: "Cancel" / description: "Keep existing session and halt"
+
+If "Cancel" → **halt before any directory creation, `git checkout -b`, or state.json write**;
+nothing under `.harness/` is changed. If "Delete and start" → delete `.harness/`, then proceed to
+Step 1 as a fresh session. A session that cannot present an interactive prompt (headless / cron /
+sub-agent) → **halt**, never a silent overwrite. Never emit a `{...}` token verbatim — substitute
+from the conflicting session's own state.json before rendering. Full procedure, the §Harness
+exception and the rule this gate instantiates: `templates/_shared/session_conflict.md`
+§Gate Procedure (`{current_skill}` = `debug`), cited by name and not restated here.
+
 Before starting a new debug session, check if `.harness/state.json` already exists **and** `state.json.skill` equals `"debug"`:
 
 1. If it exists and matches, print status in the standard format (including Model line from `model_config`), prefixed with `[debug] Previous debug session detected.`
@@ -96,7 +118,7 @@ Before starting a new debug session, check if `.harness/state.json` already exis
    - **Restart**: Delete `.harness/` directory and proceed to Step 1
    - **Stop**: Delete `.harness/` directory and halt
 
-If `.harness/state.json` does not exist (or `state.json.skill` is not `"debug"`), proceed to Step 1 normally.
+If `.harness/state.json` does not exist, proceed to Step 1 normally. (The `skill` field mismatch case is now fully handled by gate 0 above — it no longer falls through here.)
 
 ## Workflow
 
