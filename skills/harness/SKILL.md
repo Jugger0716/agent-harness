@@ -1136,7 +1136,8 @@ below):
   re-critic transition). `round` is bounded at 1 by design — §Step 3 Pass A's Auto-revise
   option disappears once `round == 1` (see the Auto-revise Exposure Predicate, §Step 3).
 - Gate display (§Step 3) null-safe-guards `counts == null` / `last_findings_path == null` /
-  file-not-found independently (mirrors `skills/spec/SKILL.md:166`'s precedent) — never
+  file-not-found independently (mirrors `skills/spec/SKILL.md` §Session Recovery — its
+  `"approved"` branch's `null-safe guard`) — never
   dereferences without checking first.
 
 **Failure handling — 3-way** (applies to the "own" dispatch only; the carried-over branch

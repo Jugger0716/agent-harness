@@ -111,16 +111,25 @@ real /spec invocation).
 
 Before starting a new task, check if `.harness/state.json` exists.
 
-**0. (NEW — P0-6) Cross-skill session conflict gate** — symmetric to `/harness`'s own gate
-(`skills/harness/SKILL.md` §Session Recovery item 1; closes the gap where `/spec` used to fall
-through to "proceed to Step 1 normally" and overwrite a live `/harness` session with **no**
-gate — [M1]): if `.harness/state.json` exists AND (`skill` is absent OR `skill != "spec"`), a
+**0. (NEW — P0-6) Cross-skill session conflict gate** — the shared gate, applied with `/spec`'s own
+absent-`skill` handling (`skills/harness/SKILL.md` §Session Recovery item 1 gates a MISMATCHED
+`skill` the same way but resolves an ABSENT one against `version` — gating some of it, deferring
+the rest to its legacy branch — so the two are deliberately NOT symmetric; closes the gap where
+`/spec` used to fall through to "proceed to Step 1 normally" and overwrite a live `/harness`
+session with **no** gate — [M1]): if `.harness/state.json` exists AND (`skill` is absent OR `skill != "spec"`), a
 different skill's live session — or an unmarked legacy file — occupies this directory's single
 `.harness/state.json` slot. Do NOT fall through to Step 1, which would overwrite it ungated.
 (A truly-missing `skill` field is treated the SAME as a mismatched skill here — every state.json
 `/spec` itself has ever written always carries `skill: "spec"` per Step 1 item 7 below, so an
 absent field can only mean another skill's file or a pre-skill-field legacy file; the safe
 default is to gate, not to guess it is safe to overwrite.)
+
+<!-- SYNC-WITH: templates/_shared/session_conflict.md §Gate Procedure -->
+Single source: `templates/_shared/session_conflict.md` §Gate Procedure (`{current_skill}` = `spec`).
+The procedure below is the canonical wording that source generalises. This file's absent-`skill`
+folding is NOT a deviation from the source — it IS the source's default rule (§Gate Procedure
+item 1); only `/harness` and `/ship` are named exceptions there (item 2). If this file and the
+source ever appear to disagree on any other point, the source wins.
 
 Ask via AskUserQuestion (in `user_lang`):
   header: "Session Conflict"
