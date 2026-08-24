@@ -195,6 +195,44 @@ SYNC_GROUPS = [
         ],
         "min_sites": 3,                        # the 2 .md sources + the dispatched JS copy (slack 0)
     },
+    {
+        # review-fixes-v8-12 S2: the cross-skill session conflict gate. Four skills (debug,
+        # refactor, migrate, test-gen) each cite templates/_shared/session_conflict.md
+        # §Gate Procedure and reproduce the ACTIONABLE part of it -- trigger condition, the
+        # AskUserQuestion header/question/options, both outcomes, and the non-interactive
+        # default -- the same way their own §Mode Gate sections reproduce mode_gate.md's
+        # decision table. What they do NOT reproduce is the full procedure, the §Harness
+        # exception, and the general destructive-vs-non-destructive rule.
+        # An earlier revision of this comment said those sites "restate only the header + the
+        # two option labels". That was false when written -- the same paragraph it described
+        # also restated the trigger condition, the ordering guarantee and both outcomes -- and
+        # it is corrected here rather than deleted.
+        # The tokens below check the header and ONE option label. That is a strictly narrower
+        # guarantee than "the gate is present and correct"; claim only the narrow one.
+        # COVERAGE GAP until S3: skills/{spec,harness,ship}/SKILL.md carry `Session Conflict`
+        # and their own option literals as hand-written prose with NO marker, so they are not
+        # sites of this group and nothing here notices when they drift from the SSOT. Editing
+        # session_conflict.md before S3 converges them means checking those three by hand.
+        # REVERT ORDER: this group and its sites must be reverted together, newest commit
+        # first. Reverting the marker insertion (or the SSOT) while leaving this group
+        # registered drops site discovery to 0, which is exit 2 (MISSING), not exit 1.
+        # The SSOT itself carries NO marker: SCAN_DIRS includes
+        # "templates", so quoting one there as an example would make the site count 5 rather
+        # than 4 and break both this floor and the raise S3 makes to it.
+        # Token non-vacuity was MEASURED before the edit, not assumed: `Session Conflict` and
+        # `Delete and start` each occurred 0 times in all four skill files, and neither is a
+        # substring of this group's marker text -- so unlike slice-command-format's `§Step 3.5`
+        # (see its HONEST COVERAGE NOTE above), both tokens here can actually fail.
+        "id": "session-conflict",
+        "target_file": "templates/_shared/session_conflict.md",
+        "section": "Gate Procedure",           # NO leading § — MARKER_RE captures the text AFTER §
+        "target_anchor": "§Gate Procedure",
+        "tokens": ["Session Conflict", "Delete and start"],
+        # zero slack: 4 skills x 1 marker. S3 raises this to 7 when spec, harness and ship
+        # converge onto the same source; a site added without raising the floor fails nothing,
+        # so that raise is guarded only by S3's own arithmetic assertion.
+        "min_sites": 4,
+    },
 ]
 
 
