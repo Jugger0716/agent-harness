@@ -215,13 +215,24 @@ SYNC_GROUPS = [
         # S3 converged those three and they now carry markers, so that gap is closed and the
         # sentence is corrected here rather than deleted. The floor below rose 4 -> 7 in the
         # same change.
-        # WHAT REPLACES IT is a narrower gap, not none. At the spec and harness sites the two
-        # tokens were ALREADY present before their markers were added (measured at the S3 base:
-        # spec 1/2, harness 1/1, ship 0/0), because both files spell their own gate out in full.
-        # So at those two sites the token check can only fail if the gate text disappears
-        # wholesale -- it cannot see wording drift away from the SSOT. Only the ship site is
-        # non-vacuous in the S2 sense. Claim the narrow guarantee: 7 markers coexist and ship
-        # carries the literals; NOT that the seven gates still agree with the source.
+        # WHAT REPLACES IT is a narrower gap, not none -- and it is NOT the gap an earlier
+        # revision of this comment described. That revision said the spec and harness sites
+        # "can only fail if the gate text disappears wholesale". Measured, that is wrong in both
+        # directions, so it is corrected here rather than deleted:
+        #   * The check DOES fire when a token's LAST occurrence in a file disappears. Injected
+        #     at the S3 head: renaming spec's single `Session Conflict` -> exit 1. Current counts
+        #     are `Session Conflict` 1 at every site except harness (5: table row + gate header +
+        #     question) and `Delete and start` 2 everywhere.
+        #   * What it genuinely cannot see is WORDING DRIFT while both literals survive, and that
+        #     limit applies to all SEVEN sites uniformly, not to spec and harness specially.
+        #     Injected: changing spec's question from "will delete it" to "will nuke it" -> exit 0,
+        #     undetected.
+        # What IS specific to spec and harness is marginal value, not toothlessness: both files
+        # already contained the two literals before their markers were added (measured at the S3
+        # base: spec 1/2, harness 1/1, ship 0/0), so the marker adds no coverage there that their
+        # own gate text did not already force. Claim the narrow guarantee -- 7 markers coexist and
+        # each site still carries both literals; NOT that the seven gates still agree with the
+        # source. Only the live probe shows that.
         # REVERT ORDER: this group and its sites must be reverted together, newest commit
         # first. Reverting the marker insertion (or the SSOT) while leaving this group
         # registered drops site discovery to 0, which is exit 2 (MISSING), not exit 1.

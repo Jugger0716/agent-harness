@@ -88,11 +88,14 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
   promise changes.
 - **The `session-conflict` group's floor rose from 4 to 7** in the same change that added the
   three markers, because adding sites without raising the floor fails nothing — the failure mode
-  is silent slack rather than a red build. **Its coverage claim is narrowed at the same time**:
-  `/spec` and `/harness` already contained both tokens before their markers existed, so at those
-  two sites the check can only notice a gate deleted wholesale, never wording that drifts from
-  the source. What is proven is that seven markers coexist and that `/ship` carries the literals;
-  that the seven gates still agree is not proven by any lint here.
+  is silent slack rather than a red build. **Its coverage claim is narrowed at the same time**,
+  to what injection actually shows: the check fires when a literal's last occurrence in a file
+  disappears, and it cannot see the gate's wording drifting away from the shared source while
+  both literals survive — a limit that applies to all seven sites equally. `/spec` and `/harness`
+  additionally already carried both tokens before their markers existed, so there the marker adds
+  no coverage their own gate text did not already force. What is proven is that seven markers
+  coexist and each site still carries both literals; that the seven gates still agree is not
+  proven by any lint here.
 
 ## [8.11.0] — 2026-08-20
 
