@@ -31,7 +31,7 @@ When an inline-dispatched sub-agent returns:
 
 This is **state.json v3** (version `"3.0"`, `skill: "harness"`). When loading an existing state.json:
 - If `version` is `"3.0"` **and `skill` is `"harness"`** → run the v3 logic defined in this file. (A `"3.0"` file whose `skill` is another skill's value OR absent is routed by §Session Recovery item 1's branch table to the Session Conflict gate instead — rows 1 and 2. A v3 file is defined as carrying BOTH fields, so a `"3.0"` file missing `skill` is not one.)
-- If `version` is missing or `"2.0"` (a pre-harness `/workflow` session — i.e. `skill` is absent; a file carrying another skill's `skill` value is routed by §Session Recovery item 1's branch table instead, whatever its `version`) → **do NOT migrate silently.** See §Session Recovery step 2 — Restart is recommended; legacy resume is not supported by /harness.
+- If `version` is missing or `"2.0"` — reached when `skill` is absent, and also when `skill` is `"harness"`, which §Session Recovery item 1's branch table row 4 admits by construction even though an ordinary /harness write never pairs `skill: "harness"` with a non-`"3.0"` `version`; a file carrying ANOTHER skill's `skill` value is routed by that table instead, whatever its `version` — → **do NOT migrate silently.** See §Session Recovery step 2 — Restart is recommended; legacy resume is not supported by /harness.
 - **Additive fields within `"3.0"` do not bump `version`**: readers MUST ignore any state.json field they do not recognize and MUST treat any missing field as its documented default (see the new-field table under Step 1 item 11); writers MUST NOT make a field added within `"3.0"` `required` — doing so would leave in-flight `"3.0"` sessions written before that field existed unreadable.
 
 ## Zero-Setup Environment Detection
@@ -180,7 +180,8 @@ Before starting a new task, check if `.harness/state.json` exists:
    If "Cancel" → **halt before any directory creation, `git checkout -b`, or state.json write**;
    nothing under `.harness/` is changed. If "Delete and start" → delete `.harness/`, then proceed
    to Step 1. A session that **cannot present an interactive prompt** (headless / cron /
-   sub-agent) → **halt**, never a silent overwrite. Never emit a `{...}` token verbatim.
+   sub-agent) → **halt**, never a silent overwrite. Never emit a `{...}` token verbatim —
+   substitute from the conflicting session's own state.json before rendering.
    Full procedure and the rule this gate instantiates:
    `templates/_shared/session_conflict.md` §Gate Procedure, cited by name and not restated here.
 
