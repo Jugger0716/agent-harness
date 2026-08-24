@@ -209,10 +209,43 @@ SYNC_GROUPS = [
         # it is corrected here rather than deleted.
         # The tokens below check the header and ONE option label. That is a strictly narrower
         # guarantee than "the gate is present and correct"; claim only the narrow one.
-        # COVERAGE GAP until S3: skills/{spec,harness,ship}/SKILL.md carry `Session Conflict`
-        # and their own option literals as hand-written prose with NO marker, so they are not
-        # sites of this group and nothing here notices when they drift from the SSOT. Editing
-        # session_conflict.md before S3 converges them means checking those three by hand.
+        # CORRECTION (S3): an earlier revision of this comment said "COVERAGE GAP until S3:
+        # skills/{spec,harness,ship}/SKILL.md carry `Session Conflict` and their own option
+        # literals as hand-written prose with NO marker, so they are not sites of this group".
+        # S3 converged those three and they now carry markers, so that gap is closed and the
+        # sentence is corrected here rather than deleted. The floor below rose 4 -> 7 in the
+        # same change.
+        # WHAT REPLACES IT is a narrower gap, not none -- and it is NOT the gap an earlier
+        # revision of this comment described. That revision said the spec and harness sites
+        # "can only fail if the gate text disappears wholesale". Measured, that is wrong in both
+        # directions, so it is corrected here rather than deleted:
+        #   * The check DOES fire when a token's LAST occurrence in a file disappears. Injected
+        #     at the S3 head: renaming spec's single `Session Conflict` -> exit 1. Current counts
+        #     are `Session Conflict` 1 at every site except harness (5: table row + gate header +
+        #     question) and `Delete and start` 2 everywhere.
+        #   * What it genuinely cannot see is WORDING DRIFT while both literals survive, and that
+        #     limit applies to all SEVEN sites uniformly, not to spec and harness specially.
+        #     Injected: changing spec's question from "will delete it" to "will nuke it" -> exit 0,
+        #     undetected.
+        # What IS specific to spec and harness is marginal value, not toothlessness: both files
+        # already contained the two literals before their markers were added, so the marker adds
+        # no coverage there that their own gate text did not already force. Pre-edit counts at the
+        # S3 base, `grep -c` (MATCHING LINES, not occurrences -- stating the basis because
+        # harness's item 1 was one long line carrying both the option label and the outcome
+        # sentence, so 2 occurrences counted as 1 line and the numbers otherwise look inconsistent
+        # with spec's): spec 1/2, harness 1/1, ship 0/0.
+        # Claim the narrow guarantee -- 7 markers coexist and each site still carries both
+        # literals; NOT that the seven gates still agree with the source. Only the live probe
+        # shows that.
+        # FORWARD CONSTRAINTS, left here because this is where the S2 -> S3 handoff note lived and
+        # was consumed, and the equivalent forward notes otherwise exist only outside git:
+        #   * S4 (/team-memory) must cite templates/_shared/session_conflict.md IN PROSE ONLY --
+        #     adding a SYNC-WITH marker there makes 8 sites against a floor of 7, which passes
+        #     silently and restores exactly the slack this zero-slack floor exists to remove.
+        #     Following this repository's usual marker convention is what causes the defect here.
+        #   * S5's read-only `doctor` carve-out must sit BEFORE item 1's branch table in
+        #     skills/harness/SKILL.md, or the gate this slice added blocks a diagnostic that reads
+        #     nothing.
         # REVERT ORDER: this group and its sites must be reverted together, newest commit
         # first. Reverting the marker insertion (or the SSOT) while leaving this group
         # registered drops site discovery to 0, which is exit 2 (MISSING), not exit 1.
@@ -228,10 +261,16 @@ SYNC_GROUPS = [
         "section": "Gate Procedure",           # NO leading § — MARKER_RE captures the text AFTER §
         "target_anchor": "§Gate Procedure",
         "tokens": ["Session Conflict", "Delete and start"],
-        # zero slack: 4 skills x 1 marker. S3 raises this to 7 when spec, harness and ship
-        # converge onto the same source; a site added without raising the floor fails nothing,
-        # so that raise is guarded only by S3's own arithmetic assertion.
-        "min_sites": 4,
+        # zero slack: 7 sites = S2's four skills (debug, refactor, migrate, test-gen) + S3's
+        # three (spec, harness, ship). Raised 4 -> 7 in S3, in the same change that added those
+        # three markers: a site added without raising the floor fails NOTHING, so the failure
+        # mode of forgetting this line is silent slack, not a red build. The only guard is the
+        # arithmetic assertion in the slice that adds sites -- `9 sync group(s), 51 marker
+        # site(s)` together with this value read directly out of the dict.
+        # Reverting one converging commit on its own (harness, say) drops sites to 6 and this
+        # floor turns red immediately. That is intended, not a bug: revert the floor in the same
+        # operation.
+        "min_sites": 7,
     },
 ]
 

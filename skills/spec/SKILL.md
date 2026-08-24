@@ -111,16 +111,30 @@ real /spec invocation).
 
 Before starting a new task, check if `.harness/state.json` exists.
 
-**0. (NEW — P0-6) Cross-skill session conflict gate** — symmetric to `/harness`'s own gate
-(`skills/harness/SKILL.md` §Session Recovery item 1; closes the gap where `/spec` used to fall
-through to "proceed to Step 1 normally" and overwrite a live `/harness` session with **no**
-gate — [M1]): if `.harness/state.json` exists AND (`skill` is absent OR `skill != "spec"`), a
+**0. (NEW — P0-6) Cross-skill session conflict gate** — the shared gate, applied with `/spec`'s own
+absent-`skill` handling (`skills/harness/SKILL.md` §Session Recovery item 1 gates a MISMATCHED
+`skill` the same way but resolves an ABSENT one against `version` — gating some of it, deferring
+the rest to its legacy branch — so the two are deliberately NOT symmetric; closes the gap where
+`/spec` used to fall through to "proceed to Step 1 normally" and overwrite a live `/harness`
+session with **no** gate — [M1]): if `.harness/state.json` exists AND (`skill` is absent OR `skill != "spec"`), a
 different skill's live session — or an unmarked legacy file — occupies this directory's single
 `.harness/state.json` slot. Do NOT fall through to Step 1, which would overwrite it ungated.
 (A truly-missing `skill` field is treated the SAME as a mismatched skill here — every state.json
 `/spec` itself has ever written always carries `skill: "spec"` per Step 1 item 7 below, so an
 absent field can only mean another skill's file or a pre-skill-field legacy file; the safe
 default is to gate, not to guess it is safe to overwrite.)
+
+<!-- SYNC-WITH: templates/_shared/session_conflict.md §Gate Procedure -->
+Single source: `templates/_shared/session_conflict.md` §Gate Procedure (`{current_skill}` = `spec`).
+The procedure below is the canonical wording that source generalises. This file's absent-`skill`
+folding is NOT a deviation from the source — it IS the source's default rule (§Gate Procedure
+item 1); only `/harness` and `/ship` are named exceptions there (item 2). If this file and the
+source ever appear to disagree on any other point, the source wins — **that is a rule for whoever
+next edits either file, not a runtime instruction for `/spec`.** A model executing `/spec` follows
+the text printed in this section as-is and does not re-open the source to check for drift, and the
+`session-conflict` sync group only checks that two literal phrases coexist, never that this
+section's full wording still matches. Drift is caught by review and by the pre-release probe, not
+by anything mechanical.
 
 Ask via AskUserQuestion (in `user_lang`):
   header: "Session Conflict"
@@ -136,6 +150,8 @@ delete `.harness/`, then proceed to Step 1 normally (fresh /spec session).
 (headless/cron/subagent — no AskUserQuestion available), the safe default is **halt**, never a
 silent delete-and-overwrite — a destructive, irreversible action must not proceed unattended
 just because no one is watching to answer the gate. Print the same conflict message and stop.
+Never emit a `{...}` token verbatim — substitute from the conflicting session's own state.json
+before rendering.
 
 If the file does not exist, OR it exists and `skill == "spec"`, gate 0 does not apply — continue
 below with `/spec`'s own session recovery:
