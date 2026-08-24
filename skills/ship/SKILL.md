@@ -92,13 +92,31 @@ If detection fails → ask user for current version.
 
 ## Session Recovery
 
+**0. Cross-skill session conflict gate — evaluate this FIRST, before the check below.**
+If `.harness/state.json` exists AND `skill` is present AND `skill != "ship"`, a different skill's
+live session occupies this directory's single `.harness/state.json` slot. **Do NOT fall through to
+Step 1**, and do not proceed to the `skill` check below.
+<!-- SYNC-WITH: templates/_shared/session_conflict.md §Gate Procedure -->
+Ask via AskUserQuestion (in `user_lang`):
+  header: "Session Conflict"
+  question: "A `/{skill|'unknown'}` session exists in this directory (task: `{task}`, phase: `{phase}`, docs: `{docs_path}`). Starting /ship here will delete it. Delete it and start /ship?"
+  options:
+    - label: "Delete and start" / description: "Delete .harness/ and proceed with /ship"
+    - label: "Cancel" / description: "Keep existing session and halt"
+
+If "Cancel" → **halt before any directory creation or state.json write**; nothing under
+`.harness/` is changed. If "Delete and start" → delete `.harness/`, then proceed to Step 1 as a
+fresh session. A session that **cannot present an interactive prompt** (headless / cron /
+sub-agent) → **halt**, never a silent overwrite. Never emit a `{...}` token verbatim.
+Full procedure: `templates/_shared/session_conflict.md` §Gate Procedure (`{current_skill}` =
+`ship`), cited by name and not restated here.
+
 Before starting, check if `.harness/state.json` exists:
 
 1. Read state.json.
 2. Check `skill` field:
-   - If `skill` field exists and is NOT `"ship"` → warn user (in `user_lang`): "A different skill session (`{skill}`) exists. You must end that session before starting /ship." Ask via AskUserQuestion: "Delete existing session and start /ship?" (Yes / No). If No → halt.
    - If `skill` field is `"ship"` → continue recovery.
-   - If `skill` field is missing → treat as legacy session (possibly from workflow v1). Ask to restart or halt.
+   - If `skill` field is missing → treat as legacy session (possibly from workflow v1). Ask to restart or halt. A session that **cannot present an interactive prompt** (headless / cron / sub-agent) → **halt** on this path too, never restart unattended.
 3. Print status in standard format, prefixed with `[harness:ship] Previous session detected.`
 4. Ask via AskUserQuestion (in `user_lang`):
    - header: "Session"
