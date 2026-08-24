@@ -228,11 +228,24 @@ SYNC_GROUPS = [
         #     Injected: changing spec's question from "will delete it" to "will nuke it" -> exit 0,
         #     undetected.
         # What IS specific to spec and harness is marginal value, not toothlessness: both files
-        # already contained the two literals before their markers were added (measured at the S3
-        # base: spec 1/2, harness 1/1, ship 0/0), so the marker adds no coverage there that their
-        # own gate text did not already force. Claim the narrow guarantee -- 7 markers coexist and
-        # each site still carries both literals; NOT that the seven gates still agree with the
-        # source. Only the live probe shows that.
+        # already contained the two literals before their markers were added, so the marker adds
+        # no coverage there that their own gate text did not already force. Pre-edit counts at the
+        # S3 base, `grep -c` (MATCHING LINES, not occurrences -- stating the basis because
+        # harness's item 1 was one long line carrying both the option label and the outcome
+        # sentence, so 2 occurrences counted as 1 line and the numbers otherwise look inconsistent
+        # with spec's): spec 1/2, harness 1/1, ship 0/0.
+        # Claim the narrow guarantee -- 7 markers coexist and each site still carries both
+        # literals; NOT that the seven gates still agree with the source. Only the live probe
+        # shows that.
+        # FORWARD CONSTRAINTS, left here because this is where the S2 -> S3 handoff note lived and
+        # was consumed, and the equivalent forward notes otherwise exist only outside git:
+        #   * S4 (/team-memory) must cite templates/_shared/session_conflict.md IN PROSE ONLY --
+        #     adding a SYNC-WITH marker there makes 8 sites against a floor of 7, which passes
+        #     silently and restores exactly the slack this zero-slack floor exists to remove.
+        #     Following this repository's usual marker convention is what causes the defect here.
+        #   * S5's read-only `doctor` carve-out must sit BEFORE item 1's branch table in
+        #     skills/harness/SKILL.md, or the gate this slice added blocks a diagnostic that reads
+        #     nothing.
         # REVERT ORDER: this group and its sites must be reverted together, newest commit
         # first. Reverting the marker insertion (or the SSOT) while leaving this group
         # registered drops site discovery to 0, which is exit 2 (MISSING), not exit 1.

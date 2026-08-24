@@ -86,9 +86,9 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
   undefined — and is now fixed at halt, matching the shared source's rule that a destructive
   action never proceeds unanswered. `/ship` documents no headless usage anywhere, so no stated
   promise changes.
-- **The `session-conflict` group's floor rose from 4 to 7** in the same change that added the
-  three markers, because adding sites without raising the floor fails nothing — the failure mode
-  is silent slack rather than a red build. **Its coverage claim is narrowed at the same time**,
+- **The `session-conflict` group's floor rose from 4 to 7** in the commit that followed the three
+  marker-adding commits, because adding sites without raising the floor fails nothing — the
+  failure mode is silent slack rather than a red build. **Its coverage claim is narrowed at the same time**,
   to what injection actually shows: the check fires when a literal's last occurrence in a file
   disappears, and it cannot see the gate's wording drifting away from the shared source while
   both literals survive — a limit that applies to all seven sites equally. `/spec` and `/harness`
