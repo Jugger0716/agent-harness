@@ -96,10 +96,12 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
   no coverage their own gate text did not already force. What is proven is that seven markers
   coexist and each site still carries both literals; that the seven gates still agree is not
   proven by any lint here.
-- **`/team-memory save` no longer writes into a gitignored store and calls it saved.** The save
-  flow ran no git command at all, so a store under an ignored path was written to and reported as
-  `Saved : N records` with nothing said — and this repository is exactly that case, since
-  `.gitignore` ignores `docs/`. A new §Step 1.5 evaluates the store's location once per
+- **`/team-memory save` no longer writes into a gitignored store *silently*.** It can still write
+  there — `Continue local-only` is an offered answer and the non-interactive default — but it can
+  no longer do so without saying so. Before this change the save flow ran no git command at all,
+  so a store under an ignored path was written to and reported as `Saved : N records` with nothing
+  said; this repository is exactly that case, since `.gitignore` ignores `docs/`. A new §Step 1.5
+  evaluates the store's location once per
   invocation, between Step 1 and Step 2; it cannot sit "just before Step 3", because Step 2 is
   the per-item loop and calls Step 3 from inside it. The check covers the store, its README, each
   category directory and one **record-shaped probe per category**, not the store directory alone:
@@ -130,6 +132,14 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
   402" correction during this slice. `README.md` (2 sites) and `CLAUDE.md` (1 site) carry the same
   unconditional claim and are deliberately untouched — this batch assigns those files to later
   slices — and are registered in `ROADMAP.md` rather than left to a commit message.
+- **Two user-visible contract changes come with it.** The Save Report gains a `Store` line — an
+  added label, documented in the skill as `templates/_shared/status_format.md` requires — with
+  five states, keeping "not a work tree" separate from "ignored" and from "the check could not
+  run", and never asserting that a path is *tracked*, which §Step 1.5 does not measure. And Key
+  Rules 1, 2, 3 and 11 are all narrowed: rules 1 and 2 had claimed this skill writes nowhere
+  outside `docs/harness/memory/`, which was already untrue of `clean`'s backup under
+  `.harness/memory_backup/` and is now also untrue of the approved `.gitignore` edit; rules 3 and
+  11 had said every write passes a **per-item** gate, which the new invocation-scoped gate is not.
 - **Two limits stated rather than implied.** This repository's own `docs/`-vs-team-memory conflict
   is made *visible* by this change, not resolved: `docs/` is thirteen skills' runtime output path
   and stays ignored. And **no lint verifies any of the above** — `skills/team-memory/` and
