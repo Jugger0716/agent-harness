@@ -30,8 +30,8 @@ When an inline-dispatched sub-agent returns:
 ## Version & Compatibility
 
 This is **state.json v3** (version `"3.0"`, `skill: "harness"`). When loading an existing state.json:
-- If `version` is `"3.0"` → run the v3 logic defined in this file.
-- If `version` is missing or `"2.0"` (a pre-harness `/workflow` session) → **do NOT migrate silently.** See §Session Recovery step 2 — Restart is recommended; legacy resume is not supported by /harness.
+- If `version` is `"3.0"` **and `skill` is absent or `"harness"`** → run the v3 logic defined in this file. (A file carrying another skill's `skill` value — even with `version: "3.0"` — is routed by §Session Recovery item 1's branch table to the Session Conflict gate instead; see that table's row 1.)
+- If `version` is missing or `"2.0"` (a pre-harness `/workflow` session — i.e. `skill` is absent; a file carrying another skill's `skill` value is routed by §Session Recovery item 1's branch table instead, whatever its `version`) → **do NOT migrate silently.** See §Session Recovery step 2 — Restart is recommended; legacy resume is not supported by /harness.
 - **Additive fields within `"3.0"` do not bump `version`**: readers MUST ignore any state.json field they do not recognize and MUST treat any missing field as its documented default (see the new-field table under Step 1 item 11); writers MUST NOT make a field added within `"3.0"` `required` — doing so would leave in-flight `"3.0"` sessions written before that field existed unreadable.
 
 ## Zero-Setup Environment Detection
@@ -149,9 +149,34 @@ Cross-session continuity uses the `state.json` phase machine below. Workflow `ru
 
 Before starting a new task, check if `.harness/state.json` exists:
 
-1. Read state.json. Check `skill` field (if present):
-   - If `skill` field exists and is NOT `"harness"` → warn user (in detected language): "A `/{skill}` skill session is active in this directory." Ask via AskUserQuestion: header "Session Conflict", question "A `/{skill}` session exists. Delete it and start /harness?", options: "Delete and start" / "Delete .harness/ and proceed with /harness", "Cancel" / "Keep existing session and halt". If "Cancel" → halt. If "Delete and start" → delete `.harness/`, proceed to Step 1.
-   - If `skill` field is `"harness"` or missing → continue below.
+1. **Read state.json and route on `skill` and `version` together BEFORE anything else in this
+   section.** The table below is the execution order, not background reference: find the row that
+   matches, then carry out that row's route — the gate paragraph below it, or item 2 — and do NOT
+   continue to Step 1 before doing so. Four rows, three distinct routes; the third route is what
+   keeps pre-harness sessions recoverable.
+   <!-- SYNC-WITH: templates/_shared/session_conflict.md §Gate Procedure -->
+
+   | `skill` | `version` | route |
+   |---|---|---|
+   | present, `!= "harness"` | any | **Session Conflict gate** (below) |
+   | absent | `"3.0"` | **Session Conflict gate** (below) — a v3 file is defined as `version "3.0"` AND `skill: "harness"` (§Version & Compatibility), so a v3.0 file with no `skill` is not a well-formed /harness session |
+   | absent | missing or non-`"3.0"` | **item 2's legacy branch** — do NOT gate. This population is identified BY the absent `skill`; gating it would make item 2 unreachable and turn its pre-harness detection message into a dead letter |
+   | `"harness"` | any | **no gate** — continue to item 2 |
+
+   **Session Conflict gate** — fires on the first two rows only. Do NOT fall through to Step 1,
+   which would overwrite the other session ungated. Ask via AskUserQuestion (in `user_lang`):
+     header: "Session Conflict"
+     question: "A `/{skill|'unknown'}` session exists in this directory (task: `{task}`, phase: `{phase}`, docs: `{docs_path}`). Starting /harness here will delete it. Delete it and start /harness?"
+     options:
+       - label: "Delete and start" / description: "Delete .harness/ and proceed with /harness"
+       - label: "Cancel" / description: "Keep existing session and halt"
+
+   If "Cancel" → **halt before any directory creation, `git checkout -b`, or state.json write**;
+   nothing under `.harness/` is changed. If "Delete and start" → delete `.harness/`, then proceed
+   to Step 1. A session that **cannot present an interactive prompt** (headless / cron /
+   sub-agent) → **halt**, never a silent overwrite. Never emit a `{...}` token verbatim.
+   Full procedure and the rule this gate instantiates:
+   `templates/_shared/session_conflict.md` §Gate Procedure, cited by name and not restated here.
 
 2. Check `version` field:
    - **Missing or `"2.0"` (or any non-`"3.0"`)** → pre-harness `/workflow` session. Print per OLC: `[harness] Pre-harness session detected (v{version|1}) — created by /workflow. Restart recommended; legacy resume is not supported.` Ask via AskUserQuestion (in `user_lang`): header "Session", question "Pre-harness session found. Restart fresh or stop?", options: "Restart" / "Delete .harness/ and start fresh", "Stop" / "Keep files and halt". No Resume option for legacy sessions (no silent migration).
