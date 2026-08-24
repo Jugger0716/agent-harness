@@ -129,7 +129,12 @@ Single source: `templates/_shared/session_conflict.md` §Gate Procedure (`{curre
 The procedure below is the canonical wording that source generalises. This file's absent-`skill`
 folding is NOT a deviation from the source — it IS the source's default rule (§Gate Procedure
 item 1); only `/harness` and `/ship` are named exceptions there (item 2). If this file and the
-source ever appear to disagree on any other point, the source wins.
+source ever appear to disagree on any other point, the source wins — **that is a rule for whoever
+next edits either file, not a runtime instruction for `/spec`.** A model executing `/spec` follows
+the text printed in this section as-is and does not re-open the source to check for drift, and the
+`session-conflict` sync group only checks that two literal phrases coexist, never that this
+section's full wording still matches. Drift is caught by review and by the pre-release probe, not
+by anything mechanical.
 
 Ask via AskUserQuestion (in `user_lang`):
   header: "Session Conflict"
@@ -145,6 +150,8 @@ delete `.harness/`, then proceed to Step 1 normally (fresh /spec session).
 (headless/cron/subagent — no AskUserQuestion available), the safe default is **halt**, never a
 silent delete-and-overwrite — a destructive, irreversible action must not proceed unattended
 just because no one is watching to answer the gate. Print the same conflict message and stop.
+Never emit a `{...}` token verbatim — substitute from the conflicting session's own state.json
+before rendering.
 
 If the file does not exist, OR it exists and `skill == "spec"`, gate 0 does not apply — continue
 below with `/spec`'s own session recovery:

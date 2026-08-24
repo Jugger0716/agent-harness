@@ -30,7 +30,7 @@ When an inline-dispatched sub-agent returns:
 ## Version & Compatibility
 
 This is **state.json v3** (version `"3.0"`, `skill: "harness"`). When loading an existing state.json:
-- If `version` is `"3.0"` **and `skill` is absent or `"harness"`** → run the v3 logic defined in this file. (A file carrying another skill's `skill` value — even with `version: "3.0"` — is routed by §Session Recovery item 1's branch table to the Session Conflict gate instead; see that table's row 1.)
+- If `version` is `"3.0"` **and `skill` is `"harness"`** → run the v3 logic defined in this file. (A `"3.0"` file whose `skill` is another skill's value OR absent is routed by §Session Recovery item 1's branch table to the Session Conflict gate instead — rows 1 and 2. A v3 file is defined as carrying BOTH fields, so a `"3.0"` file missing `skill` is not one.)
 - If `version` is missing or `"2.0"` (a pre-harness `/workflow` session — i.e. `skill` is absent; a file carrying another skill's `skill` value is routed by §Session Recovery item 1's branch table instead, whatever its `version`) → **do NOT migrate silently.** See §Session Recovery step 2 — Restart is recommended; legacy resume is not supported by /harness.
 - **Additive fields within `"3.0"` do not bump `version`**: readers MUST ignore any state.json field they do not recognize and MUST treat any missing field as its documented default (see the new-field table under Step 1 item 11); writers MUST NOT make a field added within `"3.0"` `required` — doing so would leave in-flight `"3.0"` sessions written before that field existed unreadable.
 
@@ -162,6 +162,12 @@ Before starting a new task, check if `.harness/state.json` exists:
    | absent | `"3.0"` | **Session Conflict gate** (below) — a v3 file is defined as `version "3.0"` AND `skill: "harness"` (§Version & Compatibility), so a v3.0 file with no `skill` is not a well-formed /harness session |
    | absent | missing or non-`"3.0"` | **item 2's legacy branch** — do NOT gate. This population is identified BY the absent `skill`; gating it would make item 2 unreachable and turn its pre-harness detection message into a dead letter |
    | `"harness"` | any | **no gate** — continue to item 2 |
+
+   **Worked example — the normal case is row 4, not rows 1-2.** Every state.json `/harness` writes
+   carries `skill: "harness"` from its first write (§Step 1 item 7), so an ordinary resume matches
+   row 4 ONLY: rows 1 and 2 both require `skill` to be something other than `"harness"` (a
+   different value, or absent). Do not stop scanning at the first two rows and gate a normal
+   resume.
 
    **Session Conflict gate** — fires on the first two rows only. Do NOT fall through to Step 1,
    which would overwrite the other session ungated. Ask via AskUserQuestion (in `user_lang`):

@@ -111,12 +111,13 @@ sub-agent) → **halt**, never a silent overwrite. Never emit a `{...}` token ve
 Full procedure: `templates/_shared/session_conflict.md` §Gate Procedure (`{current_skill}` =
 `ship`), cited by name and not restated here.
 
-Before starting, check if `.harness/state.json` exists:
+Once gate 0 above has cleared — the file is absent, or it exists with `skill == "ship"` or with
+`skill` missing — read state.json and continue:
 
 1. Read state.json.
 2. Check `skill` field:
    - If `skill` field is `"ship"` → continue recovery.
-   - If `skill` field is missing → treat as legacy session (possibly from workflow v1). Ask to restart or halt. A session that **cannot present an interactive prompt** (headless / cron / sub-agent) → **halt** on this path too, never restart unattended.
+   - If `skill` field is missing → treat as legacy session (possibly from workflow v1). Ask via AskUserQuestion (in `user_lang`) whether to restart or halt. A session that **cannot present an interactive prompt** (headless / cron / sub-agent) → **halt** on this path too, never restart unattended.
 3. Print status in standard format, prefixed with `[harness:ship] Previous session detected.`
 4. Ask via AskUserQuestion (in `user_lang`):
    - header: "Session"
