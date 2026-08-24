@@ -27,6 +27,17 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
   paste the same step twice while adding a lint and the check stays green while that lint executes
   zero times in CI. It lives outside `scripts/` so it neither matches the glob it counts nor
   counts itself.
+- **`templates/_shared/session_conflict.md`.** The cross-skill session conflict gate now has a
+  single source. It generalises `/spec`'s gate rather than duplicating it, and writes down the
+  one place that generalisation must not be applied verbatim: `/harness` and `/ship` both read an
+  absent `skill` field as the mark of a pre-skill-field legacy session and keep their own restart
+  branch for it, so folding the absent case in would delete that path. The file is also the single
+  source for the rule the gate is an instance of — a gate that cannot be answered halts when the
+  action is destructive and continues when it is not.
+- **`session-conflict` group in `verify_sync_markers.py`.** Nine groups, 48 marker sites. The
+  floor is 4 with zero slack, and both tokens were measured to occur zero times across the four
+  skill files before the edit, so neither can pass vacuously — unlike two existing groups whose
+  comments record exactly that weakness in themselves.
 
 ### Changed
 
@@ -47,6 +58,17 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
   workflow. `README.md`'s Repository Layout gained rows for `.claude-plugin/` and `.github/`,
   and its `scripts/` row now lists the fifth lint. A pre-commit hook is still not wired, and
   the corrected text says so.
+- **`/debug`, `/refactor`, `/migrate` and `/test-gen` no longer overwrite another skill's live
+  session.** Each previously fell straight through to Setup when `.harness/state.json` belonged
+  to a different skill, and Setup creates directories and runs `git checkout -b` before it writes
+  any state of its own — so the other session's branch was already gone, with nothing asked and
+  nothing printed. All four now evaluate the shared Session Conflict gate at the very top of
+  Session Recovery, before any side effect: `Cancel` halts with `.harness/` untouched,
+  `Delete and start` deletes it and starts fresh, and a non-interactive session defaults to halt.
+  The absence case is deliberately unchanged — a directory with no `.harness/state.json` still
+  proceeds to Setup with no prompt. **The gate is enforced as prose, not as code**: the new sync
+  group proves the four skills carry the marker and the header and option literals, never that
+  the gate actually fires. Only the pre-release live probe can show that.
 
 ## [8.11.0] — 2026-08-20
 
