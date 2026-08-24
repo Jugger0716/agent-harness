@@ -6,6 +6,48 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/).
 
+## [Unreleased]
+
+### Added
+
+- **GitHub Actions CI — `.github/workflows/lint.yml`.** The self-consistency lints run on every
+  push and pull request; until now nothing ran them automatically. The workflow adds no separate
+  end-of-line step, because `check_workflow_syntax.mjs` already scans working-tree bytes and index
+  blobs. What CI adds is the promotion of that script's index-blob SKIP report to a hard failure,
+  plus an assertion that its OK line is present: `bash -e` does not trip errexit on a failing `if`
+  condition, so a bare negative grep over a log that was never written would otherwise pass.
+- **`scripts/verify_manifest_sync.py`.** Compares `.claude-plugin/plugin.json` against
+  `.claude-plugin/marketplace.json` on the plugin description, the keyword set, and the version
+  string at every one of its three key paths. The marketplace entry is located by name rather
+  than by index, so a second listed plugin cannot shift the comparison onto the wrong entry.
+  `metadata.description`, `owner` and `author` are deliberately not compared, and the script's
+  docstring records each exclusion with its reason, because JSON carries no comments.
+- **`.github/scripts/check_lint_wiring.sh`.** Compares the lints that exist against the ones
+  `lint.yml` actually runs, by name set rather than by count. A count is satisfied by duplicates:
+  paste the same step twice while adding a lint and the check stays green while that lint executes
+  zero times in CI. It lives outside `scripts/` so it neither matches the glob it counts nor
+  counts itself.
+
+### Changed
+
+- **`.claude-plugin/marketplace.json` now matches `plugin.json`.** The marketplace copy of the
+  plugin description was missing a clause, and its keyword array was missing entries that
+  `plugin.json` carries; both are synchronised. The empty `owner.email` is removed. Edited in
+  place against key anchors and never re-serialised, so the inline keyword array survives as a
+  single line.
+- **`.gitattributes` normalises `*.sh` and `*.yml` to LF.** Both failure modes were measured on a
+  CR-intolerant tool chain and are non-reproducible under Git Bash, which swallows a trailing CR;
+  the CI runner is not Git Bash. A line-anchored regex stops matching a CRLF file, and a CRLF
+  shell script does not run at all. The CR guards themselves are not new — they already lived in
+  `check_workflow_syntax.mjs`; what changed is that they now run in CI and that a skipped
+  index-blob guard fails instead of passing quietly.
+- **Documentation corrected where CI made it false.** The lint docstrings, `CLAUDE.md`,
+  `skills/spec/SKILL.md` and the planner templates all said the lints run manually only, and
+  `CLAUDE.md` said `.github/` holds issue and PR templates only. Those sentences now name the
+  workflow. `README.md`'s Repository Layout gained rows for `.claude-plugin/` and `.github/`,
+  and its `scripts/` row now lists the fifth lint. A pre-commit hook is still not wired, and
+  the corrected text says so.
+
 ## [8.11.0] — 2026-08-20
 
 > **Version heading note — follows 8.10.0's actual precedent.** An earlier revision of this
