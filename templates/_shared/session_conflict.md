@@ -21,20 +21,25 @@ placeholder verbatim.
    only mean another skill's file or a pre-skill-field legacy file. The safe default is to gate,
    not to guess that overwriting is safe.
 
-2. **§Harness exception — the absent case is not universal.** A skill whose own recovery flow
-   uses an absent `skill` field as the identifying mark of a pre-skill-field legacy session does
-   NOT route that case here; it keeps its own legacy branch instead. **Exactly two skills carry
-   that pattern today, and every other skill routes the absent case here like any other
-   mismatch** — do not read this exception as applying to one skill only:
-   - `/harness` — `skills/harness/SKILL.md` §Session Recovery gates a MISMATCHED `skill` in
-     item 1 and lets a MISSING `skill` fall through to item 2's `version` check, which offers
-     Restart/Stop for a pre-harness session.
-   - `/ship` — `skills/ship/SKILL.md` §Session Recovery item 2 treats a MISSING `skill` as a
-     legacy session (possibly from `/workflow` v1) and asks to restart or halt.
+2. **§Harness exception — the absent case is not universal, and one skill resolves it
+   conditionally.** A skill whose own recovery flow uses an absent `skill` field as the
+   identifying mark of a pre-skill-field legacy session does NOT route that case here
+   unconditionally; it keeps its own legacy branch, either for the whole absent case or for part
+   of it. **Exactly two skills carry that pattern today, in two different shapes, and every other
+   skill routes the absent case here like any other mismatch** — do not read this exception as
+   applying to one skill only:
+   - `/harness` — **conditional.** `skills/harness/SKILL.md` §Session Recovery item 1 gates a
+     MISMATCHED `skill`, and resolves an ABSENT one against `version`: `"3.0"` gates here (a v3
+     file is defined as carrying `skill: "harness"`, so a v3.0 file without it is not
+     well-formed), while a missing or non-`"3.0"` version defers to item 2's legacy branch, which
+     offers Restart/Stop for a pre-harness session.
+   - `/ship` — **whole-case.** `skills/ship/SKILL.md` §Session Recovery treats a MISSING `skill`
+     as a legacy session (possibly from `/workflow` v1) and asks to restart or halt.
 
    Generalising `/spec`'s gate verbatim onto either would delete that legacy path; `/spec` itself
    has no legacy branch to preserve, which is why its own gate folds the absent case in. A skill
-   converging onto this source must state which of the two shapes it takes.
+   converging onto this source must state which of these shapes it takes — whole-case,
+   conditional, or none.
 
 3. **It fires before any side effect.** Evaluate the gate BEFORE directory creation, BEFORE
    `git checkout -b`, and BEFORE any `.harness/state.json` write. Placing it inside Setup makes
