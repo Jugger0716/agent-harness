@@ -246,12 +246,28 @@ SYNC_GROUPS = [
         #   * S5's read-only `doctor` carve-out must sit BEFORE item 1's branch table in
         #     skills/harness/SKILL.md, or the gate this slice added blocks a diagnostic that reads
         #     nothing.
+        #     DONE in S5 (this bullet is kept, not deleted, so a revert of S5 restores a live
+        #     constraint rather than a silent gap): the carve-out sits at the TOP of §Session
+        #     Recovery -- before the section's "Before starting a new task" sentence, which is a
+        #     STRICTLY STRONGER position than "before item 1's branch table" and the same slot
+        #     /spec's digest carve-out occupies. Read this bullet as the stronger coordinate: a
+        #     carve-out placed between that sentence and item 1 also satisfies the wording above
+        #     and is NOT what S5 shipped.
         #   * S7 must pick up the S3 row added to ROADMAP.md's Unreleased table (harness item 2's
         #     legacy branch has no non-interactive default). It is deferred BECAUSE writing it
         #     would edit item 2, and AC-S3.3's byte-unchanged comparison is the only evidence the
         #     pre-harness path was not made unreachable. Recording it only in a commit message
         #     would have been this repository's own "half-updated ledger" defect: a later slice
         #     reads the ledger, not six commit messages.
+        #   * Phase P probe (d) (/harness doctor) needs its comparison method named. Take the
+        #     recursive hash of .harness/ before and after the run -- probe (a) already takes that
+        #     same hash on its own Cancel path, though its other half is `git branch` invariance,
+        #     not `git status` -- and pair it with `git status`, which is what EPIC AC-6.3 asks for
+        #     alongside the hash. git status alone cannot see the write: .harness/ is ignored by
+        #     this repository's root .gitignore (verify with `git check-ignore -v .harness/`).
+        #   * Phase P also owes five S5 carry-overs kept only in a gitignored plan: AC-S5.2, AC-6.2,
+        #     AC-6.1's "all six green", EPIC's stale measured values, and the mislabelled cache
+        #     copy.
         # REVERT NOTE beyond the marker/floor set below: S3's final correction commit also
         # resolved a contradiction between skills/harness/SKILL.md §Version & Compatibility and
         # item 1's branch table. Reverting that commit alone reinstates the contradiction, which
