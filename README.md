@@ -66,7 +66,7 @@ Higher modes cost more per run but save total cost by reducing retry rounds. Sta
 
 | Skill | Command | Description |
 |-------|---------|-------------|
-| **Harness** | `/harness <task>` | 3-Phase (Planner -> Generator -> Evaluator) orchestrator. Inline single path by default; opt-in workflow path (ultracode or `--mode standard/multi`) runs plugin-shipped native Workflow segment scripts with schema-validated returns. Works with or without git. _(formerly `/workflow` — old name kept as a deprecation alias)_ |
+| **Harness** | `/harness <task>` | 3-Phase (Planner -> Generator -> Evaluator) orchestrator. Inline single path by default; opt-in workflow path (ultracode or `--mode standard/multi`) runs plugin-shipped native Workflow segment scripts with schema-validated returns. Works with or without git. _(formerly `/workflow` — old name kept as a deprecation alias)_ `/harness doctor` gives a read-only environment diagnostic. |
 | **Refactor** | `/refactor <target>` | Safe, behavior-preserving code structure improvement. Single (inline) or multi/comprehensive (2-3 analysts + cross-critique, native Workflow path). Execution stays gated and step-tested in the orchestrator. |
 | **Migrate** | `/migrate <target> [--from v4 --to v5]` | Staged migration of frameworks, libraries, and dependencies. Single (inline) or multi (parallel external-research + codebase-impact analysts + synthesis, native Workflow path) with WebSearch research. Staged execution stays gated and step-tested in the orchestrator. |
 | **Debug** | `/debug <error>` | Hypothesis-driven debugging with mandatory executable verification. Quick (inline) or deep (2 analysts + adversarial cross-verify, native Workflow path). |
@@ -156,6 +156,7 @@ claude plugin install agent-harness@agent-harness-marketplace
 /codebase-audit                                    # auto-recommends mode based on project size
 /codebase-audit --mode thorough                    # comprehensive multi-agent analysis
 /codebase-audit --scope "src/**" --incremental     # analyze only changes in src/
+/harness doctor                                    # read-only environment diagnostic
 
 /deep-review #123                                  # review PR (quick inline by default; ultracode -> thorough)
 /deep-review feature/auth --mode deep              # workflow path: 2 specialists + synthesis
@@ -402,7 +403,7 @@ Higher modes use more tokens per run but have higher first-pass success rates, o
 | `--verifier-model <model>` | `haiku` | Override Layer 1 Verifier model. Allowed: `haiku`, `sonnet`, `opus`. Cost warning shown for sonnet/opus. |
 | `--output-dir <path>` | `docs/harness` | Override output directory base for spec, changes, verify, and QA reports. Relative path from repo root. Disallows: absolute paths, `..`, reserved names (`memory`, `spec`, `planner`, `generator`). |
 
-Example: `/harness fix auth bug --mode single --model-config balanced --scope "src/auth/**"`
+Example: `/harness fix auth bug --mode single --model-config balanced`
 Example: `/harness add caching --output-dir build/harness --verifier-model sonnet`
 
 ### Git-Free Mode
@@ -412,6 +413,10 @@ The workflow automatically detects whether the current directory is a git reposi
 ### Session Recovery
 
 If a session is interrupted, the harness detects the existing `.harness/state.json` on next invocation and offers to resume from where you left off.
+
+### Sub-command: doctor
+
+`/harness doctor` — read-only environment diagnostic. No arguments, no `.harness/state.json` (neither read nor written), no git branch, no Mode Gate, no sub-agents, no Workflow dispatch; nothing is written anywhere. Six items, each `✓` or `⚠` with remediation decided at run time: ① CR contamination in the installed copies’ `*.workflow.js`, judged by counting the byte `0x0D` across both known install locations; ② whether the `Workflow` tool is in this session’s tool list, reported as observed and never probed; ③ `git rev-parse --is-inside-work-tree`; ④ version and content drift on three axes, enumerating the cache’s version directories and listing backup-suffixed ones (the predicate is the skill contract’s, not this file’s) separately rather than as drift; ⑤ whether the `/team-memory` store is gitignored, by that skill’s own §Step 1.5 rules; and ⑥ which of the three `agent-harness-defaults` sources wins, and the final resolved reading. It reports and never repairs — a `⚠` points at the existing route (a reinstall, or the `/team-memory` store gate). Dispatch is by positional argument, not by position alone: `doctor` must be the **only** positional token, so `/harness --mode single doctor` is the same invocation while `/harness doctor xyz` is an ordinary task. Skips Session Recovery through a carve-out at the top of that section, so running it never disturbs an in-progress harness session.
 
 ### Confirmation Gates
 
