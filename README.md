@@ -413,6 +413,10 @@ The workflow automatically detects whether the current directory is a git reposi
 
 If a session is interrupted, the harness detects the existing `.harness/state.json` on next invocation and offers to resume from where you left off.
 
+### Sub-command: doctor
+
+`/harness doctor` — read-only environment diagnostic. No arguments, no `.harness/state.json` (neither read nor written), no git branch, no Mode Gate, no sub-agents, no Workflow dispatch; nothing is written anywhere. Six items, each `✓` or `⚠` with remediation decided at run time: ① CR contamination in the installed copies’ `*.workflow.js`, judged by counting the byte `0x0D` across both known install locations; ② whether the `Workflow` tool is in this session’s tool list, reported as observed and never probed; ③ `git rev-parse --is-inside-work-tree`; ④ version and content drift on three axes, enumerating the cache’s version directories and listing `.backup-`-suffixed ones separately rather than as drift; ⑤ whether the `/team-memory` store is gitignored, by that skill’s own §Step 1.5 rules; and ⑥ which of the three `agent-harness-defaults` sources wins, and the final resolved reading. It reports and never repairs — a `⚠` points at the existing route (a reinstall, or the `/team-memory` store gate). Skips Session Recovery through a carve-out at the top of that section, so running it never disturbs an in-progress harness session.
+
 ### Confirmation Gates
 
 The Generator phase consumes significant tokens and is hard to undo. The harness enforces **explicit user confirmation** before proceeding:
