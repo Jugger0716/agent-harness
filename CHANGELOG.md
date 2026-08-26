@@ -38,6 +38,16 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
   floor is 4 with zero slack, and both tokens were measured to occur zero times across the four
   skill files before the edit, so neither can pass vacuously — unlike two existing groups whose
   comments record exactly that weakness in themselves.
+- **`/harness doctor` — a read-only environment diagnostic.** The failures this plugin
+  actually hits are environmental — a CRLF-contaminated installed copy that makes every
+  Workflow-path skill refuse to launch, a stale install, a `/team-memory` store sitting under
+  a gitignored path — and until now the means of diagnosing them were scattered across four
+  documents. `doctor` reports six items with one `✓` or `⚠` each: installed-copy CR
+  contamination across both known install locations, `Workflow` tool availability as this
+  session observes it, git work-tree status, version and content drift on three axes, the
+  team-memory store's ignore state, and how `agent-harness-defaults` resolves. It is reached
+  through a carve-out at the top of §Session Recovery, so it never reads or writes
+  `.harness/state.json` and never trips the session conflict gate that section owns.
 
 ### Changed
 
@@ -147,6 +157,15 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
   check pass on these files whatever they say. Marker total is unchanged at 51. The gate's actual
   behaviour is established only by the pre-release live probe, which itself cannot reach the
   not-a-git-repository path (it runs inside this repository) — recorded in `ROADMAP.md`.
+- **`doctor` is now a reserved first argument to `/harness`.** The string was previously a
+  task description like any other, so `/harness doctor` would have started a real session and
+  written files. It now dispatches to the read-only sub-command instead. This is a behaviour
+  change, not an addition: anyone who genuinely wants a task named `doctor` has to phrase it
+  differently. `doctor` takes no arguments at all — every path it reads is a fixed constant or
+  resolved at run time, never user-supplied — and it repairs nothing. A `⚠` points at the
+  route that already owns the fix (a reinstall, or the `/team-memory` store gate); it does not
+  edit `.gitignore`, re-sync an install copy, or touch either installed plugin directory.
+
 
 ## [8.11.0] — 2026-08-20
 
