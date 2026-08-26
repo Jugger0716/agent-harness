@@ -157,15 +157,17 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
   check pass on these files whatever they say. Marker total is unchanged at 51. The gate's actual
   behaviour is established only by the pre-release live probe, which itself cannot reach the
   not-a-git-repository path (it runs inside this repository) — recorded in `ROADMAP.md`.
-- **`doctor` is now a reserved first argument to `/harness`.** The string was previously a
-  task description like any other, so `/harness doctor` would have started a real session and
-  written files. It now dispatches to the read-only sub-command instead. This is a behaviour
+- **`doctor` is now reserved when it is the only positional argument to `/harness`.** The
+  string was previously a task description like any other, so `/harness doctor` would have
+  started a real session and written files. It now dispatches to the read-only sub-command
+  instead. Value-taking flags are consumed before the test, so `/harness --mode single doctor`
+  is the same invocation, while `/harness doctor xyz` is two positional tokens and stays an
+  ordinary task. This is a behaviour
   change, not an addition: anyone who genuinely wants a task named `doctor` has to phrase it
   differently. `doctor` takes no arguments at all — every path it reads is a fixed constant or
   resolved at run time, never user-supplied — and it repairs nothing. A `⚠` points at the
   route that already owns the fix (a reinstall, or the `/team-memory` store gate); it does not
   edit `.gitignore`, re-sync an install copy, or touch either installed plugin directory.
-
 
 ## [8.11.0] — 2026-08-20
 
