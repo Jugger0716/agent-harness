@@ -169,6 +169,62 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
   route that already owns the fix (a reinstall, or the `/team-memory` store gate); it does not
   edit `.gitignore`, re-sync an install copy, or touch either installed plugin directory.
 
+- **`/handoff resume` now always reaches its gate, and `Next :` no longer names the slice that
+  just finished.** A `resume` run printed the briefing, described its three options in prose, and
+  ended the turn, leaving the human with context and no way to answer. Nothing in §Step 5
+  authorised that — it was unspecified rather than allowed — so that section now states the
+  invariant it lacked: **every path ends in exactly one `AskUserQuestion` call**, and when the
+  first option cannot be constructed the gate is asked with the remaining two. Ending the turn
+  after the briefing is named as a defect, not a conservative choice. Three gaps made that
+  outcome likely and each is closed. (1) The no-single-command case had no rendered option set at
+  all, so the standing instruction to "ask which command to run" had nothing to ask with. The
+  first option now has **two defined forms**, the second described by the WORK rather than by a
+  command — the epic-slice shape, where a slice is implemented directly from an epic plan instead
+  of being invoked as a skill. Picking it still executes nothing extracted from prose: the human's
+  selection is the authorisation, and the document never authorises itself. (2) The
+  command-extraction count was purely syntactic, so a `/…` token inside a **negation** satisfied
+  "exactly one". A handoff whose item 1 said the next step is not a single command, and mentioned
+  `/harness` only to say the slices are not `/harness` tasks, would have rendered "Start next
+  step" and run a real task, writing `.harness/state.json` and a docs directory. Tokens are now
+  filtered to **candidates**, and an explicit statement that the next step is not a command forces
+  the count to zero regardless of which tokens the text contains. (3) `Next :`'s tier-1 fallback
+  took the ledger's last row when no row is `in-progress` — but a between-slices handoff records
+  the slice it just finished as `done` and carries no `in-progress` row, so that fallback named
+  the FINISHED slice **by construction**. It now prefers an explicit `Slice` label, and
+  `generate`'s Next Steps convention gained the requirement to write one in the no-command case.
+- **The obvious version of that last fix was measured and rejected, and the measurement ships with
+  it.** The first draft scanned item 1 for the first backtick-quoted kebab-case token. Measured
+  over all 31 ledger-bearing handoffs in `docs/harness/handoff/` (gitignored — not a public link),
+  17 carry no `in-progress` row, and the heuristic would have matched 3 of them with **2 of the 3
+  wrong**: one yielding `disallowed-tools`, which is not a slice identifier at all, and one
+  yielding `slice-e-cold-pass` where the next slice was `slice-b-plan-pipeline`. Its real record
+  is 1 right, 2 wrong, 14 silent. A confident wrong slice is worse than a disclosed fallback, so
+  the labelled read replaced it and the heuristic is recorded as rejected rather than dropped
+  silently. Handoffs written before the label keep the disclosed fallback; nothing retroactively
+  fixes them. **Three superseded claims are corrected in place inside that paragraph** rather than
+  deleted, per this repository's ledger convention — including a denominator of 18 that came from
+  the un-normalized `Status` read the same change fixes.
+- **A pre-existing `Status` comparison bug, surfaced by that measurement, is fixed in the same
+  place.** Tier 1 compared the `Status` cell against the bare word `in-progress`, while 2 of the
+  31 ledgers write it as bold-wrapped `` **`in-progress`** ``; the exact match failed there and
+  sent a handoff that HAS an in-progress row down the fallback — the same defect arriving from the
+  opposite direction. `Status` is now normalised reader-side (emphasis, then backticks, then trim),
+  on the same footing as the existing `Slice` rule. The `Epic` cell's identical wrapping stays a
+  ROADMAP deferred item, unchanged.
+- **`disallowed-tools` turn scoping gains a second observation that establishes less than it looks
+  like.** `templates/_shared/mode_gate.md` rule 3 cause (a) gains a dated record: during a
+  `/handoff resume` turn the tools that became unavailable were exactly that skill's whole
+  `disallowed-tools` value (`NotebookEdit`, `WebSearch`, `WebFetch`), all three were available
+  again in the next turn with no settings change, and `Agent`/`Workflow` — removed from that
+  frontmatter in an earlier release — stayed available throughout. **Established:** the block does
+  not persist past the turn boundary, and the blocked set tracks the installed frontmatter's
+  current value. **Not established:** that the block outlives the skill's own steps *inside* the
+  turn. Nothing was chained and the observed turn ended exactly where the skill's own steps ended,
+  so the observation cannot separate turn-scoped from skill's-own-steps-scoped, and neither of
+  §Step 5's two chaining-test outcomes fired. Cause (a) remains a candidate, not a diagnosis, and
+  this is not a verified leak. An earlier draft of these lines asserted the turn scoping as
+  established; a cold review caught it and the claim is withdrawn in place.
+
 ## [8.11.0] — 2026-08-20
 
 > **Version heading note — follows 8.10.0's actual precedent.** An earlier revision of this
