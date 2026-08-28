@@ -52,6 +52,22 @@ At Setup, resolve the execution path:
      with no settings change), but **no file in this repository documents the runtime scoping
      of `disallowed-tools`**, so turn-scoped leakage is inference, not established behavior.
      If it does apply, the remedy is the user re-running the command in a NEW message.
+     **Second observation (2026-08-28, post-refresh — the installed `handoff` copy carried the
+     current 3-entry frontmatter).** During a `/handoff resume` turn the tools that became
+     unavailable were exactly `NotebookEdit`, `WebSearch`, `WebFetch` — that skill's whole
+     `disallowed-tools` value — and all three were available again in the following turn, with no
+     settings change. `Agent` and `Workflow`, which that frontmatter no longer lists, stayed
+     available throughout. **What this establishes is narrow, and the boundary of it is stated
+     because an earlier revision of these lines overstated it.** Established: the block does not
+     persist past the turn boundary, and the blocked set tracks the installed frontmatter's
+     current value. NOT established: that the block outlives the skill's own steps INSIDE that
+     turn. The observed turn ended exactly where the skill's own steps ended and nothing was
+     chained, so this observation **cannot tell turn-scoped apart from skill's-own-steps-scoped**
+     — both predict precisely what was seen. Nor does it establish that a chained skill inherits
+     the block. `skills/handoff/SKILL.md` §Step 5 offers two outcomes for a chaining test (leak
+     supported / demote cause (a)); no chaining happened, so **neither fired**. Cause (a) stays a
+     candidate, not a diagnosis, the wording above stays as written, and this is not a
+     "verified leak".
    - **(b) the session simply lacks the permission** — then INLINE is the correct resting
      state, and the banner above is all that is owed to the user.
 4. **`has_git == false` forces INLINE** regardless of opt-in (engine `isolation:'worktree'`
