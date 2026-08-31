@@ -37,7 +37,8 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
 - **`session-conflict` group in `verify_sync_markers.py`.** Nine groups, 48 marker sites at the
   time this entry was written; a later slice in the same batch raised the total to **51**, which
   is what the lint reports today. The
-  floor is 4 with zero slack, and both tokens were measured to occur zero times across the four
+  floor was 4 with zero slack when this entry was written, and S3 raised it to 7 in the same
+  change that added three more marker sites (see Changed); both tokens were measured to occur zero times across the four
   skill files before the edit, so neither can pass vacuously — unlike two existing groups whose
   comments record exactly that weakness in themselves.
 - **`/harness doctor` — a read-only environment diagnostic.** The failures this plugin
@@ -74,9 +75,13 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
   multipliers are relative to a baseline that is not zero, and the largest part of that
   baseline is `/harness`'s own contract document loading before any work starts. It is
   reported on four bases at one commit (LF index bytes 211,235 / UTF-8 characters 207,239 /
-  working-tree CRLF bytes 213,743 / 2,508 lines at
-  `118015d51aa15ee67f409b945fcd43c65a61d4f5`, measured 2026-08-31) with the command for each,
-  because bytes and characters differ here and so do index and working tree. The
+  working-tree bytes / 2,508 lines at `118015d51aa15ee67f409b945fcd43c65a61d4f5`, measured
+  2026-08-31) with the command for each, because bytes and characters differ here. **The
+  working-tree row needed correcting before it shipped, by this release's own doing**: a Windows
+  checkout measured 213,743 bytes, one carriage return per line more than the index, and the
+  `*.md text eol=lf` line added below makes that number obsolete for every checkout from here on
+  — a file attribute outranks `core.autocrlf`, so the working tree now matches the index at
+  211,235. The old figure is kept in the table so an older checkout can recognise itself. The
   `### Token Cost vs. Quality Trade-off` table under `## workflow` gets a pointer and no
   number. **The epic plan's own figures for this table (194,572 / 190,805 / 196,865) were
   taken six slices earlier and are superseded, not wrong** — which is the whole reason the
@@ -92,7 +97,8 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
   single line.
 - **Four skill descriptions are shorter, and `/spec` loads again.** `study` drops from 1,009 to
   662 characters and the three deprecation stubs (`code-review`, `memory`, `workflow`) collapse
-  to one line each, taking the 17-skill total from 7,709 to 6,841. What `study` lost is the
+  to one line each, taking the 17-skill total from 7,709 (at `4295156`, before the trim)
+  to 6,841 (at `118015d`). What `study` lost is the
   mode clause and the read-only/WebSearch clause: `plugin-shipped native Workflow segment` is
   shared by 9 skills and `opt-in gated` by 8, so neither helps Claude tell `study` apart, while
   everything kept — the seven guide sections, `verified revision material`, the provenance
@@ -112,7 +118,9 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
   the CI runner is not Git Bash. A line-anchored regex stops matching a CRLF file, and a CRLF
   shell script does not run at all. The CR guards themselves are not new — they already lived in
   `check_workflow_syntax.mjs`; what changed is that they now run in CI and that a skipped
-  index-blob guard fails instead of passing quietly.
+  index-blob guard fails instead of passing quietly. **They do not, however, cover these two file
+  types**: that script scans `workflows/*.workflow.js` and nothing else, so for `*.sh` and `*.yml`
+  the attribute line added here is the whole protection, not a belt beside an existing brace.
 - **Documentation corrected where CI made it false.** The lint docstrings, `CLAUDE.md`,
   `skills/spec/SKILL.md` and the planner templates all said the lints run manually only, and
   `CLAUDE.md` said `.github/` holds issue and PR templates only. Those sentences now name the
@@ -257,7 +265,13 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
   the un-normalized `Status` read the same change fixes.
 - **A pre-existing `Status` comparison bug, surfaced by that measurement, is fixed in the same
   place.** Tier 1 compared the `Status` cell against the bare word `in-progress`, while 2 of the
-  31 ledgers write it as bold-wrapped `` **`in-progress`** ``; the exact match failed there and
+  31 ledgers write it as bold-wrapped `` **`in-progress`** ``  — **corrected 2026-08-31: it is
+  one ledger, one occurrence** (re-measured over the same directory, which by then held 33
+  ledger-bearing handoffs; the population only grew, so no path takes the count from 2 down to 1
+  and the original figure was simply wrong). The defect and the fix are unaffected. Note that
+  every figure in this paragraph comes from `docs/harness/handoff/`, which this repository
+  gitignores, so none of them can be re-derived from a commit — they are dated measurements, not
+  reproducible ones; the exact match failed there and
   sent a handoff that HAS an in-progress row down the fallback — the same defect arriving from the
   opposite direction. `Status` is now normalised reader-side (emphasis, then backticks, then trim),
   on the same footing as the existing `Slice` rule. The `Epic` cell's identical wrapping stays a
@@ -298,21 +312,48 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
   Two of the amendments close findings a prior slice had left open; the third closes a row
   that had itself gone stale — it still claimed a stale marker-site total in this file, which
   a slice had already corrected, so shipping it unamended would have released a deferred-item
-  row asserting a defect that no longer existed. **Two items the ledger expected are absent on
-  purpose**: both were already registered by the slice that found them, and re-registering
-  would have produced duplicate rows. **One is registered against its own slice's
+  row asserting a defect that no longer existed. **Three items the ledger expected are absent on
+  purpose** — the epic plan's item (f), the 500-line body recommendation, and the two
+  second-person descriptions: each was already registered by the slice that found it, and
+  re-registering would have produced duplicate rows. **One is registered against its own slice's
   instruction** — `claude plugin validate`'s exclusion from CI was decided with a reason, and
   that reason lived only in a plan document under the gitignored `docs/` tree, which is
   exactly the disappearing-judgement failure this batch exists to close.
-- **A note on how append-only was verified, because the stated check does not work.** The
-  acceptance criterion asks that each removed row line survive as a substring of an added one.
-  For a same-row amendment that is unsatisfiable in principle: a row ends in ` |`, so appending
-  anything inside the last cell breaks contiguity no matter where the text goes. Preservation
-  was therefore checked **cell-wise** — every cell of the old row must be a prefix of the
-  corresponding cell of the new row, which is the precise formalisation of "append inside the
-  row" and forbids deletion just as strictly. Recorded rather than quietly substituted, since
-  swapping in a different test and reporting the original as passed is the failure mode this
-  repository keeps auditing for.
+- **A note on how append-only was verified, and on two things an earlier draft of this note got
+  wrong.** The acceptance criterion asks that each removed row line survive as a substring of an
+  added one. That is not achievable *for an in-row amendment*: a row ends in ` |`, so appending
+  inside the last cell breaks contiguity wherever the text goes. **It is achievable by writing
+  the correction as a separate line instead** — then no row line is removed at all and the check
+  passes vacuously; this file's own table already carries such a line. So the two rules are
+  incompatible, not the criterion impossible, and this repository's in-row convention was the one
+  kept. Preservation was therefore checked **cell-wise**: each cell of the old row, **compared
+  with leading and trailing whitespace trimmed**, must be a prefix of the corresponding trimmed
+  cell of the new row. The trim is not cosmetic and an earlier draft omitted it while claiming
+  "0 characters removed": appending a sentence replaces the cell's trailing space with a full
+  stop, so **8 characters across the amended rows are not preserved byte-for-byte, and all 8 are
+  that displaced space**. No content character is removed. Both corrections are recorded here
+  rather than fixed silently, because swapping in a different test and reporting the original as
+  passed is the failure mode this repository keeps auditing for — and the first draft of this
+  very paragraph did a smaller version of it.
+- **Four changes this batch made that no entry above had claimed.** Found by reading the epic's
+  own diff file by file rather than by reading its plan, which is the only direction that can
+  find an omission. (1) Two absolute line citations this batch's own edits would otherwise have
+  rotted are now `§Section` references — `templates/_shared/askuserquestion.md`'s option-cap
+  bullet, and `skills/harness/SKILL.md` §Step 2.6: Plan Critic. `CLAUDE.md` §Conventions makes
+  that a contract, not a tidy-up. (2) A `/harness` example in `README.md` advertised a `--scope`
+  flag the skill does not define; it is gone. (3) All seven session-conflict gate sites now carry
+  the same placeholder-substitution instruction — `/harness` and `/ship` stopped at "never emit a
+  `{...}` token verbatim" without saying what to emit instead, so a gate could have printed a
+  literal `{task}` to the user. (4) `skills/harness/SKILL.md` §Version & Compatibility had its
+  scope narrowed in the same commit.
+- **What this release deliberately did NOT do to this file.** The closing slice was scoped to
+  reorganise these entries into Added / Changed / Fixed. Added and Changed are used; **there is
+  no Fixed section**, and that is a decision rather than an omission: several entries here are
+  written as narratives that reference each other across the boundary — one begins "surfaced by
+  that measurement, is fixed in the same place" — so splitting bug fixes out would break the
+  references that make them readable. The acceptance criterion for this file asks for
+  completeness, for the three behaviour changes to be findable under Changed, and for no version
+  heading; all three hold.
 
 ## [8.11.0] — 2026-08-20
 
