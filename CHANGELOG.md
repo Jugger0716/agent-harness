@@ -307,15 +307,22 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
   site writes it capitalised and escapes a case-sensitive grep, which is how the earlier
   miscount happened. `CLAUDE.md`'s single site needed no change — it already reported what the
   skill *declares* rather than asserting the fact.
-- **Every deferral this batch generated is now in `ROADMAP.md` instead of in a gitignored plan
-  document.** Seven rows were added and three existing rows amended in place, none deleted.
+- **The deferrals this batch generated are now in `ROADMAP.md` instead of in a gitignored plan
+  document — with one gap, stated because an unqualified "every" would be false.** Eight rows
+  were added and seven existing rows amended in place, none deleted. The gap: the carry-over list
+  was built from the session handoff document alone, and each slice plan keeps its own deferral
+  section that was never swept. Two spot-checked items from those sections are genuinely missing,
+  and the sweep itself is registered as its own row rather than guessed at.
   Two of the amendments close findings a prior slice had left open; the third closes a row
   that had itself gone stale — it still claimed a stale marker-site total in this file, which
   a slice had already corrected, so shipping it unamended would have released a deferred-item
   row asserting a defect that no longer existed. **Three items the ledger expected are absent on
   purpose** — the epic plan's item (f), the 500-line body recommendation, and the two
   second-person descriptions: each was already registered by the slice that found it, and
-  re-registering would have produced duplicate rows. **One is registered against its own slice's
+  re-registering would have produced duplicate rows. **Item (f) only partly**: the slice that
+  owned it registered the one consequence it could not fix, and left the wording-convergence half
+  in its own plan document — which is the same gap the row above records, arriving from the other
+  direction. **One is registered against its own slice's
   instruction** — `claude plugin validate`'s exclusion from CI was decided with a reason, and
   that reason lived only in a plan document under the gitignored `docs/` tree, which is
   exactly the disappearing-judgement failure this batch exists to close.
@@ -324,7 +331,7 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
   added one. That is not achievable *for an in-row amendment*: a row ends in ` |`, so appending
   inside the last cell breaks contiguity wherever the text goes. **It is achievable by writing
   the correction as a separate line instead** — then no row line is removed at all and the check
-  passes vacuously; this file's own table already carries such a line. So the two rules are
+  passes vacuously; `ROADMAP.md`'s own table already carries such a line, the `Correction (2026-08-24)` blockquote above its rows (an earlier draft of this sentence said "this file's own table" — CHANGELOG.md contains no table at all). So the two rules are
   incompatible, not the criterion impossible, and this repository's in-row convention was the one
   kept. Preservation was therefore checked **cell-wise**: each cell of the old row, **compared
   with leading and trailing whitespace trimmed**, must be a prefix of the corresponding trimmed
@@ -346,6 +353,14 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
   `{...}` token verbatim" without saying what to emit instead, so a gate could have printed a
   literal `{task}` to the user. (4) `skills/harness/SKILL.md` §Version & Compatibility had its
   scope narrowed in the same commit.
+- **Two claims in this batch's own commit messages are corrected here, because a commit message
+  cannot be amended in place.** The correction commit's summary says "Nothing is deleted" — true
+  of ROADMAP rows, of which none was removed, but not of prose: seven rows that same commit had
+  added one commit earlier were rewritten rather than amended, so their original wording is gone
+  from the file and survives only in the diff. And its per-file edit counts do not all reproduce:
+  the total of 26 is right, but it is right because an over-count and an under-count cancel, and
+  the README section heading says six corrections above five bullets. The figure to trust is the
+  diff, not either message.
 - **What this release deliberately did NOT do to this file.** The closing slice was scoped to
   reorganise these entries into Added / Changed / Fixed. Added and Changed are used; **there is
   no Fixed section**, and that is a decision rather than an omission: several entries here are
