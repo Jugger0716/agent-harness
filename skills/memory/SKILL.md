@@ -1,7 +1,7 @@
 ---
 name: memory
 disallowed-tools: NotebookEdit, Task, Agent, Workflow, WebSearch, WebFetch
-description: "[DEPRECATED -> use /team-memory] Team knowledge base manager. Renamed to /team-memory to end the trigger ambiguity with Claude Code's built-in personal auto-memory / the # shortcut / CLAUDE.md. This stub forwards to /team-memory."
+description: "[DEPRECATED -> /team-memory] Forwarding stub."
 ---
 
 # /memory — DEPRECATED alias for /team-memory
