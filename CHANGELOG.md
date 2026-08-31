@@ -60,6 +60,28 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
   caps the skill listing at a share of the context window and, when that overflows, drops the
   descriptions of the least-used skills while keeping every name — a failure that reaches the
   user as nothing at all.
+- **A five-minute first-task walkthrough in `README.md`.** It sits between `## Install` and
+  `## Quick Start` and says which role each plays: the walkthrough is the one run you read
+  start to finish, Quick Start stays the command catalogue. It names every prompt a real run
+  shows, in order — the `Model` preset, the `Convention Scan` question, and HARD GATE #1
+  (spec confirmation) — and then states the thing the gate count alone hides: **a green run
+  answers one gate**, because gates #2 and #3 render only after mechanical verification has
+  failed three times and only if auto-fix was chosen. Someone reading "3 HARD-GATEs" and
+  expecting three prompts would conclude the run was broken.
+- **A CI badge and a fixed-overhead table in `README.md`.** The badge points at
+  `.github/workflows/lint.yml`. The table sits beside `### Token Cost vs. Quality` under
+  `## At a Glance` and is the only place in the file carrying that figure — the mode
+  multipliers are relative to a baseline that is not zero, and the largest part of that
+  baseline is `/harness`'s own contract document loading before any work starts. It is
+  reported on four bases at one commit (LF index bytes 211,235 / UTF-8 characters 207,239 /
+  working-tree CRLF bytes 213,743 / 2,508 lines at
+  `118015d51aa15ee67f409b945fcd43c65a61d4f5`, measured 2026-08-31) with the command for each,
+  because bytes and characters differ here and so do index and working tree. The
+  `### Token Cost vs. Quality Trade-off` table under `## workflow` gets a pointer and no
+  number. **The epic plan's own figures for this table (194,572 / 190,805 / 196,865) were
+  taken six slices earlier and are superseded, not wrong** — which is the whole reason the
+  table ships with a basis, a SHA, a date, and a note that re-running the commands is the only
+  trustworthy source.
 
 ### Changed
 
@@ -253,6 +275,44 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
   §Step 5's two chaining-test outcomes fired. Cause (a) remains a candidate, not a diagnosis, and
   this is not a verified leak. An earlier draft of these lines asserted the turn scoping as
   established; a cold review caught it and the claim is withdrawn in place.
+- **`.gitattributes` now covers `*.md`.** Until now, what this repository *committed* as line
+  endings for its primary artifact depended on each machine's `core.autocrlf`. The blobs are
+  LF only because this checkout has it set to `true`, and that value comes from the
+  Git-for-Windows installation default rather than from anything the repository states; on a
+  checkout where it is `false`, a CRLF blob is what gets committed, and the CR-intolerant
+  failure modes already recorded for `*.sh` and `*.yml` stop being hypothetical for Markdown.
+  **The line renormalises nothing**: all 94 tracked `.md` blobs were measured as `i/lf`
+  before it landed. `git add --renormalize .` was therefore **not run** — it would have been a
+  no-op that walks the whole tree, opening the same staging surface this batch bans with its
+  `git add -A` rule. `CLAUDE.md`'s statement of what the attributes file covers is corrected
+  in the same commit, since the old sentence became false the moment the line landed.
+- **The unconditional "git-committed" claim is now conditional in `README.md` too** — all
+  three sites: the skills overview row, the `## team-memory` opening paragraph, and the
+  built-in-memory comparison table. This finishes what an earlier slice started inside
+  `skills/team-memory/` and `skills/memory/`; the count is three rather than two because one
+  site writes it capitalised and escapes a case-sensitive grep, which is how the earlier
+  miscount happened. `CLAUDE.md`'s single site needed no change — it already reported what the
+  skill *declares* rather than asserting the fact.
+- **Every deferral this batch generated is now in `ROADMAP.md` instead of in a gitignored plan
+  document.** Seven rows were added and three existing rows amended in place, none deleted.
+  Two of the amendments close findings a prior slice had left open; the third closes a row
+  that had itself gone stale — it still claimed a stale marker-site total in this file, which
+  a slice had already corrected, so shipping it unamended would have released a deferred-item
+  row asserting a defect that no longer existed. **Two items the ledger expected are absent on
+  purpose**: both were already registered by the slice that found them, and re-registering
+  would have produced duplicate rows. **One is registered against its own slice's
+  instruction** — `claude plugin validate`'s exclusion from CI was decided with a reason, and
+  that reason lived only in a plan document under the gitignored `docs/` tree, which is
+  exactly the disappearing-judgement failure this batch exists to close.
+- **A note on how append-only was verified, because the stated check does not work.** The
+  acceptance criterion asks that each removed row line survive as a substring of an added one.
+  For a same-row amendment that is unsatisfiable in principle: a row ends in ` |`, so appending
+  anything inside the last cell breaks contiguity no matter where the text goes. Preservation
+  was therefore checked **cell-wise** — every cell of the old row must be a prefix of the
+  corresponding cell of the new row, which is the precise formalisation of "append inside the
+  row" and forbids deletion just as strictly. Recorded rather than quietly substituted, since
+  swapping in a different test and reporting the original as passed is the failure mode this
+  repository keeps auditing for.
 
 ## [8.11.0] — 2026-08-20
 

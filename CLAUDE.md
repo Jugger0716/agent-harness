@@ -52,7 +52,7 @@ There is no build, test, dev, or deploy command.
 | Path | Role |
 |---|---|
 | `skills/<name>/SKILL.md` | one skill = one directory = one contract file |
-| `templates/_shared/` | cross-skill single sources (`mode_gate.md`, `status_format.md`, `project_defaults.md`, ...) |
+| `templates/_shared/` | cross-skill single sources (`mode_gate.md`, `status_format.md`, `project_defaults.md`, `session_conflict.md`, ...) |
 | `templates/<skill>/` | skill-specific prompt templates |
 | `templates/planner/` | shared by `/harness` and `/spec` — hence the `verify_block_sync.py` BLOCK groups |
 | `templates/{generator,verify,evaluator}/` | `/harness` only, despite the role-based naming |
@@ -174,5 +174,8 @@ in `.github/workflows/lint.yml`, are the entire verification layer:
   first two is incomplete.
 - `/harness`'s 3 HARD-GATEs (spec-confirm / verify-fail / auto-fix-apply) must stay in
   `skills/harness/SKILL.md`; `verify_meta_literal.py` rejects gate tokens inside segment scripts.
-- `.gitattributes` covers `*.workflow.js`, `*.sh`, and `*.yml`. Other file types are not
-  EOL-normalized by the repository.
+- `.gitattributes` covers `*.workflow.js`, `*.sh`, `*.yml`, and `*.md`. Other file types —
+  `*.py` included — are not EOL-normalized by the repository, so what they commit still
+  depends on the machine's `core.autocrlf`. The `*.md` line renormalized nothing when it
+  landed (all 94 tracked `.md` blobs were already LF); it fixes what a checkout with
+  `core.autocrlf=false` would otherwise commit.
