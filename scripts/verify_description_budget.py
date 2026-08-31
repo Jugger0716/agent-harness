@@ -89,12 +89,16 @@ PER_SKILL_CAP = 1024
 # using its own end-of-commit measurement. Nothing outside this block is re-fixed.
 # --------------------------------------------------------------------------------
 
-# Repository measurement at 4295156 (unquoted basis).
-TOTAL_CEILING = 7709
+# Repository measurement at this commit (C2) -- a ceiling re-fixed in the commit that
+# creates it cannot cite its own SHA, so it is annotated this way rather than left bare.
+# Was 7709 at 4295156, before this slice trimmed four descriptions.
+TOTAL_CEILING = 6841
 
-# Per-skill ceilings, repository measurement at 4295156 (unquoted basis).
+# Per-skill ceilings (unquoted basis). Untouched skills keep their 4295156 measurement;
+# the five this commit edits are re-fixed at this commit. The three stub ceilings are the
+# lengths of the target wordings the epic plan fixed, not a projection.
 PER_SKILL_CEILING = {
-    "code-review": 226,
+    "code-review": 45,   # at this commit (C2); was 226 at 4295156
     "codebase-audit": 410,
     "debug": 495,
     "deep-review": 668,
@@ -102,21 +106,29 @@ PER_SKILL_CEILING = {
     "harness": 470,
     "md-generate": 469,
     "md-optimize": 194,
-    "memory": 229,
+    "memory": 45,     # at this commit (C2); was 229 at 4295156
     "migrate": 397,
     "refactor": 329,
     "ship": 520,
-    "spec": 594,
-    "study": 1009,
+    "spec": 595,      # at this commit (C2); was 594 at 4295156. Raised by exactly the
+                      # one character the YAML repair costs (": " -> " -- " em dash).
+    "study": 662,     # at this commit (C2); was 1009 at 4295156
     "team-memory": 412,
     "test-gen": 472,
-    "workflow": 198,
+    "workflow": 41,   # at this commit (C2); was 198 at 4295156
 }
 
-# Lower bounds for the descriptions this slice shortens. Empty until C2 measures the
-# landed text; a bound guessed in the plan document would be a figure declared without
-# measurement, which is exactly the defect this repository keeps re-finding.
-LOWER_BOUND = {}
+# Lower bounds for the descriptions this slice shortens, set from the landed text at this
+# commit (C2) with deliberate slack below it. A total ceiling alone approves unlimited
+# shrinkage, and over-shrinking -- a skill that silently stops being selected -- is this
+# slice's actual risk. The required-token lists below already pin the content; these bounds
+# are the backstop for a future edit that guts a description while keeping its tokens.
+LOWER_BOUND = {
+    "study": 600,        # landed 662 at this commit (C2)
+    "code-review": 30,   # landed 45
+    "memory": 30,        # landed 45
+    "workflow": 30,      # landed 41
+}
 
 # --------------------------------------------------------------------------------
 # End of C2 RE-FIX BLOCK

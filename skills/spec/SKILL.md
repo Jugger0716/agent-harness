@@ -1,7 +1,7 @@
 ---
 name: spec
 disallowed-tools: NotebookEdit
-description: Requirements specification writer with multi-round Q&A discovery. Transforms vague ideas into structured specs compatible with /harness input. Modes — quick (orchestrator only, inline) / deep (4 analysts + Critic via plugin-shipped native Workflow segments, opt-in gated). Specs open with a derived Review Sheet (TL;DR, decision table, open questions, changed-in-this-revision) for fast human review. Also: /spec digest <file> — read-only 3-layer briefing (30s/5min/section map + mermaid) of any existing spec or design doc. Use when you need a well-defined spec before starting implementation.
+description: Requirements specification writer with multi-round Q&A discovery. Transforms vague ideas into structured specs compatible with /harness input. Modes — quick (orchestrator only, inline) / deep (4 analysts + Critic via plugin-shipped native Workflow segments, opt-in gated). Specs open with a derived Review Sheet (TL;DR, decision table, open questions, changed-in-this-revision) for fast human review. Also — /spec digest <file> — read-only 3-layer briefing (30s/5min/section map + mermaid) of any existing spec or design doc. Use when you need a well-defined spec before starting implementation.
 ---
 
 # Agent Harness Spec

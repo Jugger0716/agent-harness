@@ -1,7 +1,7 @@
 ---
 name: workflow
 disallowed-tools: NotebookEdit
-description: "[DEPRECATED -> use /harness] 3-Phase Planner/Generator/Evaluator workflow. Renamed to /harness to end the concept collision with Claude Code's native Workflow engine. This stub forwards to /harness."
+description: "[DEPRECATED -> /harness] Forwarding stub."
 ---
 
 # /workflow — DEPRECATED alias for /harness

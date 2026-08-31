@@ -1,7 +1,7 @@
 ---
 name: code-review
 disallowed-tools: NotebookEdit, WebSearch, WebFetch
-description: "[DEPRECATED -> use /deep-review] Systematic, bias-free code review. Renamed to /deep-review to end the literal collision with Claude Code's built-in /code-review (2.1.147+, --comment/--fix). This stub forwards to /deep-review."
+description: "[DEPRECATED -> /deep-review] Forwarding stub."
 ---
 
 # /code-review — DEPRECATED alias for /deep-review
