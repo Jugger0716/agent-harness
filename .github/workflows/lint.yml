@@ -27,6 +27,7 @@ jobs:
       # Every lint MUST be invoked from a ONE-LINE `- run:` step: that form is the contract
       # .github/scripts/check_lint_wiring.sh greps. A block-form step would not be counted.
       - run: python3 scripts/verify_block_sync.py
+      - run: python3 scripts/verify_description_budget.py
       - run: python3 scripts/verify_manifest_sync.py
       - run: python3 scripts/verify_meta_literal.py
       - run: python3 scripts/verify_sync_markers.py
