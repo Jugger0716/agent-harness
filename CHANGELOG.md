@@ -80,8 +80,10 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
   working-tree row needed correcting before it shipped, by this release's own doing**: a Windows
   checkout measured 213,743 bytes, one carriage return per line more than the index, and the
   `*.md text eol=lf` line added below makes that number obsolete for every checkout from here on
-  — a file attribute outranks `core.autocrlf`, so the working tree now matches the index at
-  211,235. The old figure is kept in the table so an older checkout can recognise itself. The
+  — a file attribute outranks `core.autocrlf`, so a checkout made from this release onward gets
+  LF and matches the index at 211,235, while a working tree that already exists keeps CRLF until
+  its files are checked out again. (Verified by cloning both commits: the old one measures
+  213,743 with `w/crlf`, this one 211,235 with `w/lf`.) The old figure is kept in the table so an older checkout can recognise itself. The
   `### Token Cost vs. Quality Trade-off` table under `## workflow` gets a pointer and no
   number. **The epic plan's own figures for this table (194,572 / 190,805 / 196,865) were
   taken six slices earlier and are superseded, not wrong** — which is the whole reason the
@@ -355,11 +357,16 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
   scope narrowed in the same commit.
 - **Two claims in this batch's own commit messages are corrected here, because a commit message
   cannot be amended in place.** The correction commit's summary says "Nothing is deleted" — true
-  of ROADMAP rows, of which none was removed, but not of prose: seven rows that same commit had
+  of ROADMAP rows, of which none was removed, but not of prose: six rows that same commit had
   added one commit earlier were rewritten rather than amended, so their original wording is gone
-  from the file and survives only in the diff. And its per-file edit counts do not all reproduce:
-  the total of 26 is right, but it is right because an over-count and an under-count cancel, and
-  the README section heading says six corrections above five bullets. The figure to trust is the
+  from the file and survives only in the diff. **Six, not the seven that message's own heading
+  claims** — the seventh item it counted is the pre-existing `Correction (2026-08-24)` blockquote,
+  which is neither a table row nor something that commit had added. That figure was carried into
+  an earlier draft of this very entry without being re-measured, which is the failure this entry
+  exists to describe. And its per-file edit counts do not all reproduce:
+  its per-file counts sum to 26 while the bullets under those headings number 25 — the README
+  heading says six corrections above five bullets, and no attempt is made here to name where the
+  missing one went, because that would be another unverified figure. The figure to trust is the
   diff, not either message.
 - **What this release deliberately did NOT do to this file.** The closing slice was scoped to
   reorganise these entries into Added / Changed / Fixed. Added and Changed are used; **there is
