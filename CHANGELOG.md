@@ -34,7 +34,9 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
   branch for it, so folding the absent case in would delete that path. The file is also the single
   source for the rule the gate is an instance of — a gate that cannot be answered halts when the
   action is destructive and continues when it is not.
-- **`session-conflict` group in `verify_sync_markers.py`.** Nine groups, 48 marker sites. The
+- **`session-conflict` group in `verify_sync_markers.py`.** Nine groups, 48 marker sites at the
+  time this entry was written; a later slice in the same batch raised the total to **51**, which
+  is what the lint reports today. The
   floor is 4 with zero slack, and both tokens were measured to occur zero times across the four
   skill files before the edit, so neither can pass vacuously — unlike two existing groups whose
   comments record exactly that weakness in themselves.
@@ -48,6 +50,16 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
   team-memory store's ignore state, and how `agent-harness-defaults` resolves. It is reached
   through a carve-out at the top of §Session Recovery, so it never reads or writes
   `.harness/state.json` and never trips the session conflict gate that section owns.
+- **`scripts/verify_description_budget.py`.** A sixth lint. It measures every skill's
+  frontmatter `description` on a basis its docstring fixes before quoting any number — outer
+  YAML quotes removed, `\r` excluded, UTF-8 characters — and enforces a per-skill cap, per-skill
+  and total ceilings, lower bounds for the four descriptions this release shortened,
+  required and forbidden token lists, frontmatter structure, and third person with a zero-slack
+  allowlist. Raising a description past its ceiling requires raising that ceiling in the same
+  commit; lowering is free, except below a recorded lower bound. It exists because Claude Code
+  caps the skill listing at a share of the context window and, when that overflows, drops the
+  descriptions of the least-used skills while keeping every name — a failure that reaches the
+  user as nothing at all.
 
 ### Changed
 
@@ -56,6 +68,23 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
   `plugin.json` carries; both are synchronised. The empty `owner.email` is removed. Edited in
   place against key anchors and never re-serialised, so the inline keyword array survives as a
   single line.
+- **Four skill descriptions are shorter, and `/spec` loads again.** `study` drops from 1,009 to
+  662 characters and the three deprecation stubs (`code-review`, `memory`, `workflow`) collapse
+  to one line each, taking the 17-skill total from 7,709 to 6,841. What `study` lost is the
+  mode clause and the read-only/WebSearch clause: `plugin-shipped native Workflow segment` is
+  shared by 9 skills and `opt-in gated` by 8, so neither helps Claude tell `study` apart, while
+  everything kept — the seven guide sections, `verified revision material`, the provenance
+  wording, `HTML report` — appears in no other skill. `/study`'s description therefore no
+  longer states its workflow-path mode clause; that fact is already carried plugin-wide by
+  `plugin.json`'s own description, and the other 8 workflow-path skills keep the clause until
+  the wider description diet happens. The stubs' forwarding behaviour is unchanged — it lives
+  in the body, and slash invocation resolves through `name`.
+  Separately, `skills/spec/SKILL.md`'s description was an unquoted YAML plain scalar containing
+  `": "`, which YAML cannot parse: **`/spec` was not loading**, and it was the only one of the
+  17 skills missing from the session skill list. One character fixes it (`Also: ` → `Also — `),
+  and the new lint rejects the pattern so it cannot come back quietly. `harness` keeps S5's
+  doctor wording byte for byte — not the shortest string that keeps the literal `doctor`, but
+  the criterion is minimum signal loss rather than minimum length.
 - **`.gitattributes` normalises `*.sh` and `*.yml` to LF.** Both failure modes were measured on a
   CR-intolerant tool chain and are non-reproducible under Git Bash, which swallows a trailing CR;
   the CI runner is not Git Bash. A line-anchored regex stops matching a CRLF file, and a CRLF
