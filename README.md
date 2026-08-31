@@ -73,13 +73,17 @@ you. Measured on **2026-08-31** at commit **`118015d51aa15ee67f409b945fcd43c65a6
 |-------|-------|---------|
 | LF bytes, **index blob** (what is committed) | **211,235 B** | `git cat-file -p HEAD:skills/harness/SKILL.md \| wc -c` |
 | UTF-8 **characters** | **207,239** | `python -c "print(len(open('skills/harness/SKILL.md',encoding='utf-8').read()))"` |
-| CRLF bytes, **working tree** (Windows checkout) | **213,743 B** | `wc -c skills/harness/SKILL.md` |
+| Bytes, **working tree**, on a checkout made after `*.md text eol=lf` | **211,235 B** (LF — identical to the index blob) | `wc -c skills/harness/SKILL.md` |
 | Lines | **2,508** | `git cat-file -p HEAD:skills/harness/SKILL.md \| wc -l` |
-| EOL attributes | `i/lf  w/crlf` | `git ls-files --eol skills/harness/SKILL.md` |
+| EOL attributes | `i/lf  w/crlf  attr/text eol=lf` (the `attr/` column was empty until this release) | `git ls-files --eol skills/harness/SKILL.md` |
 
-Bytes and characters differ because the file contains typographic characters; index and
-working tree differ because this checkout has `core.autocrlf=true`. Quote the row that matches
-what you are measuring — they are not interchangeable.
+Bytes and characters differ because the file contains typographic characters. Index and working
+tree used to differ too, on Windows checkouts with `core.autocrlf=true`: that checkout measured
+**213,743 B**, exactly 2,508 bytes more, one carriage return per line. **That is no longer the
+current value and the number is kept only so an older checkout can recognise itself** — the same
+release adds `*.md text eol=lf` to `.gitattributes`, and a file attribute outranks `core.autocrlf`,
+so a checkout made from this release onward gets LF and its working tree matches its index blob.
+Quote the row that matches what you are measuring — they are not interchangeable.
 
 > This table is a **snapshot**, not a live figure. Every edit to that file changes it, and
 > re-running the five commands above is the only trustworthy source. Do not cite these numbers
@@ -167,14 +171,18 @@ inline-vs-workflow first.)
 
 **What you will be asked, in order:**
 
-1. **`Model`** — `frontier` / `balanced (Recommended)` / `economy`. Pick **balanced**. This
-   chooses which model plays executor, advisor and evaluator; it does not change the steps.
+1. **`Model`** — `default` / `frontier` / `balanced (Recommended)` / `economy`. Pick
+   **balanced**. This chooses which model plays executor, advisor and evaluator; it does not
+   change the steps. (`default` inherits the parent model and changes nothing.)
 2. **`Convention Scan`** — `Scan` / `Skip`. A fresh repo has no `CLAUDE.md`, so you are asked
    whether to scan for existing conventions. Pick **Skip** for the demo — there is nothing to
    find yet.
-3. **`Spec` — HARD GATE #1.** The planner writes `docs/harness/<slug>/spec.md`, prints it, and
-   stops. Read it. Then answer **`Proceed as single`** (the other options are `Plan as epic`
-   to split the work into slices, `Modify` to edit the spec and re-confirm, and `Stop`).
+3. **HARD GATE #1 — spec confirmation** (this one has no short header of its own, unlike the
+   two above). The planner writes `docs/harness/<slug>/spec.md`, prints it, and stops. Read it.
+   Then answer **`Proceed`** — on the inline path that `--mode single` selects there is no scale
+   recommendation to lead with, so the option is undecorated; on the workflow path the same
+   option reads `Proceed as single`. The others are `Plan as epic` to split the work into
+   slices, `Modify` to edit the spec and re-confirm, and `Stop`.
    **This is the one gate a successful run always shows you.**
 
 Then it implements, runs mechanical verification, and runs the evaluator review. On a clean
@@ -188,9 +196,11 @@ run there is nothing more to answer — you get a summary and the artifacts unde
 - **HARD GATE #3 — the auto-fix apply gate.** Renders only if you chose `Auto-fix proposal`
   above, and asks before the patch touches your files.
 
-So a green run answers **one** gate; a run that hits trouble answers up to three. Nothing is
-written to your working tree before gate #1 is answered, and no patch is applied before
-gate #3.
+So a green run answers **one** gate; a run that hits trouble answers up to three. **No file you
+wrote is touched before gate #1** — but the run is not inert before it either: Step 1 creates
+`.harness/`, switches to a `harness/<slug>` branch, and the planner writes the spec document, all
+before the gate renders. What waits for a gate is *your* code: implementation starts only after
+gate #1, and no auto-fix patch is applied before gate #3.
 
 **If you stop partway**, run `/harness` with no arguments in the same repository — it reads
 `.harness/state.json` and re-enters at the step you left. `/harness doctor` gives a read-only
