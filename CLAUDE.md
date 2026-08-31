@@ -29,9 +29,10 @@ defect.
 | Workflow meta lint | `python scripts/verify_meta_literal.py` |
 | Block sync lint (SHA256) | `python scripts/verify_block_sync.py` |
 | Workflow syntax + CR guard | `node scripts/check_workflow_syntax.mjs` |
+| Description budget ratchet | `python scripts/verify_description_budget.py` |
 | Lint wiring equality | `bash .github/scripts/check_lint_wiring.sh` |
 
-Run all five after changing anything under `skills/`, `templates/`, `workflows/`, `scripts/`, or
+Run all six after changing anything under `skills/`, `templates/`, `workflows/`, `scripts/`, or
 `.claude-plugin/`. Re-run `check_lint_wiring.sh` as well whenever `.github/workflows/lint.yml`
 changes or a file matching `scripts/verify_*.py` or `scripts/*.mjs` is added or removed.
 
@@ -57,7 +58,7 @@ There is no build, test, dev, or deploy command.
 | `templates/{generator,verify,evaluator}/` | `/harness` only, despite the role-based naming |
 | `workflows/<skill>.<segment>.workflow.js` | native Workflow segment; the naming pattern is fixed |
 | `workflows/_reference/` | reference documents (`schemas.md`, `study_measurements.md`), not scripts |
-| `scripts/` | the 5 self-consistency lints |
+| `scripts/` | the 6 self-consistency lints |
 | `docs/` | gitignored runtime output of 13 skills |
 | `README.md` | 1,100+ lines including `### Repository Layout`; keep it in sync when a skill's surface changes |
 
@@ -119,7 +120,7 @@ frontmatter is the plugin's exposure contract, so treat it as part of the skill'
 
 ## Verification
 
-The five lints under `scripts/`, plus `.github/scripts/check_lint_wiring.sh` and the CI wiring
+The six lints under `scripts/`, plus `.github/scripts/check_lint_wiring.sh` and the CI wiring
 in `.github/workflows/lint.yml`, are the entire verification layer:
 
 - `verify_sync_markers.py` — SYNC group referential integrity, `min_sites` occurrence floor, and
@@ -139,6 +140,14 @@ in `.github/workflows/lint.yml`, are the entire verification layer:
   `metadata.description` and `owner` are marketplace-only, and `author` is carried by both files
   but not compared; the script's docstring records each exclusion with its reason, because JSON
   cannot carry a comment.
+- `verify_description_budget.py` — per-skill description caps, per-skill and total ceilings
+  (a ratchet: lowering is free, raising needs an explicit ceiling raise in the same commit),
+  lower bounds for the descriptions the v8.12 batch shortened, required/forbidden token lists,
+  frontmatter structure, and a third-person check with a zero-slack allowlist. The measurement
+  basis is fixed in its docstring before any total: quotes removed, `\r` excluded, UTF-8
+  characters. It exists because Claude Code caps the skill listing at a share of the context
+  window and, when that overflows, drops the descriptions of least-used skills while keeping
+  every name — a failure with no message to the user.
 - `check_workflow_syntax.mjs` — compiles each script through `AsyncFunction` because `node --check`
   false-greens on ESM `export`, then guards CR in both the working tree and the index blob.
 - `.github/scripts/check_lint_wiring.sh` — compares the lint scripts that exist against the ones
