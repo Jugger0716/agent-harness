@@ -28,7 +28,8 @@ Usage:
   python scripts/verify_block_sync.py
   python scripts/verify_block_sync.py --version
 
-Intended invocation: run manually (pre-commit/CI wiring is a later-phase TODO).
+Intended invocation: run manually and on push/PR via .github/workflows/lint.yml
+(pre-commit hook wiring is still a later-phase TODO).
 
 Defined contract: see the templates/planner/*.md `<!-- BLOCK-START:<tag> v1 ... -->`
 header comments + templates/_shared/{spec_context_block,input_trust_model}.md.

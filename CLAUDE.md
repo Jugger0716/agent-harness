@@ -25,14 +25,21 @@ defect.
 | Action | Command |
 |---|---|
 | Marker sync + section-ref lint | `python scripts/verify_sync_markers.py` |
+| Manifest sync lint | `python scripts/verify_manifest_sync.py` |
 | Workflow meta lint | `python scripts/verify_meta_literal.py` |
 | Block sync lint (SHA256) | `python scripts/verify_block_sync.py` |
 | Workflow syntax + CR guard | `node scripts/check_workflow_syntax.mjs` |
+| Description budget ratchet | `python scripts/verify_description_budget.py` |
+| Lint wiring equality | `bash .github/scripts/check_lint_wiring.sh` |
 
-Run all four after changing anything under `skills/`, `templates/`, `workflows/`, or `scripts/`.
-Nothing runs them automatically — `.github/` holds issue and PR templates only, and the three Python
-scripts' docstrings state `run manually (pre-commit/CI wiring is a later-phase TODO)`
-(`check_workflow_syntax.mjs` carries no such line).
+Run all six after changing anything under `skills/`, `templates/`, `workflows/`, `scripts/`, or
+`.claude-plugin/`. Re-run `check_lint_wiring.sh` as well whenever `.github/workflows/lint.yml`
+changes or a file matching `scripts/verify_*.py` or `scripts/*.mjs` is added or removed.
+
+They also run on every push and pull request via `.github/workflows/lint.yml`; `.github/` holds that
+workflow, the wiring check under `.github/scripts/`, and the issue and PR templates. The Python
+scripts' docstrings state `run manually and on push/PR via .github/workflows/lint.yml (pre-commit
+hook wiring is still a later-phase TODO)` — a pre-commit hook is still not wired.
 
 Exit codes: `0` pass, `1` violation found, `2` structural problem. One exception worth knowing:
 in `verify_sync_markers.py` a **missing target file is `1`**, and `2` means a declared SYNC group's
@@ -45,13 +52,13 @@ There is no build, test, dev, or deploy command.
 | Path | Role |
 |---|---|
 | `skills/<name>/SKILL.md` | one skill = one directory = one contract file |
-| `templates/_shared/` | cross-skill single sources (`mode_gate.md`, `status_format.md`, `project_defaults.md`, ...) |
+| `templates/_shared/` | cross-skill single sources (`mode_gate.md`, `status_format.md`, `project_defaults.md`, `session_conflict.md`, ...) |
 | `templates/<skill>/` | skill-specific prompt templates |
 | `templates/planner/` | shared by `/harness` and `/spec` — hence the `verify_block_sync.py` BLOCK groups |
 | `templates/{generator,verify,evaluator}/` | `/harness` only, despite the role-based naming |
 | `workflows/<skill>.<segment>.workflow.js` | native Workflow segment; the naming pattern is fixed |
 | `workflows/_reference/` | reference documents (`schemas.md`, `study_measurements.md`), not scripts |
-| `scripts/` | the 4 self-consistency lints |
+| `scripts/` | the 6 self-consistency lints |
 | `docs/` | gitignored runtime output of 13 skills |
 | `README.md` | 1,100+ lines including `### Repository Layout`; keep it in sync when a skill's surface changes |
 
@@ -113,7 +120,8 @@ frontmatter is the plugin's exposure contract, so treat it as part of the skill'
 
 ## Verification
 
-The four lints under `scripts/` are the entire verification layer:
+The six lints under `scripts/`, plus `.github/scripts/check_lint_wiring.sh` and the CI wiring
+in `.github/workflows/lint.yml`, are the entire verification layer:
 
 - `verify_sync_markers.py` — SYNC group referential integrity, `min_sites` occurrence floor, and
   token consistency; **plus** a section-reference check that every `§Section` pointer into
@@ -127,8 +135,24 @@ The four lints under `scripts/` are the entire verification layer:
   gate-token tripwire, and the defensive-args guard.
 - `verify_block_sync.py` — SHA256 comparison of BLOCK-delimited content. `GROUPS` declares
   `(tag, version, files, shared_source)`.
+- `verify_manifest_sync.py` — `.claude-plugin/plugin.json` and `marketplace.json`: the plugin
+  description, the keywords set, and the version string at all three key paths.
+  `metadata.description` and `owner` are marketplace-only, and `author` is carried by both files
+  but not compared; the script's docstring records each exclusion with its reason, because JSON
+  cannot carry a comment.
+- `verify_description_budget.py` — per-skill description caps, per-skill and total ceilings
+  (a ratchet: lowering is free, raising needs an explicit ceiling raise in the same commit),
+  lower bounds for the descriptions the v8.12 batch shortened, required/forbidden token lists,
+  frontmatter structure, and a third-person check with a zero-slack allowlist. The measurement
+  basis is fixed in its docstring before any total: quotes removed, `\r` excluded, UTF-8
+  characters. It exists because Claude Code caps the skill listing at a share of the context
+  window and, when that overflows, drops the descriptions of least-used skills while keeping
+  every name — a failure with no message to the user.
 - `check_workflow_syntax.mjs` — compiles each script through `AsyncFunction` because `node --check`
   false-greens on ESM `export`, then guards CR in both the working tree and the index blob.
+- `.github/scripts/check_lint_wiring.sh` — compares the lint scripts that exist against the ones
+  `.github/workflows/lint.yml` actually runs, by NAME SET rather than by count. It lives outside
+  `scripts/` so it neither matches the glob it counts nor counts itself.
 
 ## Important Notes
 
@@ -150,5 +174,8 @@ The four lints under `scripts/` are the entire verification layer:
   first two is incomplete.
 - `/harness`'s 3 HARD-GATEs (spec-confirm / verify-fail / auto-fix-apply) must stay in
   `skills/harness/SKILL.md`; `verify_meta_literal.py` rejects gate tokens inside segment scripts.
-- `.gitattributes` covers `*.workflow.js` only. Other file types are not EOL-normalized by the
-  repository.
+- `.gitattributes` covers `*.workflow.js`, `*.sh`, `*.yml`, and `*.md`. Other file types —
+  `*.py` included — are not EOL-normalized by the repository, so what they commit still
+  depends on the machine's `core.autocrlf`. The `*.md` line renormalized nothing when it
+  landed (all 94 tracked `.md` blobs were already LF); it fixes what a checkout with
+  `core.autocrlf=false` would otherwise commit.
