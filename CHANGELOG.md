@@ -6,6 +6,391 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/).
 
+## [Unreleased]
+
+### Added
+
+- **GitHub Actions CI — `.github/workflows/lint.yml`.** The self-consistency lints run on every
+  push and pull request; until now nothing ran them automatically. The workflow adds no separate
+  end-of-line step, because `check_workflow_syntax.mjs` already scans working-tree bytes and index
+  blobs. What CI adds is the promotion of that script's index-blob SKIP report to a hard failure,
+  plus an assertion that its OK line is present: `bash -e` does not trip errexit on a failing `if`
+  condition, so a bare negative grep over a log that was never written would otherwise pass.
+- **`scripts/verify_manifest_sync.py`.** Compares `.claude-plugin/plugin.json` against
+  `.claude-plugin/marketplace.json` on the plugin description, the keyword set, and the version
+  string at every one of its three key paths. The marketplace entry is located by name rather
+  than by index, so a second listed plugin cannot shift the comparison onto the wrong entry.
+  `metadata.description`, `owner` and `author` are deliberately not compared, and the script's
+  docstring records each exclusion with its reason, because JSON carries no comments.
+- **`.github/scripts/check_lint_wiring.sh`.** Compares the lints that exist against the ones
+  `lint.yml` actually runs, by name set rather than by count. A count is satisfied by duplicates:
+  paste the same step twice while adding a lint and the check stays green while that lint executes
+  zero times in CI. It lives outside `scripts/` so it neither matches the glob it counts nor
+  counts itself.
+- **`templates/_shared/session_conflict.md`.** The cross-skill session conflict gate now has a
+  single source. It generalises `/spec`'s gate rather than duplicating it, and writes down the
+  one place that generalisation must not be applied verbatim: `/harness` and `/ship` both read an
+  absent `skill` field as the mark of a pre-skill-field legacy session and keep their own restart
+  branch for it, so folding the absent case in would delete that path. The file is also the single
+  source for the rule the gate is an instance of — a gate that cannot be answered halts when the
+  action is destructive and continues when it is not.
+- **`session-conflict` group in `verify_sync_markers.py`.** Nine groups, 48 marker sites at the
+  time this entry was written; a later slice in the same batch raised the total to **51**, which
+  is what the lint reports today. The
+  floor was 4 with zero slack when this entry was written, and S3 raised it to 7 in the same
+  change that added three more marker sites (see Changed); both tokens were measured to occur zero times across the four
+  skill files before the edit, so neither can pass vacuously — unlike two existing groups whose
+  comments record exactly that weakness in themselves.
+- **`/harness doctor` — a read-only environment diagnostic.** The failures this plugin
+  actually hits are environmental — a CRLF-contaminated installed copy that makes every
+  Workflow-path skill refuse to launch, a stale install, a `/team-memory` store sitting under
+  a gitignored path — and until now the means of diagnosing them were scattered across four
+  documents. `doctor` reports six items with one `✓` or `⚠` each: installed-copy CR
+  contamination across both known install locations, `Workflow` tool availability as this
+  session observes it, git work-tree status, version and content drift on three axes, the
+  team-memory store's ignore state, and how `agent-harness-defaults` resolves. It is reached
+  through a carve-out at the top of §Session Recovery, so it never reads or writes
+  `.harness/state.json` and never trips the session conflict gate that section owns.
+- **`scripts/verify_description_budget.py`.** A sixth lint. It measures every skill's
+  frontmatter `description` on a basis its docstring fixes before quoting any number — outer
+  YAML quotes removed, `\r` excluded, UTF-8 characters — and enforces a per-skill cap, per-skill
+  and total ceilings, lower bounds for the four descriptions this release shortened,
+  required and forbidden token lists, frontmatter structure, and third person with a zero-slack
+  allowlist. Raising a description past its ceiling requires raising that ceiling in the same
+  commit; lowering is free, except below a recorded lower bound. It exists because Claude Code
+  caps the skill listing at a share of the context window and, when that overflows, drops the
+  descriptions of the least-used skills while keeping every name — a failure that reaches the
+  user as nothing at all.
+- **A five-minute first-task walkthrough in `README.md`.** It sits between `## Install` and
+  `## Quick Start` and says which role each plays: the walkthrough is the one run you read
+  start to finish, Quick Start stays the command catalogue. It names every prompt a real run
+  shows, in order — the `Model` preset, the `Convention Scan` question, and HARD GATE #1
+  (spec confirmation) — and then states the thing the gate count alone hides: **a green run
+  answers one gate**, because gates #2 and #3 render only after mechanical verification has
+  failed three times and only if auto-fix was chosen. Someone reading "3 HARD-GATEs" and
+  expecting three prompts would conclude the run was broken.
+- **A CI badge and a fixed-overhead table in `README.md`.** The badge points at
+  `.github/workflows/lint.yml`. The table sits beside `### Token Cost vs. Quality` under
+  `## At a Glance` and is the only place in the file carrying that figure — the mode
+  multipliers are relative to a baseline that is not zero, and the largest part of that
+  baseline is `/harness`'s own contract document loading before any work starts. It is
+  reported on four bases at one commit (LF index bytes 211,235 / UTF-8 characters 207,239 /
+  working-tree bytes / 2,508 lines at `118015d51aa15ee67f409b945fcd43c65a61d4f5`, measured
+  2026-08-31) with the command for each, because bytes and characters differ here. **The
+  working-tree row needed correcting before it shipped, by this release's own doing**: a Windows
+  checkout measured 213,743 bytes, one carriage return per line more than the index, and the
+  `*.md text eol=lf` line added below makes that number obsolete for every checkout from here on
+  — a file attribute outranks `core.autocrlf`, so a checkout made from this release onward gets
+  LF and matches the index at 211,235, while a working tree that already exists keeps CRLF until
+  its files are checked out again. (Verified by cloning both commits: the old one measures
+  213,743 with `w/crlf`, this one 211,235 with `w/lf`.) The old figure is kept in the table so an older checkout can recognise itself. The
+  `### Token Cost vs. Quality Trade-off` table under `## workflow` gets a pointer and no
+  number. **The epic plan's own figures for this table (194,572 / 190,805 / 196,865) were
+  taken six slices earlier and are superseded, not wrong** — which is the whole reason the
+  table ships with a basis, a SHA, a date, and a note that re-running the commands is the only
+  trustworthy source.
+
+### Changed
+
+- **`.claude-plugin/marketplace.json` now matches `plugin.json`.** The marketplace copy of the
+  plugin description was missing a clause, and its keyword array was missing entries that
+  `plugin.json` carries; both are synchronised. The empty `owner.email` is removed. Edited in
+  place against key anchors and never re-serialised, so the inline keyword array survives as a
+  single line.
+- **Four skill descriptions are shorter, and `/spec` loads again.** `study` drops from 1,009 to
+  662 characters and the three deprecation stubs (`code-review`, `memory`, `workflow`) collapse
+  to one line each, taking the 17-skill total from 7,709 (at `4295156`, before the trim)
+  to 6,841 (at `118015d`). What `study` lost is the
+  mode clause and the read-only/WebSearch clause: `plugin-shipped native Workflow segment` is
+  shared by 9 skills and `opt-in gated` by 8, so neither helps Claude tell `study` apart, while
+  everything kept — the seven guide sections, `verified revision material`, the provenance
+  wording, `HTML report` — appears in no other skill. `/study`'s description therefore no
+  longer states its workflow-path mode clause; that fact is already carried plugin-wide by
+  `plugin.json`'s own description, and the other 8 workflow-path skills keep the clause until
+  the wider description diet happens. The stubs' forwarding behaviour is unchanged — it lives
+  in the body, and slash invocation resolves through `name`.
+  Separately, `skills/spec/SKILL.md`'s description was an unquoted YAML plain scalar containing
+  `": "`, which YAML cannot parse: **`/spec` was not loading**, and it was the only one of the
+  17 skills missing from the session skill list. One character fixes it (`Also: ` → `Also — `),
+  and the new lint rejects the pattern so it cannot come back quietly. `harness` keeps S5's
+  doctor wording byte for byte — not the shortest string that keeps the literal `doctor`, but
+  the criterion is minimum signal loss rather than minimum length.
+- **`.gitattributes` normalises `*.sh` and `*.yml` to LF.** Both failure modes were measured on a
+  CR-intolerant tool chain and are non-reproducible under Git Bash, which swallows a trailing CR;
+  the CI runner is not Git Bash. A line-anchored regex stops matching a CRLF file, and a CRLF
+  shell script does not run at all. The CR guards themselves are not new — they already lived in
+  `check_workflow_syntax.mjs`; what changed is that they now run in CI and that a skipped
+  index-blob guard fails instead of passing quietly. **They do not, however, cover these two file
+  types**: that script scans `workflows/*.workflow.js` and nothing else, so for `*.sh` and `*.yml`
+  the attribute line added here is the whole protection, not a belt beside an existing brace.
+- **Documentation corrected where CI made it false.** The lint docstrings, `CLAUDE.md`,
+  `skills/spec/SKILL.md` and the planner templates all said the lints run manually only, and
+  `CLAUDE.md` said `.github/` holds issue and PR templates only. Those sentences now name the
+  workflow. `README.md`'s Repository Layout gained rows for `.claude-plugin/` and `.github/`,
+  and its `scripts/` row now lists the fifth lint. A pre-commit hook is still not wired, and
+  the corrected text says so.
+- **`/debug`, `/refactor`, `/migrate` and `/test-gen` no longer overwrite another skill's live
+  session.** Each previously fell straight through to Setup when `.harness/state.json` belonged
+  to a different skill, and Setup creates directories and runs `git checkout -b` before it writes
+  any state of its own — so the other session's branch was already gone, with nothing asked and
+  nothing printed. All four now evaluate the shared Session Conflict gate at the very top of
+  Session Recovery, before any side effect: `Cancel` halts with `.harness/` untouched,
+  `Delete and start` deletes it and starts fresh, and a non-interactive session defaults to halt.
+  The absence case is deliberately unchanged — a directory with no `.harness/state.json` still
+  proceeds to Setup with no prompt. **The gate is enforced as prose, not as code**: the new sync
+  group proves the four skills carry the marker and the header and option literals, never that
+  the gate actually fires. Only the pre-release live probe can show that.
+- **`/harness` now gates a `version: "3.0"` session that carries no `skill` field, and its
+  question names what is about to be deleted.** §Session Recovery item 1 was a two-way test where
+  "`harness` or missing" both continued; absent `skill` now routes on `version` instead. `"3.0"`
+  gates — a v3 file is defined as carrying both `version "3.0"` and `skill: "harness"`, so one
+  without the field is not a well-formed session — while a missing or non-`"3.0"` version still
+  reaches item 2's pre-harness branch with Restart/Stop and no Resume. **That third route is the
+  point**: sending every absent-`skill` file to the gate would have left item 2 intact and
+  unreachable, which no byte-comparison can detect. The gate's question now carries the task,
+  phase and docs_path of the session being deleted, as `/spec`'s already did.
+- **`/ship`'s conflict gate uses the shared labels and halts when nobody can answer.** Its
+  question was a bare Yes/No with no header and no reference to the shared source; it is now the
+  canonical `Session Conflict` / `Delete and start` / `Cancel` form, promoted to the top of
+  Session Recovery so it is evaluated before the `skill` check rather than nested inside it.
+  **The legacy branch's unattended behaviour was previously undefined** — not permissive,
+  undefined — and is now fixed at halt, matching the shared source's rule that a destructive
+  action never proceeds unanswered. `/ship` documents no headless usage anywhere, so no stated
+  promise changes.
+- **The `session-conflict` group's floor rose from 4 to 7** in the commit that followed the three
+  marker-adding commits, because adding sites without raising the floor fails nothing — the
+  failure mode is silent slack rather than a red build. **Its coverage claim is narrowed at the same time**,
+  to what injection actually shows: the check fires when a literal's last occurrence in a file
+  disappears, and it cannot see the gate's wording drifting away from the shared source while
+  both literals survive — a limit that applies to all seven sites equally. `/spec` and `/harness`
+  additionally already carried both tokens before their markers existed, so there the marker adds
+  no coverage their own gate text did not already force. What is proven is that seven markers
+  coexist and each site still carries both literals; that the seven gates still agree is not
+  proven by any lint here.
+- **`/team-memory save` no longer writes into a gitignored store *silently*.** It can still write
+  there — `Continue local-only` is an offered answer and the non-interactive default — but it can
+  no longer do so without saying so. Before this change the save flow ran no git command at all,
+  so a store under an ignored path was written to and reported as `Saved : N records` with nothing
+  said; this repository is exactly that case, since `.gitignore` ignores `docs/`. A new §Step 1.5
+  evaluates the store's location once per
+  invocation, between Step 1 and Step 2; it cannot sit "just before Step 3", because Step 2 is
+  the per-item loop and calls Step 3 from inside it. The check covers the store, its README, each
+  category directory and one **record-shaped probe per category**, not the store directory alone:
+  a file glob under the store, a pattern on one category, and a store with a tracked descendant
+  each leave the directory reported as not-ignored while the record about to be written is
+  ignored — `git check-ignore` ignores the filesystem but consults the index, so only a new,
+  untracked probe path is a trustworthy signal. The multi-path form drops `-q`, which is rejected
+  outright once more than one path is passed. The work-tree test reads stdout rather than the exit
+  code, because inside a `.git/` directory the command exits 0 and prints `false`.
+- **The repair the gate offers is narrow by decision, and the narrowing is the point.** Which
+  branch applies is decided by MEASURING the store's ancestors, never by the shape of the reported
+  pattern. Only when an ancestor is itself ignored — this repository's `docs/` — is the ignoring
+  line replaced with the star cascade, its depth set by the shallowest ignored ancestor. Every
+  other shape (`*.md`, `**/memory/`, `docs/harness/memory/` itself, a per-category pattern, a
+  nested `.gitignore`, `.git/info/exclude`, a global excludes file, or two different source lines)
+  is reported with the exact lines to change and left alone. A delete-the-offending-line branch
+  was drafted and dropped: with `*.md` it was measured to newly track every `.md` in a repository,
+  and a one-directional side-effect check passes while it happens. Verification after an edit now
+  runs in **both** directions — a sample that was ignored and is now tracked fails exactly as the
+  reverse does — and any failure restores the line verbatim and re-asks instead of continuing on
+  the user's behalf. Rollback never uses `git checkout`/`stash`/`restore`, which would swallow
+  unrelated uncommitted work.
+- **The unconditional "git-committed" claim is now conditional at all four sites inside the two
+  skills that make it** — `/team-memory`'s frontmatter description and opening paragraph, and the
+  deprecated `/memory` stub's blockquote and the sentence it PRINTS to the user. The description
+  measures 412 UTF-8 characters, up from 400; that basis matters, because `awk length()` and
+  `wc -c` report bytes on this shell (414) and confusing the two produced a false "400 is really
+  402" correction during this slice. `README.md` (2 sites) and `CLAUDE.md` (1 site) carry the same
+  unconditional claim and are deliberately untouched — this batch assigns those files to later
+  slices — and are registered in `ROADMAP.md` rather than left to a commit message.
+- **Two user-visible contract changes come with it.** The Save Report gains a `Store` line — an
+  added label, documented in the skill as `templates/_shared/status_format.md` requires — with
+  five states, keeping "not a work tree" separate from "ignored" and from "the check could not
+  run", and never asserting that a path is *tracked*, which §Step 1.5 does not measure. And Key
+  Rules 1, 2, 3 and 11 are all narrowed: rules 1 and 2 had claimed this skill writes nowhere
+  outside `docs/harness/memory/`, which was already untrue of `clean`'s backup under
+  `.harness/memory_backup/` and is now also untrue of the approved `.gitignore` edit; rules 3 and
+  11 had said every write passes a **per-item** gate, which the new invocation-scoped gate is not.
+- **Two limits stated rather than implied.** This repository's own `docs/`-vs-team-memory conflict
+  is made *visible* by this change, not resolved: `docs/` is thirteen skills' runtime output path
+  and stays ignored. And **no lint verifies any of the above** — `skills/team-memory/` and
+  `skills/memory/` carry no SYNC marker and no workflow script, so all five lints plus the wiring
+  check pass on these files whatever they say. Marker total is unchanged at 51. The gate's actual
+  behaviour is established only by the pre-release live probe, which itself cannot reach the
+  not-a-git-repository path (it runs inside this repository) — recorded in `ROADMAP.md`.
+- **`doctor` is now reserved when it is the only positional argument to `/harness`.** The
+  string was previously a task description like any other, so `/harness doctor` would have
+  started a real session and written files. It now dispatches to the read-only sub-command
+  instead. Value-taking flags are consumed before the test, so `/harness --mode single doctor`
+  is the same invocation, while `/harness doctor xyz` is two positional tokens and stays an
+  ordinary task. This is a behaviour
+  change, not an addition: anyone who genuinely wants a task named `doctor` has to phrase it
+  differently. `doctor` takes no arguments at all — every path it reads is a fixed constant or
+  resolved at run time, never user-supplied — and it repairs nothing. A `⚠` points at the
+  route that already owns the fix (a reinstall, or the `/team-memory` store gate); it does not
+  edit `.gitignore`, re-sync an install copy, or touch either installed plugin directory.
+
+- **`/handoff resume` now always reaches its gate, and `Next :` no longer names the slice that
+  just finished.** A `resume` run printed the briefing, described its three options in prose, and
+  ended the turn, leaving the human with context and no way to answer. Nothing in §Step 5
+  authorised that — it was unspecified rather than allowed — so that section now states the
+  invariant it lacked: **every path ends in exactly one `AskUserQuestion` call**, and when the
+  first option cannot be constructed the gate is asked with the remaining two. Ending the turn
+  after the briefing is named as a defect, not a conservative choice. Three gaps made that
+  outcome likely and each is closed. (1) The no-single-command case had no rendered option set at
+  all, so the standing instruction to "ask which command to run" had nothing to ask with. The
+  first option now has **two defined forms**, the second described by the WORK rather than by a
+  command — the epic-slice shape, where a slice is implemented directly from an epic plan instead
+  of being invoked as a skill. Picking it still executes nothing extracted from prose: the human's
+  selection is the authorisation, and the document never authorises itself. (2) The
+  command-extraction count was purely syntactic, so a `/…` token inside a **negation** satisfied
+  "exactly one". A handoff whose item 1 said the next step is not a single command, and mentioned
+  `/harness` only to say the slices are not `/harness` tasks, would have rendered "Start next
+  step" and run a real task, writing `.harness/state.json` and a docs directory. Tokens are now
+  filtered to **candidates**, and an explicit statement that the next step is not a command forces
+  the count to zero regardless of which tokens the text contains. (3) `Next :`'s tier-1 fallback
+  took the ledger's last row when no row is `in-progress` — but a between-slices handoff records
+  the slice it just finished as `done` and carries no `in-progress` row, so that fallback named
+  the FINISHED slice **by construction**. It now prefers an explicit `Slice` label, and
+  `generate`'s Next Steps convention gained the requirement to write one in the no-command case.
+- **The obvious version of that last fix was measured and rejected, and the measurement ships with
+  it.** The first draft scanned item 1 for the first backtick-quoted kebab-case token. Measured
+  over all 31 ledger-bearing handoffs in `docs/harness/handoff/` (gitignored — not a public link),
+  17 carry no `in-progress` row, and the heuristic would have matched 3 of them with **2 of the 3
+  wrong**: one yielding `disallowed-tools`, which is not a slice identifier at all, and one
+  yielding `slice-e-cold-pass` where the next slice was `slice-b-plan-pipeline`. Its real record
+  is 1 right, 2 wrong, 14 silent. A confident wrong slice is worse than a disclosed fallback, so
+  the labelled read replaced it and the heuristic is recorded as rejected rather than dropped
+  silently. Handoffs written before the label keep the disclosed fallback; nothing retroactively
+  fixes them. **Three superseded claims are corrected in place inside that paragraph** rather than
+  deleted, per this repository's ledger convention — including a denominator of 18 that came from
+  the un-normalized `Status` read the same change fixes.
+- **A pre-existing `Status` comparison bug, surfaced by that measurement, is fixed in the same
+  place.** Tier 1 compared the `Status` cell against the bare word `in-progress`, while 2 of the
+  31 ledgers write it as bold-wrapped `` **`in-progress`** ``  — **corrected 2026-08-31: it is
+  one ledger, one occurrence** (re-measured over the same directory, which by then held 33
+  ledger-bearing handoffs; the population only grew, so no path takes the count from 2 down to 1
+  and the original figure was simply wrong). The defect and the fix are unaffected. Note that
+  every figure in this paragraph comes from `docs/harness/handoff/`, which this repository
+  gitignores, so none of them can be re-derived from a commit — they are dated measurements, not
+  reproducible ones; the exact match failed there and
+  sent a handoff that HAS an in-progress row down the fallback — the same defect arriving from the
+  opposite direction. `Status` is now normalised reader-side (emphasis, then backticks, then trim),
+  on the same footing as the existing `Slice` rule. The `Epic` cell's identical wrapping stays a
+  ROADMAP deferred item, unchanged.
+- **`disallowed-tools` turn scoping gains a second observation that establishes less than it looks
+  like.** `templates/_shared/mode_gate.md` rule 3 cause (a) gains a dated record: during a
+  `/handoff resume` turn the tools that became unavailable were exactly that skill's whole
+  `disallowed-tools` value (`NotebookEdit`, `WebSearch`, `WebFetch`), all three were available
+  again in the next turn with no settings change, and `Agent`/`Workflow` — removed from that
+  frontmatter in an earlier release — stayed available throughout. **Established:** the block does
+  not persist past the turn boundary, and the blocked set tracks the installed frontmatter's
+  current value. **Not established:** that the block outlives the skill's own steps *inside* the
+  turn. Nothing was chained and the observed turn ended exactly where the skill's own steps ended,
+  so the observation cannot separate turn-scoped from skill's-own-steps-scoped, and neither of
+  §Step 5's two chaining-test outcomes fired. Cause (a) remains a candidate, not a diagnosis, and
+  this is not a verified leak. An earlier draft of these lines asserted the turn scoping as
+  established; a cold review caught it and the claim is withdrawn in place.
+- **`.gitattributes` now covers `*.md`.** Until now, what this repository *committed* as line
+  endings for its primary artifact depended on each machine's `core.autocrlf`. The blobs are
+  LF only because this checkout has it set to `true`, and that value comes from the
+  Git-for-Windows installation default rather than from anything the repository states; on a
+  checkout where it is `false`, a CRLF blob is what gets committed, and the CR-intolerant
+  failure modes already recorded for `*.sh` and `*.yml` stop being hypothetical for Markdown.
+  **The line renormalises nothing**: all 94 tracked `.md` blobs were measured as `i/lf`
+  before it landed. `git add --renormalize .` was therefore **not run** — it would have been a
+  no-op that walks the whole tree, opening the same staging surface this batch bans with its
+  `git add -A` rule. `CLAUDE.md`'s statement of what the attributes file covers is corrected
+  in the same commit, since the old sentence became false the moment the line landed.
+- **The unconditional "git-committed" claim is now conditional in `README.md` too** — all
+  three sites: the skills overview row, the `## team-memory` opening paragraph, and the
+  built-in-memory comparison table. This finishes what an earlier slice started inside
+  `skills/team-memory/` and `skills/memory/`; the count is three rather than two because one
+  site writes it capitalised and escapes a case-sensitive grep, which is how the earlier
+  miscount happened. `CLAUDE.md`'s single site needed no change — it already reported what the
+  skill *declares* rather than asserting the fact.
+- **The deferrals this batch generated are now in `ROADMAP.md` instead of in a gitignored plan
+  document — with one gap, stated because an unqualified "every" would be false.** Eight rows
+  were added and seven existing rows amended in place, none deleted. The gap: the carry-over list
+  was built from the session handoff document alone, and each slice plan keeps its own deferral
+  section that was never swept. Two spot-checked items from those sections are genuinely missing,
+  and the sweep itself is registered as its own row rather than guessed at.
+  Two of the amendments close findings a prior slice had left open; the third closes a row
+  that had itself gone stale — it still claimed a stale marker-site total in this file, which
+  a slice had already corrected, so shipping it unamended would have released a deferred-item
+  row asserting a defect that no longer existed. **Three items the ledger expected are absent on
+  purpose** — the epic plan's item (f), the 500-line body recommendation, and the two
+  second-person descriptions: each was already registered by the slice that found it, and
+  re-registering would have produced duplicate rows. **Item (f) only partly**: the slice that
+  owned it registered the one consequence it could not fix, and left the wording-convergence half
+  in its own plan document — which is the same gap the row above records, arriving from the other
+  direction. **One is registered against its own slice's
+  instruction** — `claude plugin validate`'s exclusion from CI was decided with a reason, and
+  that reason lived only in a plan document under the gitignored `docs/` tree, which is
+  exactly the disappearing-judgement failure this batch exists to close.
+- **A note on how append-only was verified, and on two things an earlier draft of this note got
+  wrong.** The acceptance criterion asks that each removed row line survive as a substring of an
+  added one. That is not achievable *for an in-row amendment*: a row ends in ` |`, so appending
+  inside the last cell breaks contiguity wherever the text goes. **It is achievable by writing
+  the correction as a separate line instead** — then no row line is removed at all and the check
+  passes vacuously; `ROADMAP.md`'s own table already carries such a line, the `Correction (2026-08-24)` blockquote above its rows (an earlier draft of this sentence said "this file's own table" — CHANGELOG.md contains no table at all). So the two rules are
+  incompatible, not the criterion impossible, and this repository's in-row convention was the one
+  kept. Preservation was therefore checked **cell-wise**: each cell of the old row, **compared
+  with leading and trailing whitespace trimmed**, must be a prefix of the corresponding trimmed
+  cell of the new row. The trim is not cosmetic and an earlier draft omitted it while claiming
+  "0 characters removed": appending a sentence replaces the cell's trailing space with a full
+  stop, so **8 characters across the amended rows are not preserved byte-for-byte, and all 8 are
+  that displaced space**. No content character is removed. Both corrections are recorded here
+  rather than fixed silently, because swapping in a different test and reporting the original as
+  passed is the failure mode this repository keeps auditing for — and the first draft of this
+  very paragraph did a smaller version of it.
+- **Four changes this batch made that no entry above had claimed.** Found by reading the epic's
+  own diff file by file rather than by reading its plan, which is the only direction that can
+  find an omission. (1) Two absolute line citations this batch's own edits would otherwise have
+  rotted are now `§Section` references — `templates/_shared/askuserquestion.md`'s option-cap
+  bullet, and `skills/harness/SKILL.md` §Step 2.6: Plan Critic. `CLAUDE.md` §Conventions makes
+  that a contract, not a tidy-up. (2) A `/harness` example in `README.md` advertised a `--scope`
+  flag the skill does not define; it is gone. (3) All seven session-conflict gate sites now carry
+  the same placeholder-substitution instruction — `/harness` and `/ship` stopped at "never emit a
+  `{...}` token verbatim" without saying what to emit instead, so a gate could have printed a
+  literal `{task}` to the user. (4) `skills/harness/SKILL.md` §Version & Compatibility had its
+  scope narrowed in the same commit.
+- **Two claims in this batch's own commit messages are corrected here, because a commit message
+  cannot be amended in place.** The correction commit's summary says "Nothing is deleted" — true
+  of ROADMAP rows, of which none was removed, but not of prose: six rows that same commit had
+  added one commit earlier were rewritten rather than amended, so their original wording is gone
+  from the file and survives only in the diff. **Six, not the seven that message's own heading
+  claims** — the seventh item it counted is the pre-existing `Correction (2026-08-24)` blockquote,
+  which is neither a table row nor something that commit had added. That figure was carried into
+  an earlier draft of this very entry without being re-measured, which is the failure this entry
+  exists to describe. And its per-file edit counts do not all reproduce:
+  its per-file counts sum to 26 while the bullets under those headings number 25 — the README
+  heading says six corrections above five bullets, and no attempt is made here to name where the
+  missing one went, because that would be another unverified figure. The figure to trust is the
+  diff, not either message.
+- **Three sentences that pointed at correct numbers incorrectly, found in a fourth review round.**
+  Every figure in the overhead table and the ledger reproduces; what was wrong was the prose
+  around them. (1) The paragraph under the overhead table split the rows by position — "the first
+  three" versus "the last two" — and got both halves wrong: the working-tree byte row is
+  clone-dependent and was counted among the commit-fixed ones, while the line count reads the
+  committed blob and was counted among the clone-dependent ones. Four lines later the same
+  paragraph said the opposite. Rows are now named rather than numbered, and the follow-on sentence
+  that omitted the line count is corrected with them. (2) The deferral-sweep row said it failed to
+  learn a lesson "from three rows away"; the distance is sixteen, and the commit message that
+  introduced the row already said sixteen — the right number was in the immutable place and the
+  wrong one in the editable place. (3) The EOL cell told the reader to expect "three tab-separated
+  fields", but `git ls-files --eol` pads its three status fields with spaces and emits a single tab
+  before the path, so following that instruction yields two fields and the cell's own reference to
+  a "middle" field stops making sense.
+- **What this release deliberately did NOT do to this file.** The closing slice was scoped to
+  reorganise these entries into Added / Changed / Fixed. Added and Changed are used; **there is
+  no Fixed section**, and that is a decision rather than an omission: several entries here are
+  written as narratives that reference each other across the boundary — one begins "surfaced by
+  that measurement, is fixed in the same place" — so splitting bug fixes out would break the
+  references that make them readable. The acceptance criterion for this file asks for
+  completeness, for the three behaviour changes to be findable under Changed, and for no version
+  heading; all three hold.
+
 ## [8.11.0] — 2026-08-20
 
 > **Version heading note — follows 8.10.0's actual precedent.** An earlier revision of this

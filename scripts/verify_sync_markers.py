@@ -33,7 +33,8 @@ Exit codes:
 Usage:
   python scripts/verify_sync_markers.py
 
-Intended invocation: run manually (pre-commit/CI wiring is a later-phase TODO).
+Intended invocation: run manually and on push/PR via .github/workflows/lint.yml
+(pre-commit hook wiring is still a later-phase TODO).
 """
 
 from __future__ import annotations
@@ -193,6 +194,109 @@ SYNC_GROUPS = [
             "re-synthesize from the proposals only",
         ],
         "min_sites": 3,                        # the 2 .md sources + the dispatched JS copy (slack 0)
+    },
+    {
+        # review-fixes-v8-12 S2: the cross-skill session conflict gate. Four skills (debug,
+        # refactor, migrate, test-gen) each cite templates/_shared/session_conflict.md
+        # §Gate Procedure and reproduce the ACTIONABLE part of it -- trigger condition, the
+        # AskUserQuestion header/question/options, both outcomes, and the non-interactive
+        # default -- the same way their own §Mode Gate sections reproduce mode_gate.md's
+        # decision table. What they do NOT reproduce is the full procedure, the §Harness
+        # exception, and the general destructive-vs-non-destructive rule.
+        # An earlier revision of this comment said those sites "restate only the header + the
+        # two option labels". That was false when written -- the same paragraph it described
+        # also restated the trigger condition, the ordering guarantee and both outcomes -- and
+        # it is corrected here rather than deleted.
+        # The tokens below check the header and ONE option label. That is a strictly narrower
+        # guarantee than "the gate is present and correct"; claim only the narrow one.
+        # CORRECTION (S3): an earlier revision of this comment said "COVERAGE GAP until S3:
+        # skills/{spec,harness,ship}/SKILL.md carry `Session Conflict` and their own option
+        # literals as hand-written prose with NO marker, so they are not sites of this group".
+        # S3 converged those three and they now carry markers, so that gap is closed and the
+        # sentence is corrected here rather than deleted. The floor below rose 4 -> 7 in the
+        # same change.
+        # WHAT REPLACES IT is a narrower gap, not none -- and it is NOT the gap an earlier
+        # revision of this comment described. That revision said the spec and harness sites
+        # "can only fail if the gate text disappears wholesale". Measured, that is wrong in both
+        # directions, so it is corrected here rather than deleted:
+        #   * The check DOES fire when a token's LAST occurrence in a file disappears. Injected
+        #     at the S3 head: renaming spec's single `Session Conflict` -> exit 1. Current counts
+        #     are `Session Conflict` 1 at every site except harness (5: table row + gate header +
+        #     question) and `Delete and start` 2 everywhere.
+        #   * What it genuinely cannot see is WORDING DRIFT while both literals survive, and that
+        #     limit applies to all SEVEN sites uniformly, not to spec and harness specially.
+        #     Injected: changing spec's question from "will delete it" to "will nuke it" -> exit 0,
+        #     undetected.
+        # What IS specific to spec and harness is marginal value, not toothlessness: both files
+        # already contained the two literals before their markers were added, so the marker adds
+        # no coverage there that their own gate text did not already force. Pre-edit counts at the
+        # S3 base, `grep -c` (MATCHING LINES, not occurrences -- stating the basis because
+        # harness's item 1 was one long line carrying both the option label and the outcome
+        # sentence, so 2 occurrences counted as 1 line and the numbers otherwise look inconsistent
+        # with spec's): spec 1/2, harness 1/1, ship 0/0.
+        # Claim the narrow guarantee -- 7 markers coexist and each site still carries both
+        # literals; NOT that the seven gates still agree with the source. Only the live probe
+        # shows that.
+        # FORWARD CONSTRAINTS, left here because this is where the S2 -> S3 handoff note lived and
+        # was consumed, and the equivalent forward notes otherwise exist only outside git:
+        #   * S4 (/team-memory) must cite templates/_shared/session_conflict.md IN PROSE ONLY --
+        #     adding a SYNC-WITH marker there makes 8 sites against a floor of 7, which passes
+        #     silently and restores exactly the slack this zero-slack floor exists to remove.
+        #     Following this repository's usual marker convention is what causes the defect here.
+        #   * S5's read-only `doctor` carve-out must sit BEFORE item 1's branch table in
+        #     skills/harness/SKILL.md, or the gate this slice added blocks a diagnostic that reads
+        #     nothing.
+        #     DONE in S5 (this bullet is kept, not deleted, so a revert of S5 restores a live
+        #     constraint rather than a silent gap): the carve-out sits at the TOP of §Session
+        #     Recovery -- before the section's "Before starting a new task" sentence, which is a
+        #     STRICTLY STRONGER position than "before item 1's branch table" and the same slot
+        #     /spec's digest carve-out occupies. Read this bullet as the stronger coordinate: a
+        #     carve-out placed between that sentence and item 1 also satisfies the wording above
+        #     and is NOT what S5 shipped.
+        #   * S7 must pick up the S3 row added to ROADMAP.md's Unreleased table (harness item 2's
+        #     legacy branch has no non-interactive default). It is deferred BECAUSE writing it
+        #     would edit item 2, and AC-S3.3's byte-unchanged comparison is the only evidence the
+        #     pre-harness path was not made unreachable. Recording it only in a commit message
+        #     would have been this repository's own "half-updated ledger" defect: a later slice
+        #     reads the ledger, not six commit messages.
+        #   * Phase P probe (d) (/harness doctor) needs its comparison method named. Take the
+        #     recursive hash of .harness/ before and after the run -- probe (a) already takes that
+        #     same hash on its own Cancel path, though its other half is `git branch` invariance,
+        #     not `git status` -- and pair it with `git status`, which is what EPIC AC-6.3 asks for
+        #     alongside the hash. git status alone cannot see the write: .harness/ is ignored by
+        #     this repository's root .gitignore (verify with `git check-ignore -v .harness/`).
+        #   * Phase P also owes five S5 carry-overs kept only in a gitignored plan: AC-S5.2, AC-6.2,
+        #     AC-6.1's "all six green", EPIC's stale measured values, and the mislabelled cache
+        #     copy.
+        # REVERT NOTE beyond the marker/floor set below: S3's final correction commit also
+        # resolved a contradiction between skills/harness/SKILL.md §Version & Compatibility and
+        # item 1's branch table. Reverting that commit alone reinstates the contradiction, which
+        # no check here detects -- both texts are prose and both literals survive either way.
+        # REVERT ORDER: this group and its sites must be reverted together, newest commit
+        # first. Reverting the marker insertion (or the SSOT) while leaving this group
+        # registered drops site discovery to 0, which is exit 2 (MISSING), not exit 1.
+        # The SSOT itself carries NO marker: SCAN_DIRS includes
+        # "templates", so quoting one there as an example would make the site count 5 rather
+        # than 4 and break both this floor and the raise S3 makes to it.
+        # Token non-vacuity was MEASURED before the edit, not assumed: `Session Conflict` and
+        # `Delete and start` each occurred 0 times in all four skill files, and neither is a
+        # substring of this group's marker text -- so unlike slice-command-format's `§Step 3.5`
+        # (see its HONEST COVERAGE NOTE above), both tokens here can actually fail.
+        "id": "session-conflict",
+        "target_file": "templates/_shared/session_conflict.md",
+        "section": "Gate Procedure",           # NO leading § — MARKER_RE captures the text AFTER §
+        "target_anchor": "§Gate Procedure",
+        "tokens": ["Session Conflict", "Delete and start"],
+        # zero slack: 7 sites = S2's four skills (debug, refactor, migrate, test-gen) + S3's
+        # three (spec, harness, ship). Raised 4 -> 7 in S3, in the same change that added those
+        # three markers: a site added without raising the floor fails NOTHING, so the failure
+        # mode of forgetting this line is silent slack, not a red build. The only guard is the
+        # arithmetic assertion in the slice that adds sites -- `9 sync group(s), 51 marker
+        # site(s)` together with this value read directly out of the dict.
+        # Reverting one converging commit on its own (harness, say) drops sites to 6 and this
+        # floor turns red immediately. That is intended, not a bug: revert the floor in the same
+        # operation.
+        "min_sites": 7,
     },
 ]
 
