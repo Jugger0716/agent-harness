@@ -1,5 +1,7 @@
 # Agent Harness
 
+[![lint](https://github.com/Jugger0716/agent-harness/actions/workflows/lint.yml/badge.svg)](https://github.com/Jugger0716/agent-harness/actions/workflows/lint.yml)
+
 **Zero-setup, zero-dependency** multi-agent workflow harness for Claude Code with **3-layer quality gates** and **selectable single-agent or multi-agent persona mode**. Works for development tasks and non-development tasks (planning, document generation, analysis) alike.
 
 No dependencies required. No Python, no pip, no build steps — just install the plugin and go.
@@ -62,6 +64,41 @@ Higher modes cost more per run but save total cost by reducing retry rounds. Sta
 
 > *(estimated)*: Figures are estimates based on internal dogfooding. A measurement benchmark harness is planned for a future release.
 
+**Fixed orchestrator overhead.** The multipliers above are relative to a baseline that is not
+zero: before any planning happens, `/harness`'s own contract document is loaded. It is the
+largest skill in this repository, so it is the honest floor for what the orchestrator costs
+you. Measured on **2026-08-31** at commit **`118015d51aa15ee67f409b945fcd43c65a61d4f5`**:
+
+| Basis | Value | Command |
+|-------|-------|---------|
+| LF bytes, **index blob** (what is committed) | **211,235 B** | `git cat-file -p HEAD:skills/harness/SKILL.md \| wc -c` |
+| UTF-8 **characters** | **207,239** | `python -c "print(len(open('skills/harness/SKILL.md',encoding='utf-8').read()))"` |
+| Bytes, **working tree** | **211,235 B** on a checkout made from this release onward (LF — identical to the index blob); **213,743 B** on an older one, where the file is still CRLF | `wc -c skills/harness/SKILL.md` |
+| Lines | **2,508** | `git cat-file -p HEAD:skills/harness/SKILL.md \| wc -l` |
+| EOL attributes | three space-padded status fields followed by a single tab and the path: `i/lf`, then a **middle** field that depends on when you cloned — `w/lf` from this release onward, `w/crlf` on an older checkout — then `attr/text eol=lf` (empty at the basis commit) | `git ls-files --eol skills/harness/SKILL.md` |
+
+Three of these rows hold at that commit for **every** clone — the index-blob byte count, the
+character count and the line count, all three of which read the committed blob rather than the
+file on disk. **The other two — the working-tree byte row and the EOL row — describe a checkout
+instead of a commit**, because `*.md text eol=lf` did not exist at `118015d`; it lands in this
+release, so at the basis commit the `attr/` column was empty and the working tree was CRLF.
+(Rows are named rather than numbered here on purpose: an earlier revision counted positions and
+put the working-tree row among the commit-fixed three and the line count among the two that
+depend on the clone. Both were wrong, in opposite directions.)
+
+Bytes and characters differ because the file contains typographic characters. Index and working
+tree differ on a Windows checkout made with `core.autocrlf=true` and no attribute: there the file
+is CRLF and measures **213,743 B**, exactly 2,508 bytes more, one carriage return per line. This
+release adds `*.md text eol=lf` to `.gitattributes`, and a file attribute outranks
+`core.autocrlf`, so a checkout made from here on gets LF and its working tree matches its index
+blob. **The two working-tree figures above therefore describe different clones, not different files**
+— the index, character and line figures are the ones that hold for everyone. Quote the row that
+matches what you are measuring; they are not interchangeable.
+
+> This table is a **snapshot**, not a live figure. Every edit to that file changes it, and
+> re-running the five commands above is the only trustworthy source. Do not cite these numbers
+> without the commit SHA and the date.
+
 ## Skills
 
 | Skill | Command | Description |
@@ -72,7 +109,7 @@ Higher modes cost more per run but save total cost by reducing retry rounds. Sta
 | **Debug** | `/debug <error>` | Hypothesis-driven debugging with mandatory executable verification. Quick (inline) or deep (2 analysts + adversarial cross-verify, native Workflow path). |
 | **Spec** | `/spec <requirement>` | Multi-round Q&A requirements specification. Output directly compatible with `/harness` input. Quick (inline) or deep (4 analysts + Critic, native Workflow path). Specs open with a derived Review Sheet (TL;DR / decision table / open questions / changed-in-this-revision); `/spec digest <file>` gives a read-only 3-layer briefing of any existing doc. |
 | **Test Gen** | `/test-gen <target>` | Automated test generation with mutation-based quality verification. Single (inline) or multi (parallel coverage analysts + propose-only mutation skeptics, native Workflow path; test generation + mutation execution stay orchestrator-inline). Supports coverage-gap and regression modes. |
-| **Team Memory** | `/team-memory <cmd>` | Team knowledge base (save/show/clean/search). Git-committed, team-shared decisions, patterns, and conventions. Human-gated CRUD — never escalates to sub-agents or the Workflow engine. _(formerly `/memory` — old name kept as a deprecation alias)_ |
+| **Team Memory** | `/team-memory <cmd>` | Team knowledge base (save/show/clean/search). Team-shared decisions, patterns, and conventions, git-committed unless the store path is gitignored — which the save gate discloses. Human-gated CRUD — never escalates to sub-agents or the Workflow engine. _(formerly `/memory` — old name kept as a deprecation alias)_ |
 | **Handoff** | `/handoff generate/resume/list` | Session handoff for cross-session continuity: `generate` captures a verified HANDOFF document (git state, confirmed facts, next steps, reading order, an optional epic Progress Ledger) and writes it immediately — no save confirmation, because the filename convention never overwrites (`-2`/`-3` on collision); `resume` primes a fresh session from it with git-drift verification plus a live `.harness/state.json` cross-check (both report-only — never mutates git or `.harness/`). Complements `/harness` Session Recovery (task-internal state); `/harness` recommends `/handoff generate` at every session boundary. |
 | **Codebase Audit** | `/codebase-audit` | Systematic codebase analysis for team onboarding. Quick (inline) or deep/thorough (parameterized lens analysts + completeness critique + synthesis, native Workflow path; orchestrator writes the report). Incremental analysis support. |
 | **Deep Review** | `/deep-review <target>` | Systematic, bias-free code review. Quick (inline checklist) or deep/thorough (2-3 specialists + adversarial cross-verification, native Workflow path). Optional `--comment` (inline PR comments) / `--fix` (gated apply) / `--spec <path>` (opt-in spec-conformance pass, reviewers stay blind to it). Re-runs on the same target auto-advance review rounds with prior-finding reconciliation and an advisory Round Verdict. _(formerly `/code-review` — old name kept as a deprecation alias)_ |
@@ -103,7 +140,7 @@ Six top-level directories, each with a fixed role:
 |-----------|------|
 | `skills/<name>/SKILL.md` | The skill definition — orchestrator prompt, Mode Gate resolution, HARD-GATEs, and (for stateful skills) the phase state machine. Claude Code auto-discovers a skill from this file's presence alone. |
 | `workflows/<skill>.<segment>.workflow.js` | Native Workflow engine segment scripts — the code that actually runs when a skill's deep/thorough/multi mode is opt-in. Filename pattern is fixed: `<skill>.<segment>.workflow.js`, 1:1 with the SKILL.md `Workflow { scriptPath: ... }` call site. |
-| `templates/<skill>/<role>.md` | Sub-agent persona templates a segment script copies in at author-time (`SYNC-SOURCE: templates/<skill>/<role>.md` comments mark the embedded copy). Some are DUAL-USE (the same file also dispatches as-is on a skill's inline path). |
+| `templates/<skill>/<role>.md` | Sub-agent persona templates a segment script copies in at author-time (`SYNC-SOURCE: templates/<skill>/<role>.md` comments mark the embedded copy). Some are DUAL-USE (the same file also dispatches as-is on a skill's inline path). `templates/_shared/` holds the cross-skill single sources instead — `mode_gate.md`, `status_format.md`, `project_defaults.md`, `session_conflict.md` and the rest; a skill cites one by name and never restates its body. |
 | `scripts/*.{mjs,py}` | Repository self-verification lints (`check_workflow_syntax.mjs`, `verify_block_sync.py`, `verify_description_budget.py`, `verify_manifest_sync.py`, `verify_meta_literal.py`, `verify_sync_markers.py`) — they check this repo's own `workflows/`/`skills/`/`templates/`/`.claude-plugin/` source, and are never executed at skill runtime. |
 | `.claude-plugin/*.json` | Plugin and marketplace manifests. The version string lives at three key paths across these two files. |
 | `.github/` | CI: `workflows/lint.yml` runs the lint layer on push and PR; `scripts/check_lint_wiring.sh` checks that every lint is actually wired into it. Also holds the issue and PR templates. |
@@ -116,6 +153,68 @@ One additional asset type lives under `templates/`: a **skill-only static asset*
 claude plugin marketplace add Jugger0716/agent-harness
 claude plugin install agent-harness@agent-harness-marketplace
 ```
+
+## Your First Task in 5 Minutes
+
+This is one complete run, start to finish, in a fresh repository — every prompt you will
+actually see, in the order you will see it. **Quick Start below is a command catalogue**;
+this section is the single walkthrough. Read this one first, then use Quick Start as the
+reference you come back to.
+
+**Setup — a scratch repository, so nothing you care about is in scope:**
+
+```bash
+mkdir harness-demo && cd harness-demo && git init
+echo "# harness-demo" > README.md && git add README.md && git commit -m "init"
+```
+
+**Run:**
+
+```
+/harness --mode single "add a greet(name) function that returns 'Hello, <name>!' with a test"
+```
+
+`--mode single` forces the inline path — one orchestrator, no sub-agent fan-out, no Workflow
+engine. It is the cheapest path and the right one for a first run. (Without a `--mode` flag
+the Mode Gate decides, and in an interactive session with the engine available it may ask you
+inline-vs-workflow first.)
+
+**What you will be asked, in order:**
+
+1. **`Model`** — `default` / `frontier` / `balanced (Recommended)` / `economy`. Pick
+   **balanced**. This chooses which model plays executor, advisor and evaluator; it does not
+   change the steps. (`default` inherits the parent model and changes nothing.)
+2. **`Convention Scan`** — `Scan` / `Skip`. A fresh repo has no `CLAUDE.md`, so you are asked
+   whether to scan for existing conventions. Pick **Skip** for the demo — there is nothing to
+   find yet.
+3. **HARD GATE #1 — spec confirmation** (this one has no short header of its own, unlike the
+   two above). The planner writes `docs/harness/<slug>/spec.md`, prints it, and stops. Read it.
+   Then answer **`Proceed`** — on the inline path that `--mode single` selects there is no scale
+   recommendation to lead with, so the option is undecorated; on the workflow path the same
+   option reads `Proceed as single`. The others are `Plan as epic` to split the work into
+   slices, `Modify` to edit the spec and re-confirm, and `Stop`.
+   **This is the one gate a successful run always shows you.**
+
+Then it implements, runs mechanical verification, and runs the evaluator review. On a clean
+run there is nothing more to answer — you get a summary and the artifacts under
+`docs/harness/<slug>/`.
+
+**The other two HARD-GATEs only appear when something fails**, which is the point of them:
+
+- **HARD GATE #2 — `Verify`.** Renders only after mechanical verification (build/test/lint)
+  has failed three times: `Auto-fix proposal` / `Continue to Evaluator` / `Stop`.
+- **HARD GATE #3 — the auto-fix apply gate.** Renders only if you chose `Auto-fix proposal`
+  above, and asks before the patch touches your files.
+
+So a green run answers **one** gate; a run that hits trouble answers up to three. **No file you
+wrote is touched before gate #1** — but the run is not inert before it either: Step 1 creates
+`.harness/`, switches to a `harness/<slug>` branch, and the planner writes the spec document, all
+before the gate renders. What waits for a gate is *your* code: implementation starts only after
+gate #1, and no auto-fix patch is applied before gate #3.
+
+**If you stop partway**, run `/harness` with no arguments in the same repository — it reads
+`.harness/state.json` and re-enters at the step you left. `/harness doctor` gives a read-only
+environment diagnostic and never touches that state.
 
 ## Quick Start
 
@@ -380,6 +479,9 @@ contract (`verify.cold_result`, 6 values + `null`).
 | **multi** | Complex features, architectural changes, high-stakes code | ~2-2.5x baseline | +85-95% |
 
 Higher modes use more tokens per run but have higher first-pass success rates, often reducing total cost by avoiding retry rounds. Standard mode is recommended for most tasks — it provides significant quality improvement at modest token cost.
+
+> The **fixed orchestrator overhead** these multipliers sit on top of is measured once, in
+> `### Token Cost vs. Quality` under `## At a Glance`. It is not repeated here.
 
 ### Execution Styles
 
@@ -908,7 +1010,7 @@ After tests pass, each test is verified for meaningfulness:
 
 > Formerly `/memory`. The `/memory` alias still resolves (deprecated → redirects here).
 
-Team knowledge base manager. Saves, searches, and maintains **git-committed, team-shared** records of decisions, patterns, bugs, and conventions. Completely separate from Claude Code's built-in personal auto-memory.
+Team knowledge base manager. Saves, searches, and maintains **team-shared** records of decisions, patterns, bugs, and conventions — **git-committed when `docs/harness/memory/` is not gitignored**, which §Step 1.5 checks before the first write and the Save Report discloses either way. Completely separate from Claude Code's built-in personal auto-memory.
 
 ```
 /team-memory save     -> analyze session -> extract team-valuable items -> per-item HARD-GATE -> save
@@ -922,7 +1024,7 @@ Team knowledge base manager. Saves, searches, and maintains **git-committed, tea
 | | Built-in auto-memory | /team-memory |
 |-|---------------------|---------|
 | **Location** | `~/.claude/projects/` | `docs/harness/memory/` |
-| **Scope** | Personal, per-user | **Team-shared, git-committed** |
+| **Scope** | Personal, per-user | **Team-shared; git-committed when the store path is not gitignored** |
 | **Content** | Session context, preferences | Decisions, patterns, bugs, conventions |
 | **Index** | MEMORY.md | `docs/harness/memory/README.md` |
 | **CLAUDE.md** | Managed by built-in | **Never touched** |
