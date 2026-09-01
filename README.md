@@ -75,11 +75,16 @@ you. Measured on **2026-08-31** at commit **`118015d51aa15ee67f409b945fcd43c65a6
 | UTF-8 **characters** | **207,239** | `python -c "print(len(open('skills/harness/SKILL.md',encoding='utf-8').read()))"` |
 | Bytes, **working tree** | **211,235 B** on a checkout made from this release onward (LF — identical to the index blob); **213,743 B** on an older one, where the file is still CRLF | `wc -c skills/harness/SKILL.md` |
 | Lines | **2,508** | `git cat-file -p HEAD:skills/harness/SKILL.md \| wc -l` |
-| EOL attributes | three tab-separated fields, `i/lf`, then a **middle** field that depends on when you cloned — `w/lf` from this release onward, `w/crlf` on an older checkout — then `attr/text eol=lf` (empty at the basis commit) | `git ls-files --eol skills/harness/SKILL.md` |
+| EOL attributes | three space-padded status fields followed by a single tab and the path: `i/lf`, then a **middle** field that depends on when you cloned — `w/lf` from this release onward, `w/crlf` on an older checkout — then `attr/text eol=lf` (empty at the basis commit) | `git ls-files --eol skills/harness/SKILL.md` |
 
-The first three rows hold at that commit for every clone. **The last two describe a checkout
-instead of a commit**, because `*.md text eol=lf` did not exist at `118015d` — it lands in this
+Three of these rows hold at that commit for **every** clone — the index-blob byte count, the
+character count and the line count, all three of which read the committed blob rather than the
+file on disk. **The other two — the working-tree byte row and the EOL row — describe a checkout
+instead of a commit**, because `*.md text eol=lf` did not exist at `118015d`; it lands in this
 release, so at the basis commit the `attr/` column was empty and the working tree was CRLF.
+(Rows are named rather than numbered here on purpose: an earlier revision counted positions and
+put the working-tree row among the commit-fixed three and the line count among the two that
+depend on the clone. Both were wrong, in opposite directions.)
 
 Bytes and characters differ because the file contains typographic characters. Index and working
 tree differ on a Windows checkout made with `core.autocrlf=true` and no attribute: there the file
@@ -87,8 +92,8 @@ is CRLF and measures **213,743 B**, exactly 2,508 bytes more, one carriage retur
 release adds `*.md text eol=lf` to `.gitattributes`, and a file attribute outranks
 `core.autocrlf`, so a checkout made from here on gets LF and its working tree matches its index
 blob. **The two working-tree figures above therefore describe different clones, not different files**
-— the index and character figures are the ones that hold for everyone. Quote the row that matches
-what you are measuring; they are not interchangeable.
+— the index, character and line figures are the ones that hold for everyone. Quote the row that
+matches what you are measuring; they are not interchangeable.
 
 > This table is a **snapshot**, not a live figure. Every edit to that file changes it, and
 > re-running the five commands above is the only trustworthy source. Do not cite these numbers
