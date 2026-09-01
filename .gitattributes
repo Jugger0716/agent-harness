@@ -37,3 +37,28 @@
 # these lines produce no index diff for them.
 *.sh  text eol=lf
 *.yml text eol=lf
+
+# Markdown must be LF too. Added 2026-08-31 (review-fixes-v8-12 S7, user decision U-1).
+#
+# Why: without an attribute, what this repository COMMITS depends on each machine's
+# `core.autocrlf`. The blobs are LF here only because this checkout has it set to
+# `true` -- which comes from the Git-for-Windows installation default
+# (`git config --show-origin --get core.autocrlf` -> `file:C:/Program Files/Git/etc/gitconfig`),
+# not from anything this repository states. On a machine or CI container where it is
+# `false`, a CRLF blob is what gets committed, and the CR-intolerant failure modes
+# recorded in the block above stop being hypothetical for `.md` too.
+#
+# Limits, measured 2026-08-31 at 118015d:
+#   - All 94 tracked `.md` files were already `i/lf` in the INDEX, which is the axis
+#     that decides what gets committed (`git ls-files --eol '*.md'`), so this line
+#     renormalises NOTHING and `git add --renormalize .` is a no-op that produces no
+#     diff. It was deliberately NOT run: that command walks the whole tree and opens
+#     the same staging surface this batch bans with its `git add -A` rule.
+#     The other two columns of that command are NOT part of the claim: `attr/` was
+#     empty only until this line landed, and a working tree edited in this session can
+#     read `w/mixed` until it is checked out again.
+#   - The working tree keeps CRLF until the files are checked out again. As with the
+#     blocks above, `git ls-files --eol` is the detector, not a promise.
+#   - `*.py` (5 tracked files, same `i/lf w/crlf attr/` state) is deliberately NOT
+#     covered: U-1 scopes this to `*.md`.
+*.md  text eol=lf
