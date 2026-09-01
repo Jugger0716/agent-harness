@@ -391,6 +391,58 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
   completeness, for the three behaviour changes to be findable under Changed, and for no version
   heading; all three hold.
 
+- **`disallowed-tools` turn-scoping is no longer recorded as unverified — it was measured, and
+  every document that hedged on it now states the result — `templates/_shared/mode_gate.md`,
+  `skills/handoff/SKILL.md`, `skills/team-memory/SKILL.md`, and `ROADMAP.md` itself.** They are
+  named rather than counted on purpose: a numeral here is the kind of figure the next edit
+  silently invalidates, which is a defect class this batch has already been bitten by. The last
+  two are named because a cold pass over this very change found them left behind: this entry's own new ROADMAP rows assert
+  the mechanism while an existing row in the same table still said the leak's mechanism was
+  `UNVERIFIED`, so the change had made one of its own ledger rows stale. That row now carries an
+  in-row correction — the form this repository requires — and it is amended rather than rewritten,
+  including the part that does NOT change: `/harness doctor` item ② still cannot diagnose another
+  session's tool scope, and the item stays deferred on its first clause. `skills/team-memory/SKILL.md`
+  Key Rule 11 was the other one left behind: it told the reader not to chain out of its own turn
+  and attributed that to a mechanism it called `UNVERIFIED`, **citing as its single source the
+  very passage this change was updating** — so after the update it contradicted the source it
+  named. It now reads `MEASURED`, and its "may inherit these blocks" becomes "inherits". The rule
+  itself is untouched and is strengthened, not weakened, by the result. **Both of these were
+  reported by the cold pass and then REJECTED by its adversarial verification step; they are
+  fixed here because a direct check of the two files showed the findings held.** The verifier was
+  right about a third one, and that correction is kept: the reviewer had also proposed changing
+  a "three documents" phrase to "two", which would have planted a fresh falsehood — the phrase is
+  now a list of names with no numeral at all. `templates/_shared/mode_gate.md`
+  rule 3 cause (a) gains a third observation (2026-09-01): inside a turn running a skill that
+  declares `disallowed-tools: Bash`, a second skill was invoked **from that same turn** — one
+  whose own frontmatter does not list `Bash` — and the following `Bash` call was refused with the
+  same message; the next turn restored it. That closes, in the confirming direction, the two
+  things the second observation had explicitly listed as NOT established (that the block outlives
+  the skill's own steps within the turn, and that a chained skill inherits it). `skills/handoff/
+  SKILL.md` §Step 5 and §Non-Goals drop "**may be**"/"**appears to be**"/"**UNVERIFIED**"
+  accordingly. **Scope discipline, because the temptation here is to claim more than was
+  measured:** cause (a) stays first in that candidate list rather than becoming a diagnosis —
+  this rule's caller still cannot observe which cause produced the denial in front of it — and
+  two limits ship with the observation instead of being smoothed away: the probe skill lived in
+  `.claude/skills/` rather than in the installed plugin (same frontmatter field, different
+  install surface), and the blocked-set boundary was not measured (`Agent`/`Task` were also
+  unreachable during that turn although only `Bash` was declared, but neither was called
+  directly, so "removed" is not distinguished from "not surfaced by that search"). §Step 5 also
+  gains one sentence the confirmation makes necessary rather than optional: a verified leak is
+  not a harmless one — this skill's remaining three entries are inherited by whatever `resume`
+  chains into, which is why rule 5 still declines to chain into a web-dependent skill.
+- **`ROADMAP.md` registers five findings from the pre-release live probe**, four of them measured
+  platform facts rather than deferred work. They are entered because the documents holding the
+  evidence live under `docs/`, which this repository ignores, so the table is the only path by
+  which they persist. One of the five is a **correction to a fact this project had already
+  recorded as established** — "skills are not loaded mid-session, restart required" — which
+  controlled re-measurement refuted: a skill created mid-turn stays `Unknown skill` for the rest
+  of that turn even with an intervening `Skill` call, then appears after the next user message,
+  with no restart. Another removes an option from a follow-up design rather than adding one:
+  a `disallowed-tools` **scope pattern** is a silent no-op (a write to the pattern's own path
+  succeeded, and neither that tool nor any other was removed), while the identical pattern does
+  block under `settings.json` `permissions.deny` — so the two surfaces do not share a matcher,
+  and per-step path scoping cannot be expressed in skill frontmatter at all.
+
 ## [8.11.0] — 2026-08-20
 
 > **Version heading note — follows 8.10.0's actual precedent.** An earlier revision of this

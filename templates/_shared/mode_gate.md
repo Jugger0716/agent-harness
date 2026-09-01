@@ -68,6 +68,30 @@ At Setup, resolve the execution path:
      supported / demote cause (a)); no chaining happened, so **neither fired**. Cause (a) stays a
      candidate, not a diagnosis, the wording above stays as written, and this is not a
      "verified leak".
+     **Third observation (2026-09-01, dedicated probe — this one DID chain, and it closes both
+     gaps the second observation named as NOT established.)** A probe skill declaring
+     `disallowed-tools: Bash` was invoked; inside that same turn a `Bash` call returned
+     `Error: No such tool available: Bash. Bash is disabled for this session, in subagents as well
+     as here.` A second skill was then invoked **from inside that same turn** — one whose own
+     frontmatter does not list `Bash` — and the immediately following `Bash` call was refused with
+     the identical message. In the next turn, with no settings change, `Bash` worked. **Now
+     established, and this supersedes the "stays as written" sentence above rather than deleting
+     it:** the block outlives the blocking skill's own steps within the turn, a chained skill
+     inherits it, and the scope is the turn — not the session (the message's own `for this
+     session` wording is inaccurate) and not the skill's own steps. Per
+     `skills/handoff/SKILL.md` §Step 5's two outcomes, this is the **leak-supported** branch, so
+     cause (a) is no longer UNVERIFIED — it is a **measured mechanism**. It stays first in this
+     list as a *candidate cause of a given denial* for a separate reason: this rule's caller still
+     cannot observe which cause produced the denial in front of it, and (b) remains possible.
+     **Two limits, stated so this is not read as broader than it is.** (i) The probe skill lived in
+     `.claude/skills/`, not in the installed plugin — the same frontmatter field, a different
+     install surface, and nothing here re-measures the plugin surface. (ii) The blocked-set
+     boundary was not measured: during that turn `Agent` and `Task` were also unreachable
+     (`ToolSearch select:Agent,Task` found nothing; both resolved normally in the next turn) even
+     though the frontmatter named only `Bash`. That is consistent with the message's "in subagents
+     as well as here" being enforced by removing the dispatch tool, but it was never called
+     directly, so "removed" is not distinguished from "not surfaced by that search" — recorded as
+     an open question, not as a finding.
    - **(b) the session simply lacks the permission** — then INLINE is the correct resting
      state, and the banner above is all that is owed to the user.
 4. **`has_git == false` forces INLINE** regardless of opt-in (engine `isolation:'worktree'`
