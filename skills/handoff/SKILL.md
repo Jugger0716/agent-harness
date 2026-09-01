@@ -584,18 +584,26 @@ in the next turn with no settings change.)
 
 That was the wrong layer to fix. Those three entries existed to enforce a rule about **this
 skill's own behavior** — `/handoff` needs no sub-agents and no engine — but `disallowed-tools`
-**may be** turn-scoped rather than skill-scoped, which would explain why it also appeared to
-disarm whatever ran next. **That scoping is UNVERIFIED**: single source
-`templates/_shared/mode_gate.md` rule 3, cause (a), which records both the one supporting
-observation and the fact that nothing in this repository documents the behavior. The entries are
-gone; the rule they encoded now lives in §Non-Goals as prose.
+**is** turn-scoped rather than skill-scoped, which explains why it also disarmed whatever ran
+next. **That scoping was UNVERIFIED when this paragraph was written and is now MEASURED** —
+single source `templates/_shared/mode_gate.md` rule 3, cause (a), whose third observation
+(2026-09-01) chained a second skill from inside a blocking skill's turn and saw the block hold,
+then lift at the turn boundary. Read that record for the two limits it states, which are not
+restated here. The entries are gone; the rule they encoded now lives in §Non-Goals as prose.
 
-This change is **also a test** of that hypothesis — but a valid test only **after the installed
+This change was **also a test** of that hypothesis — but a valid test only **after the installed
 plugin cache has been refreshed**. Until then the running copy still carries the old frontmatter,
 so a chaining failure would say nothing about the leak: **do not read a pre-refresh failure as a
-refutation.** Once a post-refresh result exists, update the observation record in `mode_gate.md`
-rule 3, cause (a) — success → a second observation, leak supported; failure → demote cause (a)
-from the candidate list.
+refutation.** That condition was met and the test has now run: **2026-09-01, post-refresh, the
+leak-supported branch fired**, and `mode_gate.md` rule 3 cause (a) carries the observation. The
+outcome is what makes THIS skill's frontmatter change correct rather than merely untested — with
+the three entries present, a chained skill really would have inherited them.
+
+**What the result does NOT license.** It confirms the mechanism, not that chaining is now free of
+cost: this skill's remaining `disallowed-tools` (`NotebookEdit`, `WebSearch`, `WebFetch`) are
+inherited by whatever `resume` chains into, for the rest of the turn, which is exactly why rule 5
+below still declines to chain into a skill that needs the web. Do not read "the leak is verified"
+as "the leak is harmless".
 
 **What this gives up, stated plainly:** `Task`, `Agent` and `Workflow` are no longer blocked at
 runtime for this skill, so nothing mechanically stops a future edit from making `/handoff`
@@ -645,10 +653,12 @@ Scan `docs/harness/handoff/*.md` (only files whose first line starts with `# HAN
 - **No background agents and no Workflow engine for this skill's own work** — every step here
   runs inline in the orchestrator. **This is a prose rule, not a runtime constraint**:
   `Task`/`Agent`/`Workflow` were removed from `disallowed-tools` because that frontmatter
-  **appears to be** turn-scoped and to have disarmed whatever skill `resume` chained into
-  (**UNVERIFIED** — see §Step 5). `NotebookEdit`, `WebSearch` and `WebFetch` stay blocked, and
-  **that is not free for all three**: `NotebookEdit` is irrelevant to this skill, but if the
-  turn-scope hypothesis holds, chaining into `/migrate` strips its external research step, and
+  **is** turn-scoped and did disarm whatever skill `resume` chained into
+  (**MEASURED 2026-09-01** — see §Step 5, and `templates/_shared/mode_gate.md` rule 3 cause (a)
+  for the observation and its two limits). `NotebookEdit`, `WebSearch` and `WebFetch` stay
+  blocked, and **that is not free for all three** — nor is it hypothetical any more:
+  `NotebookEdit` is irrelevant to this skill, but chaining into `/migrate` strips its external
+  research step, and
   `/migrate` absorbs that into a local-source fallback (`skills/migrate/SKILL.md`
   §Step 2: Analysis Phase — the WebSearch-fails-fall-back-to-local-sources rule under its
   INLINE path — and §Key Rules' WebSearch fallback bullet, which states the same rule at
