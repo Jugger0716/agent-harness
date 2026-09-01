@@ -368,6 +368,20 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
   heading says six corrections above five bullets, and no attempt is made here to name where the
   missing one went, because that would be another unverified figure. The figure to trust is the
   diff, not either message.
+- **Three sentences that pointed at correct numbers incorrectly, found in a fourth review round.**
+  Every figure in the overhead table and the ledger reproduces; what was wrong was the prose
+  around them. (1) The paragraph under the overhead table split the rows by position — "the first
+  three" versus "the last two" — and got both halves wrong: the working-tree byte row is
+  clone-dependent and was counted among the commit-fixed ones, while the line count reads the
+  committed blob and was counted among the clone-dependent ones. Four lines later the same
+  paragraph said the opposite. Rows are now named rather than numbered, and the follow-on sentence
+  that omitted the line count is corrected with them. (2) The deferral-sweep row said it failed to
+  learn a lesson "from three rows away"; the distance is sixteen, and the commit message that
+  introduced the row already said sixteen — the right number was in the immutable place and the
+  wrong one in the editable place. (3) The EOL cell told the reader to expect "three tab-separated
+  fields", but `git ls-files --eol` pads its three status fields with spaces and emits a single tab
+  before the path, so following that instruction yields two fields and the cell's own reference to
+  a "middle" field stops making sense.
 - **What this release deliberately did NOT do to this file.** The closing slice was scoped to
   reorganise these entries into Added / Changed / Fixed. Added and Changed are used; **there is
   no Fixed section**, and that is a decision rather than an omission: several entries here are
