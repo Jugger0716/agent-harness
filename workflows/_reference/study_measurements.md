@@ -734,7 +734,12 @@ are correctly dropped either way. Pinned in Step 1.3(3).
 **`§C# Target` cannot be cited from a skill file, and that is a lint limitation, not a naming
 choice.** `scripts/verify_sync_markers.py`'s section-reference pattern is
 `§[A-Z][A-Za-z]*(?: [A-Z][A-Za-z]*)*`, which stops at the `#` and captures `§C`, then fails because
-no `## §C` heading exists. Adding the first such citation to `skills/study/SKILL.md` broke the lint
+no `## §C` heading exists. **Correction 2026-09-03 — "the pattern" is now two patterns, and this
+paragraph's instruction is unaffected:** `SECTION_REF_TARGETS` gained a second entry under mode
+`harness-steps`, whose own pattern is `SECTION_ANY` (built from `_FIRST`/`_NEXT`). The quoted
+pattern above is still exactly what mode `anchor-heading` — the mode that governs **this** file —
+uses, so the `§C` truncation and the redirection instruction below both stand unchanged. Neither
+pattern admits `#`, so widening remains unrepaired either way. Adding the first such citation to `skills/study/SKILL.md` broke the lint
 immediately; the citation was redirected here instead. **Cite this section for anything a skill file
 needs from §C# Target** until the pattern admits `#`. Recorded rather than repaired: widening a lint
 regex is its own change with its own re-measurement, and no rule currently depends on it.

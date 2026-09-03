@@ -867,7 +867,7 @@ This is a warning only — it does NOT halt (legitimate git-free/doc-only tasks 
 
 **Persisted Spec Artifacts Check:**
 
-Before running CLAUDE.md richness check, look for `{docs_path}conventions.md` (persisted by /spec Phase 3 in slug-matched directory). **(m7)** `{docs_path}` is read from state.json (set by Step 1 step 7 — see §state.json schema).
+Before running CLAUDE.md richness check, look for `{docs_path}conventions.md` (persisted by /spec Phase 3 in slug-matched directory). **(m7)** `{docs_path}` is read from state.json (set by Step 1 step 7 — see §Step 1: Setup, its state.json schema block).
 
 **Evaluation order (explicit decision tree):**
 
@@ -2268,7 +2268,21 @@ Glossary and remediation in `user_lang`, one `✓` or `⚠` per item. doctor doe
 **No lint checks this section's item-number citations** — `§Step 1.5 items 1–2`, `§Storage
 Criteria`, `mode_gate.md` `rule 2`. They are prose pointers into other files, so a renumbering
 upstream rots them silently and nothing turns red. Re-read the cited section whenever either file
-changes.
+changes. **Clarification appended 2026-09-03** (the sentence above stays true as written):
+`scripts/verify_sync_markers.py`'s `harness-steps` mode compares Step-number citations against this
+file's own Step headings, which touches the first citation quoted above in a way worth stating
+precisely — the two occurrences of that citation in this section behave differently. The real
+pointer, in item ⑤ below, carries a plugin-root path beside it, so the lint recognises it as
+another file's and leaves it alone. The occurrence in the sentence above is a bare quoted example
+with no path beside it, so the lint compares its number against *this* file's own
+`### Step 1.5: Convention Scan` and passes it for the wrong reason. Either way the sentence above
+holds: a team-memory renumbering still turns nothing red, and the **item** numbers are checked by
+nothing at all. Both directions are recorded in that script's own limits section.
+
+Deliberately, this paragraph introduces no new §-prefixed token of its own — every figure that
+script publishes counts the tokens in THIS file, so prose about the count perturbs the count. That
+happened three times while this change was being written; it is cheaper to avoid the shape than to
+chase the arithmetic.
 
 ① **Installed-copy CR contamination.** For each known install location, read every
 `*.workflow.js` under it as bytes and count the occurrences of the byte `0x0D`; the verdict is that
