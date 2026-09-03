@@ -35,19 +35,37 @@ A renamed heading otherwise rots every pointer silently -- the same failure mode
 this repository already fixed twice for absolute line-number citations.
 
 §What this does not check (harness-steps mode; see §FIGURE PROVENANCE below):
-  Of the 405 in-file §citations in skills/harness/SKILL.md, 204 are checked and
-  201 are NOT: 196 non-Step citations, 2 `§Step Mode Prerequisites` (a Step-prefixed
-  name, not a Step number), and 3 §Step citations carrying ANOTHER file's path anchor
-  (they target spec and team-memory, so they are deliberately out of scope).
-  204 + 201 = 405 exactly; the split is a partition, not a sample.
-  The check verifies Step NUMBERS, not section TITLES -- renaming `Step 5: Verify
-  Phase` to `Step 5: Mechanical Check` still passes. A full-heading rename sweep over
-  all 80 headings is caught for 20 of them. One misattribution survives: the
-  `§Step 1.5 items 1-2` citation in that file's §Sub-command: doctor targets
-  team-memory but carries no path anchor on its own line, so it resolves against that
-  file's own Step 1.5 and passes -- the section says so about itself. Heading
-  extraction skips code fences; citation extraction does NOT (7 in-file §Step
-  citations sit inside fences and all resolve to real ids today).
+  1. IN-FILE COVERAGE. Of the 403 in-file §citations in skills/harness/SKILL.md, 203
+     are checked and 200 are NOT: 195 non-Step citations, 2 `§Step Mode Prerequisites`
+     (a Step-prefixed name, not a Step number), and 3 §Step citations carrying ANOTHER
+     file's path anchor (they target spec and team-memory, so they are deliberately out
+     of scope). 203 + 200 = 403 exactly; the split is a partition, not a sample. The
+     unchecked share is just under half -- large, but not the majority.
+  2. NUMBERS, NOT TITLES. Renaming `Step 5: Verify Phase` to `Step 5: Mechanical Check`
+     passes. A rename sweep over all 80 headings is caught for 20 of them.
+  3. SCAN SCOPE. Every layer here iterates SCAN_DIRS (skills/, templates/, workflows/),
+     so the repository ROOT documents are never scanned. Measured: 6 sub-path citations
+     (ROADMAP.md 4, CHANGELOG.md 2) and 39 path-anchored pointers at this target
+     (CHANGELOG.md 26, ROADMAP.md 12, README.md 1) sit outside every count below.
+     Widening is not a one-line change: iter_files() is shared with collect_markers(),
+     so touching it moves the SYNC marker-site total too.
+  4. PIN-STEP IS A SET COMPARISON. It sees heading TEXT only -- never order, nesting
+     level, or position -- so reordering or re-levelling the Step sections keeps it green.
+  5. PIN-FILES IS A ONE-DIRECTORY GLOB (`skills/harness/*.md`). A split into a
+     subdirectory, a different extension, or another skill's directory escapes it, and
+     glob case-sensitivity is platform-dependent. It catches the sibling-file split the
+     conditional-`go` in ROADMAP names, not every conceivable one.
+  6. MISATTRIBUTION, BOTH DIRECTIONS. Passing-for-the-wrong-reason: the `§Step 1.5`
+     token quoted inside that file's §Sub-command: doctor prose resolves against this
+     file's own Step 1.5 although the sentence is about team-memory. Failing-for-the-
+     wrong-reason is possible too and is NOT hypothetical in shape: a §Step citation
+     written without a path anchor is judged against THIS target's ids whatever it
+     means. Layers 4 and 5 both use the path anchor to narrow that; a citation that
+     omits one gets no such protection.
+  7. FENCES, ASYMMETRICALLY. Heading extraction skips code fences; citation extraction
+     does not. Today 7 in-file §Step citations sit inside fences and all resolve, so the
+     live risk is not a fenced HEADING example (harmless) but a fenced CITATION example
+     naming an id this file does not have.
 
 Exit codes:
   0  all known groups consistent
@@ -345,9 +363,11 @@ SYNC_GROUPS = [
 # its OWN mode. `skills/harness/SKILL.md` has zero `## §Name` headings, so extending
 # "anchor-heading" to it would fail on every pointer; the "harness-steps" mode instead
 # checks only the `§Step N(.N)` family plus path-anchored cross-file pointers, and
-# discloses the 201 in-file citations it does not check (module docstring
-# §What this does not check). Every one of the three "would fail" shapes quoted above
-# is still unchecked -- they are exactly what that disclosure enumerates.
+# discloses the 200 in-file citations it does not check (module docstring
+# §What this does not check). All three "would fail" shapes quoted above remain
+# unchecked -- note that the disclosure counts categories rather than naming these three
+# by example, and that two of them (`§Allowed Writes`, `§3.4a`) live in other files
+# entirely, so nothing here brought them under a check either.
 #
 # Entry condition for a third entry: state its mode, measure the citation families in
 # that file first, and pin whatever the mode compares against with zero slack.
@@ -363,31 +383,41 @@ SECTION_HEADING_RE = re.compile(r"^## (§[^\n]+?)\s*$", re.M)
 # --- harness-steps mode -----------------------------------------------------------
 # §FIGURE PROVENANCE. Every pinned constant and every count quoted in the module
 # docstring was measured on the tree THIS change produces -- base commit c986901 plus
-# the two edits this same change makes to skills/harness/SKILL.md: repointing a rotted
-# `§state.json schema` (no such heading anywhere in that file) at `§Step 1: Setup`, and
-# appending a misattribution clarification to §Sub-command: doctor. Both ADD §citations
-# to the file being counted, so figures measured at bare c986901 read lower (403 / 207 /
-# 205 / 202) and are not wrong, just pre-edit. Re-measure with the command named beside
-# each figure before changing a pin.
+# BOTH edits this same change makes to skills/harness/SKILL.md. Naming only one of them
+# would describe a tree that yields 403/203, not the figures below:
+#   (a) repointing a rotted `§state.json schema` at `§Step 1: Setup`. This ADDS NOTHING
+#       to the 403 total -- it swaps one §citation for another -- but it moves that one
+#       citation from unchecked into checked.
+#   (b) appending a misattribution note to §Sub-command: doctor, written deliberately
+#       with no §-prefixed token of its own so it perturbs no count. Three earlier
+#       revisions of it did carry such tokens and moved the total to 405 each time.
+# So against bare c986901 the TOTAL is unchanged at 403; only `in scope` (202 -> 203) and
+# `unchecked` (201 -> 200) move, by the single citation (a) relocates. Re-measure with the
+# command named beside each figure before changing a pin.
 #
 # These counts describe ANOTHER file, so quoting them here is safe. Do not copy them
 # into skills/harness/SKILL.md itself: a figure that counts its own document invalidates
-# itself the moment it is written, which is exactly how the 403 above became 405.
+# itself the moment it is written -- (b) above is that mechanism caught in the act.
 #
-#   405 in-file §citations   python -c "import re;print(len(re.findall(r'§(?=[0-9A-Za-z])',
+#   403 in-file §citations   python -c "import re;print(len(re.findall(r'§(?=[0-9A-Za-z])',
 #                            open('skills/harness/SKILL.md',encoding='utf-8').read())))"
-#   209 bare §Step           ... re.findall(r'§Step', text)
-#   207 §Step + number       ... re.findall(r'§Step[ \t\n]+\d', text)
-#   204 in scope             207 minus the 3 that carry another file's path anchor
-#   201 unchecked            196 non-Step + 2 §Step Mode Prerequisites + 3 foreign
+#   208 bare §Step           ... re.findall(r'§Step', text)
+#   206 §Step + number       ... re.findall(r'§Step[ \t\n]+\d', text)
+#   203 in scope             206 minus the 3 that carry another file's path anchor
+#   200 unchecked            195 non-Step + 2 §Step Mode Prerequisites + 3 foreign
 #   17 Step headings / 11 canonical ids
 #                            python -c "import re,collections;t=open('skills/harness/SKILL.md',
 #                            encoding='utf-8').read();print(collections.Counter(m.group(2) for m
 #                            in re.finditer(r'^#{1,6}[ \t]+(Step (\d+(?:\.\d+)?)\b.*)$',t,re.M)))"
 #   80 headings              ... re.finditer(r'^(#{1,6})[ \t]+(.*\S)[ \t]*$', text, re.M)
+#                            (fence-blind, unlike _headings(); both give 80 today because
+#                            no fenced line in that file starts with `#`)
+#   20 of 80 caught          replace each heading's whole text with a sentinel, one at a
+#                            time, and count the copies this script rejects
 #
-# The OK lines this script prints are the live restatement of the first four figures --
-# read them rather than trusting this comment if the two ever disagree.
+# Of these, ONLY `203 in scope` is restated by an OK line below; 403 / 208 / 206 / 200 /
+# 80 / 20 are not printed anywhere and are reproducible only from the commands above.
+# Where an OK line and this comment disagree, the OK line is the live measurement.
 FENCE_RE = re.compile(r"^\s*(```|~~~)")
 HEAD_LINE_RE = re.compile(r"^(#{1,6})[ \t]+(.*\S)[ \t]*$")
 # Heading text up to its first decoration, so `§Step 2` resolves against
@@ -442,9 +472,19 @@ def _fail(msg: str) -> None:
 
 
 def _headings(text: str) -> list[str]:
-    """ATX heading texts, code fences skipped (a fenced `# ...` line is not a heading)."""
+    """ATX heading texts, code fences skipped (a fenced `# ...` line is not a heading).
+
+    `rstrip("\\r")` is load-bearing, not tidiness: HEAD_LINE_RE ends `[ \\t]*$`, which a
+    trailing CR does not satisfy, so on a CRLF working tree this would return ZERO
+    headings and every layer below would fail for a reason unrelated to its subject.
+    `.gitattributes` pins `*.md text eol=lf` so a fresh checkout is LF, but its own
+    limits section records that an already-written working tree keeps CRLF -- and the
+    neighbouring anchor-heading mode is immune, so without this the new mode would be
+    strictly more fragile than the one it sits beside.
+    """
     out, fence = [], False
     for line in text.split("\n"):
+        line = line.rstrip("\r")
         if FENCE_RE.match(line):
             fence = not fence
             continue
@@ -552,14 +592,32 @@ def _check_harness_steps(target_rel: str) -> int:
                 f"§Step {m.group(1)}, which is not a canonical Step heading there"
             )
 
-    # 5. SUBPATH-CITE -- repository-wide, the family ROADMAP.md:61 named.
+    # 5. SUBPATH-CITE -- the `Step N — INLINE|WORKFLOW path` family, scoped the same way
+    # layer 4 is. NOT repository-wide in two senses, both of which are real:
+    #   (a) iter_files() covers SCAN_DIRS only, so root documents are never scanned;
+    #   (b) `skills/migrate/SKILL.md` and `skills/refactor/SKILL.md` own sub-path headings
+    #       of their OWN (measured: `Step 5 — INLINE path` / `Step 5 — WORKFLOW path` in
+    #       each). Judging every such citation tree-wide against HARNESS_SUBPATHS would
+    #       pass a migrate-owned citation coincidentally -- harness happens to pin id 5
+    #       too -- and would turn it red the day harness stops doing so. That is the
+    #       silent wrong-attribution layer 4's PATH_ANCHOR_RE already guards against, so
+    #       this layer takes the same rule rather than the opposite one.
+    # In scope: citations inside the target itself, plus citations elsewhere that carry
+    # the target's own path anchor.
+    subpath_anchor_re = re.compile(
+        r"(?:\{CLAUDE_PLUGIN_ROOT\}/)?" + re.escape(target_rel) + r"`?[ \t\n]*§Step"
+    )
     sub_cites = 0
     for p in iter_files():
         try:
             txt = p.read_text(encoding="utf-8")
         except (OSError, UnicodeDecodeError):
             continue
+        if p != target:
+            anchored = {m.end() - len("§Step") for m in subpath_anchor_re.finditer(txt)}
         for m in SUBPATH_CITE_RE.finditer(txt):
+            if p != target and m.start() not in anchored:
+                continue  # another file's own sub-path section -- not this target's
             sub_cites += 1
             if (m.group(1), m.group(2)) not in sub_set:
                 bad += 1

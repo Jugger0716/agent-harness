@@ -17,19 +17,25 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
   original scoping comment warned that a generic check false-positives across this
   repository's heading styles; that judgement was honoured, not overturned, and the comment
   is kept verbatim beside the note explaining what changed around it.
-  Six layers: three zero-slack structural pins (`HARNESS_STEP_IDS` 11 canonical Step ids,
+  Six layers over **four** zero-slack pins (`HARNESS_STEP_IDS` 11 canonical Step ids,
   `HARNESS_SUBPATHS` 6 `Step N — INLINE|WORKFLOW path` headings, `HARNESS_FILES` the
-  `skills/harness/*.md` file set), the in-file `§Step N(.N)` layer, a repository-wide
-  sub-path-citation layer, and a path-anchored cross-file layer.
-  **What it does not check is the larger half and is written down, not implied**: of the
-  **405** in-file §citations, **204** are checked and **201** are not (196 non-Step, 2
-  `§Step Mode Prerequisites`, 3 carrying another file's path anchor). 204 + 201 = 405 — a
+  `skills/harness/*.md` file set, `HARNESS_NON_HEADING_ANCHORS` the one anchor that is a
+  bold label rather than a heading), plus the in-file `§Step N(.N)` layer, a sub-path-citation
+  layer, and a path-anchored cross-file layer. **Neither citation layer is repository-wide**:
+  both iterate `SCAN_DIRS`, so the root documents are never scanned, and both narrow to this
+  target by path anchor so another skill's own `Step N — INLINE|WORKFLOW path` section is not
+  judged against harness's pins (`migrate` and `refactor` each own one).
+  **What it does not check is just under half, and is written down rather than implied**: of the
+  **403** in-file §citations, **203** are checked and **200** are not (195 non-Step, 2
+  `§Step Mode Prerequisites`, 3 carrying another file's path anchor). 203 + 200 = 403 — a
   partition, not a sample. It checks Step **numbers**, never section **titles**: renaming
   `Step 5: Verify Phase` to `Step 5: Mechanical Check` still passes, and a rename sweep over
-  all **80** headings is caught for **20**. Every figure here is restated live by the lint's
-  own OK lines and reproducible from the commands in the script's `§FIGURE PROVENANCE`;
-  the OK line count for this check goes from 1 to 3, so a later reader quoting "the section
-  ref line" has to say which.
+  all **80** headings is caught for **20**. Of these figures only **203** is restated by an OK
+  line; the rest are reproducible solely from the commands in the script's `§FIGURE PROVENANCE`,
+  which this change extends to cover the 80-heading sweep as well. The OK line count for this
+  check goes from 1 to 3, so a later reader quoting "the section ref line" has to say which.
+  Scan scope is its own disclosed limit: 6 sub-path citations and 39 path-anchored pointers in
+  the root documents lie outside every count above.
   The canonical-heading rule is the load-bearing part: ids 2, 4 and 5 each appear on three
   headings, so sourcing ids from all 17 Step headings would let a canonical heading be
   deleted outright while a sub-path heading kept its id alive — measured, that left 38
@@ -39,25 +45,33 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
 
 ### Fixed
 
-- **A rotted section pointer in `skills/harness/SKILL.md`.** Line 870 cited
-  `§state.json schema`, which is a heading in `skills/ship/SKILL.md` and in no section of
-  the file doing the citing. Repointed at `§Step 1: Setup`, whose item 11 holds the schema
-  literal the sentence means — the same anchor `CHANGELOG.md`'s 8.10.0 entry already uses
-  for it. Found while measuring for the lint above, and **not findable by that lint**: the
-  old text began with a lowercase letter, which the `§Step` family never matches. Fixing it
-  moved one citation into scope, which is why figures measured at `c986901` read one lower.
+- **A rotted section pointer in `skills/harness/SKILL.md` §Step 1.5: Convention Scan.** It
+  cited `§state.json schema`, which matches no heading in that file — nor anywhere else, since
+  the nearest real heading is `## state.json Schema` in `skills/ship/SKILL.md`, a different
+  skill and a different capitalisation. Repointed at `§Step 1: Setup`, whose item 11 holds the
+  schema literal the sentence means — the same anchor `CHANGELOG.md`'s 8.10.0 entry already
+  uses for it. Found while measuring for the lint above, and **not findable by that lint**: the
+  old text began with a lowercase letter, which the `§Step` family never matches. The repoint
+  adds no citation — it swaps one for another — so against `c986901` the **total is unchanged at
+  403**; what moves is that single citation, from unchecked to checked (202 → 203, 201 → 200).
+  The §Sub-command: doctor note added in the same change is written with no §-prefixed token of
+  its own for the same reason: three earlier revisions of it each pushed the total to 405 by
+  quoting one, which is the self-invalidating-figure trap this repository names in its own
+  conventions.
 
 ### Changed
 
 - **`ROADMAP.md` W7-spike entry condition — partially met, verdict still `no-go`.** The
-  condition asked the lint to cover `skills/harness/SKILL.md`; it now covers 204 of that
-  file's 405 in-file citations, numbers only. Recording that as "met" would be the false
+  condition asked the lint to cover `skills/harness/SKILL.md`; it now covers 203 of that
+  file's 403 in-file citations, numbers only. Recording that as "met" would be the false
   ledger this repository's own conventions exist to prevent. The row now states a
   conditional `go` for a split that cuts on canonical Step-section boundaries and re-pins
   the three constants in the same commit — measured: exporting `## Workflow Steps` to a
-  second file trips all three pins with 87 failures. Four other rows carrying the stale
-  "covers one file" claim were corrected in place, including the one whose conclusion the
-  correction leaves standing.
+  second file trips all three pins with 87 failures. Three other rows carrying the stale "covers one file" claim were corrected in place
+  (including the one whose conclusion the correction leaves standing), and a fourth was
+  corrected for a different reason — it asserted the W7 verdict independently, so it now
+  defers to the W7 row as SSOT. A fifth site, the verbatim twin of that claim inside the
+  8.11.0 entry below, is corrected there rather than here.
 
 ## [8.12.0] — 2026-09-01
 
@@ -625,7 +639,9 @@ out-of-scope** — this batch closed only the rows its own spec named IMPLEMENTA
   WebSearch-fails-fall-back-to-local-sources rule); `:531` → `§Key Rules`' WebSearch fallback
   bullet. Both heading strings verified present, literally, exactly once, in the target file.
   **Honest limit**: §section citations are not machine-checked in this repository
-  (`scripts/verify_sync_markers.py`'s `SECTION_REF_TARGETS` covers one file, not this one) — this
+  (`scripts/verify_sync_markers.py`'s `SECTION_REF_TARGETS` covers one file, not this one — **as of
+  the Unreleased entry above it covers two, and `skills/migrate/SKILL.md` is still not among them,
+  so this limit stands unchanged and only the count went stale**) — this
   buys rot-resistance, not verifiability, and other absolute line citations remain elsewhere in
   the tracked tree (see `ROADMAP.md`'s new deferred rows) — this entry does not claim absolute
   line citations were eliminated, only that this batch's edits reduced their count and added

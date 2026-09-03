@@ -2269,12 +2269,20 @@ Glossary and remediation in `user_lang`, one `✓` or `⚠` per item. doctor doe
 Criteria`, `mode_gate.md` `rule 2`. They are prose pointers into other files, so a renumbering
 upstream rots them silently and nothing turns red. Re-read the cited section whenever either file
 changes. **Clarification appended 2026-09-03** (the sentence above stays true as written):
-`scripts/verify_sync_markers.py`'s `harness-steps` mode does now read the `§Step 1.5` half of the
-first citation — but only its NUMBER, and it compares that number against **this** file's own
-`### Step 1.5: Convention Scan`, not against `skills/team-memory/SKILL.md`, which is what the
-citation actually means. So a team-memory renumbering still turns nothing red, the **item** numbers
-are still checked by nothing, and this pointer passes the lint for the wrong reason. That
-misattribution is recorded in that script's `§What this does not check`.
+`scripts/verify_sync_markers.py`'s `harness-steps` mode compares Step-number citations against this
+file's own Step headings, which touches the first citation quoted above in a way worth stating
+precisely — the two occurrences of that citation in this section behave differently. The real
+pointer, in item ⑤ below, carries a plugin-root path beside it, so the lint recognises it as
+another file's and leaves it alone. The occurrence in the sentence above is a bare quoted example
+with no path beside it, so the lint compares its number against *this* file's own
+`### Step 1.5: Convention Scan` and passes it for the wrong reason. Either way the sentence above
+holds: a team-memory renumbering still turns nothing red, and the **item** numbers are checked by
+nothing at all. Both directions are recorded in that script's own limits section.
+
+Deliberately, this paragraph introduces no new §-prefixed token of its own — every figure that
+script publishes counts the tokens in THIS file, so prose about the count perturbs the count. That
+happened three times while this change was being written; it is cheaper to avoid the shape than to
+chase the arithmetic.
 
 ① **Installed-copy CR contamination.** For each known install location, read every
 `*.workflow.js` under it as bytes and count the occurrences of the byte `0x0D`; the verdict is that
