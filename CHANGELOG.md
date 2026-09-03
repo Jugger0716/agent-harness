@@ -6,6 +6,59 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/).
 
+## [Unreleased]
+
+### Added
+
+- **`harness-steps` mode in `scripts/verify_sync_markers.py`'s section-reference check.**
+  `SECTION_REF_TARGETS` was a list of paths and is now a list of `{path, mode}` entries.
+  `skills/harness/SKILL.md` joins it — the first target that carries **zero** `## §Name`
+  headings, which is why it needed a mode of its own rather than a widened regex. The
+  original scoping comment warned that a generic check false-positives across this
+  repository's heading styles; that judgement was honoured, not overturned, and the comment
+  is kept verbatim beside the note explaining what changed around it.
+  Six layers: three zero-slack structural pins (`HARNESS_STEP_IDS` 11 canonical Step ids,
+  `HARNESS_SUBPATHS` 6 `Step N — INLINE|WORKFLOW path` headings, `HARNESS_FILES` the
+  `skills/harness/*.md` file set), the in-file `§Step N(.N)` layer, a repository-wide
+  sub-path-citation layer, and a path-anchored cross-file layer.
+  **What it does not check is the larger half and is written down, not implied**: of the
+  **405** in-file §citations, **204** are checked and **201** are not (196 non-Step, 2
+  `§Step Mode Prerequisites`, 3 carrying another file's path anchor). 204 + 201 = 405 — a
+  partition, not a sample. It checks Step **numbers**, never section **titles**: renaming
+  `Step 5: Verify Phase` to `Step 5: Mechanical Check` still passes, and a rename sweep over
+  all **80** headings is caught for **20**. Every figure here is restated live by the lint's
+  own OK lines and reproducible from the commands in the script's `§FIGURE PROVENANCE`;
+  the OK line count for this check goes from 1 to 3, so a later reader quoting "the section
+  ref line" has to say which.
+  The canonical-heading rule is the load-bearing part: ids 2, 4 and 5 each appear on three
+  headings, so sourcing ids from all 17 Step headings would let a canonical heading be
+  deleted outright while a sub-path heading kept its id alive — measured, that left 38
+  citations pointing at nothing with exit 0.
+  Cross-file matching uses the full relative path, never the basename: 17 skills share the
+  basename `SKILL.md`.
+
+### Fixed
+
+- **A rotted section pointer in `skills/harness/SKILL.md`.** Line 870 cited
+  `§state.json schema`, which is a heading in `skills/ship/SKILL.md` and in no section of
+  the file doing the citing. Repointed at `§Step 1: Setup`, whose item 11 holds the schema
+  literal the sentence means — the same anchor `CHANGELOG.md`'s 8.10.0 entry already uses
+  for it. Found while measuring for the lint above, and **not findable by that lint**: the
+  old text began with a lowercase letter, which the `§Step` family never matches. Fixing it
+  moved one citation into scope, which is why figures measured at `c986901` read one lower.
+
+### Changed
+
+- **`ROADMAP.md` W7-spike entry condition — partially met, verdict still `no-go`.** The
+  condition asked the lint to cover `skills/harness/SKILL.md`; it now covers 204 of that
+  file's 405 in-file citations, numbers only. Recording that as "met" would be the false
+  ledger this repository's own conventions exist to prevent. The row now states a
+  conditional `go` for a split that cuts on canonical Step-section boundaries and re-pins
+  the three constants in the same commit — measured: exporting `## Workflow Steps` to a
+  second file trips all three pins with 87 failures. Four other rows carrying the stale
+  "covers one file" claim were corrected in place, including the one whose conclusion the
+  correction leaves standing.
+
 ## [8.12.0] — 2026-09-01
 
 ### Added

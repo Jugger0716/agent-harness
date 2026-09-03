@@ -124,9 +124,19 @@ The six lints under `scripts/`, plus `.github/scripts/check_lint_wiring.sh` and 
 in `.github/workflows/lint.yml`, are the entire verification layer:
 
 - `verify_sync_markers.py` — SYNC group referential integrity, `min_sites` occurrence floor, and
-  token consistency; **plus** a section-reference check that every `§Section` pointer into
-  `workflows/_reference/study_measurements.md` resolves to a real `## §Section` heading there
-  (renaming a heading in that file breaks the lint). It is a marker-and-token check, **not** a
+  token consistency; **plus** a section-reference check over `SECTION_REF_TARGETS`, which now
+  holds **two files under two different modes** — no single sentence covers both:
+  mode `anchor-heading` (`workflows/_reference/study_measurements.md`) requires every `§Section`
+  pointer into that file to resolve to a real `## §Section` heading there, unchanged since it
+  shipped; mode `harness-steps` (`skills/harness/SKILL.md`) exists because that file has **zero**
+  `## §Name` headings, so the anchor rule cannot apply — six layers instead check the `§Step N(.N)`
+  citation family and the path-anchored cross-file pointers against zero-slack structural pins
+  (`HARNESS_STEP_IDS` / `HARNESS_SUBPATHS` / `HARNESS_FILES`). Renaming a heading in either target
+  breaks the lint. **It checks Step numbers, not section titles, and a majority of that file's
+  in-file citations are deliberately unchecked** — the script's own `§What this does not check`
+  docstring carries the split with the command that produces each figure, and the lint's OK lines
+  restate them live; read those rather than copying a number into this file.
+  It is a marker-and-token check, **not** a
   semantic diff: it proves tokens coexist, not that the surrounding prose still agrees.
   Add a group by appending to `SYNC_GROUPS`. `min_sites` is pinned to the **measured count with
   zero slack**, so adding a marker site means raising the floor in the same change, and removing

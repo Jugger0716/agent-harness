@@ -867,7 +867,7 @@ This is a warning only — it does NOT halt (legitimate git-free/doc-only tasks 
 
 **Persisted Spec Artifacts Check:**
 
-Before running CLAUDE.md richness check, look for `{docs_path}conventions.md` (persisted by /spec Phase 3 in slug-matched directory). **(m7)** `{docs_path}` is read from state.json (set by Step 1 step 7 — see §state.json schema).
+Before running CLAUDE.md richness check, look for `{docs_path}conventions.md` (persisted by /spec Phase 3 in slug-matched directory). **(m7)** `{docs_path}` is read from state.json (set by Step 1 step 7 — see §Step 1: Setup, its state.json schema block).
 
 **Evaluation order (explicit decision tree):**
 
@@ -2268,7 +2268,13 @@ Glossary and remediation in `user_lang`, one `✓` or `⚠` per item. doctor doe
 **No lint checks this section's item-number citations** — `§Step 1.5 items 1–2`, `§Storage
 Criteria`, `mode_gate.md` `rule 2`. They are prose pointers into other files, so a renumbering
 upstream rots them silently and nothing turns red. Re-read the cited section whenever either file
-changes.
+changes. **Clarification appended 2026-09-03** (the sentence above stays true as written):
+`scripts/verify_sync_markers.py`'s `harness-steps` mode does now read the `§Step 1.5` half of the
+first citation — but only its NUMBER, and it compares that number against **this** file's own
+`### Step 1.5: Convention Scan`, not against `skills/team-memory/SKILL.md`, which is what the
+citation actually means. So a team-memory renumbering still turns nothing red, the **item** numbers
+are still checked by nothing, and this pointer passes the lint for the wrong reason. That
+misattribution is recorded in that script's `§What this does not check`.
 
 ① **Installed-copy CR contamination.** For each known install location, read every
 `*.workflow.js` under it as bytes and count the occurrences of the byte `0x0D`; the verdict is that
