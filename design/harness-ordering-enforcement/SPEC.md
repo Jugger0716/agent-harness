@@ -5,7 +5,7 @@
 >
 > 본문은 그 밖의 한 글자도 수정하지 않았다.
 
-# SPEC — `harness-ordering-enforcement` (rev.3)
+# SPEC — `harness-ordering-enforcement` (rev.5)
 
 > **성격**: 후속 에픽의 요구사항 명세. 입력은 `docs/harness/plan/REMEASURE-harness-split.md`(gitignored)와
 > `docs/harness/plan/PROBE-FINDINGS-enforcement.md`(gitignored), 그리고 `ROADMAP.md`의 W7 행·phase-P 4행.
@@ -54,6 +54,62 @@
   기본은 **미보유**로 두었으나, Reading Order 성격의 파일 존재 확인에 필요한지 미검증.
 
 ### Changed in this revision
+
+**rev.5 (2026-09-04) — C2 구현에 대한 적대적 검증(4렌즈)이 18건을 냈고, 그중 3건이 성립한다.**
+세션 한도로 반증 패스가 14/40 실패해 표결이 완결되지 않았으므로, 아래 3건은 **오케스트레이터가
+직접 재현·확인**한 것만이다 — 나머지 15건은 판정 미완이며 그렇게 표시한다.
+
+1. **C2가 만든 회귀 1건.** 「디스패치 전 삭제」가 성공한 뒤 재크리틱 디스패치가 중단되면,
+   직전 패스의 `last_findings_path`가 가리키는 파일이 **없어져** §Well-formedness가 malformed로
+   떨어진다 → §Step 3 Pass A가 row ①-b가 아니라 **row ④**를 렌더한다. C2 이전에는 옛 파일이
+   살아남아 ①-b가 맞았다. §Step 2.6의 Interruption cost 문단이 그대로면 거짓이 되므로 함께
+   고쳤고, 삭제 규칙 자리에 그 창을 명문화했다. 복구 경로(크리틱 재실행)는 양쪽이 같다.
+2. **「live 줄 수」가 캐시된 read를 재사용하는 것으로 읽혔다.** 원문이 「§Step 3의 HARD-GATE가
+   이미 읽은 내용에서 센다」였는데, 같은 턴 Modify 루프는 편집 **후** Pass A를 다시 렌더하므로
+   그 값은 편집 전 파일을 기술한다 — 이 체크가 잡으라고 있는 바로 그 입력이다.
+   → **매 Pass A 렌더마다 새로 읽는다**로 명문화. 새 read 사이트가 아니라 예외목록 (1)의
+   재실행임을 함께 적었다(7개 불변).
+3. **수치 3건이 낡았다.** SPEC의 「mtime 10회」는 §Step 6 인용을 고치기 전 값이었고,
+   ROADMAP·CHANGELOG의 §citation 수치는 C2가 세어지는 문서를 바꾸면서 낡았다. 전건 재측정.
+
+함께 채운 미정의 3건(검증이 지적했고 재현 없이도 문면상 명백한 것): 스탬프가 non-`null`이지만
+**malformed**인 경우의 fail-closed 규칙, latch 두 실패 원인의 `failure_reason` 분리
+(`findings_file_missing` / `spec_stamp_invalid`), row ④ 배너의 **세 번째 조합**
+(`executed` + malformed + `failure_reason == null`).
+
+**rev.4 (2026-09-04) — 사이트 전수조사(4각도 + 완결성 비평)가 결정 ② 자체에서 BLOCKING 3건을
+찾아냈다. 결정 ②는 그대로 실행되지 않았고, 아래 형태로 **재설계된 뒤** 구현됐다.**
+
+1. **「같은 write에서 +1」은 물리적으로 불가능했다.** `spec.md`는 파일, 카운터는 `state.json`
+   필드다. 어느 쪽이든 하나가 두 번째이고, 「파일 먼저」면 그 사이의 크래시가 **거짓 not-stale**을
+   만든다 — mtime에는 원리적으로 없던 창이다(파일시스템이 write의 부수효과로 갱신하므로).
+   → **invalidate-first 3단계 프로토콜**로 대체: `prev` 포획 → `spec_stamp → null` → spec.md
+   기록 → `spec_stamp → {generation: prev+1, lines: N}`. 크래시 창이 `null`로 떨어지고,
+   `null`은 fail-closed로 stale이다.
+2. **latch (b)의 대체물이 (b)가 막던 갱을 못 막았다.** rev.2 §3.3의 완화책(「파일 존재 확인은
+   별도로 유지」)은 **원래부터 (a)였으므로 no-op**였다. 경로가 고정이라 이전 라운드 잔존 파일이
+   항상 (a)를 통과하고, 새 (b)는 검사가 아니라 오케스트레이터가 값을 **쓰는 행위**라 실패할 수
+   없다 → 크리틱이 못 본 spec에 거짓 클린 판정. → **디스패치 전 삭제**(사용자 결정)로 대체.
+   존재 확인이 비로소 「이번 패스가 썼다」를 뜻하게 된다.
+3. **에디터 직접 편집 미탐지를 rev.2가 인지하지 못했다.** §3.2가 이득 3건만 적고 손실 절이
+   없었다. 현행 규칙이 스스로 「이 규칙이 보호하려는 입력」이라고 지목한 케이스이며,
+   REMEASURE 44행이 그 문장을 인용해 놓고도 결정 ②에서 탈락시켰다. → **줄 수 병기**(사용자
+   결정)로 대부분 회수하고, 회수되지 않는 부분(한 줄 안의 단어 교체)은 §Stale Determination
+   본문에 **인라인 공시**했다.
+
+그 밖에 rev.4가 확정한 것 3건(설계 판단이 갈리지 않아 단독 결정):
+**기본값은 `0`이 아니라 `null`** — `§Version & Compatibility`가 「missing field는 문서화된
+기본값으로 MUST 처리」를 규정하므로 `0`이면 기존 v3.0 세션 전부가 `0 == 0 → not stale`이 된다.
+**이름은 `spec_stamp.generation`** — `plan_critic.round`가 이미 「revision round」를 뜻해
+`spec_revision`은 같은 절에서 두 카운터를 같은 단어로 부르게 된다.
+**failure branch (iii)는 `spec_stamp_at_critic = null`**(`round`처럼 UNCHANGED가 아니다) —
+잔존 스탬프가 우연히 일치해 실패한 크리틱을 not-stale로 만들 수 있다.
+
+**AC 정정 2건**: AC-2(mtime **비교** 0건)는 그대로 충족되나, AC-3(2022·2046행 무수정)은
+**의도적으로 깼다** — 2046행(§Step 7 AC-21 노트)의 **전제절**이 「latch가 mtime을 비교한다」였고
+변경 후 거짓이 되기 때문이다. 보호 범위를 「deliberately NOT ported」 **결론절**로 좁히고 전제절을
+갱신했으며, 그 정정을 문장 안에 남겼다. 2022행(§Step 6)은 §Step 7 노트를 **이름으로** 가리키는데
+그 이름을 바꿨으므로 인용도 함께 고쳤다 — 두 행은 대칭이 아니었다.
 
 **rev.3 (2026-09-04) — 적대적 검증(4렌즈 + 렌즈당 2반증)이 BLOCKING 1건을 확정했고,
 그것이 rev.2의 exit 0 측정을 무효화했다. 뒤집히는 것 2건:**
@@ -206,43 +262,90 @@ REMEASURE §1-③-c 안 1은 §Step 8의 `#### If epic exit:` 블록을 「§Ste
 
 ---
 
-## 3. Stale Determination — 세대 카운터 (결정 ②)
+## 3. Stale Determination — 세대 카운터 + 줄 수 (결정 ②, rev.4에서 재설계)
 
-### 3.1 새 필드
+### 3.1 필드 2개 (둘 다 기본값 `null`)
 
-| 필드 | 소유자 | 규칙 |
+| 필드 | 값 | 쓰는 곳 |
 |---|---|---|
-| `state.spec_revision` | `harness` | `{docs_path}spec.md`를 쓰는 **모든** 사이트가 같은 write에서 `+1`. 초기값 `0`, 첫 §Step 2 write 후 `1` |
-| `state.plan_critic.spec_revision_at_critic` | `harness` | §Step 2.6의 single read-modify-write에 **6번째가 아닌 7번째 필드로 추가**. critic이 판정한 spec.md의 revision |
+| `state.spec_stamp` | `{ generation: int, lines: int }` | `{docs_path}spec.md`를 쓰는 **모든** 사이트 |
+| `state.plan_critic.spec_stamp_at_critic` | 같은 모양 — critic이 판정한 spec.md의 스탬프 사본 | §Step 2.6의 single read-modify-write (7번째 필드) |
 
-### 3.2 판정 규칙 (§Stale Determination 대체 문안)
+기본값이 `0`이 아니라 **`null`**인 이유는 §Version & Compatibility의 「missing field는 문서화된
+기본값으로 MUST 처리」와 충돌하지 않기 위해서다 — `0`이면 기존 v3.0 세션이 `0 == 0 → not stale`로
+떨어진다. `null`이면 fail-closed 분기로 간다.
+
+### 3.2 write protocol — **invalidate first**
+
+1. `prev = spec_stamp.generation` 포획(`null` → `0`), 그다음 `spec_stamp → null` 기록.
+2. `{docs_path}spec.md` 기록(또는 디스패치된 planner가 기록).
+3. `spec_stamp → { generation: prev + 1, lines: <디스크상 줄 수> }` 기록.
+
+**순서가 핵심이다.** 파일과 state.json 필드를 한 write로 묶을 수 없으므로 하나는 두 번째다.
+스탬프가 두 번째이고 2~3 사이에서 세션이 죽으면 스탬프는 **이전** spec.md를 기술하는데 디스크의
+파일은 새것이고, 판정은 그것을 **not stale**로 읽는다 — 크리틱이 못 본 spec에 Auto-revise가
+노출된다. invalidate-first는 같은 창을 `null`로 만들고, `null`은 stale이다.
+**mtime에는 이 창이 아예 없었다**(파일시스템이 write의 부수효과로 갱신). 이 순서 규칙은 개선이
+아니라 대체가 만들어낸 창의 수리다.
+
+### 3.3 판정 규칙 (fixed order, first match wins)
 
 ```
-plan_critic.last_findings_path == null                        → stale-unknown
-spec_revision 또는 spec_revision_at_critic 중 하나라도 부재    → stale (fail closed)
-spec_revision != spec_revision_at_critic                      → stale
-spec_revision == spec_revision_at_critic                      → not stale
+last_findings_path == null                                   → stale-unknown
+spec_stamp == null OR spec_stamp_at_critic == null           → stale (fail closed)
+spec_stamp.generation != spec_stamp_at_critic.generation     → stale
+spec_stamp.lines      != spec_stamp_at_critic.lines          → stale
+live(spec.md 줄 수)   != spec_stamp.lines                    → stale   ← 외부 편집 탐지
+그 외                                                          → not stale
 ```
 
-**mtime 대비 이득 3가지:**
-1. `Bash`/`Glob` 의존 소멸 → 무도구 게이트가 판정을 **수행할 수 있다**(state.json은 `Read`로 읽는다).
-2. **동률(same-second) 케이스 소멸** — REMEASURE §1-①-2가 「Glob 정렬로는 대체 불가」로 지목한 유일한 구멍.
-3. I/O 실패 축이 사라져 fail-closed 분기가 「필드 부재」 하나로 단순화된다.
+마지막 줄만이 **오케스트레이터 밖에서 일어난 편집**을 본다. 줄 수는 §Step 3의 HARD-GATE가
+**이미 읽은** spec.md 내용에서 세므로 새 read 사이트가 아니다 — §Architecture Principles #1의
+예외 7개 불변.
 
-### 3.3 함께 바뀌는 사이트 (전건 열거 — 한 커밋에서)
+**공시된 손실(인라인)**: 줄 수를 보존하는 외부 편집(한 줄 안의 단어 교체)은 **탐지되지 않는다**.
+mtime은 모든 외부 편집을 잡았고 I/O 실패라는 fail-closed 축도 있었다. 줄 수 병기는 손실을
+좁히지 닫지 않는다. 그 대가로 얻는 유일한 것: **파일시스템 도구가 하나도 없는 게이트가 판정을
+수행할 수 있다.**
 
-- §Stale Determination — 본문 전체 교체.
-- §Auto-revise Exposure Predicate point 4 — 이름 인용이므로 문안 무변경, 단 헤더 주석의 mtime 언급 제거.
-- §Step 2.6 **latch 조건 (b)** — 「mtime STRICTLY AFTER」 → 「`spec_revision_at_critic == spec_revision`을
-  같은 write에서 기록」. **주의**: 현행 (b)는 WORKFLOW 세그먼트가 파일을 쓰지 않고 schema-valid 결과만
-  반환하는 갭을 막는 장치다. revision 비교는 그 갭을 막지 못하므로 **파일 존재 확인은 별도로 유지**한다.
-- §Modify Interaction 2항목 — mtime 근거 → revision 근거.
-- §Step 3 Pass A의 「a completed own dispatch writes a fresher mtime」 문장 — 재작성.
-- `skills/harness/SKILL.md` 전체 `mtime` 21건 중 **비교를 수행하는 2곳**(§Step 2.6 latch, §Stale Determination)만
-  대상. 나머지 19건(§Session Recovery의 279행대, §Step 5·6 영역의 2022·2046 「일부러 이식하지 않았다」 서술 포함)은
-  **손대지 않는다** — 2046은 반대 방향 서술이므로 수정하면 사실이 뒤집힌다.
+### 3.3a 결정 A와의 관계 — 모순처럼 보이는 것을 명문화한다
 
----
+결정 A는 「위조 가능한 모델-작성 값을 게이트 근거로 쓰지 않는다」며 `phase`를 감사 전용으로
+강등했다. 결정 ②는 같은 성질의 새 모델-작성 값을 신선도 판정의 근거로 쓴다. **두 결정이 같은
+속성에 반대 결론을 내는 것처럼 보이며, 이 절이 그 구분을 적는다.**
+
+| | `phase` (결정 A가 강등) | `spec_stamp` (결정 ②가 채택) |
+|---|---|---|
+| 답하는 질문 | **게이트를 통과했는가**(순서) | **이 판정이 이 문서에 대한 것인가**(신선도) |
+| 위협 모델 | **적대적** — 단계를 건너뛴 모델은 표식도 같이 위조한다(PROBE §3 안 A의 폐기 사유) | **사고적** — 스탬프를 안 올린 것은 버그이지 게이트 우회가 아니다 |
+| 교차 검증 | 없음 — 상태값 하나가 유일 근거 | **있음(부분)** — live 줄 수는 산출물에서 파생되므로 스탬프가 거짓이면 어긋난다 |
+
+**정직하게 남는 것**: 게이트를 우회하려는 모델은 스탬프도 줄 수도 함께 맞출 수 있다. 그 경우
+이 기제는 막지 못한다 — mtime 대비 실질 약화이고, 받아들이는 이유는 하나다. mtime을 유지하면
+**무도구 게이트가 성립하지 않고**, 그것이 이 에픽의 전제다. 결정 A가 금지한 것은 「위조 가능한
+값을 **순서 집행의 근거**로 쓰는 것」이지 「어떤 모델-작성 값도 읽지 않는 것」이 아니다.
+
+### 3.4 latch (b) 대체 — 디스패치 전 삭제
+
+§Step 2.6은 own-critic을 디스패치하기 **직전에** `{docs_path}plan_critic_findings.md`를 삭제한다.
+그 뒤에야 latch의 (a) 존재 확인이 「이번 패스가 썼다」를 뜻한다. 삭제 실패 시 디스패치하지 않고
+failure branch (iii) + `failure_reason = "findings_file_stale"`.
+새 latch: **(a)** 파일 존재 **AND (b)** `spec_stamp`가 non-`null`.
+
+### 3.5 함께 바뀐 사이트 (실측 28건, 전건 열거는 커밋 diff)
+
+§Step 1 item 11 신규필드 표(2행 + 용어 구분 주석) / §Step 2 write protocol 단일소스 신설 /
+§Step 2 INLINE item 1·5 / §Step 2 WORKFLOW item 6·7 / Auto-revise 재진입 재렌더 /
+인터럽트 무변경 열거 / §Step 2.6 디스패치 전 삭제·latch·3분기 6→7 필드·Interruption cost /
+§Stale Determination 본문 / §Pass A latch-staleness asymmetry·Run Critic anyway·row ①-c·
+Auto-revise·Modify / §Pass B Modify / §Modify Interaction 2항목 / §Step 6 by-name 인용 /
+§Step 7 AC-21 노트 / §Session Recovery 2곳.
+
+**손대지 않은 것**: mtime 언급 중 §Step 5·§Step 6·§Step 7의 「일부러 이식하지 않았다」 결론절.
+변경 후 파일에 남은 `mtime`은 **9행 / 10회**이고 **전부 서술**이며 비교를 수행하는 사이트는
+0건이다. (rev.4는 이를 「10회」라고만 적었는데 그것은 §Step 6의 by-name 인용을 고치기 **전**
+값이었고, 그 뒤 rev.5의 공시 추가로 다시 움직였다 — 단위를 적지 않은 수치가 어떻게 낡는지의
+표본이라 지우지 않고 남긴다. 재현: `grep -c mtime` 은 **행**을 세므로 회수와 다르다.)
 
 ## 4. `Modify` 재설계 (결정 ③)
 
@@ -257,7 +360,9 @@ spec_revision == spec_revision_at_critic                      → not stale
 
 1. 게이트가 halt한다(쓰기 0).
 2. 게이트가 `/harness --modify "<수정 요청>"` 형태의 재진입 명령을 출력한다.
-3. 사용자가 그 명령을 친다 → `harness`가 spec.md를 수정하고 `spec_revision`을 `+1`한다.
+3. 사용자가 그 명령을 친다 → `harness`의 오케스트레이터가 §Step 2의 `spec_stamp` write protocol에 따라 spec.md를 수정한다
+   (invalidate → 기록 → 스탬프). rev.2가 여기 적었던 「`spec_revision`을 +1」은 rev.4가 기각한
+   기제이며, 그 이름의 필드는 존재하지 않는다.
 4. `harness`가 다시 `/harness-gate`를 안내한다.
 
 ### 4.3 §Modify Interaction 3항목의 운명
@@ -487,8 +592,10 @@ OK: 9 sync group(s), 51 marker site(s)
 | AC-1c | 모드가 요구하는 키가 빠진 엔트리는 **KeyError가 아니라 이름을 말하는 FAIL**로 실패. 체커는 있는데 필수키 테이블에 없는 모드도 마찬가지 | `_MODE_REQUIRED_KEYS` 검사 (**충족**) |
 | AC-1d | **채택된 분할(꼬리 잔류)** 에서 ①+③+④가 rc=0에 도달 | §6.2 (**충족** — 수정 전 3 FAIL, 수정 후 0) |
 | AC-1e | 어떤 측정도 그것이 어느 분할에서 나왔는지 명시한다 | §6.1/§6.2가 각각 컷을 명시 (**충족**) |
-| AC-2 | C2 적용 후 `skills/harness/SKILL.md`에 mtime **비교**를 수행하는 사이트가 0건 | `grep -n mtime` 후 각 건이 서술인지 비교인지 수동 판정 (21건 전건 열거) |
-| AC-3 | C2가 2022·2046행의 「일부러 이식하지 않았다」 서술을 **수정하지 않음** | `git diff`에 해당 행 부재 |
+| AC-2 | C2 적용 후 `skills/harness/SKILL.md`에 mtime **비교**를 수행하는 사이트가 0건 | `grep -n mtime` → 9행 / 10회, 전건 서술 (**충족**) |
+| AC-3 | C2가 §Step 7 AC-21 노트의 **「deliberately NOT ported」 결론절**을 뒤집지 않음 (rev.4에서 **범위 축소** — 원문은 「2022·2046행 무수정」이었으나, 2046행의 **전제절**이 「latch가 mtime을 비교한다」여서 변경 후 거짓이 된다. 결론절은 유지, 전제절은 갱신, 정정은 문장 안에 기록) | 노트 본문 (**충족**) |
+| AC-3b | 이름을 바꾼 노트를 **이름으로** 인용하던 곳이 함께 고쳐짐 | §Step 6의 by-name 인용 (**충족** — 이것이 2022·2046이 대칭이 아니었던 이유) |
+| AC-3c | `spec_stamp`/`spec_stamp_at_critic`이 §Session Recovery의 `View state only`에 출력됨 — mtime을 잃으면서 오판을 진단할 **유일한 표면**이 됨 | 해당 항목 (**충족**) |
 | AC-4 | C3 적용 후 정본 Step id가 12개이고 `HARNESS_STEP_IDS`가 같은 커밋에서 재고정됨 | 린트 rc=0 + `git show --stat`에 두 파일 동시 존재 |
 | AC-5 | C5 적용 후 린트 7종 rc=0, **SYNC 9그룹 무손상** | `verify_sync_markers.py` → `9 sync group(s), 51 marker site(s)` |
 | AC-6 | C5의 재앵커가 `skills/team-memory/SKILL.md` 앵커 2건을 **건드리지 않음** | `git diff` 해당 2행 부재 |

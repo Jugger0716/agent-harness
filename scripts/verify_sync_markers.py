@@ -35,12 +35,18 @@ A renamed heading otherwise rots every pointer silently -- the same failure mode
 this repository already fixed twice for absolute line-number citations.
 
 §What this does not check (harness-steps mode; see §FIGURE PROVENANCE below):
-  1. IN-FILE COVERAGE. Of the 403 in-file §citations in skills/harness/SKILL.md, 203
-     are checked and 200 are NOT: 195 non-Step citations, 2 `§Step Mode Prerequisites`
+  1. IN-FILE COVERAGE. Of the 428 in-file §citations in skills/harness/SKILL.md, 219
+     are checked and 209 are NOT: 204 non-Step citations, 2 `§Step Mode Prerequisites`
      (a Step-prefixed name, not a Step number), and 3 §Step citations carrying ANOTHER
      file's path anchor (they target spec and team-memory, so they are deliberately out
-     of scope). 203 + 200 = 403 exactly; the split is a partition, not a sample. The
+     of scope). 219 + 209 = 428 exactly; the split is a partition, not a sample. The
      unchecked share is just under half -- large, but not the majority.
+     RE-MEASURED 2026-09-04, after the spec_stamp change rewrote parts of that file:
+     the figures were 403 / 203 / 200 / 195 when this mode shipped, and 422 / 216 / 206 /
+     201 one edit-round later inside that same change. Nothing about the
+     check moved -- the counted document did. That is the ordinary case for every
+     figure in this block, which is why each carries its command rather than a date
+     alone.
   2. NUMBERS, NOT TITLES. Renaming `Step 5: Verify Phase` to `Step 5: Mechanical Check`
      passes. A rename sweep over all 80 headings is caught for 20 of them.
   3. SCAN SCOPE. Every layer here iterates SCAN_DIRS (skills/, templates/, workflows/),
@@ -373,12 +379,12 @@ SECTION_HEADING_RE = re.compile(r"^## (§[^\n]+?)\s*$", re.M)
 # into skills/harness/SKILL.md itself: a figure that counts its own document invalidates
 # itself the moment it is written -- (b) above is that mechanism caught in the act.
 #
-#   403 in-file §citations   python -c "import re;print(len(re.findall(r'§(?=[0-9A-Za-z])',
+#   428 in-file §citations   python -c "import re;print(len(re.findall(r'§(?=[0-9A-Za-z])',
 #                            open('skills/harness/SKILL.md',encoding='utf-8').read())))"
-#   208 bare §Step           ... re.findall(r'§Step', text)
-#   206 §Step + number       ... re.findall(r'§Step[ \t\n]+\d', text)
-#   203 in scope             206 minus the 3 that carry another file's path anchor
-#   200 unchecked            195 non-Step + 2 §Step Mode Prerequisites + 3 foreign
+#   224 bare §Step           ... re.findall(r'§Step', text)
+#   222 §Step + number       ... re.findall(r'§Step[ \t\n]+\d', text)
+#   219 in scope             222 minus the 3 that carry another file's path anchor
+#   209 unchecked            204 non-Step + 2 §Step Mode Prerequisites + 3 foreign
 #   17 Step headings / 11 canonical ids
 #                            python -c "import re,collections;t=open('skills/harness/SKILL.md',
 #                            encoding='utf-8').read();print(collections.Counter(m.group(2) for m
@@ -389,7 +395,7 @@ SECTION_HEADING_RE = re.compile(r"^## (§[^\n]+?)\s*$", re.M)
 #   20 of 80 caught          replace each heading's whole text with a sentinel, one at a
 #                            time, and count the copies this script rejects
 #
-# Of these, ONLY `203 in scope` is restated by an OK line below; 403 / 208 / 206 / 200 /
+# Of these, ONLY `219 in scope` is restated by an OK line below; 428 / 224 / 222 / 209 /
 # 80 / 20 are not printed anywhere and are reproducible only from the commands above.
 # Where an OK line and this comment disagree, the OK line is the live measurement.
 FENCE_RE = re.compile(r"^\s*(```|~~~)")

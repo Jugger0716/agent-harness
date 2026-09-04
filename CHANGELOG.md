@@ -8,6 +8,40 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
 
 ## [Unreleased]
 
+### Changed
+
+- **`/harness`'s spec-freshness check moved off filesystem mtime onto a state.json stamp.**
+  `state.spec_stamp` (`{generation, lines}`) and `plan_critic.spec_stamp_at_critic` replace the
+  `mtime(spec.md)` vs `mtime(plan_critic_findings.md)` comparison in §Stale Determination and
+  §Step 2.6's latch. The reason is a capability boundary, not a defect in mtime: the follow-up
+  `harness-ordering-enforcement` design splits the spec-confirmation gate into a skill that
+  holds neither `Bash` nor `Glob`, and such a skill cannot read an mtime at all.
+  Three things the move needed that a straight substitution would have missed, each recorded
+  because each was found by measurement rather than by reading:
+  - **Write order is part of the contract.** A file and a state.json field cannot be written
+    at once, and stamping second leaves a crash window that reads as *not stale* — a window
+    mtime never had, since the filesystem stamps as a side effect of the write itself. The
+    protocol therefore invalidates (`spec_stamp → null`) *before* spec.md changes; `null` is
+    fail-closed.
+  - **The latch's leftover-file guard had to be rebuilt.** mtime was what distinguished "this
+    pass wrote the findings file" from "an earlier pass did", on a fixed, reused path. §Step 2.6
+    now deletes that file before dispatching, which is what lets plain existence carry the same
+    weight; a failed delete takes failure branch (iii) with `findings_file_stale`.
+  - **One detection is genuinely lost and is disclosed inline.** An edit made outside the
+    orchestrator no longer moves anything. A live line-count comparison recovers most of it;
+    an external edit that preserves the line count is not detected, and unlike mtime there is
+    no I/O-failure axis to fall closed on. §Stale Determination states this where the verdict
+    is defined rather than in a footnote.
+  Two further losses, listed because a reader of this entry would otherwise meet them only in
+  the contract file: the same-second tie-break rule is gone (integers have no tie case, so the
+  conservative bias it supplied is simply absent), and a user can no longer check the gate's
+  reasoning independently with `ls -l` — `state.json` is now the only surface a wrong verdict
+  can be diagnosed from, which is why §Session Recovery's `View state only` prints both stamps.
+  Both new fields default to `null`, not `0` — §Version & Compatibility requires readers to
+  treat a missing field as its documented default, so `0` would have made every pre-existing
+  `"3.0"` session compare `0 == 0` and read clean. `generation` is deliberately not named
+  `revision`: `plan_critic.round` already owns that word in this file.
+
 ### Added
 
 - **`harness-steps` mode in `scripts/verify_sync_markers.py`'s section-reference check.**
