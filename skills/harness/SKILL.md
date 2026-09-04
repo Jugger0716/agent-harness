@@ -303,7 +303,10 @@ Before starting a new task, check if `.harness/state.json` exists:
      `plan_critic.spec_stamp_at_critic` (both in full — they are two small integer pairs,
      and after the move off mtime they are the ONLY surface on which a wrong stale /
      not-stale verdict can be diagnosed at all: the filesystem no longer carries a second
-     opinion a user could check with `ls -l`). This is strictly more than
+     opinion a user could check with `ls -l`. The two halves are not equally checkable even
+     here: `lines` can be compared against the file itself with `wc -l`, while `generation`
+     has no counterpart anywhere outside this record — nothing but the orchestrator's own
+     bookkeeping ever produced it, so a wrong `generation` is unfalsifiable from outside). This is strictly more than
      item 3's earlier standard-status print, never a duplicate of it. Any field state.json does
      not currently carry (8.10.0 declared several of these additive-optional, missing = default)
      prints as `(none recorded)` — never invented. If `state.json` itself fails to parse, print
@@ -1183,6 +1186,16 @@ findings file) already exists (a sanctioned read — §Architecture Principles #
   shows the `carried over from /spec` literal.
 - **Does not exist** → dispatch this step's own critic below (WORKFLOW or INLINE, per
   `path_resolved`); `plan_critic.source = "own"` in that case.
+
+**Pre-dispatch stamp check (own-critic branch only):** before the delete below, and before
+dispatching anything, check `state.spec_stamp`. If it is `null` or malformed, do NOT delete and
+do NOT dispatch — take failure branch (iii) with `failure_reason = "spec_stamp_invalid"`. That
+state means the §Step 2 write protocol did not finish, so `{docs_path}spec.md` is a partial or
+abandoned write and critiquing it spends a dispatch on a document no one intends to keep. The
+latch below tests the same condition, but only AFTER the dispatch has already been paid for;
+this is the same test moved to where it can still prevent the cost. It also protects the
+existing findings file, which the delete below would otherwise destroy on the way to a critic
+pass that was going to fail the latch anyway.
 
 **Pre-dispatch delete (own-critic branch only — both WORKFLOW and INLINE):** immediately
 before dispatching, delete `{docs_path}plan_critic_findings.md` if it exists. This is what

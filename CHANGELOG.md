@@ -37,6 +37,15 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
   conservative bias it supplied is simply absent), and a user can no longer check the gate's
   reasoning independently with `ls -l` — `state.json` is now the only surface a wrong verdict
   can be diagnosed from, which is why §Session Recovery's `View state only` prints both stamps.
+  **This entry invalidates figures printed in the `harness-steps` entries below**, which
+  quote 403 in-file §citations / 203 checked / 200 unchecked / 195 non-Step for
+  `skills/harness/SKILL.md`. Those were correct when that mode shipped and are correct for the
+  tree it shipped against; this change edits the very document they count. Live at the end of
+  this change: **429 / 220 / 209 / 204**, and 14 rather than 12 sub-path citations —
+  measured after the last edit in this batch, and moved three times by edits inside the
+  batch itself before settling there. The older
+  entries are left as they were written — they describe their own commit — and this sentence is
+  the pointer a reader needs to avoid re-running their commands and concluding the lint broke.
   Both new fields default to `null`, not `0` — §Version & Compatibility requires readers to
   treat a missing field as its documented default, so `0` would have made every pre-existing
   `"3.0"` session compare `0 == 0` and read clean. `generation` is deliberately not named
