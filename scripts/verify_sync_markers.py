@@ -45,8 +45,10 @@ this repository already fixed twice for absolute line-number citations.
      passes. A rename sweep over all 80 headings is caught for 20 of them.
   3. SCAN SCOPE. Every layer here iterates SCAN_DIRS (skills/, templates/, workflows/),
      so the repository ROOT documents are never scanned. Measured: 6 sub-path citations
-     (ROADMAP.md 4, CHANGELOG.md 2) and 39 path-anchored pointers at this target
-     (CHANGELOG.md 26, ROADMAP.md 12, README.md 1) sit outside every count below.
+     (ROADMAP.md 4, CHANGELOG.md 2) and 40 path-anchored pointers at this target
+     (CHANGELOG.md 27, ROADMAP.md 12, README.md 1) sit outside every count below.
+     These two are DATED figures, not invariants: prose about them lives in the very
+     files they count, so writing this disclosure moved the second one twice.
      Widening is not a one-line change: iter_files() is shared with collect_markers(),
      so touching it moves the SYNC marker-site total too.
   4. PIN-STEP IS A SET COMPARISON. It sees heading TEXT only -- never order, nesting
