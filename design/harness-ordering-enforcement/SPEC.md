@@ -5,7 +5,7 @@
 >
 > 본문은 그 밖의 한 글자도 수정하지 않았다.
 
-# SPEC — `harness-ordering-enforcement` (rev.5)
+# SPEC — `harness-ordering-enforcement` (rev.6)
 
 > **성격**: 후속 에픽의 요구사항 명세. 입력은 `docs/harness/plan/REMEASURE-harness-split.md`(gitignored)와
 > `docs/harness/plan/PROBE-FINDINGS-enforcement.md`(gitignored), 그리고 `ROADMAP.md`의 W7 행·phase-P 4행.
@@ -54,6 +54,18 @@
   기본은 **미보유**로 두었으나, Reading Order 성격의 파일 존재 확인에 필요한지 미검증.
 
 ### Changed in this revision
+
+**rev.6 (2026-09-04) — C3 완료.** §Step 8의 `If epic exit:` 블록을 §Step 3.5 직후 `#### Step 3.6:
+Epic Exit`으로 승격했다. §0-B의 재해석대로 착지점은 「§Step 3.5 뒤」가 아니라 **게이트 직후
+스킬이 소유하는 첫 섹션**이고, 분할 전 트리에서는 그 자리가 곧 Step 3.5와 Step 4 사이다.
+정본 Step id는 11 → **12**가 됐고 `HARNESS_STEP_IDS`를 같은 커밋에서 재고정했다.
+인용 15곳 + 외부 1곳(`skills/handoff/SKILL.md`)을 재조준했다.
+
+구현 중 드러난 것 2건: (a) §Session Boundary가 두 곳에서 「Step 8의 모든 분기」로 적용 범위를
+규정하는데 epic-exit가 더 이상 Step 8 분기가 아니어서 **둘 다 거짓이 됐다** — 둘 다 고쳤다.
+(b) 헤딩 총수는 **80으로 불변**이다(`#### If epic exit:` 하나가 빠지고 `#### Step 3.6: Epic Exit`
+하나가 들어왔다). 대신 핀이 12개가 되면서 sentinel 실측이 **20 → 21 of 80**으로 올랐다 —
+추정하지 않고 80회 돌려 셌다.
 
 **rev.5 (2026-09-04) — C2 구현에 대한 적대적 검증(4렌즈)이 18건을 냈고, 그중 3건이 성립한다.**
 세션 한도로 반증 패스가 14/40 실패해 표결이 완결되지 않았으므로, 아래 3건은 **오케스트레이터가
@@ -427,7 +439,7 @@ Modify 1회당 **+2회**.
 |---|---|---|---|
 | **C1** | `harness-steps` mode 파라미터화 — **구현 완료, 아래 §6.1 참조** | `scripts/verify_sync_markers.py`만. 손잡이 5개(`HARNESS_STEP_IDS`/`HARNESS_SUBPATHS`/`HARNESS_FILES`/`HARNESS_NON_HEADING_ANCHORS` + `HARNESS_MIN_CROSS_FILES`)를 `SECTION_REF_TARGETS` 엔트리로 이동 + 모드별 필수 키 검사(`_MODE_REQUIRED_KEYS`) + **layer 5 foreign-anchor 배제**(rev.3, BLOCKING). **PIN-FILES 라벨 버그는 범위에서 제외** — 이미 `81227d4`에서 수정됨 | 린트 7종 rc=0, **출력 바이트 동일**(베이스라인 대비 diff 0) + 채택 분할에서 rc=0(§6.2) |
 | **C2** | 세대 카운터 도입 | `skills/harness/SKILL.md` 단일 파일. §3.3의 사이트 전건 | 린트 7종 rc=0. 분할 전이므로 인용 무영향 |
-| **C3** | epic-exit 분리 → §Step 3.6 승격 | `skills/harness/SKILL.md` + §Step 8 인용 재조준. 정본 Step id 11→12 → `HARNESS_STEP_IDS` 재고정 **같은 커밋에서** | 린트 7종 rc=0 |
+| **C3** | epic-exit 분리 → §Step 3.6 승격 — **완료** | `skills/harness/SKILL.md` 블록 이동 + 인용 15곳, `skills/handoff/SKILL.md` 1곳, `HARNESS_STEP_IDS` 11→12 재고정(같은 커밋) | 린트 7종 rc=0, 정본 Step id 12개 (**충족**) |
 | **C4** | 공유 계약 추출 | `templates/_shared/` 6파일 신설 + `skills/harness/SKILL.md`에서 참조로 대체. **R-1 프로브 선행** | 린트 7종 rc=0 + 프로브 기록 |
 | **C5** | 3분할 | 스킬 디렉터리 2개 신설 + `SECTION_REF_TARGETS` 등록(C1이 가능하게 만든 것) + 핀 재고정 + 경계 넘는 `§Step` 인용 재앵커 | 린트 7종 rc=0 |
 | **C6** | description 문안 + 예산 | 3스킬 문안 + `PER_SKILL_CEILING` 3항목 + `TOTAL_CEILING` 상향 | `verify_description_budget.py` rc=0 |
@@ -596,7 +608,10 @@ OK: 9 sync group(s), 51 marker site(s)
 | AC-3 | C2가 §Step 7 AC-21 노트의 **「deliberately NOT ported」 결론절**을 뒤집지 않음 (rev.4에서 **범위 축소** — 원문은 「2022·2046행 무수정」이었으나, 2046행의 **전제절**이 「latch가 mtime을 비교한다」여서 변경 후 거짓이 된다. 결론절은 유지, 전제절은 갱신, 정정은 문장 안에 기록) | 노트 본문 (**충족**) |
 | AC-3b | 이름을 바꾼 노트를 **이름으로** 인용하던 곳이 함께 고쳐짐 | §Step 6의 by-name 인용 (**충족** — 이것이 2022·2046이 대칭이 아니었던 이유) |
 | AC-3c | `spec_stamp`/`spec_stamp_at_critic`이 §Session Recovery의 `View state only`에 출력됨 — mtime을 잃으면서 오판을 진단할 **유일한 표면**이 됨 | 해당 항목 (**충족**) |
-| AC-4 | C3 적용 후 정본 Step id가 12개이고 `HARNESS_STEP_IDS`가 같은 커밋에서 재고정됨 | 린트 rc=0 + `git show --stat`에 두 파일 동시 존재 |
+| AC-4 | C3 적용 후 정본 Step id가 12개이고 `HARNESS_STEP_IDS`가 같은 커밋에서 재고정됨 | 린트 OK 라인 `-> 12 pinned Step id(s)` (**충족**) |
+| AC-4b | epic 세션이 §Step 8에 **진입하지 않음** — 무게이트 구현-스킬 진입 경로가 소멸 | §Step 3.5 → §Step 3.6 직행, §Step 8 라우팅에서 epic 분기 제거 (**충족**) |
+| AC-4c | 이동으로 거짓이 된 문장이 남지 않음 | §Session Boundary 적용범위 2곳 정정 (**충족**) |
+| AC-4d | 「20 of 80 caught」류 수치를 추정하지 않고 실측 | sentinel 80회 실행 → **21 of 80** (**충족**) |
 | AC-5 | C5 적용 후 린트 7종 rc=0, **SYNC 9그룹 무손상** | `verify_sync_markers.py` → `9 sync group(s), 51 marker site(s)` |
 | AC-6 | C5의 재앵커가 `skills/team-memory/SKILL.md` 앵커 2건을 **건드리지 않음** | `git diff` 해당 2행 부재 |
 | AC-7 | `harness-gate`의 frontmatter가 `Bash`·`Write`·`Edit`를 **이름 형식으로** 나열 (스코프 패턴 금지 — no-op) | frontmatter 직접 확인 |
