@@ -56,7 +56,11 @@ this repository already fixed twice for absolute line-number citations.
   5. PIN-FILES IS A ONE-DIRECTORY GLOB (`skills/harness/*.md`). A split into a
      subdirectory, a different extension, or another skill's directory escapes it, and
      glob case-sensitivity is platform-dependent. It catches the sibling-file split the
-     conditional-`go` in ROADMAP names, not every conceivable one.
+     conditional-`go` in ROADMAP names, not every conceivable one. Per-target pinning
+     (2026-09-04) did NOT change this: it moved the pin's VALUE onto the entry, while
+     the SCOPE compared against it is still `(ROOT / entry['path']).parent`. So a second
+     target in its own directory is still invisible to the first target's PIN-FILES,
+     and silently de-registering that second entry trips nothing here.
   6. MISATTRIBUTION, BOTH DIRECTIONS. Passing-for-the-wrong-reason: the `§Step 1.5`
      token quoted inside that file's §Sub-command: doctor prose resolves against this
      file's own Step 1.5 although the sentence is about team-memory. Failing-for-the-
@@ -346,38 +350,6 @@ SYNC_GROUPS = [
 ]
 
 
-# Files whose `<path>` §<Section> references are machine-checked, each with the MODE
-# that fits its own heading style. Each entry is {"path": ..., "mode": ...}.
-#
-# ORIGINAL SCOPING JUDGEMENT, KEPT (2026-08, when the list held one file) -- do not read
-# it as still describing the whole list:
-#   "Deliberately scoped to `workflows/_reference/` rather than generic: many §references
-#   in this repository legitimately point at something that is NOT an exact `## §` heading
-#   -- a bullet (skills/study/SKILL.md documents `§Allowed Writes` as a Key Rules bullet),
-#   a prefix-matched heading (`§Mode Gate` vs the full `## Mode Gate -- path & mode
-#   resolution ...`), or a section of the citing file itself (`§3.4a`). A generic check
-#   would fail on all of those, so it would be turned off."
-#   What this DOES guard is the one case with no other guard at all: a skill that moved
-#   its measurement record into a side file and now cites it by section name.
-#
-# WHAT CHANGED (2026-09-03): that judgement was right about a GENERIC check and is why
-# this is still not one. The list did not become generic -- it gained a SECOND entry with
-# its OWN mode. `skills/harness/SKILL.md` has zero `## §Name` headings, so extending
-# "anchor-heading" to it would fail on every pointer; the "harness-steps" mode instead
-# checks only the `§Step N(.N)` family plus path-anchored cross-file pointers, and
-# discloses the 200 in-file citations it does not check (module docstring
-# §What this does not check). All three "would fail" shapes quoted above remain
-# unchecked -- note that the disclosure counts categories rather than naming these three
-# by example, and that two of them (`§Allowed Writes`, `§3.4a`) live in other files
-# entirely, so nothing here brought them under a check either.
-#
-# Entry condition for a third entry: state its mode, measure the citation families in
-# that file first, and pin whatever the mode compares against with zero slack.
-SECTION_REF_TARGETS = [
-    {"path": "workflows/_reference/study_measurements.md", "mode": "anchor-heading"},
-    {"path": "skills/harness/SKILL.md", "mode": "harness-steps"},
-]
-
 # `## §Section Name` -- the anchor form section pointers use in "anchor-heading" mode
 # ONLY. `skills/harness/SKILL.md` uses no such heading; see the harness-steps constants.
 SECTION_HEADING_RE = re.compile(r"^## (§[^\n]+?)\s*$", re.M)
@@ -469,6 +441,84 @@ HARNESS_NON_HEADING_ANCHORS = {
 }
 
 
+# Files whose `<path>` §<Section> references are machine-checked, each with the MODE
+# that fits its own heading style. Each entry is {"path": ..., "mode": ...} plus
+# whatever keys that mode requires -- see the harness-steps entry below.
+#
+# ORIGINAL SCOPING JUDGEMENT, KEPT (2026-08, when the list held one file) -- do not read
+# it as still describing the whole list:
+#   "Deliberately scoped to `workflows/_reference/` rather than generic: many §references
+#   in this repository legitimately point at something that is NOT an exact `## §` heading
+#   -- a bullet (skills/study/SKILL.md documents `§Allowed Writes` as a Key Rules bullet),
+#   a prefix-matched heading (`§Mode Gate` vs the full `## Mode Gate -- path & mode
+#   resolution ...`), or a section of the citing file itself (`§3.4a`). A generic check
+#   would fail on all of those, so it would be turned off."
+#   What this DOES guard is the one case with no other guard at all: a skill that moved
+#   its measurement record into a side file and now cites it by section name.
+#
+# WHAT CHANGED (2026-09-03): that judgement was right about a GENERIC check and is why
+# this is still not one. The list did not become generic -- it gained a SECOND entry with
+# its OWN mode. `skills/harness/SKILL.md` has zero `## §Name` headings, so extending
+# "anchor-heading" to it would fail on every pointer; the "harness-steps" mode instead
+# checks only the `§Step N(.N)` family plus path-anchored cross-file pointers, and
+# discloses the 200 in-file citations it does not check (module docstring
+# §What this does not check). All three "would fail" shapes quoted above remain
+# unchecked -- note that the disclosure counts categories rather than naming these three
+# by example, and that two of them (`§Allowed Writes`, `§3.4a`) live in other files
+# entirely, so nothing here brought them under a check either.
+#
+# Entry condition for a third entry: state its mode, measure the citation families in
+# that file first, pin whatever the mode compares against with zero slack, and supply
+# every key that mode requires (_MODE_REQUIRED_KEYS below names them).
+#
+# WHAT CHANGED (2026-09-04): "harness-steps" was parameterised per target. Its five
+# knobs -- step_ids / subpaths / files / min_cross_files / non_heading_anchors -- now
+# live in the ENTRY rather than in module scope. `_check_harness_steps` took a path
+# argument but read all five as module globals, so two targets under this mode shared
+# ONE set of pins and neither could satisfy it. Measured before this change on a
+# scratch copy split at the Step 4 boundary into `skills/harness-build/`: the split
+# alone failed with 54 failures, and registering the new file under "harness-steps"
+# exactly as ROADMAP's W7 conditional-`go` instructs made it 70. This commit is that
+# instruction's missing prerequisite, landed on its own so the split it enables can be
+# reviewed separately. Behaviour for the two entries below is unchanged: same pins,
+# read from a different place.
+#
+# A SECOND harness-steps entry must supply all five. `min_cross_files` is the one most
+# easily got wrong: it floors how many OTHER files carry a path-anchored §pointer at
+# THAT target, so for a newly created file nothing points at yet it is 1, not the 7
+# pinned for `skills/harness/SKILL.md`.
+SECTION_REF_TARGETS = [
+    {"path": "workflows/_reference/study_measurements.md", "mode": "anchor-heading"},
+    {
+        "path": "skills/harness/SKILL.md",
+        "mode": "harness-steps",
+        # The constants keep their names so every existing reference to them still
+        # resolves. Measured 2026-09-04, and only two such references exist:
+        # CLAUDE.md §Verification and ROADMAP.md's W7 row. This module's own docstring
+        # does NOT name them -- an earlier revision of this comment said it did.
+        # What moved is where the checker READS them from.
+        "step_ids": HARNESS_STEP_IDS,
+        "subpaths": HARNESS_SUBPATHS,
+        "files": HARNESS_FILES,
+        "min_cross_files": HARNESS_MIN_CROSS_FILES,
+        "non_heading_anchors": HARNESS_NON_HEADING_ANCHORS,
+    },
+]
+
+# Keys a mode REQUIRES on its entry. Checked before dispatch so a target added without
+# its pins fails with a message naming them, not with a KeyError traceback.
+_MODE_REQUIRED_KEYS = {
+    "anchor-heading": (),
+    "harness-steps": (
+        "step_ids",
+        "subpaths",
+        "files",
+        "min_cross_files",
+        "non_heading_anchors",
+    ),
+}
+
+
 def _fail(msg: str) -> None:
     print(f"[verify_sync_markers] FAIL section-ref: {msg}", file=sys.stderr)
 
@@ -524,8 +574,19 @@ def _resolve(core: str, idx: set[str], extra=()) -> str | None:
     return None
 
 
-def _check_harness_steps(target_rel: str) -> int:
-    """Six layers over skills/harness/SKILL.md. Returns this target's failure count."""
+def _check_harness_steps(entry: dict) -> int:
+    """Six layers over one harness-steps target. Returns that target's failure count.
+
+    Every pin comes from `entry`, never from module scope: two targets under this mode
+    would otherwise share one set of pins and neither could satisfy it. The five keys
+    are guaranteed present by check_section_refs()'s _MODE_REQUIRED_KEYS check.
+    """
+    target_rel = entry["path"]
+    step_ids_pin = entry["step_ids"]
+    subpaths_pin = entry["subpaths"]
+    files_pin = entry["files"]
+    min_cross_files = entry["min_cross_files"]
+    non_heading_anchors = entry["non_heading_anchors"]
     target = ROOT / target_rel
     if not target.exists():
         _fail(f"target file missing: {target_rel}")
@@ -537,24 +598,26 @@ def _check_harness_steps(target_rel: str) -> int:
 
     # 1. PIN-STEP -- canonical Step ids, multiset (a duplicated id is also a failure).
     ids = [m.group(1) for h in heads for m in [CANON_STEP_RE.match(h)] if m]
-    if collections.Counter(ids) != collections.Counter(HARNESS_STEP_IDS):
+    if collections.Counter(ids) != collections.Counter(step_ids_pin):
         bad += 1
         _fail(
             f"{target_rel} canonical Step ids {sorted(ids)} != pinned "
-            f"{sorted(HARNESS_STEP_IDS)} -- update HARNESS_STEP_IDS in this change"
+            f"{sorted(step_ids_pin)} -- update this target's 'step_ids' in "
+            f"SECTION_REF_TARGETS in this change"
         )
     # 2. PIN-SUBPATH -- `Step N — INLINE|WORKFLOW path` sub-headings.
     subs = [
         (m.group(1), m.group(2)) for h in heads for m in [SUBPATH_HEAD_RE.match(h)] if m
     ]
-    if set(subs) != HARNESS_SUBPATHS or len(subs) != len(HARNESS_SUBPATHS):
+    if set(subs) != subpaths_pin or len(subs) != len(subpaths_pin):
         bad += 1
         _fail(
             f"{target_rel} sub-path headings {sorted(subs)} != pinned "
-            f"{sorted(HARNESS_SUBPATHS)} -- update HARNESS_SUBPATHS in this change"
+            f"{sorted(subpaths_pin)} -- update this target's 'subpaths' in "
+            f"SECTION_REF_TARGETS in this change"
         )
     # 3. PIN-ANCHOR / PIN-FILES -- non-heading anchors and the file set itself.
-    for anchor, literal in HARNESS_NON_HEADING_ANCHORS.items():
+    for anchor, literal in non_heading_anchors.items():
         if literal not in text:
             bad += 1
             _fail(
@@ -566,12 +629,13 @@ def _check_harness_steps(target_rel: str) -> int:
     present = {
         str(p.relative_to(ROOT)).replace("\\", "/") for p in target_dir.glob("*.md")
     }
-    if present != HARNESS_FILES:
+    if present != files_pin:
         bad += 1
         _fail(
-            f"{glob_label} is {sorted(present)} != pinned {sorted(HARNESS_FILES)} "
-            f"-- a split must register each new file in SECTION_REF_TARGETS and re-pin "
-            f"HARNESS_FILES/HARNESS_STEP_IDS/HARNESS_SUBPATHS in the same change. "
+            f"{glob_label} is {sorted(present)} != pinned {sorted(files_pin)} "
+            f"-- a split must register each new file in SECTION_REF_TARGETS, giving that "
+            f"entry its OWN files/step_ids/subpaths/min_cross_files/non_heading_anchors "
+            f"pins, in the same change. "
             f"NOTE: this glob only sees {glob_label}, so a split into ANOTHER skill "
             f"directory is invisible to this pin -- see the module docstring's limit 5"
         )
@@ -602,7 +666,7 @@ def _check_harness_steps(target_rel: str) -> int:
     #   (a) iter_files() covers SCAN_DIRS only, so root documents are never scanned;
     #   (b) `skills/migrate/SKILL.md` and `skills/refactor/SKILL.md` own sub-path headings
     #       of their OWN (measured: `Step 5 — INLINE path` / `Step 5 — WORKFLOW path` in
-    #       each). Judging every such citation tree-wide against HARNESS_SUBPATHS would
+    #       each). Judging every such citation tree-wide against this target's subpaths
     #       pass a migrate-owned citation coincidentally -- harness happens to pin id 5
     #       too -- and would turn it red the day harness stops doing so. That is the
     #       silent wrong-attribution layer 4's PATH_ANCHOR_RE already guards against, so
@@ -618,9 +682,24 @@ def _check_harness_steps(target_rel: str) -> int:
             txt = p.read_text(encoding="utf-8")
         except (OSError, UnicodeDecodeError):
             continue
-        if p != target:
-            anchored = {m.end() - len("§Step") for m in subpath_anchor_re.finditer(txt)}
+        anchored = {m.end() - len("§Step") for m in subpath_anchor_re.finditer(txt)}
+        # Same exclusion layer 4 applies, and for the same reason: a citation carrying
+        # ANOTHER file's path anchor is that file's business even when it sits inside
+        # this target. Layer 4 did this from the start; layer 5 only narrowed p !=
+        # target, so an anchored pointer in the target itself was judged against the
+        # target's own pins. Harmless while nothing points out of this file (measured
+        # 2026-09-04: 0 such citations, so this changes no current count) -- and a
+        # deterministic false FAIL the moment a split makes one, which is exactly the
+        # tail-retained split REMEASURE-split.md §2.4 adopts: its 3 sub-path citations
+        # at Steps 4 and 5 stay in this file and get re-anchored at the new one.
+        foreign_sub = {
+            m.end() - len("§Step")
+            for m in PATH_ANCHOR_RE.finditer(txt)
+            if m.group(1) != target_rel
+        }
         for m in SUBPATH_CITE_RE.finditer(txt):
+            if m.start() in foreign_sub:
+                continue  # anchored at another file -- not this target's
             if p != target and m.start() not in anchored:
                 continue  # another file's own sub-path section -- not this target's
             sub_cites += 1
@@ -658,7 +737,7 @@ def _check_harness_steps(target_rel: str) -> int:
                 files.add(str(p.relative_to(ROOT)))
                 r = _resolve(g, idx)
                 if r is None:
-                    r = _resolve(g, set(), HARNESS_NON_HEADING_ANCHORS.keys())
+                    r = _resolve(g, set(), non_heading_anchors.keys())
                     if r is not None:
                         used.add(r)
                 if r is None:
@@ -668,17 +747,17 @@ def _check_harness_steps(target_rel: str) -> int:
                         f"{target_rel} {g.replace(chr(10), ' ')!r}, which resolves to no "
                         f"heading there"
                     )
-    if len(files) < HARNESS_MIN_CROSS_FILES:
+    if len(files) < min_cross_files:
         bad += 1
         _fail(
             f"{len(files)} file(s) carry a path-anchored {target_rel} §pointer, "
-            f"expected >= {HARNESS_MIN_CROSS_FILES}"
+            f"expected >= {min_cross_files} (this target's min_cross_files pin)"
         )
-    for dead in set(HARNESS_NON_HEADING_ANCHORS) - used:
+    for dead in set(non_heading_anchors) - used:
         bad += 1
         _fail(
-            f"HARNESS_NON_HEADING_ANCHORS entry {dead!r} is never used by any pointer "
-            f"-- remove it rather than leaving a stale allowlist entry"
+            f"{target_rel}: non_heading_anchors entry {dead!r} is never used by any "
+            f"pointer -- remove it rather than leaving a stale allowlist entry"
         )
 
     if not bad:
@@ -696,8 +775,15 @@ def _check_harness_steps(target_rel: str) -> int:
     return bad
 
 
-def _check_anchor_heading(target_rel: str) -> int:
-    """The original `## §Section` check. Returns this target's failure count."""
+def _check_anchor_heading(entry: dict) -> int:
+    """The original `## §Section` check. Returns this target's failure count.
+
+    Takes the whole entry, not a path, so both modes share one dispatch signature.
+    This mode requires no extra keys -- _MODE_REQUIRED_KEYS records that as an empty
+    tuple rather than by omission, so a mode missing from that table is a bug rather
+    than a silent "requires nothing" default.
+    """
+    target_rel = entry["path"]
     bad = 0
     target = ROOT / target_rel
     if not target.exists():
@@ -772,7 +858,28 @@ def check_section_refs() -> int:
             )
             bad += 1
             continue
-        bad += checker(entry["path"])
+        required = _MODE_REQUIRED_KEYS.get(entry["mode"])
+        if required is None:
+            print(
+                f"[verify_sync_markers] FAIL section-ref: mode {entry['mode']!r} has a "
+                f"checker but no _MODE_REQUIRED_KEYS entry -- add one (an empty tuple "
+                f"when the mode needs no extra keys) rather than leaving the table "
+                f"incomplete",
+                file=sys.stderr,
+            )
+            bad += 1
+            continue
+        missing = [k for k in required if k not in entry]
+        if missing:
+            print(
+                f"[verify_sync_markers] FAIL section-ref: {entry['path']}: mode "
+                f"{entry['mode']!r} entry is missing {missing} -- every key a mode "
+                f"requires must be pinned on the entry itself",
+                file=sys.stderr,
+            )
+            bad += 1
+            continue
+        bad += checker(entry)
     return bad
 
 
