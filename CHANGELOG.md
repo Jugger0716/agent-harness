@@ -10,6 +10,21 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
 
 ### Changed
 
+- **`/harness`'s epic-exit path is its own step now (`§Step 3.6: Epic Exit`), not a branch of
+  `§Step 8`.** §Step 3.5 wrote `slice_plan.md` and then handed control forward into §Step 8's
+  first branch, skipping Steps 4-7 — the only step-skipping edge in the file, and it pointed at
+  the step that owns cleanup, commit and the end-of-session summary. The follow-up design
+  splits this file into skills at the Step 4 boundary, which would have put that edge across a
+  skill boundary and let an epic session enter the implementation skill without passing a gate.
+  The block moved unchanged; what changed is where it lives and, consequently, that an epic
+  session now ends before §Step 8 is reached at all. Canonical Step ids go 11 to 12 and
+  `HARNESS_STEP_IDS` is re-pinned in the same commit, as that pin's zero-slack convention
+  requires. Two §Session Boundary sentences that scoped themselves to "every Step 8 branch"
+  became false in the move and are corrected rather than left to rot. Heading count is
+  unchanged at 80 — one heading left, one arrived — but the section-reference lint now catches
+  21 of them on a rename sweep rather than 20, measured with the sentinel method its own
+  docstring names, not inferred from the extra pin.
+
 - **`/harness`'s spec-freshness check moved off filesystem mtime onto a state.json stamp.**
   `state.spec_stamp` (`{generation, lines}`) and `plan_critic.spec_stamp_at_critic` replace the
   `mtime(spec.md)` vs `mtime(plan_critic_findings.md)` comparison in §Stale Determination and

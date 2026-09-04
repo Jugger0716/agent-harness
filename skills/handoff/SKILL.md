@@ -325,9 +325,9 @@ checks instead:
    `.harness/state.json` no longer exists at resume time, report: "recorded task state — file
    no longer exists (cleaned up, or a different task started since)." **This absence alone is
    not a red flag** — it is also the normal signature of an epic boundary: `/harness`
-   §Step 3.5: Slice Plan writes `{docs_path}slice_plan.md` and hands control to §Step 8's
-   epic-exit branch (both by name); that branch confirms the file — it never writes it — and
-   deletes `.harness/` only after that confirmation succeeds. So a missing state.json next to a
+   §Step 3.5: Slice Plan writes `{docs_path}slice_plan.md` and hands control to
+   §Step 3.6: Epic Exit (both by name); that section confirms the file — it never writes it —
+   and deletes `.harness/` only after that confirmation succeeds. So a missing state.json next to a
    `Docs` directory that now contains `slice_plan.md` reads as "the epic advanced to its next
    slice," not as an abandoned task — mention this reading in the report whenever
    `slice_plan.md` is among the entry names item 3 below collects. Item 3's directory read
