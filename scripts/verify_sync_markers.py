@@ -35,11 +35,11 @@ A renamed heading otherwise rots every pointer silently -- the same failure mode
 this repository already fixed twice for absolute line-number citations.
 
 §What this does not check (harness-steps mode; see §FIGURE PROVENANCE below):
-  1. IN-FILE COVERAGE. Of the 429 in-file §citations in skills/harness/SKILL.md, 220
-     are checked and 209 are NOT: 204 non-Step citations, 2 `§Step Mode Prerequisites`
+  1. IN-FILE COVERAGE. Of the 446 in-file §citations in skills/harness/SKILL.md, 236
+     are checked and 210 are NOT: 205 non-Step citations, 2 `§Step Mode Prerequisites`
      (a Step-prefixed name, not a Step number), and 3 §Step citations carrying ANOTHER
      file's path anchor (they target spec and team-memory, so they are deliberately out
-     of scope). 220 + 209 = 429 exactly; the split is a partition, not a sample. The
+     of scope). 236 + 210 = 446 exactly; the split is a partition, not a sample. The
      unchecked share is just under half -- large, but not the majority.
      RE-MEASURED 2026-09-04, after the spec_stamp change rewrote parts of that file:
      the figures were 403 / 203 / 200 / 195 when this mode shipped, and 422 / 216 / 206 /
@@ -48,7 +48,7 @@ this repository already fixed twice for absolute line-number citations.
      figure in this block, which is why each carries its command rather than a date
      alone.
   2. NUMBERS, NOT TITLES. Renaming `Step 5: Verify Phase` to `Step 5: Mechanical Check`
-     passes. A rename sweep over all 80 headings is caught for 20 of them.
+     passes. A rename sweep over all 80 headings is caught for 21 of them.
   3. SCAN SCOPE. Every layer here iterates SCAN_DIRS (skills/, templates/, workflows/),
      so the repository ROOT documents are never scanned. Measured: 6 sub-path citations
      (ROADMAP.md 4, CHANGELOG.md 2) and 40 path-anchored pointers at this target
@@ -379,23 +379,23 @@ SECTION_HEADING_RE = re.compile(r"^## (§[^\n]+?)\s*$", re.M)
 # into skills/harness/SKILL.md itself: a figure that counts its own document invalidates
 # itself the moment it is written -- (b) above is that mechanism caught in the act.
 #
-#   429 in-file §citations   python -c "import re;print(len(re.findall(r'§(?=[0-9A-Za-z])',
+#   446 in-file §citations   python -c "import re;print(len(re.findall(r'§(?=[0-9A-Za-z])',
 #                            open('skills/harness/SKILL.md',encoding='utf-8').read())))"
-#   225 bare §Step           ... re.findall(r'§Step', text)
-#   223 §Step + number       ... re.findall(r'§Step[ \t\n]+\d', text)
-#   220 in scope             223 minus the 3 that carry another file's path anchor
-#   209 unchecked            204 non-Step + 2 §Step Mode Prerequisites + 3 foreign
-#   17 Step headings / 11 canonical ids
+#   241 bare §Step           ... re.findall(r'§Step', text)
+#   239 §Step + number       ... re.findall(r'§Step[ \t\n]+\d', text)
+#   236 in scope             239 minus the 3 that carry another file's path anchor
+#   210 unchecked            205 non-Step + 2 §Step Mode Prerequisites + 3 foreign
+#   18 Step headings / 12 canonical ids
 #                            python -c "import re,collections;t=open('skills/harness/SKILL.md',
 #                            encoding='utf-8').read();print(collections.Counter(m.group(2) for m
 #                            in re.finditer(r'^#{1,6}[ \t]+(Step (\d+(?:\.\d+)?)\b.*)$',t,re.M)))"
 #   80 headings              ... re.finditer(r'^(#{1,6})[ \t]+(.*\S)[ \t]*$', text, re.M)
 #                            (fence-blind, unlike _headings(); both give 80 today because
 #                            no fenced line in that file starts with `#`)
-#   20 of 80 caught          replace each heading's whole text with a sentinel, one at a
+#   21 of 80 caught          replace each heading's whole text with a sentinel, one at a
 #                            time, and count the copies this script rejects
 #
-# Of these, ONLY `220 in scope` is restated by an OK line below; 429 / 225 / 223 / 209 /
+# Of these, ONLY `236 in scope` is restated by an OK line below; 446 / 241 / 239 / 210 /
 # 80 / 20 are not printed anywhere and are reproducible only from the commands above.
 # Where an OK line and this comment disagree, the OK line is the live measurement.
 FENCE_RE = re.compile(r"^\s*(```|~~~)")
@@ -432,7 +432,9 @@ PATH_ANCHOR_RE = re.compile(
 # raising the pin in the SAME change, and removing one fails immediately. These pins, not
 # a citation-count floor, are what makes a heading rename un-silenceable -- deleting the
 # citations to hide a rename trips PIN-STEP instead.
-HARNESS_STEP_IDS = {"1", "1.5", "2", "2.6", "3", "3.5", "4", "5", "6", "7", "8"}  # 11
+HARNESS_STEP_IDS = {
+    "1", "1.5", "2", "2.6", "3", "3.5", "3.6", "4", "5", "6", "7", "8",
+}  # 12 -- 3.6 (Epic Exit) added when that path moved out of Step 8
 HARNESS_SUBPATHS = {
     ("2", "INLINE"), ("2", "WORKFLOW"),
     ("4", "INLINE"), ("4", "WORKFLOW"),
