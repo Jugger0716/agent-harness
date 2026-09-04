@@ -561,16 +561,19 @@ def _check_harness_steps(target_rel: str) -> int:
                 f"{target_rel} no longer contains the literal for non-heading anchor "
                 f"{anchor!r}: {literal!r}"
             )
+    target_dir = (ROOT / target_rel).parent
+    glob_label = str(target_dir.relative_to(ROOT)).replace("\\", "/") + "/*.md"
     present = {
-        str(p.relative_to(ROOT)).replace("\\", "/")
-        for p in (ROOT / target_rel).parent.glob("*.md")
+        str(p.relative_to(ROOT)).replace("\\", "/") for p in target_dir.glob("*.md")
     }
     if present != HARNESS_FILES:
         bad += 1
         _fail(
-            f"skills/harness/*.md is {sorted(present)} != pinned {sorted(HARNESS_FILES)} "
+            f"{glob_label} is {sorted(present)} != pinned {sorted(HARNESS_FILES)} "
             f"-- a split must register each new file in SECTION_REF_TARGETS and re-pin "
-            f"HARNESS_FILES/HARNESS_STEP_IDS/HARNESS_SUBPATHS in the same change"
+            f"HARNESS_FILES/HARNESS_STEP_IDS/HARNESS_SUBPATHS in the same change. "
+            f"NOTE: this glob only sees {glob_label}, so a split into ANOTHER skill "
+            f"directory is invisible to this pin -- see the module docstring's limit 5"
         )
 
     id_set, sub_set = set(ids), set(subs)
