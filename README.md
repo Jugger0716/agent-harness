@@ -134,7 +134,7 @@ Old names are scheduled for removal no earlier than the next MAJOR release.
 
 ### Repository Layout
 
-Six top-level directories, each with a fixed role:
+Seven top-level directories, each with a fixed role:
 
 | Directory | Role |
 |-----------|------|
@@ -144,6 +144,7 @@ Six top-level directories, each with a fixed role:
 | `scripts/*.{mjs,py}` | Repository self-verification lints (`check_workflow_syntax.mjs`, `verify_block_sync.py`, `verify_description_budget.py`, `verify_manifest_sync.py`, `verify_meta_literal.py`, `verify_sync_markers.py`) — they check this repo's own `workflows/`/`skills/`/`templates/`/`.claude-plugin/` source, and are never executed at skill runtime. |
 | `.claude-plugin/*.json` | Plugin and marketplace manifests. The version string lives at three key paths across these two files. |
 | `.github/` | CI: `workflows/lint.yml` runs the lint layer on push and PR; `scripts/check_lint_wiring.sh` checks that every lint is actually wired into it. Also holds the issue and PR templates. |
+| `design/<epic>/` | Committed design records for a follow-up epic — the spec plus the measurements it rests on. Skill *runtime* output goes to `docs/`, which is `.gitignore`d; anything that must outlive the session that produced it lives here instead. Nothing at skill runtime reads this directory, and no lint scans it. |
 
 One additional asset type lives under `templates/`: a **skill-only static asset** (e.g. `templates/study/html_shell.html`) — a non-`.md` file a skill reads and splices content into directly (never dispatched to a sub-agent, never a `SYNC-SOURCE` embed target), author-time-authored once and reused unchanged across runs.
 
