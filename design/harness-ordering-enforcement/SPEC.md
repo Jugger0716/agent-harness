@@ -5,7 +5,7 @@
 >
 > 본문은 그 밖의 한 글자도 수정하지 않았다.
 
-# SPEC — `harness-ordering-enforcement` (rev.1)
+# SPEC — `harness-ordering-enforcement` (rev.3)
 
 > **성격**: 후속 에픽의 요구사항 명세. 입력은 `docs/harness/plan/REMEASURE-harness-split.md`(gitignored)와
 > `docs/harness/plan/PROBE-FINDINGS-enforcement.md`(gitignored), 그리고 `ROADMAP.md`의 W7 행·phase-P 4행.
@@ -55,7 +55,36 @@
 
 ### Changed in this revision
 
-rev.1이 최초 개정이다. 아래는 **입력 문서의 진술 중 이 spec이 뒤집는 것**이다.
+**rev.3 (2026-09-04) — 적대적 검증(4렌즈 + 렌즈당 2반증)이 BLOCKING 1건을 확정했고,
+그것이 rev.2의 exit 0 측정을 무효화했다. 뒤집히는 것 2건:**
+
+1. **rev.2 §6.1의 「①+③+④ → exit 0」은 저장소가 기각한 분할로 측정됐다.**
+   그 측정은 `### Step 4: Generate Phase` 이후를 **전부** B로 보내는 단순 컷을 썼는데,
+   §2.1과 REMEASURE §2.4가 채택한 것은 **꼬리 잔류** 분할이다. 꼬리에 있는 subpath 인용
+   3건(2440행 1건 + 2455행 2건, 전부 `§Step 4|5 — WORKFLOW path`)이 단순 컷에서는 B로
+   함께 넘어가 자기참조가 되면서 결함을 **우연히 피해갔다**. 채택안으로 다시 재면 rc=1이다.
+   이 저장소가 반복해 온 실패(잘못된 기준으로 잰 수치)를 이번에도 발화시켰다 — §6.2가 대체한다.
+2. **파라미터화만으로는 두 번째 타깃이 green에 도달하지 못한다.** layer 5(SUBPATH-CITE)가
+   `p == target`일 때 경로 앵커를 **읽지 않아**, 재앵커를 정확히 붙여도 거짓 FAIL이 남는다.
+   layer 4는 같은 상황에서 `foreign_at`으로 배제한다 — 원래부터 있던 비대칭이며 이 diff가
+   만든 것이 아니다(HEAD와 제어흐름 바이트 동일). **C1에서 함께 고친다** — 고치지 않으면
+   C1이 존재할 이유(두 번째 타깃 통과 가능)가 성립하지 않기 때문이다.
+
+**rev.2 (2026-09-04) — C1을 구현하고 실측했다. 이 개정이 뒤집는 것 3건:**
+
+1. **C1의 범위가 줄었다.** rev.1의 C1 행은 「PIN-FILES 메시지의 하드코딩 라벨 버그도 함께」를
+   포함했는데, 그 버그는 **이미 고쳐져 있다** — `glob_label`이 타깃 디렉터리에서 계산되며,
+   `81227d4`에서 도입됐다. REMEASURE §4가 그것을 결함으로 적은 것은 측정 기준이 `490f4a6`,
+   즉 그 수정 **이전** 커밋이었기 때문이다. REMEASURE는 틀리지 않았고 기준이 낡았다.
+2. **「①+④ → exit 0」은 참이지만 ③이 빠져 있었다.** REMEASURE §4-3은 ①(파라미터화)과
+   ④(재앵커)만 적용한 사본이 exit 0에 도달한다고 적었다. 실제로는 **③(재핀)이 함께 필요하다** —
+   분할 후 `harness` 엔트리의 `step_ids`/`subpaths`도 자기 것으로 줄여야 한다.
+   ①+③만 적용하면 62 FAIL, ①+③+④를 적용해야 exit 0이다(아래 실측표).
+3. **C1 단독으로는 분할이 green이 되지 않는다** — 될 수도 없다. C1이 제거하는 것은
+   **공유 핀 실패 5건**뿐이고, 나머지는 ③·④의 몫이다. 이것을 C1의 성공 기준으로 삼는다
+   (AC-1 재작성).
+
+**rev.1 (2026-09-04)** — 최초 개정. 아래는 **입력 문서의 진술 중 이 spec이 뒤집는 것**이다.
 
 1. `PROBE-FINDINGS-enforcement.md` §5의 광고 명제 — **거짓**. §1로 대체.
 2. `REMEASURE-harness-split.md` §1-③-c 안 1의 epic-exit 착지점(「§Step 3.5 뒤 자체 섹션」) —
@@ -291,12 +320,109 @@ Modify 1회당 **+2회**.
 
 | # | 커밋 | 범위 | 검증 |
 |---|---|---|---|
-| **C1** | `harness-steps` mode 파라미터화 | `scripts/verify_sync_markers.py`만. 손잡이 5개(`HARNESS_STEP_IDS`/`HARNESS_SUBPATHS`/`HARNESS_FILES`/`HARNESS_NON_HEADING_ANCHORS` + `HARNESS_MIN_CROSS_FILES`)를 `SECTION_REF_TARGETS` 엔트리로 이동. PIN-FILES 메시지의 하드코딩 라벨 버그도 함께 | 린트 7종 rc=0, **동작 변경 0** (기존 타깃 OK 라인 불변) |
+| **C1** | `harness-steps` mode 파라미터화 — **구현 완료, 아래 §6.1 참조** | `scripts/verify_sync_markers.py`만. 손잡이 5개(`HARNESS_STEP_IDS`/`HARNESS_SUBPATHS`/`HARNESS_FILES`/`HARNESS_NON_HEADING_ANCHORS` + `HARNESS_MIN_CROSS_FILES`)를 `SECTION_REF_TARGETS` 엔트리로 이동 + 모드별 필수 키 검사(`_MODE_REQUIRED_KEYS`) + **layer 5 foreign-anchor 배제**(rev.3, BLOCKING). **PIN-FILES 라벨 버그는 범위에서 제외** — 이미 `81227d4`에서 수정됨 | 린트 7종 rc=0, **출력 바이트 동일**(베이스라인 대비 diff 0) + 채택 분할에서 rc=0(§6.2) |
 | **C2** | 세대 카운터 도입 | `skills/harness/SKILL.md` 단일 파일. §3.3의 사이트 전건 | 린트 7종 rc=0. 분할 전이므로 인용 무영향 |
 | **C3** | epic-exit 분리 → §Step 3.6 승격 | `skills/harness/SKILL.md` + §Step 8 인용 재조준. 정본 Step id 11→12 → `HARNESS_STEP_IDS` 재고정 **같은 커밋에서** | 린트 7종 rc=0 |
 | **C4** | 공유 계약 추출 | `templates/_shared/` 6파일 신설 + `skills/harness/SKILL.md`에서 참조로 대체. **R-1 프로브 선행** | 린트 7종 rc=0 + 프로브 기록 |
 | **C5** | 3분할 | 스킬 디렉터리 2개 신설 + `SECTION_REF_TARGETS` 등록(C1이 가능하게 만든 것) + 핀 재고정 + 경계 넘는 `§Step` 인용 재앵커 | 린트 7종 rc=0 |
 | **C6** | description 문안 + 예산 | 3스킬 문안 + `PER_SKILL_CEILING` 3항목 + `TOTAL_CEILING` 상향 | `verify_description_budget.py` rc=0 |
+
+### 6.1 C1 실측 (2026-09-04, base `b1de150`)
+
+스크래치 사본에 Step 4 경계 컷(`### Step 4: Generate Phase` 헤딩 앞)을 적용하고
+새 파일을 `skills/harness-build/SKILL.md`에 두어 네 가지로 돌렸다. 원본 트리는 무수정.
+
+| 시나리오 | rc | FAIL |
+|---|---|---|
+| OLD 스크립트, 분할만 | 1 | 54 |
+| OLD 스크립트, 분할 + W7 (b) 문면대로 등록 | 1 | **70** (악화) |
+| NEW 스크립트, 분할만 | 1 | 54 (불변 — 동작 변경 0) |
+| NEW 스크립트, 분할 + 엔트리가 자기 핀 보유 | 1 | **65** |
+
+**70 → 65의 5건이 정확히 「공유 핀」 부류다.** 실패 분류 실측:
+
+| 부류 | OLD 등록 | NEW 등록 |
+|---|---|---|
+| SELF-STEP 인용 (file A) | 52 | 52 |
+| SELF-STEP 인용 (file B) | 10 | 10 |
+| PIN-STEP | 2 | **1** |
+| PIN-SUBPATH | 2 | **1** |
+| PIN-ANCHOR | 1 | **0** |
+| PIN-FILES | 1 | **0** |
+| 죽은 앵커 경고 | 1 | **0** |
+| CROSS floor | 1 | 1 |
+
+남은 PIN-STEP·PIN-SUBPATH 각 1건은 **`harness` 엔트리 자신의 재핀(③)** 몫이고,
+CROSS floor 1건은 아직 그 파일을 가리키는 파일이 없어서다(④가 채운다).
+**즉 C1 이후 남는 실패 중 파라미터화 때문인 것은 0건이다.**
+
+**⚠ 아래 블록은 저장소가 기각한 단순 컷으로 측정됐다 — §6.2가 대체한다. 삭제하지 않고 남기는
+이유는 이 오류의 메커니즘 자체가 기록할 가치가 있기 때문이다.**
+
+**①+③+④ 전부 적용: exit 0.** OK 라인 실측:
+
+```
+OK: 28 cross-file section ref(s) from 8 file(s) -> skills/harness/SKILL.md
+OK: 96 in-file §Step ref(s) -> 6 pinned Step id(s); 8 §Step N — INLINE|WORKFLOW path ref(s) -> 2 pinned; 53 foreign-anchored OUT OF SCOPE
+OK: 52 cross-file section ref(s) from 1 file(s) -> skills/harness-build/SKILL.md
+OK: 45 in-file §Step ref(s) -> 5 pinned Step id(s); 4 §Step N — INLINE|WORKFLOW path ref(s) -> 4 pinned; 12 foreign-anchored OUT OF SCOPE
+OK: 9 sync group(s), 51 marker site(s)
+```
+
+재앵커는 file A 52건 / file B 10건이고, **이미 다른 파일에 앵커된 2건(team-memory)은
+자동으로 건너뛴다** — 앵커 여부를 `PATH_ANCHOR_RE` 위치로 판정하므로 정규식 일괄 치환의
+오탐 2건이 구조적으로 발생하지 않는다. C5는 이 방식을 써야 한다.
+
+**REMEASURE와의 차이 1건**: REMEASURE §4-3은 harness 쪽 cross-file을 **30**으로 적었고
+이번 실측은 **28**이다. 나머지 수치(96/6/8/2/53, 52/1, 45/5/4/4/12, 9/51)는 전부 일치한다.
+차이는 ④ 재앵커를 어떻게 수행했는지에서 온다(REMEASURE는 손으로 편집한 사본). C1의 결함이
+아니지만, **C5에서 이 숫자를 REMEASURE에서 인용하면 틀린다** — 그때 다시 측정한다.
+
+### 6.2 채택된 분할(꼬리 잔류)에서의 실측 — §6.1의 exit 0을 대체한다
+
+분할: `### Step 4: Generate Phase`부터 `## Sub-command: doctor` **직전**까지만 B로 추출.
+preamble과 꼬리는 `harness`에 잔류(§2.1 (i), REMEASURE §2.4).
+①(파라미터화)+③(재핀)+④(재앵커) 전부 적용, layer 5 수정만 토글:
+
+| layer 5 foreign-anchor 배제 | rc | FAIL |
+|---|---|---|
+| OFF (원래 코드) | 1 | **3** |
+| ON (C1이 추가) | 0 | **0** |
+
+FAIL 3건 전문:
+
+```
+skills/harness/SKILL.md:1850 cites '§Step 5 — WORKFLOW path', which is not a sub-path heading in skills/harness/SKILL.md
+skills/harness/SKILL.md:1865 cites '§Step 4 — WORKFLOW path', ...
+skills/harness/SKILL.md:1865 cites '§Step 5 — WORKFLOW path', ...
+```
+
+**재앵커를 아무리 정확히 붙여도 회피 불가**하다 — layer 5가 앵커를 읽지 않으므로 접두어의
+정확성과 무관하다. 그리고 PIN-SUBPATH가 집합 동치(제로 슬랙)라 A의 핀에 `(4,*)`·`(5,*)`를
+남겨두는 우회도 막힌다.
+
+**ON일 때의 OK 라인 (C5가 기준으로 삼을 수치):**
+
+```
+OK: 23 cross-file section ref(s) from 8 file(s) -> skills/harness/SKILL.md
+OK: 101 in-file §Step ref(s) -> 6 pinned Step id(s); 8 §Step N — INLINE|WORKFLOW path ref(s) -> 2 pinned; 65 foreign-anchored OUT OF SCOPE
+OK: 62 cross-file section ref(s) from 1 file(s) -> skills/harness-build/SKILL.md
+OK: 35 in-file §Step ref(s) -> 5 pinned Step id(s); 4 §Step N — INLINE|WORKFLOW path ref(s) -> 4 pinned; 5 foreign-anchored OUT OF SCOPE
+OK: 9 sync group(s), 51 marker site(s)
+```
+
+재앵커 건수는 **A→B 62 / B→A 5**로 REMEASURE §2.4의 정적 실측(62 / 5)과 정확히 일치한다 —
+두 방법이 독립적으로 같은 수를 낸다. §6.1의 52 / 10은 단순 컷의 수치이므로 **C5에서 인용하면
+틀린다**. 마찬가지로 cross-file은 23이며, §6.1의 28도 REMEASURE의 30도 채택안의 값이 아니다.
+
+**적대적 검증에서 살아남은 나머지 4건(전부 minor)과 처리:**
+
+| 발견 | 처리 |
+|---|---|
+| `_MODE_REQUIRED_KEYS`에 없는 새 모드 → `KeyError` 트레이스백 (구코드엔 없던 경로) | **수정** — `.get()` 후 이름을 말하는 FAIL |
+| PIN-FILES가 형제 디렉터리 분할을 못 본다 — 값만 엔트리로 옮겼을 뿐 **비교 범위**는 여전히 타깃 자신의 디렉터리 하나 | **수정 안 함, 공시 강화** — docstring 한계 5에 명문화. 범위 확대는 ROADMAP의 별도 이월 항목(per-mode file list) |
+| 새 주석이 「이 모듈 docstring도 상수명을 인용한다」고 적었는데 **거짓** | **수정** — 실측 결과 인용처는 CLAUDE.md §Verification과 ROADMAP W7 행 **둘뿐** |
+| 검증 프롬프트가 「변경 파일 1개」라 했으나 실제 3개 | 코드 결함 아님 — 프롬프트 오류. 기록만 |
 
 **C5의 인용 재앵커 — 실측 주의사항 2건 (REMEASURE §4-2):**
 - 2분할 기준 측정치는 file A **52건** / file B **10건**. **3분할은 재측정이 필요하다** — 첫 컷(Step 3 앞)의
@@ -356,7 +482,11 @@ Modify 1회당 **+2회**.
 
 | AC | 내용 | 검증 방법 |
 |---|---|---|
-| AC-1 | C1 적용 후 기존 2타깃의 OK 라인이 **바이트 동일** | `verify_sync_markers.py` 출력 diff |
+| AC-1 | C1 적용 후 린트 7종 출력이 사전 베이스라인과 **바이트 동일** | `diff baseline.txt after.txt` → 빈 출력 (**충족**, §6.1) |
+| AC-1b | C1 이후 분할 실패 중 **파라미터화가 원인인 것이 0건** — 이것이 C1의 성공 기준이며, 「분할이 green이 된다」가 아니다 | 스크래치 실패 분류표 (**충족**, §6.1: 공유 핀 5건 소멸) |
+| AC-1c | 모드가 요구하는 키가 빠진 엔트리는 **KeyError가 아니라 이름을 말하는 FAIL**로 실패. 체커는 있는데 필수키 테이블에 없는 모드도 마찬가지 | `_MODE_REQUIRED_KEYS` 검사 (**충족**) |
+| AC-1d | **채택된 분할(꼬리 잔류)** 에서 ①+③+④가 rc=0에 도달 | §6.2 (**충족** — 수정 전 3 FAIL, 수정 후 0) |
+| AC-1e | 어떤 측정도 그것이 어느 분할에서 나왔는지 명시한다 | §6.1/§6.2가 각각 컷을 명시 (**충족**) |
 | AC-2 | C2 적용 후 `skills/harness/SKILL.md`에 mtime **비교**를 수행하는 사이트가 0건 | `grep -n mtime` 후 각 건이 서술인지 비교인지 수동 판정 (21건 전건 열거) |
 | AC-3 | C2가 2022·2046행의 「일부러 이식하지 않았다」 서술을 **수정하지 않음** | `git diff`에 해당 행 부재 |
 | AC-4 | C3 적용 후 정본 Step id가 12개이고 `HARNESS_STEP_IDS`가 같은 커밋에서 재고정됨 | 린트 rc=0 + `git show --stat`에 두 파일 동시 존재 |
