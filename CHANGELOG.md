@@ -34,7 +34,7 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
   line; the rest are reproducible solely from the commands in the script's `§FIGURE PROVENANCE`,
   which this change extends to cover the 80-heading sweep as well. The OK line count for this
   check goes from 1 to 3, so a later reader quoting "the section ref line" has to say which.
-  Scan scope is its own disclosed limit: 6 sub-path citations and 39 path-anchored pointers in
+  Scan scope is its own disclosed limit: 6 sub-path citations and 40 path-anchored pointers in
   the root documents lie outside every count above.
   The canonical-heading rule is the load-bearing part: ids 2, 4 and 5 each appear on three
   headings, so sourcing ids from all 17 Step headings would let a canonical heading be
