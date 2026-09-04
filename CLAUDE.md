@@ -60,6 +60,7 @@ There is no build, test, dev, or deploy command.
 | `workflows/_reference/` | reference documents (`schemas.md`, `study_measurements.md`), not scripts |
 | `scripts/` | the 6 self-consistency lints |
 | `docs/` | gitignored runtime output of 13 skills |
+| `design/<epic>/` | committed design records for follow-up epics — spec plus the measurement evidence it rests on. Outside `SCAN_DIRS`, so no lint reads them; that is why a forward-looking `§Step` citation here does not turn a lint red |
 | `README.md` | 1,100+ lines including `### Repository Layout`; keep it in sync when a skill's surface changes |
 
 `skills/{code-review,memory,workflow}/` are deprecation stubs forwarding to
@@ -172,7 +173,9 @@ in `.github/workflows/lint.yml`, are the entire verification layer:
 
 - `.gitignore` covers `docs/`, `.harness/`, `.claude/`, `.venv/`, `__pycache__/`, `*.pyc`, `.env`,
   and `.idea/`. When citing a `docs/` path from a committed document, mark it
-  `(gitignored — not a public link)`.
+  `(gitignored — not a public link)`. A document that must SURVIVE — a design spec, a measurement
+  record another session will act on — does not belong under `docs/` at all: put it in
+  `design/<epic>/`, which is committed.
 - **`/team-memory` conflicts with this repository's own `.gitignore`.** It declares its store as
   git-committed, shared, and version-controlled at `docs/harness/memory/`, but `docs/` is ignored
   here — so team-memory records written in this repository are not committed.
