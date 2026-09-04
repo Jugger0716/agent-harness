@@ -369,8 +369,8 @@ Auto-revise·Modify / §Pass B Modify / §Modify Interaction 2항목 / §Step 6 
 
 | 현행 항목 | 처리 |
 |---|---|
-| 1. 재표시 시 Modify 이전 버전 기준 counts 표시 | **유지** — 근거만 mtime → revision |
-| 2. Modify 후 Auto-revise 즉시 재노출 금지 | **유지, 더 강해짐** — revision 증가가 구조적으로 Predicate point 4를 깬다. 세션 경계 무관은 자동 성립(state.json 필드이므로) |
+| 1. 재표시 시 Modify 이전 버전 기준 counts 표시 | **유지** — 근거만 mtime → `spec_stamp_at_critic`. 그 필드가 「Modify 이전 버전」을 문자 그대로 기록한다 |
+| 2. Modify 후 Auto-revise 즉시 재노출 금지 | **유지, 더 강해짐** — Modify가 write protocol을 타므로 `spec_stamp.generation`이 전진하고, 그것이 구조적으로 Predicate point 4를 깬다. 세션 경계 무관은 자동 성립(state.json 필드이므로) |
 | 3. 재표시는 항상 Pass A부터 | **자동 충족** — 게이트 재호출은 항상 Pass A부터 렌더한다. 「Pass B의 Modify에서도」라는 단서가 불필요해진다 |
 
 **대가 (정직하게)**: 「Modify → 즉시 재표시」가 「Modify → 사용자 메시지 2회 왕복」이 된다.
