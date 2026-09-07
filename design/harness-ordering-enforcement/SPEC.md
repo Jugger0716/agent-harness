@@ -5,7 +5,7 @@
 >
 > 본문은 그 밖의 한 글자도 수정하지 않았다.
 
-# SPEC — `harness-ordering-enforcement` (rev.9)
+# SPEC — `harness-ordering-enforcement` (rev.10)
 
 > **성격**: 후속 에픽의 요구사항 명세. 입력은 `docs/harness/plan/REMEASURE-harness-split.md`(gitignored)와
 > `docs/harness/plan/PROBE-FINDINGS-enforcement.md`(gitignored), 그리고 `ROADMAP.md`의 W7 행·phase-P 4행.
@@ -55,6 +55,23 @@
   미보유.** 파일 존재 확인은 `Read` 실패가 곧 답이고(§5.4.5 항목 7), Glob의 다른 용도는 없다.
 
 ### Changed in this revision
+
+**rev.10 (2026-09-07) — C5 실행 계획(`PLAN-c5.md`)을 세우며 실측한 것 4건. 설계는 불변, rev.9가 세지 않은 것이다.**
+
+1. **Pass A의 옵션 3개("Auto-revise" / "Run Critic anyway" / "Retry Critic")가 §2.2 매핑표에 없었다.**
+   셋 다 §Step 2/§Step 2.6 디스패치 + state.json 쓰기라 gate가 실행할 수 없다. Modify와 같은
+   리다이렉트로 처리한다 — §2.2 표에 3행 추가, harness가 `--auto-revise`·`--critic`(boolean)을
+   `plan_done` 재진입 플래그로 받는다. `--modify`는 VALUE-TAKING이라 §Session Recovery carve-out의
+   값 취득 플래그 목록에 들어간다.
+2. **`hx-scale-render`(#15)는 B2 5,525 B로 확정** — §1~§4 2,516 + §Signal Domain 1,530 + §INLINE
+   Fallback 1,477(연속 구간). gate가 `measured: 없음/손상됨`과 마감 공시 줄을 렌더하므로 뒤 둘도
+   필요하다. 헤더 blockquote + §Compute-once(2,044 B)만 O harness. 전체 비용 +35.1 → **+39.4 KB**.
+3. **재앵커는 126건**(A→B 77 / A→G 21 / G→A 15 / G→B 4 / B→G 7 / B→A 2). 62/5는 2분할 수치였다(§6.2의
+   경고대로).
+4. **BLOCK 그룹 16개** — `hx-model-selection`(§Model Selection, build가 디스패치에 실행) 추가, `## User
+   Interaction Rules` 2줄은 동기화 없는 복제. SYNC 마커 사이트 51 → 53(`session-conflict` 7→8,
+   `handoff-state-record` 2→3); `slice-command-format`의 target은 `skills/harness-build/SKILL.md`.
+   AC-5의 「51 marker site(s)」는 그 행 안에서 정정.
 
 **rev.9 (2026-09-07) — 결정 ①을 사람이 재확인해 「유지」로 확정했고, 잔여 74%를 실제로 배분했다.
 배분해 보니 rev.8의 비용 산식 자체가 틀렸다 — 두 방향으로.**
@@ -357,6 +374,9 @@ REMEASURE §1-③-c 안 1은 §Step 8의 `#### If epic exit:` 블록을 「§Ste
 | "Plan as epic" | `/harness-build --epic` |
 | "Modify" | `/harness --modify "<사용자 수정 요청>"` |
 | "Stop" | (없음 — 세션 종료) |
+| "Auto-revise" (Pass A ①-a) — rev.10 | `/harness --auto-revise` |
+| "Run Critic anyway" / "Retry Critic" (Pass A ①-b/①-c/②-b/③/④) — rev.10 | `/harness --critic` |
+| "Proceed as-is" (Pass A) — rev.10 | (명령 없음 — 같은 턴에서 Pass B로 진행, 쓰기 0) |
 
 **전달 매체는 사용자 메시지다.** 이것이 결정 A의 직접적 귀결이며, PROBE §3 안 A/B가 폐기된 이유
 (「모델이 쓴 값은 모델이 위조한다」)를 **회피가 아니라 인정**으로 처리한 것이다: 게이트의 산출을
@@ -601,7 +621,7 @@ rev.8은 O와 「나머지」 두 부류만 두고 나머지를 전부 ×3으로
 | §Mode Gate | | 2,560 | B2 | build도 세그먼트 opt-in을 해석. C4 미계상 |
 | §Standard Status Format | | 764 | B2 | C4 미계상 |
 | §run_style | | 2,639 | B2 | Generate/Verify/Evaluate 뒤 halt. **Plan→Gate 경계 문장은 재작성**(rev.9 (b)). C4 미계상 |
-| §Scale Assessment | render 형식 | ≤1,235 | B2 (harness·**gate**) | Pass B가 `state.scale.*` 동결값으로 블록을 찍는다. compute(§1·§3·§4·Signal Domain·INLINE Fallback)는 O harness. **render 조각을 §Compute-once 절에서 분리할 수 있는지는 C5 착수 시 실측** — 이 표에서 유일하게 미확정인 행 |
+| §Scale Assessment | render 형식 | 5,525 (rev.10 실측 — §1~§4 2,516 + Signal Domain 1,530 + INLINE Fallback 1,477, 연속 구간; rev.9의 ≤1,235는 §1~§4 일부만 센 추정이었다) | B2 (harness·**gate**) | Pass B가 `state.scale.*` 동결값으로 블록을 찍는다. gate는 `measured: 없음/손상됨`과 마감 공시 줄까지 렌더하므로 Signal Domain·INLINE Fallback도 필요하다. 헤더 blockquote + §Compute-once(2,044 B)만 O harness(파일별 머리말). **확정(rev.10)** |
 
 #### 5.4.4 BLOCK-sync 그룹 — `verify_block_sync.py` `GROUPS` 등록안
 
@@ -625,7 +645,8 @@ rev.8은 O와 「나머지」 두 부류만 두고 나머지를 전부 ×3으로
 | 12 | `hx-handoff-fields` | harness, build | 475–490 | 791 |
 | 13 | `hx-state-machine` | harness, build | 612–639 | 1,273 |
 | 14 | `hx-path-validator` | harness, gate, build | 2642–2680 | 2,244 |
-| (15) | `hx-scale-render` | harness, gate | §Scale Assessment render 조각 — **C5 실측 후 확정** | ≤1,235 |
+| 15 | `hx-scale-render` | harness, gate | 521–610 (§1 → §INLINE Fallback) — **rev.10 확정** | 5,525 |
+| 16 | `hx-model-selection` | harness, build | 2594–2603 — **rev.10 추가**(build가 디스패치 역할 맵을 실행) | 1,207 |
 
 **왜 6이 아니라 14인가.** BLOCK은 연속 구간이고, 공유 산문 사이에 소유자 전용 조각이 끼면 블록이 갈라진다.
 §Session Recovery 하나가 4개(#6·#7·#8·#9)로 갈라지는 이유가 정확히 그것이다 — 6.5·7(b)·jump row가
@@ -673,7 +694,8 @@ Evaluate in order; the first match halts.
 | gate 신작 | — | +≈1.5 KB | §5.4.5 |
 | 재앵커 | 62건 | 62건 | 불변 |
 | 동기화 다중도 | 「영구 3중」 | 3중 3그룹 / 2중 11그룹 | §5.4.4 |
-| 동기화 없는 복제 | — | 1,474 B (§Architecture Principles #3·#5·#6) | 공시 |
+| 동기화 없는 복제 | — | 1,474 B (§Architecture Principles #3·#5·#6) + §User Interaction Rules 2줄 | 공시 |
+| 전체 + #15·#16 실측 (rev.10) | — | **+39.4 KB** + #16 1.2 KB + gate 신작 ≈1.5 KB | #15 5,525 − 1,235 = +4.3 KB |
 
 B2 15,815 = SR 9,505 + SB 1,237 + OLC-inline 1,101 + Sub-agent RV 1,321 + SM 1,273 + AP #3·#6 1,378.
 B3 5,090 = OLC core 2,750 + Path Validator 2,244 + AP #5 96. 전체 기준은 여기에 preamble B2 7,618
@@ -709,7 +731,7 @@ PY
 | **C2** | 세대 카운터 도입 | `skills/harness/SKILL.md` 단일 파일. §3.3의 사이트 전건 | 린트 7종 rc=0. 분할 전이므로 인용 무영향 |
 | **C3** | epic-exit 분리 → §Step 3.6 승격 — **완료** | `skills/harness/SKILL.md` 블록 이동 + 인용 15곳, `skills/handoff/SKILL.md` 1곳, `HARNESS_STEP_IDS` 11→12 재고정(같은 커밋) | 린트 7종 rc=0, 정본 Step id 12개 (**충족**) |
 | **C4** | 공유 계약 추출 | `templates/_shared/` 6파일 신설 + `skills/harness/SKILL.md`에서 참조로 대체. **R-1 프로브 선행** | 린트 7종 rc=0 + 프로브 기록 |
-| **C5** | 3분할 | 스킬 디렉터리 2개 신설 + `SECTION_REF_TARGETS` 등록(C1이 가능하게 만든 것) + 핀 재고정 + 경계 넘는 `§Step` 인용 재앵커 + **BLOCK 그룹 14개 등록(§5.4.4; #15는 실측 후) + gate 진입 검사 신작(§5.4.5) + rev.9 (a)~(e) 문면 반영** | 린트 7종 rc=0, `verify_block_sync.py`가 새 그룹 전건 대조, gate frontmatter에 `Glob` 포함(AC-14) |
+| **C5** | 3분할 | 스킬 디렉터리 2개 신설 + `SECTION_REF_TARGETS` 등록(C1이 가능하게 만든 것) + 핀 재고정 + 경계 넘는 `§Step` 인용 재앵커 + **BLOCK 그룹 16개 등록(§5.4.4, rev.10) + gate 진입 검사 신작(§5.4.5) + rev.9 (a)~(e) 문면 반영 + Pass A 리다이렉트(rev.10)** | 린트 7종 rc=0, `verify_block_sync.py`가 새 그룹 전건 대조, gate frontmatter에 `Glob` 포함(AC-14) |
 | **C6** | description 문안 + 예산 | 3스킬 문안 + `PER_SKILL_CEILING` 3항목 + `TOTAL_CEILING` 상향 | `verify_description_budget.py` rc=0 |
 
 ### 6.1 C1 실측 (2026-09-04, base `b1df306`)
@@ -880,14 +902,14 @@ OK: 9 sync group(s), 51 marker site(s)
 | AC-4b | epic 세션이 §Step 8에 **진입하지 않음** — 무게이트 구현-스킬 진입 경로가 소멸 | §Step 3.5 → §Step 3.6 직행, §Step 8 라우팅에서 epic 분기 제거 (**충족**) |
 | AC-4c | 이동으로 거짓이 된 문장이 남지 않음 | §Session Boundary 적용범위 2곳 정정 (**충족**) |
 | AC-4d | 「20 of 80 caught」류 수치를 추정하지 않고 실측 | sentinel 80회 실행 → **21 of 80** (**충족**) |
-| AC-5 | C5 적용 후 린트 7종 rc=0, **SYNC 9그룹 무손상** | `verify_sync_markers.py` → `9 sync group(s), 51 marker site(s)` |
+| AC-5 | C5 적용 후 린트 7종 rc=0, **SYNC 9그룹 무손상** | `verify_sync_markers.py` → `9 sync group(s), 51 marker site(s)` — **rev.10 정정: 53**(블록 복제로 `session-conflict`·`handoff-state-record` 마커가 build에 1곳씩 생긴다) |
 | AC-6 | C5의 재앵커가 `skills/team-memory/SKILL.md` 앵커 2건을 **건드리지 않음** | `git diff` 해당 2행 부재 |
 | AC-7 | `harness-gate`의 frontmatter가 `Bash`·`Write`·`Edit`를 **이름 형식으로** 나열 (스코프 패턴 금지 — no-op) | frontmatter 직접 확인 |
 | AC-8 | `harness-gate` 세션에서 `Bash` 호출이 `No such tool available`로 실패 | **라이브 프로브 1회** |
 | AC-9 | **R-1 프로브**: `templates/_shared/` 파일을 이름으로만 인용한 스킬이 그 계약을 실제로 준수하는지 | **라이브 프로브 1회 — C4 착수 전 필수** |
 | AC-10 | C6 적용 후 `verify_description_budget.py` rc=0, `TOTAL_CEILING`이 같은 커밋에서 상향 | 린트 + `git show` |
 | AC-11 | 이 spec의 핵심 3건(광고 명제 확정 / phase 감사 전용 강등 / 3분할)이 **ROADMAP에 등재**됨 | `docs/`가 gitignored이므로 영속 경로 확보 |
-| AC-12 | C5 적용 후 §5.4.4의 BLOCK 그룹이 `verify_block_sync.py` `GROUPS`에 전건 등재되고 rc=0 — 그룹 수는 14(#15 실측 결과에 따라 15) | `python scripts/verify_block_sync.py` → 기존 2 + 신규 N 그룹 |
+| AC-12 | C5 적용 후 §5.4.4의 BLOCK 그룹이 `verify_block_sync.py` `GROUPS`에 전건 등재되고 rc=0 — 그룹 수는 16(rev.10) | `python scripts/verify_block_sync.py` → 기존 2 + 신규 N 그룹 |
 | AC-13 | `harness-gate`에 AskUserQuestion 사이트가 **정확히 1개**(HARD GATE #1; Pass A/B는 한 태그 안의 두 패스)이고, 진입 검사(§5.4.5)에는 "Restart"/"Stop"/"Delete" 문자열이 없음 | `grep -c AskUserQuestion skills/harness-gate/SKILL.md`, 진입 검사 절 grep |
 | AC-14 | `harness-gate` frontmatter `disallowed-tools`가 `Bash`·`Write`·`Edit`에 더해 `Glob`을 이름 형식으로 나열 | frontmatter 직접 확인 (AC-7의 확장) |
 | AC-15 | C5 적용 후 §Scale Assessment·§run_style에 「render (2)·(3) 상호배타」/「auto는 Step 2→2.6→3 직행」 문장이 남아 있지 않음 (rev.9 (a)(b)) | 해당 절 grep |
@@ -906,4 +928,5 @@ OK: 9 sync group(s), 51 marker site(s)
 - **`skills/harness/SKILL.md` 안에 그 파일의 §citation 수치를 적지 마라** — 자기무효화가 3회 발화한 이력.
 - **2분할 실측치를 3분할에 그대로 쓰지 마라** — 52/10은 **두 번째 컷**의 비용일 뿐이다.
 - **gate가 실행할 수 없는 옵션을 gate에 렌더하지 마라** — "Restart"/"Stop"/"Delete and start"는 `Bash`가 없는 스킬에서 거짓 약속이다. gate의 진입 검사는 §5.4.5의 리다이렉트뿐이다.
-- **rev.8의 +62 KB를 인용하지 마라** — §5.4.6이 대체했다(6절 기준 +26 KB / 전체 +35 KB).
+- **rev.8의 +62 KB를 인용하지 마라** — §5.4.6이 대체했다(6절 기준 +26 KB / 전체 +35 KB; rev.10 실측 +39 KB).
+- **Pass A의 Auto-revise / Run Critic anyway / Retry Critic을 gate에서 디스패치하지 마라** — 리다이렉트(§2.2, rev.10)뿐이다.
