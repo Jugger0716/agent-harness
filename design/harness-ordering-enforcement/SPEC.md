@@ -5,7 +5,7 @@
 >
 > 본문은 그 밖의 한 글자도 수정하지 않았다.
 
-# SPEC — `harness-ordering-enforcement` (rev.6)
+# SPEC — `harness-ordering-enforcement` (rev.7)
 
 > **성격**: 후속 에픽의 요구사항 명세. 입력은 `docs/harness/plan/REMEASURE-harness-split.md`(gitignored)와
 > `docs/harness/plan/PROBE-FINDINGS-enforcement.md`(gitignored), 그리고 `ROADMAP.md`의 W7 행·phase-P 4행.
@@ -54,6 +54,34 @@
   기본은 **미보유**로 두었으나, Reading Order 성격의 파일 존재 확인에 필요한지 미검증.
 
 ### Changed in this revision
+
+**rev.7 (2026-09-07) — R-1 프로브 완료(AC-9). 결정 ④가 명세대로는 구현 불가로 판정됐다.**
+
+프로브는 라이브 관측 2건이다.
+
+1. **이름 인용은 런타임에 아무것도 전달하지 않는다.** 이 spec을 쓰는 세션에서 `/handoff`의
+   SKILL.md가 전문 주입됐고 그 본문은 `templates/_shared/mode_gate.md` rule 3을 이름으로
+   인용하는데, 그 파일 내용은 주입되지 않았다. 스킬은 자기 SKILL.md만 받는다 — §5.3이
+   R-1으로 세워둔 가설이 확인된 것이 아니라, **(가)안(런타임 Read)이 유일한 경로임이
+   확인**된 것이다.
+2. **저장소의 실제 관례는 추출이 아니다.** `mode_gate.md`는 14,500 B이고, 이를 인용하는
+   9개 스킬이 각자 §Mode Gate 섹션을 **2,081~4,003 B 인라인으로** 갖는다(실측). 그리고 그
+   인라인은 단일소스의 요약이 아니라 **각 스킬 자신의 해석 표**다. 공유 파일은 규약과
+   근거를, 스킬은 자기가 실행할 규칙을 갖는 분업이다. 인용만 하고 아무것도 인라인하지 않는
+   두 스킬(`handoff`, `team-memory`)은 애초에 그 해석이 필요 없는 inline-only 스킬이다.
+
+**그래서 §5.2의 「이름으로 인용하고 본문을 restate하지 않는다」는 이 6개 절에 적용될 수 없다.**
+이것들은 참조 문서가 아니라 **오케스트레이터가 실행하는 계약**이다 — §Session Recovery는
+phase 기계, §State Machine은 전이표, §Output Language Contract는 모든 출력을 지배한다.
+이름만 남기면 런타임에 계약이 사라지고, 런타임 Read로 메우면 §Architecture Principles #1의
+「reads no intermediate files」 예외 7개가 13개가 된다.
+
+**결정 ④는 재선택이 필요하다.** 측정이 지지하는 형태는 「추출 vs 복제」가 아니라 **소유권 분할**
+이다: 6개 절 중 실행 주체가 갈리는 것은 스킬별로 **쪼개고**(§Session Recovery의 phase 라우팅은
+harness가 1~3.6, build가 4~8만 가지면 된다 — 복제가 아니라 분할이다), 실제로 동일해야 하는
+작은 것만 BLOCK-sync로 복제하며(§Output Language Contract 4,717 + §Sub-agent Return Value
+Rules 1,320 = 6,037 B), 규약·근거 서술은 `templates/_shared/`에 남긴다. 40,734 B 전체를 한
+축으로 처리하려던 것이 오류였다.
 
 **rev.6 (2026-09-04) — C3 완료.** §Step 8의 `If epic exit:` 블록을 §Step 3.5 직후 `#### Step 3.6:
 Epic Exit`으로 승격했다. §0-B의 재해석대로 착지점은 「§Step 3.5 뒤」가 아니라 **게이트 직후
@@ -426,8 +454,11 @@ Modify 1회당 **+2회**.
   요약본들 사이의 드리프트를 막을 lint가 필요하다(BLOCK-sync는 **byte-identical** 블록용이라 요약본에는
   그대로 쓸 수 없다).
 
-**이 spec은 (가)를 기본으로 하되, 구현 전에 라이브 프로브 1회로 확인할 것을 요구한다** — AC-9 참조.
-프로브 없이 (가)를 가정하고 40 KB를 옮기면, 실패 시 롤백 비용이 이 에픽 최대가 된다.
+**프로브 완료(2026-09-07, rev.7) — (가)가 유일한 경로이고, 그래서 §5.2 자체가 성립하지 않는다.**
+이름 인용은 런타임에 내용을 전달하지 않으며(라이브 관측), 저장소의 실제 관례도 추출이 아니라
+「스킬이 실행할 규칙은 스킬 안에, 규약은 공유 파일에」다(mode_gate.md 14,500 B ↔ 9개 스킬의
+인라인 2,081~4,003 B, 실측). 결정 ④는 재선택 대상이며 rev.7의 변경 요약이 대안을 적었다.
+**프로브를 먼저 돌린 것이 이 에픽 최대의 롤백 비용을 막았다** — 이 순서가 AC-9의 존재 이유다.
 
 ---
 
