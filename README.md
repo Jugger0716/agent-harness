@@ -103,7 +103,9 @@ matches what you are measuring; they are not interchangeable.
 
 | Skill | Command | Description |
 |-------|---------|-------------|
-| **Harness** | `/harness <task>` | 3-Phase (Planner -> Generator -> Evaluator) orchestrator. Inline single path by default; opt-in workflow path (ultracode or `--mode standard/multi`) runs plugin-shipped native Workflow segment scripts with schema-validated returns. Works with or without git. _(formerly `/workflow` — old name kept as a deprecation alias)_ `/harness doctor` gives a read-only environment diagnostic. |
+| **Harness** | `/harness <task>` | Entry point of the 3-Phase (Planner -> Generator -> Evaluator) pipeline: Setup, Convention Scan, Plan and Plan Critic, then every session ends at `plan_done` with `Next → /harness-gate`. Inline single path by default; opt-in workflow path (ultracode or `--mode standard/multi`) runs plugin-shipped native Workflow segment scripts with schema-validated returns. Works with or without git. _(formerly `/workflow` — old name kept as a deprecation alias)_ `/harness doctor` gives a read-only environment diagnostic. |
+| **Harness gate** | `/harness-gate` | HARD GATE #1 (spec confirmation) as its own skill, with `Bash`, `Write`, `Edit`, `Glob` and every sub-agent tool removed — the turn that renders the gate cannot modify a file or run a command. It reads `state.json` and `spec.md`, asks once, and prints the next command for you to type (`/harness-build`, `/harness-build --epic`, or a `/harness --modify` / `--auto-revise` / `--critic` re-entry). Writes nothing. |
+| **Harness build** | `/harness-build [--epic \| generate \| verify \| evaluate]` | The implementation half: Slice Plan / Epic Exit, Generate, Verify (Layer 1), Evaluate (Layer 2+3), Verdict loop, Cleanup. Performs the `generate_ready` write on entry; consumes only a `spec.md` the gate confirmed. Not an entry point. |
 | **Refactor** | `/refactor <target>` | Safe, behavior-preserving code structure improvement. Single (inline) or multi/comprehensive (2-3 analysts + cross-critique, native Workflow path). Execution stays gated and step-tested in the orchestrator. |
 | **Migrate** | `/migrate <target> [--from v4 --to v5]` | Staged migration of frameworks, libraries, and dependencies. Single (inline) or multi (parallel external-research + codebase-impact analysts + synthesis, native Workflow path) with WebSearch research. Staged execution stays gated and step-tested in the orchestrator. |
 | **Debug** | `/debug <error>` | Hypothesis-driven debugging with mandatory executable verification. Quick (inline) or deep (2 analysts + adversarial cross-verify, native Workflow path). |
@@ -189,14 +191,17 @@ inline-vs-workflow first.)
    whether to scan for existing conventions. Pick **Skip** for the demo — there is nothing to
    find yet.
 3. **HARD GATE #1 — spec confirmation** (this one has no short header of its own, unlike the
-   two above). The planner writes `docs/harness/<slug>/spec.md`, prints it, and stops. Read it.
-   Then answer **`Proceed`** — on the inline path that `--mode single` selects there is no scale
-   recommendation to lead with, so the option is undecorated; on the workflow path the same
-   option reads `Proceed as single`. The others are `Plan as epic` to split the work into
-   slices, `Modify` to edit the spec and re-confirm, and `Stop`.
+   two above). The planner writes `docs/harness/<slug>/spec.md`, prints it, and the `/harness`
+   session ends with `Next → /harness-gate`. Read the spec, then type **`/harness-gate`** — a
+   separate skill that holds no `Bash`, `Write` or `Edit`, so the turn that shows you the gate
+   cannot touch anything. Answer **`Proceed`** — on the inline path that `--mode single` selects
+   there is no scale recommendation to lead with, so the option is undecorated; on the workflow
+   path the same option reads `Proceed as single`. The others are `Plan as epic` to split the
+   work into slices, `Modify` to edit the spec and re-confirm, and `Stop`. The gate prints one
+   line — `/harness-build` — and you type that as your third message.
    **This is the one gate a successful run always shows you.**
 
-Then it implements, runs mechanical verification, and runs the evaluator review. On a clean
+Then `/harness-build` implements, runs mechanical verification, and runs the evaluator review. On a clean
 run there is nothing more to answer — you get a summary and the artifacts under
 `docs/harness/<slug>/`.
 
@@ -207,15 +212,18 @@ run there is nothing more to answer — you get a summary and the artifacts unde
 - **HARD GATE #3 — the auto-fix apply gate.** Renders only if you chose `Auto-fix proposal`
   above, and asks before the patch touches your files.
 
-So a green run answers **one** gate; a run that hits trouble answers up to three. **No file you
-wrote is touched before gate #1** — but the run is not inert before it either: Step 1 creates
-`.harness/`, switches to a `harness/<slug>` branch, and the planner writes the spec document, all
-before the gate renders. What waits for a gate is *your* code: implementation starts only after
-gate #1, and no auto-fix patch is applied before gate #3.
+So a green run answers **one** gate and types **three** commands; a run that hits trouble
+answers up to three gates. **No file you wrote is touched before gate #1** — but the run is not
+inert before it either: Step 1 creates `.harness/`, switches to a `harness/<slug>` branch, and the
+planner writes the spec document, all before the gate renders. What waits for a gate is *your*
+code: implementation starts only after gate #1, and no auto-fix patch is applied before gate #3.
+And the gate itself is structurally inert: the skill that renders it has no write tool at all,
+so nothing can be implemented in the same turn the spec is shown to you.
 
-**If you stop partway**, run `/harness` with no arguments in the same repository — it reads
-`.harness/state.json` and re-enters at the step you left. `/harness doctor` gives a read-only
-environment diagnostic and never touches that state.
+**If you stop partway**, run the skill that owns the phase you stopped in, with no arguments, in
+the same repository — `/harness` up to `plan_done`, `/harness-build` after it; each reads
+`.harness/state.json`, re-enters at the step you left, and names the other skill if the phase is
+not its own. `/harness doctor` gives a read-only environment diagnostic and never touches that state.
 
 ## Quick Start
 

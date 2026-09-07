@@ -10,6 +10,24 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
 
 ### Changed
 
+- **`/harness` is now three skills, and the spec-confirmation gate has no write tool.**
+  `skills/harness/SKILL.md` (Steps 1–2.6, ends every session at `plan_done`),
+  `skills/harness-gate/SKILL.md` (Step 3 only — `disallowed-tools` removes `Bash`, `Write`,
+  `Edit`, `Glob`, `Task`, `Agent`, `Workflow`, so the turn that renders HARD GATE #1 cannot
+  modify a file or run a command) and `skills/harness-build/SKILL.md` (Steps 3.5–8). The gate's
+  options print the next command for the human to type (`/harness-build`,
+  `/harness-build --epic`, `/harness --modify` / `--auto-revise` / `--critic`);
+  `phase → "generate_ready"` is written by `/harness-build` on entry and is never read as proof
+  the gate ran. Operative contracts the skills share are byte-identical BLOCK-sync copies (16
+  `hx-*` groups in `verify_block_sync.py`, three of them three-way); `verify_sync_markers.py`
+  pins all three files under `harness-steps`, and its SYNC floors moved with the copies
+  (`session-conflict` 7→8, `handoff-state-record` 2→3, `adhoc-dispatch` 12→13,
+  `slice-command-format` re-targeted at `harness-build`). A task now costs three user messages
+  minimum (`/harness` → `/harness-gate` → `/harness-build`) and a Modify two more. Description
+  budget: `harness` 470 → 555, plus `harness-gate` 401 and `harness-build` 379; `TOTAL_CEILING`
+  6841 → 7706. Design record: `design/harness-ordering-enforcement/SPEC.md` (rev.10) and
+  `PLAN-c5.md`; the split commit is `231e2f5`.
+
 - **History rewritten to drop files that had been committed at now-`.gitignore`d paths, and
   every commit sha this repository cites was re-pointed.** 1,883 blob paths — `.venv/` 1,862,
   `__pycache__/` 14, `docs/superpowers/*.md` 7 — were removed from all history with

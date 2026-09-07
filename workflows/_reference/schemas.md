@@ -199,7 +199,7 @@ const PlanResultSchema = {
 > `harness.plan.workflow.js`: `PlanResultSchema.required` lists `sliceHint` alongside `goal`,
 > `acceptanceCriteria` and `risks`, and `FRAG_SYNTHESIS_OUTPUT` carries a
 > `` `sliceHint` ← Scale Hint `` mapping marked `MANDATORY`. The consumers exist too —
-> `skills/harness/SKILL.md` §Step 3 and §Step 3.5 read `scale.slice_hint`.
+> `skills/harness-gate/SKILL.md` §Step 3 and `skills/harness-build/SKILL.md` §Step 3.5 read `scale.slice_hint`.
 >
 > What is still true, and is the part worth carrying forward: the INLINE path
 > (`templates/planner/planner_single.md`) does not produce `sliceHint`, so a consumer still

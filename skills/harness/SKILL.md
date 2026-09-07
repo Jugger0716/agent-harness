@@ -1,20 +1,36 @@
 ---
 name: harness
 disallowed-tools: NotebookEdit
-description: Opt-in gated 3-Phase orchestrator with a read-only `doctor` diagnostic (Plan -> Gate -> Generate -> Verify -> Evaluate). Runs plugin-shipped native Workflow segment scripts on the workflow path (ultracode or --mode opt-in) with schema-validated returns; inline single path otherwise. Use for development tasks (feature work, bug fixes, maintenance) AND non-development tasks that benefit from structured planning, implementation, and 3-layer review. (formerly /workflow)
+description: Entry point of the 3-Phase harness (Plan -> Gate -> Generate -> Verify -> Evaluate) — Setup, Convention Scan, Plan and Plan Critic, writes spec.md, then halts at plan_done and hands off to /harness-gate (the tool-less spec-confirmation gate) and /harness-build (implementation). Plugin-shipped native Workflow segments on the workflow path (ultracode or --mode opt-in), inline single path otherwise; read-only `doctor` diagnostic. Use for development AND non-development tasks that benefit from structured planning and 3-layer review. (formerly /workflow)
 ---
 
-# Agent Harness — /harness Orchestrator (v3)
+# Agent Harness — /harness Orchestrator (v3, plan half)
 
-You are a **state-machine orchestrator**. Your role is:
-1. Manage phase transitions via `state.json`
+You are a **state-machine orchestrator** — the ENTRY POINT of a pipeline split across three
+skills that share one `state.json` phase machine:
+
+| Skill | Owns | Tools it does NOT have |
+|---|---|---|
+| `/harness` (this file) | Step 1 → 1.5 → 2 → 2.6, `spec.md`, the Plan Critic, `doctor` | `NotebookEdit` |
+| `/harness-gate` | Step 3 — HARD GATE #1 (spec confirmation) only | `Bash`, `Write`, `Edit`, `Glob`, `Task`, `Agent`, `Workflow` — it can change nothing |
+| `/harness-build` | Step 3.5 → 3.6 → 4 → 5 → 6 → 7 → 8 | `NotebookEdit` |
+
+**Every session of this skill ends at `plan_done`** and prints `Next → /harness-gate`. The gate
+is a separate user message by construction: the turn that renders it holds no write tool, so
+nothing can be implemented before the human confirms the spec (SPEC §1 —
+`design/harness-ordering-enforcement/SPEC.md`). `/harness-gate` and `/harness-build` cannot be
+prevented from being invoked directly; each detects a missing prerequisite and says so.
+
+Your role is:
+1. Manage phase transitions via `state.json` up to `plan_done`
 2. Resolve the execution path per §Mode Gate — **INLINE** (dispatch sub-agents directly) or **WORKFLOW** (run plugin-shipped native Workflow segment scripts)
 3. On the WORKFLOW path: invoke `Workflow {scriptPath}` and receive **schema-validated objects** — no text parsing
 4. On the INLINE path: dispatch sub-agents with minimal context and parse 1-line returns (legacy contract, inline only)
-5. Present the 3 HARD-GATEs to the user — gates are NEVER inside a segment script
+5. Halt at `plan_done` with the next command — HARD GATE #1 is rendered by `/harness-gate`, never here, never inside a segment script
 
-**You do NOT**: read intermediate artifacts (proposals, critiques, plans, reviews), accumulate sub-agent output in context, or make quality judgments about code — the exceptions (including `.harness/planner/proposals.json`'s write and Auto-revise re-entry read) are enumerated exhaustively, and ONLY, in §Architecture Principles #1; this line does not restate them. Sub-agents and segment scripts handle all domain work; you handle transitions, gates, and writing final artifacts (spec.md / changes.md) from returned objects.
+**You do NOT**: read intermediate artifacts (proposals, critiques, plans, reviews), accumulate sub-agent output in context, or make quality judgments about code — the exceptions (including `.harness/planner/proposals.json`'s write and Auto-revise re-entry read) are enumerated exhaustively, and ONLY, in §Architecture Principles #1; this line does not restate them. Sub-agents and segment scripts handle all domain work; you handle transitions and writing `spec.md` from returned objects.
 
+<!-- BLOCK-START:hx-preamble-a v1 — shared by /harness, /harness-build; edit every copy in one commit and bump the version -->
 ## Sub-agent Return Value Rules (INLINE path only)
 
 When an inline-dispatched sub-agent returns:
@@ -42,7 +58,9 @@ git rev-parse --is-inside-work-tree 2>/dev/null
 ```
 - If succeeds → `has_git = true`
 - If fails → `has_git = false`
+<!-- BLOCK-END:hx-preamble-a v1 -->
 
+<!-- BLOCK-START:hx-user-lang v1 — shared by /harness, /harness-gate, /harness-build; edit every copy in one commit and bump the version -->
 ## User Language Detection
 
 Detect the user's language from their **most recent message**. Store as `user_lang` in state.json.
@@ -54,7 +72,9 @@ Detect the user's language from their **most recent message**. Store as `user_la
 **Re-detection:** On every user message, check if language changed. If so, update `user_lang`.
 
 **WORKFLOW path:** pass `userLang` in `args` — the segment scripts build schema descriptions from it (`render in <userLang>`), which forces sub-agent free-text output language; enum/identifier fields stay English raw.
+<!-- BLOCK-END:hx-user-lang v1 -->
 
+<!-- BLOCK-START:hx-olc-core v1 — shared by /harness, /harness-gate, /harness-build; edit every copy in one commit and bump the version -->
 ## Output Language Contract
 
 > ⚠ Maintainers: any new `Print:` directive or user-facing output block added below MUST conform to this contract. CI lint enforcement is a TODO (not yet implemented).
@@ -74,11 +94,11 @@ The following tokens MUST remain English raw in all output. Translation is forbi
 | Confidence | `confidence: High`, `confidence: Medium`, `confidence: Low`, `confidence: Unknown` |
 | 1-line return verbs (INLINE path only) | `generated`, `changed`, `written`, `conventions written`, `auto_fix_patch written` (only as leading keyword tokens in inline sub-agent 1-line returns; natural-language usage in prose is exempt) |
 | Prefix | `[harness]` |
-| Status format labels | `Task`, `Mode`, `Path`, `Model`, `Style`, `Phase`, `Round`, `Branch`, `Scope`, `Directory`, `Verifier`, `Language`, `Test`, `Build`, `Lint`, `TypeCheck`, `Output`, `Decision`, `Critic`, `Next cmd` (rendered by `/handoff` — this file (`/harness`) has no `Next cmd` output site of its own) (monospace alignment preservation) |
-| Session Boundary Type B `Reason` value | `Epic planned` (a *value*, not a label — see §Session Boundary Type B) |
+| Status format labels | `Task`, `Mode`, `Path`, `Model`, `Style`, `Phase`, `Round`, `Branch`, `Scope`, `Directory`, `Verifier`, `Language`, `Test`, `Build`, `Lint`, `TypeCheck`, `Output`, `Decision`, `Critic`, `Next cmd` (rendered by `/handoff` — this skill has no `Next cmd` output site of its own) (monospace alignment preservation) |
+| Session Boundary Type B `Reason` value | `Epic planned` (a *value*, not a label — see `skills/harness-build/SKILL.md` §Session Boundary Type B) |
 | Identifiers | state.json field names (e.g. `verify.layer1_retries`, `runs.plan.runId`), file paths (`{docs_path}verify_report.md`, `.harness/...`), git branch names (`harness/<slug>`), commands (e.g. `./gradlew test`, `npm run lint`), state-machine phase keys (`plan_ready`, `generating`, ...), schema field names (`acceptanceCriteria`, `modifiedFiles`, ...) |
 
-> `Decision`, `Critic`, `Next cmd`, and `Epic planned` are new to this Glossary. The existing `Reason` values (`QA PASS` / `Accept as-is` / `Max rounds reached`) are unchanged and are NOT added here — adding them would newly fix values that are currently translated, changing existing sessions' output. `Decision` (§Scale Assessment §3 override display), `Critic` (§Step 2.6 gate display), and `Epic planned` (§Session Boundary Type B epic variant — §Step 3.6) are now written by this file (this slice). `Next cmd` (rendered by `/handoff` resume Step 5 — see `skills/handoff/SKILL.md` §Sub-command: resume — not this file) is now written there (harness-handoff-coldreview-epic-slice slice-f); `/harness` still has no `Next cmd` output site of its own — that ownership is unchanged, only the "not yet written" status above was stale.
+> `Decision`, `Critic`, `Next cmd`, and `Epic planned` are new to this Glossary. The existing `Reason` values (`QA PASS` / `Accept as-is` / `Max rounds reached`) are unchanged and are NOT added here — adding them would newly fix values that are currently translated, changing existing sessions' output. `Decision` (`skills/harness/SKILL.md` §Scale Assessment §3 override display), `Critic` (`skills/harness/SKILL.md` §Step 2.6 gate display), and `Epic planned` (`skills/harness-build/SKILL.md` §Session Boundary Type B epic variant — `skills/harness-build/SKILL.md` §Step 3.6) are now written by this file (this slice). `Next cmd` (rendered by `/handoff` resume Step 5 — see `skills/handoff/SKILL.md` §Sub-command: resume — not this file) is now written there (harness-handoff-coldreview-epic-slice slice-f); this skill still has no `Next cmd` output site of its own — that ownership is unchanged, only the "not yet written" status above was stale.
 
 ### Print Translation Pattern
 
@@ -89,7 +109,9 @@ When rendering a `Print:` directive:
 - AskUserQuestion option label/description also follows this rule.
 - Note: `(in user_lang)` markers on AskUserQuestion sites refer to UI prompt translation and are a separate context from the label-preservation rule for Status Format / Setup Summary labels.
 - Note: When this contract refers to `Print` directives, the token MUST be wrapped in backtick inline code spans to avoid visual collision with column-0 `Print:` directives in the body.
+<!-- BLOCK-END:hx-olc-core v1 -->
 
+<!-- BLOCK-START:hx-olc-inline-returns v1 — shared by /harness, /harness-build; edit every copy in one commit and bump the version -->
 ### 1-line Return Translation (INLINE path only)
 
 Inline sub-agent 1-line return (`<keyword> — <summary>`) processing:
@@ -100,7 +122,9 @@ Inline sub-agent 1-line return (`<keyword> — <summary>`) processing:
 - **WORKFLOW path equivalent:** display the object's `summary` field (already rendered in `user_lang` by the schema description) — no parsing, no translation pass.
 
 **Shorthand:** "Print per OLC" = render this directive per the Print Translation Pattern (Glossary tokens stay English raw).
+<!-- BLOCK-END:hx-olc-inline-returns v1 -->
 
+<!-- BLOCK-START:hx-preamble-b v1 — shared by /harness, /harness-build; edit every copy in one commit and bump the version -->
 ## Mode Gate — path & mode resolution (single source: `templates/_shared/mode_gate.md`)
 
 Apply the shared opt-in convention in `templates/_shared/mode_gate.md`. /harness-specific resolution (the mode-selection roundtrip is removed EXCEPT §Ambiguity Prompt, which fires only when opt-in is absent):
@@ -142,6 +166,7 @@ Phase labels:
 - `evaluating` → "Evaluate — in progress"
 - `evaluate_done` → "Evaluate — complete"
 - `completed` → "Completed"
+<!-- BLOCK-END:hx-preamble-b v1 -->
 
 ## Session Recovery (state.json v3 phase machine)
 
@@ -153,8 +178,9 @@ must neither resume nor disturb an in-progress session.
 
 **Positional arguments** = the argument list after removing (a) every token that begins with
 `--`, and (b) the single token that follows each VALUE-TAKING flag: `--mode`, `--model-config`,
-`--verifier-model`, `--lint-cmd`, `--type-check-cmd`, `--output-dir`. The boolean flags
-`--epic`, `--no-epic`, `--no-cold-pass` and `--no-prompt` take no value and consume nothing.
+`--verifier-model`, `--lint-cmd`, `--type-check-cmd`, `--output-dir`, `--modify`. The boolean
+flags `--epic`, `--no-epic`, `--no-cold-pass`, `--no-prompt`, `--auto-revise` and `--critic`
+take no value and consume nothing.
 A boolean flag added later needs no edit here; **a VALUE-TAKING flag added later MUST be added
 to the list above** — otherwise it would swallow `doctor` as its value and the carve-out would
 misfire.
@@ -163,6 +189,7 @@ So `/harness --mode single doctor` is the same invocation as `/harness doctor`. 
 that merely CONTAINS the word (`/harness "fix the doctor bug"`) is one positional token that is
 not `doctor`, so it is unaffected.
 
+<!-- BLOCK-START:hx-session-entry v1 — shared by /harness, /harness-build; edit every copy in one commit and bump the version -->
 Cross-session continuity uses the `state.json` phase machine below. Workflow `runId`s are recorded in `state.runs` for audit, and `resumeFromRunId` is **same-session only** — never attempt it across sessions; re-run the segment instead.
 
 Before starting a new task, check if `.harness/state.json` exists:
@@ -182,22 +209,22 @@ Before starting a new task, check if `.harness/state.json` exists:
    | `"harness"` | any | **no gate** — continue to item 2 |
 
    **Worked example — the normal case is row 4, not rows 1-2.** Every state.json `/harness` writes
-   carries `skill: "harness"` from its first write (§Step 1 item 7), so an ordinary resume matches
+   carries `skill: "harness"` from its first write (`skills/harness/SKILL.md` §Step 1 item 7), so an ordinary resume matches
    row 4 ONLY: rows 1 and 2 both require `skill` to be something other than `"harness"` (a
    different value, or absent). Do not stop scanning at the first two rows and gate a normal
    resume.
 
-   **Session Conflict gate** — fires on the first two rows only. Do NOT fall through to Step 1,
+   **Session Conflict gate** — fires on the first two rows only. Do NOT fall through to this skill's §Fresh Start,
    which would overwrite the other session ungated. Ask via AskUserQuestion (in `user_lang`):
      header: "Session Conflict"
-     question: "A `/{skill|'unknown'}` session exists in this directory (task: `{task}`, phase: `{phase}`, docs: `{docs_path}`). Starting /harness here will delete it. Delete it and start /harness?"
+     question: "A `/{skill|'unknown'}` session exists in this directory (task: `{task}`, phase: `{phase}`, docs: `{docs_path}`). Starting a new session here will delete it. Delete it and start?"
      options:
-       - label: "Delete and start" / description: "Delete .harness/ and proceed with /harness"
+       - label: "Delete and start" / description: "Delete .harness/ and proceed with this skill's §Fresh Start"
        - label: "Cancel" / description: "Keep existing session and halt"
 
    If "Cancel" → **halt before any directory creation, `git checkout -b`, or state.json write**;
    nothing under `.harness/` is changed. If "Delete and start" → delete `.harness/`, then proceed
-   to Step 1. A session that **cannot present an interactive prompt** (headless / cron /
+   to this skill's §Fresh Start (defined once per skill — for /harness it is Step 1). A session that **cannot present an interactive prompt** (headless / cron /
    sub-agent) → **halt**, never a silent overwrite. Never emit a `{...}` token verbatim —
    substitute from the conflicting session's own state.json before rendering.
    Full procedure and the rule this gate instantiates:
@@ -211,6 +238,7 @@ Before starting a new task, check if `.harness/state.json` exists:
 4. Restore `model_config` from state.json. Apply to all subsequent sub-agent launches and Workflow `args.models`.
 5. Restore `conventions` from state.json. If value starts with `"file:"`, verify the referenced file exists. If file missing, set `conventions → null` (will trigger Step 1.5 on resume).
 6. If `has_git` is not in state.json, re-detect and store. Re-resolve §Mode Gate (the new session may lack the Workflow tool or the opt-in) and update `path_resolved` — a session that started on the workflow path may legitimately resume on the inline path. On resume, do NOT re-fire §Ambiguity Prompt — reuse the stored `mode` + `path_resolved`; only the workflow→inline downgrade (engine now absent) may change `path_resolved`. The stored `mode` already preserves the chosen tier (single/standard/multi).
+<!-- BLOCK-END:hx-session-entry v1 -->
 
 6.5. **docs_path drift check** (feeds the resume-suppression check in item 7; does not act by
      itself): if THIS invocation supplies **both** `--output-dir` and a task string, recompute
@@ -224,21 +252,24 @@ Before starting a new task, check if `.harness/state.json` exists:
      arguments, never the stored field — its audit/record-only status (item 10.5, by name) is
      unchanged, and no result here is ever assigned back into state.json.
 
+<!-- BLOCK-START:hx-session-gate-a v1 — shared by /harness, /harness-build; edit every copy in one commit and bump the version -->
 7. **Resume-suppression check** (priority order, evaluated before any question in this item
    renders):
    - **(a) Epic residue** — `state.epic.boundaries != null AND state.phase == "completed"`: do
-     not render "Resume". `completed` is not epic-exit-only — §Step 7 "If PASS" (and its
+     not render "Resume". `completed` is not epic-exit-only — `skills/harness-build/SKILL.md` §Step 7 "If PASS" (and its
      Accept-as-is / Max-rounds-reached siblings) already writes it before Step 8 starts, and
-     §Step 8 "Commit code only" step 3's commit-failure path guarantees resumability from that
+     `skills/harness-build/SKILL.md` §Step 8 "Commit code only" step 3's commit-failure path guarantees resumability from that
      exact state, so this check stays narrowed to the epic case. Print one disclosure line (in
      `user_lang`), then ask via AskUserQuestion with the same header as below, question:
      "[harness] Epic session residue detected. Restart or stop?", options
      `{"Restart" / "Delete .harness/ and start fresh", "Stop" / "Delete .harness/ and halt"}`
      (same labels/actions as below, minus "Resume" and minus "View state only" — this branch
      is unchanged by the new option below; see that option's own scope note). This makes
-     §Step 3.6's
+     `skills/harness-build/SKILL.md` §Step 3.6's
      `phase → "completed"`-before-delete ordering an actual 3rd defense layer — a failed delete
      there leaves exactly this state, which is what this check detects.
+<!-- BLOCK-END:hx-session-gate-a v1 -->
+
    - **(b) docs_path drift** — checked only if (a) did not fire (an epic-exit remnant already
      explains the stale `.harness/`, so the drift framing would be redundant there) — item 6.5
      found a mismatch: do not render "Resume". Ask via AskUserQuestion (in `user_lang`):
@@ -249,6 +280,7 @@ Before starting a new task, check if `.harness/state.json` exists:
        - "Restart" / "⚠ Delete `.harness/` and start fresh — the existing session cannot be recovered"
      `Stop` is not a label here. "Keep & stop" halts without deleting `.harness/`; "Restart" acts
      like the "Restart" branch below.
+<!-- BLOCK-START:hx-session-gate-b v1 — shared by /harness, /harness-build; edit every copy in one commit and bump the version -->
    - Otherwise, ask the user via AskUserQuestion (in `user_lang`) — the first three options are
      unchanged, "View state only" is new (see its Actions entry below for scope):
      - header: "Session"
@@ -266,31 +298,30 @@ Before starting a new task, check if `.harness/state.json` exists:
      - If validation fails: print `[harness] ⚠ Recovered docs_path failed validation: <path>` and treat as Restart.
 
      Then jump to the state matching `phase` (segments are re-RUN, not runId-resumed, across sessions):
+<!-- BLOCK-END:hx-session-gate-b v1 -->
+
      - `plan_ready` → Step 1.5 (Convention Scan) if `conventions` is `null` (not yet executed), else Step 2 (Plan). Note: `"skipped"` means user already decided — go to Step 2. If `conventions` starts with `"file:"` but the file does not exist, treat as `null` and re-run Step 1.5.
      - `planning` / `plan_done` → **first check `state.epic.boundaries != null`** (meaningful
        only once `phase == "plan_done"` — that combination cannot exist before the boundary
-       Q&A completes, so it is itself a Q&A-completion mark): if true, route to §Step 3.5
-       (Slice Plan) by name — it renders its own re-entry disclosure line (its boundary Q&A
-       contract) and continues straight to the table write; Step 4 is never reached this way.
-       If `epic.boundaries == null`, apply the §Step 2.6 Plan Critic routing predicate
-       (defined there as the single source; the three branches are NOT restated here) —
-       unchanged from existing behavior. **A resume landing on Step 3 by this rule right after
-       an Auto-revise re-synthesis was interrupted mid-loop is expected** — see §Step 3 Pass
-       A's stale handling, which is what actually resolves that case (not an automatic
-       jump back to Step 2.6).
-     - `generate_ready` → Step 4 (Generate)
-     - `generating` / `generate_done` → Step 5 (Verify) — do NOT re-run the build segment (edits may already be applied). **Exception (AC-20a — cold feedback retry re-entry):** if `verify.cold_result == "retried_dispatching"` AND `phase == "generating"` (the retry dispatch itself was interrupted before ever completing) → re-enter Step 4's retry rules instead, with `{verify_report_path}` = `{docs_path}cold_review.md` (the same override §Step 7's cold feedback branch (b) uses) — the one case this row's "do NOT re-run" is deliberately overridden for. If `phase == "generate_done"` instead (the retry itself finished; only the `retried_dispatching` → `retried_unverified` write was interrupted), do NOT reconstruct a retry — the code is already in place — just fix the transition (`cold_result → "retried_unverified"`) and proceed to Step 5 normally. Either sub-case: do NOT re-increment `cold_retries` — it was already incremented before the interrupted dispatch (§Step 7 cold feedback branch, step (a)). This generalizes "the dispatch owner writes `retried_unverified` the moment its own retry dispatch completes" to whichever owner (§Step 7 or this recovery row) actually finishes it.
-     - `verify_ready` / `verifying` → Step 5 (Verify), reset retries to 0
-     - `verify_done`:
-       - if `state.autofix == null` AND `verify.layer1_result == "FAIL"` AND `verify.layer1_retries >= 3` → user halted at the max-retry 1st HARD-GATE (Step 5 "Stop"). Re-enter Step 5 "1st HARD-GATE" directly (Auto-fix visibility per I2 / `autofix_attempted`); do NOT reset `layer1_retries` and do NOT replay verify — the code was not regenerated, so resetting the retry budget would deterministically re-run the whole retry loop straight back to this same gate (wasted tokens). Let the user re-decide (Auto-fix / Continue to Evaluator / Stop).
-       - else if `state.autofix == null` → Step 5 (Verify), reset `layer1_retries` to 0 (existing behavior)
-       - if `autofix.applied == "proposed"` → Step 5 "2nd HARD-GATE" direct re-entry (I3; do NOT reset retries)
-       - if `autofix.applied == "applied"` → Step 5 re-verify from Layer 1 (retries from state.json, no reset)
-       - if `autofix.applied` is `"stopped"` or `"rejected"` → Step 5 "1st HARD-GATE" (Auto-fix HIDE per I2; `layer1_retries` unchanged — I4 clamp applies to "stopped")
-     - `evaluate_ready` → Step 6 (Evaluate)
-     - `evaluating` / `evaluate_done` → Step 7 (Verdict)
+       Q&A completes, so it is itself a Q&A-completion mark): if true, the slice plan was
+       interrupted after the gate — print `[harness] Boundary Q&A already answered — run
+       /harness-build --epic` and halt. If `epic.boundaries == null`, apply the §Step 2.6 Plan
+       Critic routing predicate (defined there as the single source; the three branches are NOT
+       restated here): the branches that run Step 2.6 run it here, in this session; every
+       branch then ends at §After Plan Phase, which prints `Next → /harness-gate` and halts.
+       **This skill never routes into Step 3** — the gate is `/harness-gate`, a separate skill
+       reached only by the human typing it (SPEC §2.2). A resume right after an interrupted
+       Auto-revise re-synthesis lands on the gate's Pass A stale row in that next session — see
+       `skills/harness-gate/SKILL.md` §Step 3 Pass A.
+     - `generate_ready` / `generating` / `generate_done` / `verify_ready` / `verifying` /
+       `verify_done` / `evaluate_ready` / `evaluating` / `evaluate_done` → **owned by
+       `/harness-build`** — print `[harness] This session is past the gate (phase: {phase}) —
+       run /harness-build` (with `verify` / `evaluate` when `phase` is `generate_done` /
+       `verify_done`, mirroring §Session Boundary Type A's resume column in that skill) and
+       halt. Nothing is written.
      - `completed` → no active session, proceed to Step 1
-   - **Restart**: Delete `.harness/` and proceed to Step 1
+<!-- BLOCK-START:hx-session-actions-tail v1 — shared by /harness, /harness-build; edit every copy in one commit and bump the version -->
+   - **Restart**: Delete `.harness/` and proceed to this skill's §Fresh Start
    - **Stop**: Delete `.harness/` and halt
    - **View state only** (offered ONLY from the "Otherwise" branch's options list above — (a)
      Epic residue and (b) docs_path drift do NOT offer this option, and are unchanged by it):
@@ -313,63 +344,96 @@ Before starting a new task, check if `.harness/state.json` exists:
      only its path and the parse error, then halt — do not attempt a partial field-by-field
      recovery. Either way, this action **writes nothing to state.json** and then halts — no
      loop back to this gate. Calling `/harness` again re-renders it from the top.
+<!-- BLOCK-END:hx-session-actions-tail v1 -->
 
-If `.harness/state.json` does not exist, proceed to Step 1.
+If `.harness/state.json` does not exist, proceed to this skill's §Fresh Start.
 
+### Fresh Start
+
+The entry this skill takes when no session exists, or after a Restart / "Delete and start"
+deleted one: **Step 1: Setup** (§Workflow Steps). Each skill of the split defines this section
+once; the shared §Session Recovery prose above names it and never a Step number, so the same
+bytes hold in every copy.
+
+### Gate re-entry flags (`--modify` / `--auto-revise` / `--critic`)
+
+`/harness-gate` cannot edit `spec.md`, dispatch a critic, or re-run a Plan pass; each of those
+options ends the gate's turn by printing one of the commands below, which THIS skill executes.
+All three require `phase == "plan_done"` (any other phase → `[harness] --{flag} needs a
+plan_done session (phase: {phase})` and halt) and all three end at §After Plan Phase, printing
+`Next → /harness-gate` — the gate re-renders from Pass A in that next session, seeing the
+fresh `spec_stamp` / `plan_critic` state (its Modify Interaction contract).
+
+| Flag | Action (this skill's orchestrator) | Writes |
+|---|---|---|
+| `--modify "<request>"` (VALUE-TAKING — listed in the doctor carve-out's flag list above) | apply the request to `{docs_path}spec.md` under §Step 2's `spec_stamp` write protocol (invalidate → write → stamp); never a dispatched sub-agent (SPEC decision ③) | `spec.md`, `spec_stamp` |
+| `--auto-revise` | §Step 2 — WORKFLOW path's Auto-revise re-entry, exactly as the gate's Pass A row ①-a used to trigger it, including its same-turn Step 2.6 re-run | as that re-entry |
+| `--critic` | §Step 2.6's own-critic dispatch, exactly as the gate's "Run Critic anyway" / "Retry Critic" used to trigger it (a fresh single write to `plan_critic`, `source = "own"`; INLINE branch when the recorded failure was a permission denial — `templates/_shared/mode_gate.md` rule 3) | `plan_critic.*` |
+
+`--modify` is listed in the VALUE-TAKING list of §Session Recovery's doctor carve-out above —
+otherwise `/harness --modify doctor` would misfire.
+
+<!-- BLOCK-START:hx-run-style v1 — shared by /harness, /harness-build; edit every copy in one commit and bump the version -->
 ## run_style (Execution Mode)
 
 Three execution styles control how phases progress:
 
 | Style | Behavior | Session end points |
 |-------|----------|-------------------|
-| `auto` | Automatic progression, user gates at plan_done and evaluate_done(FAIL) only | `completed` |
+| `auto` | Automatic progression WITHIN a skill; the Plan → Gate boundary is a skill boundary and always ends the `/harness` session (SPEC rev.9 (b)). In `/harness-build`, user gates at evaluate_done(FAIL) only | `plan_done` (`/harness`), `completed` (`/harness-build`) |
 | `phase` | Stop at each `*_done` state, resume in next session | `plan_done`, `generate_done`, `verify_done`, `evaluate_done` |
 | `step` | Execute only the specified step, then stop | Immediately after step |
 
 ### CLI Parsing
 
 ```
-/harness "task description"              → auto (default)
-/harness plan "task description"         → phase mode, plan step
-/harness generate                        → phase mode, generate step
-/harness verify                          → step mode, verify only
-/harness evaluate                        → step mode, evaluate only
+/harness "task description"              → auto (default); ends at plan_done → Next → /harness-gate
+/harness plan "task description"         → phase mode, plan step — the same end point (auto and phase are equivalent up to the gate)
 /harness --mode single "task"            → auto + single mode (inline forced)
 /harness --mode multi "task"             → auto + multi mode (workflow path)
 /harness --model-config balanced "task"  → auto + balanced preset
-/harness plan "task" --epic              → phase mode + cli_flags.epic=true (§Scale Assessment override); halts at the plan boundary, then a bare-args resume runs §Step 2.6's routing predicate → Step 3 → §Step 3.5, with no in-context PlanResult
-/harness plan "task" --no-epic           → phase mode + cli_flags.epic=false (§Scale Assessment override)
-/harness "task" --epic                    → auto (no `plan` prefix) + cli_flags.epic=true; Step 2 → §Step 2.6 → Step 3 → §Step 3.5 all run in this one call, in-context PlanResult still live
-/harness "task" --no-cold-pass           → auto (default) + cli_flags.cold_pass=false — read by §Step 5 "Cold Review Input Collection" `cold_dispatch_allowed`
-/harness doctor                          → read-only diagnostic; the dispatch condition lives in §Session Recovery's carve-out, the read-only contract in `## Sub-command: doctor`
+/harness plan "task" --epic              → cli_flags.epic=true (`skills/harness/SKILL.md` §Scale Assessment override); the gate's Pass B leads with "Plan as epic" and prints `/harness-build --epic`, whose Slice Plan (`skills/harness-build/SKILL.md` §Step 3.5) fills its table with no in-context PlanResult
+/harness plan "task" --no-epic           → cli_flags.epic=false (`skills/harness/SKILL.md` §Scale Assessment override)
+/harness "task" --epic                    → same as the `plan` form — no `run_style` reaches the gate in one call any more
+/harness "task" --no-cold-pass           → cli_flags.cold_pass=false — read by `skills/harness-build/SKILL.md` §Step 5 "Cold Review Input Collection" `cold_dispatch_allowed`
+/harness --modify "<request>"            → gate re-entry (plan_done only) — `skills/harness/SKILL.md` §Gate re-entry flags
+/harness --auto-revise | --critic        → gate re-entry (plan_done only) — same section
+/harness doctor                          → read-only diagnostic (`/harness` only); the dispatch condition lives in `skills/harness/SKILL.md` §Session Recovery's carve-out, the read-only contract in `## Sub-command: doctor`
+/harness-gate                            → HARD GATE #1 (Pass A / Pass B); prints the next command; writes nothing
+/harness-build                           → `phase → "generate_ready"` write, then Step 4 → 8 (auto within this skill)
+/harness-build --epic                    → Slice Plan (`skills/harness-build/SKILL.md` §Step 3.5) then Epic Exit (Step 3.6); `phase` stays plan_done
+/harness-build generate                  → phase mode, generate step
+/harness-build verify                    → step mode, verify only
+/harness-build evaluate                  → step mode, evaluate only
 ```
 
-When state.json exists and `/harness` is called with no arguments:
-→ Read phase, suggest next step: e.g. "Plan complete. Run generate?"
+When state.json exists and `/harness` or `/harness-build` is called with no arguments:
+→ §Session Recovery routes by phase; a phase owned by the other skill prints that skill's name
+and halts.
 
 ### Step Mode Prerequisites
 
 | Step | Required files | Required phase (minimum) | Missing action |
 |------|---------------|-------------------------|----------------|
 | `/harness plan` | (none) | (new session OK) | Normal start |
-| `/harness generate` | spec.md | after `plan_done` | Error: "Run plan first" |
-| `/harness verify` | changes.md | after `generate_done` | Error: "Run generate first" |
-| `/harness evaluate` | spec.md + changes.md + verify_report.md | after `verify_done` | Error: "Run verify first" |
+| `/harness-gate` | spec.md | `plan_done` exactly | `skills/harness-gate/SKILL.md` §Entry Check redirects to the owner; nothing is written |
+| `/harness-build` | spec.md | `plan_done` (performs the `generate_ready` write) or later | Error: "Run /harness first" |
+| `/harness-build verify` | changes.md | after `generate_done` | Error: "Run generate first" |
+| `/harness-build evaluate` | spec.md + changes.md + verify_report.md | after `verify_done` | Error: "Run verify first" |
+<!-- BLOCK-END:hx-run-style v1 -->
 
 ---
 
 ## Session Boundary
 
-> Single source for every user-facing block printed when a session ends mid-task. Referenced
-> by name (never restated) at: the 4 phase/step-mode phase-boundary sites in §Workflow Steps
-> 2/4/5/6 (After Plan / After Generate / After Verify / After Evaluate), the Step 5 L1
-> max-retry 1st HARD-GATE "Stop" branch, and the end-of-session summary printed by §Step 8's
-> 3 commit branches and its `has_git == false` branch, plus §Step 3.6 — which is no longer one
-> of those branches, so it is named separately here rather than folded into "Step 8"; excludes
-> the commit-failure abort path, which does not end the session). Shape + label rules mirror Setup Summary
+> Single source for the user-facing block printed when a `/harness` session ends. In this skill
+> that is exactly ONE site — §After Plan Phase — and it is not optional: every `/harness`
+> session ends there (the gate is a separate skill). Type B (task complete) never prints from
+> this skill; it belongs to `/harness-build`. Shape + label rules mirror Setup Summary
 > (§Output Language Contract — Print Translation Pattern: labels English raw, values per
 > Preserved-English Glossary).
 
+<!-- BLOCK-START:hx-boundary-shell v1 — shared by /harness, /harness-build; edit every copy in one commit and bump the version -->
 ### Type A — phase-boundary (mid-task; session can resume next time)
 
 ```
@@ -381,86 +445,17 @@ When state.json exists and `/harness` is called with no arguments:
   Resume  : <resume command — see table below>
   Handoff : Run `/handoff generate` to capture this session for cross-session continuity.
 ```
+<!-- BLOCK-END:hx-boundary-shell v1 -->
 
 | Boundary site | Completed → Next | Resume command |
 |---|---|---|
-| After Plan (Step 2) | Plan → Generate | `/harness` (no args — only bare args reach §Session Recovery item 7's `plan_done` row, as in the After Evaluate row; that row goes straight to §Step 3.5 when `epic.boundaries != null`, else via the §Step 2.6 predicate to Step 3, where §Step 3.5 needs Pass B's epic option. A typed `/harness generate` reaches none of these per §Step Mode Prerequisites — unchanged by design, residual disclosed below) |
-| After Generate (Step 4) | Generate → Verify | `/harness verify` |
-| After Verify (Step 5) | Verify → Evaluate | `/harness evaluate` |
-| After Evaluate (Step 6) | Evaluate → Verdict & Loop | `/harness` (no args — Session Recovery / no-args next-step rule routes to Step 7) |
-| Step 5 L1 max-retry "Stop" (1st HARD-GATE) | Verify (Layer 1) halted | `/harness` (no args — §Session Recovery `verify_done` branch re-enters the 1st HARD-GATE directly) |
+| After Plan (Step 2) — the only Type A site in this skill | Plan → Gate | `/harness-gate` (always — `run_style` no longer changes this: `auto` sessions halt here too, SPEC rev.9 (b)). A `/harness` re-entry (`--modify` / `--auto-revise` / `--critic`) also ends here and prints the same line. |
 
-**Residual (After Plan row, AC-17):** §Step Mode Prerequisites is unchanged, so `/harness
-generate` typed directly still skips §Step 2.6/§Step 3/§Step 3.5 — the row above only steers
-the *recommended* Resume command, it does not close that direct-entry path. Tracked in
-ROADMAP.md's deferred-items table.
+**Residual (After Plan row):** `/harness-build` typed directly still skips the gate — by
+design, not by drift (SPEC §8: an explicit choice, detected and disclosed by
+`skills/harness-build/SKILL.md` §Entry, never prevented).
 
-### Type B — Step 8 end-of-session summary (task complete)
-
-Applies at the end of every branch that concludes the session: §Step 8's 3 commit options
-("Commit code only" / "Commit all" / "No commit") and its `has_git == false` branch, plus
-§Step 3.6 (see the epic variant below), which ends the session before §Step 8 is reached and
-is therefore no longer a Step 8 branch. Does **NOT** apply to the
-commit-failure abort path (§Step 8 "Commit code only" step 3, "If the commit FAILS") — that
-path leaves the session open/resumable, so no closing summary is printed.
-
-```
-[harness] Session boundary — Task complete.
-  Task      : <task>
-  Reason    : <QA PASS | Accept as-is | Max rounds reached | Epic planned>
-  Remaining : <none | see {docs_path}qa_report.md | see {docs_path}cold_review.md | see {docs_path}slice_plan.md>     ← exact value: 'Remaining derivation' priority table below (values can combine)
-  Output    : <docs_path>     (preserved — see §Step 8)
-  Branch    : <state.json.branch>     ← omit if has_git == false
-  Commit    : <sha>                   ← omit if has_git == false, "No commit" was selected, or epic-exit (no commit stage ever runs)
-  Handoff   : Run `/handoff generate` to capture this session for cross-session continuity.
-```
-
-- `Reason` is derived from §Step 7 without a new state.json field (P2-2 deferred — see
-  ROADMAP.md): `QA PASS` (Step 7 "If PASS"), `Accept as-is` (Step 7 Layer 2 or Layer 3
-  "Accept as-is" branch), `Max rounds reached` (Step 7 "If FAIL and max rounds reached").
-  The epic-exit branch does not go through §Step 7 at all — it sets `Epic planned` directly.
-- `Remaining`'s full derivation is a priority table, below — it is no longer a flat
-  enumeration now that a 4th `Reason` value exists.
-
-**Epic variant** (§Step 3.6): that section's own rendering of the block
-above sets `Reason : Epic planned` and `Remaining : see {docs_path}slice_plan.md`, omits
-`Commit` entirely (no commit stage ever runs), and replaces the `Handoff` row:
-
-```
-  Handoff   : Run the Command from {docs_path}slice_plan.md's row for the next slice to start
-              it — `/handoff generate` is not offered here, because this branch has already
-              deleted `.harness/` by the time this block prints.
-```
-
-(`Handoff` printing after `.harness/` is already deleted is a pre-existing defect shared by
-all 4 other branches too, not unique to epic-exit — out of scope here, see changes.md; only
-this row's *content* is replaced.) Branch note: no code changed this session, so
-`harness/<slug>` sits at the same commit it was cut from — cleanup is optional (§Step 1 item 8
-already reuses an empty branch like it silently); the real caveat is switching to the intended
-base branch **before** starting the first slice, not deleting this one. If deleted, use
-`git branch -d` (never `-D`; the checked-out branch cannot be deleted anyway).
-
-**`Remaining` derivation** (priority table — the single source for this value, superseding any
-flat enumeration):
-
-| `Reason` | `verify.cold_result` | `Remaining` |
-|---|---|---|
-| `Epic planned` | any | `see {docs_path}slice_plan.md` |
-| `QA PASS` | `clean` / `null` | `none` |
-| `QA PASS` | `skipped` | `none (cold pass skipped — <reason>)` — the §Step 5 gating row that fired is NOT persisted, so derive `<reason>` from state, first match wins: `cli_flags.cold_pass == false` → `--no-cold-pass`; `verify.cold_round == null` → `git failure or empty input` (§Step 7's table makes those two the only skip reasons that leave `cold_round` unwritten); `has_git == false` → `has_git == false`; else → `skipL1`. Never collapse to a bare `none` |
-| `QA PASS` | `findings` / `retried_unverified` | `see {docs_path}cold_review.md` |
-| `QA PASS` | `retried_dispatching` | `see {docs_path}cold_review.md (cold feedback retry incomplete)` |
-| `QA PASS` | `failed` AND `cold_review_path != null` | `see {docs_path}cold_review.md (cold pass failed)` |
-| `QA PASS` | `failed` AND `cold_review_path == null` | `none (cold pass failed — no report written)` — the cold agent threw before any findings existed, so no file was written; pointing at it would be the exact mirror of the `findings`+null misdirection §Step 5 forbids |
-| `Accept as-is` / `Max rounds reached` | `clean` / `null` | `see {docs_path}qa_report.md` |
-| `Accept as-is` / `Max rounds reached` | `skipped` | `see {docs_path}qa_report.md` (cold pass skipped — `<reason>`, same rendering rule as the `QA PASS` row above) |
-| `Accept as-is` / `Max rounds reached` | `findings` / `retried_unverified` / `retried_dispatching` / `failed` | `see {docs_path}qa_report.md` AND `see {docs_path}cold_review.md` (both) — except `failed` AND `cold_review_path == null`, which renders `see {docs_path}qa_report.md` alone (no report was written — same reason as the `QA PASS` row above) |
-
-`Epic planned` combined with a non-null cold state is **unreachable** (epic-exit never runs
-Steps 5–7, so no cold-review pass exists in that session). The cold-review rows are live —
-written by §Step 5 (WORKFLOW) / §Step 6 (INLINE), this slice; `verify.cold_result`'s full
-6-value + `null` vocabulary is defined once, in §Step 7 "If PASS" (cited here by name).
-
+<!-- BLOCK-START:hx-handoff-fields v1 — shared by /harness, /harness-build; edit every copy in one commit and bump the version -->
 ### `/handoff generate` field contract (P0-4)
 
 When the `Handoff` row above is followed, `/handoff generate` reads `skill` / `task` / `phase`
@@ -477,7 +472,8 @@ Docs : <docs_path>
 ```
 <!-- SYNC-WITH: skills/handoff/SKILL.md §Fixed Label Record Format -->
 See `skills/handoff/SKILL.md` §Fixed Label Record Format / §Live task-state cross-check for the
-full contract — this file (`/harness`) has no further obligation beyond being read.
+full contract — this skill has no further obligation beyond being read.
+<!-- BLOCK-END:hx-handoff-fields v1 -->
 
 ---
 
@@ -490,15 +486,15 @@ full contract — this file (`/harness`) has no further obligation beyond being 
 
 ## Scale Assessment
 
-> Single source for the scale/slice recommendation block. Referenced by name (never
-> restated) at exactly 3 sites: **(1) compute** — §Step 2 (Plan Phase), immediately after
-> the Plan segment/sub-agent completes on BOTH the INLINE and WORKFLOW branches, run
-> exactly once per Plan pass and frozen into `state.scale.*`; **(2) render** — §After Plan
-> Phase, the phase/step-run_style halt path (before Step 3 is ever reached this session);
-> **(3) render** — §Step 3 Pass B, the auto-run_style path. Renders (2) and (3) are
-> MUTUALLY EXCLUSIVE per session: a `phase`/`step` session that ends at Step 2 only ever
-> reaches (2); an `auto` session runs straight through Step 2 → Step 2.6 → Step 3 without
-> stopping and only ever reaches (3) — never both in the same session.
+> Single source for the scale/slice recommendation block. **(1) compute** — §Step 2 (Plan
+> Phase), immediately after the Plan segment/sub-agent completes on BOTH the INLINE and
+> WORKFLOW branches, run exactly once per Plan pass and frozen into `state.scale.*`;
+> **(2) render** — §After Plan Phase, which EVERY `/harness` session reaches (the gate is a
+> separate skill, so there is no `auto` run-through any more); **(3) render** — `/harness-gate`
+> §Workflow Steps Step 3 Pass B, in the NEXT session, from the same frozen values. Renders
+> (2) and (3) are therefore both expected in one task — the earlier rule that the two renders
+> never both fire in one session described the unsplit file and is withdrawn (SPEC rev.9 (a)). The render
+> fragment below (§1 → §INLINE Fallback) is byte-identical with `/harness-gate`'s copy.
 
 ### Compute-once / freeze / render-by-reference
 
@@ -518,6 +514,7 @@ missing entirely** (e.g. a pre-this-slice session resuming into Step 3, or any s
 somehow reaches Step 3 without ever computing it), treat every signal as `absent` and
 render per §INLINE Fallback below — never error, never block the gate on a missing block.
 
+<!-- BLOCK-START:hx-scale-render v1 — shared by /harness, /harness-gate; edit every copy in one commit and bump the version -->
 ### 1. Raw signal counts
 
 Four raw signals, each independently tagged with its own measurement state (`ok` /
@@ -547,8 +544,8 @@ tokens). If `cli_flags.epic == null`, render "override 없음 — 위 권고안�
 **When an override is active, §1's raw signal counts and §2's verbatim recommendation still
 render unchanged** — an override never suppresses the measured signal, it only changes which
 choice ultimately wins at Step 3 Pass B. In that case append one more Status-Format-style
-line, using the ONE place in this section where §Standard Status Format's aligned
-`Label     : value` convention (unlike the unaligned `Critic:` gate literals in §Step 2.6)
+line, using the ONE place in this section where `skills/harness/SKILL.md` §Standard Status Format's aligned
+`Label     : value` convention (unlike the unaligned `Critic:` gate literals in `skills/harness/SKILL.md` §Step 2.6)
 applies literally:
 ```
 Decision : forced by --epic     ← or "forced by --no-epic", matching whichever flag was given
@@ -593,7 +590,7 @@ The INLINE path (and any resume that lands in §INLINE Fallback per the rule abo
 degraded mode**, not a silent 3-of-4 failure:
 
 - The ONLY `ok` signal: a language-independent scan of spec.md for GFM checkbox lines
-  matching the literal pattern `- [ ]` (used under `### Completion Criteria` — see §Step 2
+  matching the literal pattern `- [ ]` (used under `### Completion Criteria` — see `skills/harness/SKILL.md` §Step 2
   WORKFLOW path spec.md render mapping) — count occurrences. **Do NOT parse the heading
   TEXT** (`### Completion Criteria` or any other) to locate the section — spec.md headings
   are rendered in `user_lang` per §Output Language Contract, so an English heading match
@@ -604,11 +601,13 @@ degraded mode**, not a silent 3-of-4 failure:
 - Recommendation: render "없음 (INLINE 경로 — 권고를 만드는 sliceHint가 이 경로에는 없음)"
   — state the degradation explicitly, never omit the recommendation line silently.
 - Append the closing disclosure line above AND one more: "이 폴백은 독립적인 2차 방어가
-  아니라 spec.md 자체(§Step 2 INLINE 산출물)의 하류임 — spec.md가 이미 손상된 scope를
+  아니라 spec.md 자체(`skills/harness/SKILL.md` §Step 2 INLINE 산출물)의 하류임 — spec.md가 이미 손상된 scope를
   반영했다면 이 신호도 같은 오염을 반영함".
+<!-- BLOCK-END:hx-scale-render v1 -->
 
 ---
 
+<!-- BLOCK-START:hx-state-machine v1 — shared by /harness, /harness-build; edit every copy in one commit and bump the version -->
 ## State Machine
 
 ### State Transition Diagram
@@ -619,7 +618,7 @@ plan_ready → planning → plan_done → [User Gate] → generate_ready
   → evaluate_ready → evaluating → evaluate_done → [Verdict Gate]
   → completed
 
-plan_done → completed (epic exit only — §Step 3.6; Steps 4–8 not executed)
+plan_done → completed (epic exit only — `skills/harness-build/SKILL.md` §Step 3.6; Steps 4–8 not executed)
 
 Retry loops:
   verify_done(FAIL) + retries<3 → generating → generate_done → verifying → ...
@@ -635,35 +634,9 @@ On the WORKFLOW path the same machine applies; `harness.eval` covers verifying�
 - `*_done` → next `*_ready`: auto mode = automatic / phase mode = next session
 - Phase mode can end session at: `plan_done`, `generate_done`, `verify_done`, `evaluate_done`
 - `plan_done` → `completed` directly, skipping `generate_ready` through `evaluate_done`: the
-  one epic-exit exception, taken only via §Step 3.6 (by name) — never any
+  one epic-exit exception, taken only via `skills/harness-build/SKILL.md` §Step 3.6 (by name) — never any
   other transition skips a state.
-
-### Auto-fix State Transition Table
-
-| `autofix.applied` | Meaning |
-|---|---|
-| `null` (idle) | Auto-fix not yet attempted |
-| `"proposed"` | Proposer dispatched, awaiting 2nd HARD-GATE |
-| `"applied"` | Patch applied, re-verification in progress |
-| `"rejected"` | User rejected proposal |
-| `"stopped"` | Patch applied but re-verification failed |
-
-**Transitions:**
-
-| From | Event | To |
-|---|---|---|
-| `null` (idle) | 1st HARD-GATE "Auto-fix" selected | `proposed` |
-| `proposed` | User "Apply patch" (2nd HARD-GATE) | `applied` |
-| `proposed` | User "Reject" (2nd HARD-GATE) | `rejected` |
-| `applied` | Re-verify PASS | (cleared — continues to Step 6) |
-| `applied` | Re-verify FAIL | `stopped` |
-
-**Invariants (I1–I4):**
-
-- **I1**: `verify.autofix_attempted == true ⟺ autofix != null ∧ autofix.applied ≠ "proposed"`
-- **I2**: 1st HARD-GATE Auto-fix option is visible only when `verify.autofix_attempted == false AND state.autofix == null`
-- **I3**: On session resume, if `autofix.applied == "proposed"` → re-enter 2nd HARD-GATE directly (skip 1st GATE)
-- **I4**: `autofix.applied == "stopped"` ⟹ `layer1_retries = min(layer1_retries, 3)` (clamp — no further increment)
+<!-- BLOCK-END:hx-state-machine v1 -->
 
 ---
 
@@ -693,8 +666,8 @@ On the WORKFLOW path the same machine applies; `harness.eval` covers verifying�
      - **Step 4** Reserved first segment: `path.split("/")[0]` ∈ `{memory, spec, planner, generator, evaluator, verify, harness, .harness}` → halt with error: "output-dir value starts with a reserved directory name." (first segment only — trailing slash stripped first; full-path comparison is NOT performed)
      - **Step 4.5** `docs` first-segment exception for `/spec → /harness` slug-safe handoff: if `path.split("/")[0] == "docs"`, the second segment MUST be `harness` (i.e. path starts with `docs/harness/...`). Otherwise halt with error: "output-dir under docs/ must be docs/harness/..." Rationale: the default `output_base = "docs/harness"` always writes under this tree, so the standard /spec handoff value `docs/harness/<slug>/` is the only legitimate `docs/...` override; any other `docs/<other>/` first-segment override is rejected to prevent accidental writes outside the harness namespace.
      - If valid: normalize with trailing slash stripped, store in `cli_flags.output_dir`.
-   - `--epic` / `--no-epic` → store `cli_flags.epic` as `true` / `false` (tri-state; unset stays `null` — §Scale Assessment's own recommendation stands). **Validation**: if BOTH `--epic` AND `--no-epic` are given, halt with error: "Cannot combine --epic and --no-epic." **This halt fires HERE, in item 2 (pure parsing) — before item 7 creates `.harness/`/`{docs_path}` and item 8 creates the git branch** (same placement reasoning as the `--verifier-model` halt above: a halt placed after those side effects would leave a ghost `.harness/` + empty branch for the next Session Recovery to mistakenly offer to Resume). Consumers: §Scale Assessment's override display and §Step 3 Pass B's leading-option table — both real as of this slice. Neither §Step 3.5 nor §Step 3.6's epic-exit predicate reads this field (that predicate uses `state.epic.boundaries` + `state.phase` only); a `--epic` session can still choose "Proceed as single" at Pass B.
-   - `--no-cold-pass` → store `cli_flags.cold_pass = false` (default `true` — cold pass runs unless this flag is given). Consumer: the `cold_dispatch_allowed(skipL1)` predicate defined in §Step 5 "Cold Review Input Collection" (1st of 3 `--no-cold-pass` gating points, AC-28) — read there (§Step 5 WORKFLOW args), at §Step 6's own entry gate (2nd point), and by the segment's own `A.coldPass === true` check in `workflows/harness.eval.workflow.js` (3rd point).
+   - `--epic` / `--no-epic` → store `cli_flags.epic` as `true` / `false` (tri-state; unset stays `null` — §Scale Assessment's own recommendation stands). **Validation**: if BOTH `--epic` AND `--no-epic` are given, halt with error: "Cannot combine --epic and --no-epic." **This halt fires HERE, in item 2 (pure parsing) — before item 7 creates `.harness/`/`{docs_path}` and item 8 creates the git branch** (same placement reasoning as the `--verifier-model` halt above: a halt placed after those side effects would leave a ghost `.harness/` + empty branch for the next Session Recovery to mistakenly offer to Resume). Consumers: §Scale Assessment's override display and `skills/harness-gate/SKILL.md` §Step 3 Pass B's leading-option table — both real as of this slice. Neither `skills/harness-build/SKILL.md` §Step 3.5 nor `skills/harness-build/SKILL.md` §Step 3.6's epic-exit predicate reads this field (that predicate uses `state.epic.boundaries` + `state.phase` only); a `--epic` session can still choose "Proceed as single" at Pass B.
+   - `--no-cold-pass` → store `cli_flags.cold_pass = false` (default `true` — cold pass runs unless this flag is given). Consumer: the `cold_dispatch_allowed(skipL1)` predicate defined in `skills/harness-build/SKILL.md` §Step 5 "Cold Review Input Collection" (1st of 3 `--no-cold-pass` gating points, AC-28) — read there (`skills/harness-build/SKILL.md` §Step 5 WORKFLOW args), at `skills/harness-build/SKILL.md` §Step 6's own entry gate (2nd point), and by the segment's own `A.coldPass === true` check in `workflows/harness.eval.workflow.js` (3rd point).
 3. **Slugify the task:** lowercase, transliterate non-ASCII to ASCII, remove non-word chars except hyphens, replace spaces with hyphens, truncate to 50 chars. Store as `<slug>`.
 4. **Auto-detect project language and commands.** Scan the working directory.
 5. **Auto-detect lint command** (skip if `--lint-cmd` provided).
@@ -816,19 +789,19 @@ On the WORKFLOW path the same machine applies; `harness.eval` covers verifying�
 | `plan_critic.failure_reason` | string | `null` | §Step 2.6 | §Step 2.6 gate display |
 | `plan_critic.source` | `"own"` / `"carried_over"` | `null` | §Step 2.6 | §Step 2.6 gate display (`carried over from /spec` literal) |
 | `plan_critic.counts` | `{ critical, major, minor }` (lowercase — matches `CriticReport.counts` in `workflows/_reference/schemas.md` — cited by name, not line: that file is append-only, so any delta appended above `CriticReport` would silently shift a line citation) | `null` (not yet run / not yet parsed) | §Step 2.6 | §Step 2.6 gate display, §Session Recovery item 7 "View state only" |
-| `plan_critic.spec_stamp_at_critic` | `{ generation, lines }` — a copy of `state.spec_stamp` as it stood when this critic pass ran | `null` | §Step 2.6 (all three branches — success copies the current stamp, carried-over and failure branch (iii) write `null`) | §Stale Determination, §Session Recovery item 7 "View state only" |
-| `spec_stamp` | `{ generation: integer, lines: integer }` | `null` | every site that writes `{docs_path}spec.md`, per §Step 2's `spec_stamp` write protocol (by name) | §Stale Determination, §Step 2.6's latch, §Session Recovery item 7 "View state only" |
+| `plan_critic.spec_stamp_at_critic` | `{ generation, lines }` — a copy of `state.spec_stamp` as it stood when this critic pass ran | `null` | §Step 2.6 (all three branches — success copies the current stamp, carried-over and failure branch (iii) write `null`) | `skills/harness-gate/SKILL.md` §Stale Determination, §Session Recovery item 7 "View state only" |
+| `spec_stamp` | `{ generation: integer, lines: integer }` | `null` | every site that writes `{docs_path}spec.md`, per §Step 2's `spec_stamp` write protocol (by name) | `skills/harness-gate/SKILL.md` §Stale Determination, §Step 2.6's latch, §Session Recovery item 7 "View state only" |
 | `scale.signals` | object | `null` | §Scale Assessment | §Scale Assessment, Step 3 gate |
-| `scale.slice_hint` | object — PlanResult `sliceHint` stored verbatim | `null` | §Scale Assessment | §Step 3 Pass B (this slice), §Step 3.5 (Slice Plan) |
+| `scale.slice_hint` | object — PlanResult `sliceHint` stored verbatim | `null` | §Scale Assessment | `skills/harness-gate/SKILL.md` §Step 3 Pass B (this slice), `skills/harness-build/SKILL.md` §Step 3.5 (Slice Plan) |
 | `scale.override` | boolean | `null` | §Scale Assessment (`--epic`/`--no-epic` override) | §Scale Assessment |
-| `epic.id` | string | `null` | §Step 3.5 (Slice Plan) | no reader yet — written for the `Command` column's display; its derivation is defined once, in §Step 3.5 |
-| `epic.boundaries` | object | `null` | §Step 3.5 (Q&A and no-Q&A paths alike), §Step 3 Pass B "Proceed as single" (reset to `null`) | §Step 3.5 re-entry check, §Session Recovery item 7 (a) + item 7 "View state only" (presence only) + `plan_done` jump-table row, §Step 3.6's epic-exit predicate |
-| `verify.cold_result` | string | `null` | §Step 5 (WORKFLOW) / §Step 6 (INLINE); §Step 7 feedback branch (`retried_dispatching` → `retried_unverified`); §Session Recovery (same transition, on resume) | §Step 7 cold feedback branch (single definition there), §Session Boundary `Remaining` rule, §Session Recovery re-entry |
-| `verify.cold_retries` | integer | `0` | §Step 5 / §Step 6 (never changed there, only initialized); §Step 7 feedback branch (`+= 1`); reset to `0` on round increment (§Step 7 "If Fix") | §Step 7 feedback-branch condition |
-| `verify.cold_round` | integer | `null` | §Step 5 / §Step 6; reset to `null` on round increment (§Step 7 "If Fix") | §Step 5 `cold_dispatch_allowed` predicate, §Step 7 `cold_ran_this_round` derivation, §Session Boundary `Remaining` skip-reason derivation |
-| `verify.cold_counts` | `{ Critical, Major, Minor }` (uppercase — matches `CriticReport.items[].severity`; see the cold-review severity delta in `workflows/_reference/schemas.md`) | `null` | §Step 5 / §Step 6 | §Step 7 cold feedback branch (single definition there) |
-| `verify.cold_review_path` | string | `null` | §Step 5 (WORKFLOW, after the file write succeeds) / §Step 6 (INLINE, sub-agent wrote it directly) | §Step 7, §Session Boundary `Remaining` rule |
-| `cli_flags.epic` | tri-state: `null` / `true` / `false` | `null` (no `--epic`/`--no-epic` given — §Scale Assessment recommendation stands) | §Step 1 CLI Parsing (`--epic`/`--no-epic`) | §Scale Assessment override check, §Step 3 Pass B leading-option table (never §Step 3.5 or the epic-exit predicate — that predicate reads `state.epic.boundaries` + `state.phase` only) |
+| `epic.id` | string | `null` | `skills/harness-build/SKILL.md` §Step 3.5 (Slice Plan) | no reader yet — written for the `Command` column's display; its derivation is defined once, in `skills/harness-build/SKILL.md` §Step 3.5 |
+| `epic.boundaries` | object | `null` | `skills/harness-build/SKILL.md` §Step 3.5 (Q&A and no-Q&A paths alike), `skills/harness-gate/SKILL.md` §Step 3 Pass B "Proceed as single" (reset to `null`) | `skills/harness-build/SKILL.md` §Step 3.5 re-entry check, §Session Recovery item 7 (a) + item 7 "View state only" (presence only) + `plan_done` jump-table row, `skills/harness-build/SKILL.md` §Step 3.6's epic-exit predicate |
+| `verify.cold_result` | string | `null` | `skills/harness-build/SKILL.md` §Step 5 (WORKFLOW) / `skills/harness-build/SKILL.md` §Step 6 (INLINE); `skills/harness-build/SKILL.md` §Step 7 feedback branch (`retried_dispatching` → `retried_unverified`); §Session Recovery (same transition, on resume) | `skills/harness-build/SKILL.md` §Step 7 cold feedback branch (single definition there), §Session Boundary `Remaining` rule, §Session Recovery re-entry |
+| `verify.cold_retries` | integer | `0` | `skills/harness-build/SKILL.md` §Step 5 / `skills/harness-build/SKILL.md` §Step 6 (never changed there, only initialized); `skills/harness-build/SKILL.md` §Step 7 feedback branch (`+= 1`); reset to `0` on round increment (`skills/harness-build/SKILL.md` §Step 7 "If Fix") | `skills/harness-build/SKILL.md` §Step 7 feedback-branch condition |
+| `verify.cold_round` | integer | `null` | `skills/harness-build/SKILL.md` §Step 5 / `skills/harness-build/SKILL.md` §Step 6; reset to `null` on round increment (`skills/harness-build/SKILL.md` §Step 7 "If Fix") | `skills/harness-build/SKILL.md` §Step 5 `cold_dispatch_allowed` predicate, `skills/harness-build/SKILL.md` §Step 7 `cold_ran_this_round` derivation, §Session Boundary `Remaining` skip-reason derivation |
+| `verify.cold_counts` | `{ Critical, Major, Minor }` (uppercase — matches `CriticReport.items[].severity`; see the cold-review severity delta in `workflows/_reference/schemas.md`) | `null` | `skills/harness-build/SKILL.md` §Step 5 / `skills/harness-build/SKILL.md` §Step 6 | `skills/harness-build/SKILL.md` §Step 7 cold feedback branch (single definition there) |
+| `verify.cold_review_path` | string | `null` | `skills/harness-build/SKILL.md` §Step 5 (WORKFLOW, after the file write succeeds) / `skills/harness-build/SKILL.md` §Step 6 (INLINE, sub-agent wrote it directly) | `skills/harness-build/SKILL.md` §Step 7, §Session Boundary `Remaining` rule |
+| `cli_flags.epic` | tri-state: `null` / `true` / `false` | `null` (no `--epic`/`--no-epic` given — §Scale Assessment recommendation stands) | §Step 1 CLI Parsing (`--epic`/`--no-epic`) | §Scale Assessment override check, `skills/harness-gate/SKILL.md` §Step 3 Pass B leading-option table (never `skills/harness-build/SKILL.md` §Step 3.5 or the epic-exit predicate — that predicate reads `state.epic.boundaries` + `state.phase` only) |
 | `cli_flags.cold_pass` | boolean | `true` (cold pass runs unless `--no-cold-pass`) | §Step 1 CLI Parsing (`--no-cold-pass`) | cold review dispatch gating |
 
 > `plan_critic.counts` (lowercase keys) and `verify.cold_counts` (uppercase keys) follow different upstream schemas (`CriticReport.counts` lowercase keys vs. `CriticReport.items[].severity` uppercase values; the lowercase `FindingSchema.severity` in that same file is a THIRD, unrelated vocabulary) — an intentional difference, NOT normalized to one case.
@@ -836,7 +809,7 @@ On the WORKFLOW path the same machine applies; `harness.eval` covers verifying�
 > `plan_critic.applied`'s value set (`executed`/`skipped`/`failed`) is harness-local and is NOT interchangeable with /spec `state.critic.applied`'s value set (`approved`/`pending`/`revised`) — the field name is borrowed from /spec `state.critic`, the value set is not.
 > `cli_flags.epic` is tri-state (`null`/`true`/`false`) while `cli_flags.cold_pass` is a plain boolean — `--epic`+`--no-epic` given together can halt on that distinction (two explicit, opposite non-null values) rather than collapsing onto one boolean.
 > A per-session cold-pass execution cap equal to `max_rounds` (default 3) is not a separate counter — it falls out arithmetically from `verify.cold_round`'s once-per-round execution latch.
-> `cli_flags.output_dir` remains audit/record only (see the `docs_path usage rule` note at Step 1 item 10.5) — no section recomputes from it, only `docs_path` itself is read directly (§Session Recovery's docs_path drift check does not read this field either). `cli_flags.epic` and `cli_flags.cold_pass` are NOT audit-only: `cli_flags.epic` is written by §Step 1 CLI Parsing and read by §Scale Assessment's override check and §Step 3 Pass B; `cli_flags.cold_pass` is written by §Step 1 CLI Parsing and read by the `cold_dispatch_allowed` predicate (§Step 5 "Cold Review Input Collection", this slice).
+> `cli_flags.output_dir` remains audit/record only (see the `docs_path usage rule` note at Step 1 item 10.5) — no section recomputes from it, only `docs_path` itself is read directly (§Session Recovery's docs_path drift check does not read this field either). `cli_flags.epic` and `cli_flags.cold_pass` are NOT audit-only: `cli_flags.epic` is written by §Step 1 CLI Parsing and read by §Scale Assessment's override check and `skills/harness-gate/SKILL.md` §Step 3 Pass B; `cli_flags.cold_pass` is written by §Step 1 CLI Parsing and read by the `cold_dispatch_allowed` predicate (`skills/harness-build/SKILL.md` §Step 5 "Cold Review Input Collection", this slice).
 > `plan_critic.*`, `scale.*`, `cli_flags.epic`/`cli_flags.cold_pass`, `epic.*`, and now `verify.cold_*` are all written by the sections named in the table above (this slice).
 
 12. **Print setup summary** per §Output Language Contract — Print Translation Pattern (labels remain English raw; values follow §Output Language Contract — Preserved-English Glossary):
@@ -982,7 +955,7 @@ Before the plan dispatch/segment, prepare:
 
 **`spec_stamp` write protocol (single source — every site that writes `{docs_path}spec.md`
 cites this by name and none restates it: §Step 2 — INLINE path, §Step 2 — WORKFLOW path,
-that path's Auto-revise re-entry, and §Step 3's "Modify" option):** three ordered steps,
+that path's Auto-revise re-entry, and `skills/harness-gate/SKILL.md` §Step 3's "Modify" option):** three ordered steps,
 **invalidate first**.
 
 1. Capture `prev = state.spec_stamp.generation` (`null` stamp → `0`), then write
@@ -997,7 +970,7 @@ that path's Auto-revise re-entry, and §Step 3's "Modify" option):** three order
 file and `spec_stamp` is a state.json field, so "write both at once" does not exist; one of
 them is second. If the stamp were second and the session died between steps 2 and 3, the
 stamp would still describe the PREVIOUS spec.md while the file on disk is new — and the
-§Stale Determination would read that as **not stale**, exposing Auto-revise against a spec
+`skills/harness-gate/SKILL.md` §Stale Determination would read that as **not stale**, exposing Auto-revise against a spec
 the critic never saw. Invalidating first makes that same window resolve to `null`, which
 that determination treats as stale (fail closed). The mtime mechanism this replaced had no
 such window at all — the filesystem updated the stamp as a side effect of the write itself —
@@ -1058,7 +1031,7 @@ introduced.
 9. Update phase → `"plan_done"`, `updated_at → now`.
 10. **On Workflow error** (launch failure, script error, schema-invalid result): apply §Mode Gate graceful fallback → re-run this step on the INLINE path.
 
-**Auto-revise re-entry (dispatched only from §Step 2.6 / §Step 3 Pass A "Auto-revise")** —
+**Auto-revise re-entry (dispatched only from §Step 2.6 / `skills/harness-gate/SKILL.md` §Step 3 Pass A "Auto-revise")** —
 re-runs this same segment in re-synthesis form, skipping Propose:
 ```
 Workflow {
@@ -1115,12 +1088,12 @@ step-8 procedure above — an Auto-revise
 re-entry is a fresh Step-2-shaped run, not the cross-session "do NOT recompute" case). Then
 immediately re-run §Step 2.6's own-critic dispatch (see §Step 2.6 below) — this bypasses the
 skip-vs-run decision inside §Step 2.6 entirely, the same entry point Pass A's "Run Critic
-anyway" option uses (§Step 3) — in the SAME turn, against the freshly re-rendered spec.md;
+anyway" option uses (`skills/harness-gate/SKILL.md` §Step 3) — in the SAME turn, against the freshly re-rendered spec.md;
 this is how a low-cost Auto-revise round actually re-checks the revision, with no separate
 user gate in between.
 
 **Before dispatching this re-entry**, the orchestrator runs the proposals.json validity
-check itself (named and defined once, at §Step 3's Auto-revise Exposure Predicate — applied
+check itself (named and defined once, at `skills/harness-gate/SKILL.md` §Step 3's Auto-revise Exposure Predicate — applied
 HERE by the orchestrator before dispatch, not only as a gate-display condition). If it fails
 on ANY point, do NOT dispatch with `reSynthesisOnly: true`; instead dispatch a FULL re-run
 (`reSynthesisOnly: false`, no `priorProposals`) and print a warning banner (in `user_lang`):
@@ -1183,7 +1156,7 @@ findings file) already exists (a sanctioned read — §Architecture Principles #
   version it judged), and leave
   `plan_critic.round` UNCHANGED at its existing value — a carried-over skip does not consume
   a revision round (all 7 fields, per the single read-modify-write rule below). Gate display
-  (§Step 3 Pass A row ③) parses counts FROM `{docs_path}critic_findings.md`'s `## Summary`
+  (`skills/harness-gate/SKILL.md` §Step 3 Pass A row ③) parses counts FROM `{docs_path}critic_findings.md`'s `## Summary`
   line for this session (Architecture Principles #1 (7)'s "carried-over branch" read) and
   shows the `carried over from /spec` literal.
 - **Does not exist** → dispatch this step's own critic below (WORKFLOW or INLINE, per
@@ -1212,8 +1185,8 @@ later prove it wrote a new one.
 **Crash window this delete opens, and where it lands** — recorded because it changes a claim
 made elsewhere in this file. If the delete succeeds and the dispatch is then interrupted, the
 previous pass's `plan_critic` record survives while the file its `last_findings_path` names
-does not. §Well-formedness Determination requires that file to exist, so the record is
-**malformed** and §Step 3 Pass A renders **row ④**, whose "Retry Critic" option re-runs this
+does not. `skills/harness-gate/SKILL.md` §Well-formedness Determination requires that file to exist, so the record is
+**malformed** and `skills/harness-gate/SKILL.md` §Step 3 Pass A renders **row ④**, whose "Retry Critic" option re-runs this
 same dispatch. Before this delete existed the old file survived such an interrupt and the same
 resume landed on row ①-b instead. Both rows recover by re-running the critic, so the recovery
 is unchanged; the row is not, and §Step 2.6's Interruption cost paragraph below is written
@@ -1277,9 +1250,9 @@ below):
   re-entry, same turn), THIS write also carries `round: 0 → 1` — **the only place `round` is
   ever incremented** (mirrors `skills/spec/SKILL.md`'s `critic.round: 0 → 1` precedent:
   prepared logically between re-synthesis and re-critic, written atomically with this
-  re-critic transition). `round` is bounded at 1 by design — §Step 3 Pass A's Auto-revise
-  option disappears once `round == 1` (see the Auto-revise Exposure Predicate, §Step 3).
-- Gate display (§Step 3) null-safe-guards `counts == null` / `last_findings_path == null` /
+  re-critic transition). `round` is bounded at 1 by design — `skills/harness-gate/SKILL.md` §Step 3 Pass A's Auto-revise
+  option disappears once `round == 1` (see the Auto-revise Exposure Predicate, `skills/harness-gate/SKILL.md` §Step 3).
+- Gate display (`skills/harness-gate/SKILL.md` §Step 3) null-safe-guards `counts == null` / `last_findings_path == null` /
   file-not-found independently (mirrors `skills/spec/SKILL.md` §Session Recovery — its
   `"approved"` branch's `null-safe guard`) — never
   dereferences without checking first.
@@ -1305,7 +1278,7 @@ above never reaches this):
   session's §Session Recovery re-enters via routing predicate (b) by name (the routing
   predicate defined above — not restated here) — landing back on Step 2.6, not Step 3. Under
   `run_style == "auto"`, §After Plan Phase does not halt, so Step 3 is reached in THIS SAME
-  turn with `plan_critic` still unrecorded — §Step 3 Pass A row ④ (failed / unrecorded /
+  turn with `plan_critic` still unrecorded — `skills/harness-gate/SKILL.md` §Step 3 Pass A row ④ (failed / unrecorded /
   unknown, defined below) is what renders in that case. If the user then picks "Proceed as-is"
   there instead of "Retry Critic", `phase` advances to `generate_ready` and no later session
   re-enters Step 2.6 for this task — `plan_critic` stays permanently unrecorded for it (a
@@ -1334,9 +1307,9 @@ above never reaches this):
 
 **Interruption cost**: if the SAME-turn re-critic dispatch this section describes (triggered
 from §Step 2 WORKFLOW path's Auto-revise re-entry) is itself interrupted before its write
-completes, resume lands on §Step 3 Pass A **row ④** (malformed — the pre-dispatch delete
+completes, resume lands on `skills/harness-gate/SKILL.md` §Step 3 Pass A **row ④** (malformed — the pre-dispatch delete
 above already removed the file the FIRST pass's `last_findings_path` names, and
-§Well-formedness Determination requires it to exist). **This used to be row ①-b** and is not
+`skills/harness-gate/SKILL.md` §Well-formedness Determination requires it to exist). **This used to be row ①-b** and is not
 any more: before the pre-dispatch delete, the first pass's file survived the interrupt, the
 record stayed well-formed, and the staleness axis decided the row. The staleness the stamps
 would have shown is still real — the re-entry advanced `spec_stamp.generation` past the
@@ -1354,1067 +1327,18 @@ reserved fourth slot for Step 2.6. Recording under `runs.eval` would silently cl
 
 Print: `[harness] Plan complete.`
 
-**If `run_style == "phase"` or (`run_style == "step"` and requested step was `plan`):** Print
-the `## Scale Assessment` block (its After-Plan render site — the other render site is §Step
-3 Pass B; the two are mutually exclusive, see that section's header) using the values frozen
-in `state.scale.*` at the end of Step 2. Then print the §Session Boundary block (Type A:
-After Plan). Halt. **If this session carries `cli_flags.epic` or a §Scale Assessment epic
-recommendation**, the halt here means the NEXT `/harness` invocation's §Session Recovery
-routes through the §Step 2.6 predicate to Step 3 and on to §Step 3.5 with no in-context
+**Every `run_style`** (auto / phase / step) ends the session here — the gate is
+`/harness-gate`, a separate skill (SPEC rev.9 (b): an `auto` session no longer runs
+straight through to the gate any more; the stop is structural, not a rule). Print the
+`## Scale Assessment` block (its After-Plan render site; `skills/harness-gate/SKILL.md` §Step 3
+Pass B renders the same frozen `state.scale.*` values again in the next session) using the
+values frozen at the end of Step 2. Then print the §Session Boundary block (Type A: After
+Plan), whose Resume row is `/harness-gate`, and print `Next → /harness-gate`. Halt. **If this
+session carries `cli_flags.epic` or a §Scale Assessment epic recommendation**, the gate's
+Pass B leads with "Plan as epic" and prints `/harness-build --epic`;
+`skills/harness-build/SKILL.md` §Step 3.5 there fills its table with no in-context
 `PlanResult` — see that section's degraded restore order, by name, for how it fills the table
 without one.
-
-**If `run_style == "auto"`:** Continue to Step 3 (Gate) — do NOT render `## Scale Assessment`
-here; it renders once, at Step 3 Pass B.
-
----
-
-### Step 3: HARD GATE #1 — Spec Confirmation
-
-> Rendered by the orchestrator BETWEEN the `harness.plan` and `harness.build` segment runs
-> — never inside a script. This gate renders as up to TWO SEQUENTIAL PASSES (Pass A, then
-> Pass B) inside ONE `<HARD-GATE>` tag — see the §Architecture Principles #6 note this
-> slice adds: the gate count stays 3, a pass is not a fourth gate.
-
-<HARD-GATE>
-Read and show spec.md to the user.
-
-Every AskUserQuestion call in this gate (Pass A and Pass B alike) stays within the
-option-count guidance in `templates/_shared/askuserquestion.md` — referenced by name here,
-not restated (that file is the single source for the actual limit).
-
-#### Stale Determination (single source — computed fresh every time this gate is about to
-render, including on a §Session Recovery re-entry into Step 3; never a turn-local fact)
-
-Reads `state.spec_stamp` and `state.plan_critic.spec_stamp_at_critic` (§Step 2's
-`spec_stamp` write protocol defines the first and §Step 2.6's single read-modify-write the
-second — both by name, neither restated here), plus the line count of `{docs_path}spec.md`
-read **fresh at every Pass A render**, never carried over from an earlier render in the same
-turn. That is not a new read site: §Architecture Principles #1's exception list entry (1) is
-"spec.md at plan gate", and re-executing a declared read is not declaring another one — the
-list stays at 7 items. **The word "fresh" is load-bearing and is why this is spelled out
-rather than phrased as reusing what the gate already read.** A same-turn Modify loop
-re-presents Pass A after the file changed; a count carried over from before that edit would
-describe the pre-edit file, which is precisely the input this check exists to catch.
-
-Evaluated in this fixed order, first match wins:
-
-- `plan_critic.last_findings_path == null` (no findings file recorded — covers the
-  carried-over and failed branches) → render as **stale-unknown**.
-- `spec_stamp == null` OR `spec_stamp_at_critic == null` → **fail closed**, treat as
-  **stale**. `null` is the documented default of both fields (§Step 1 item 11's new-field
-  table), so a `"3.0"` session written before they existed lands here rather than comparing
-  two absent values into a false match — and so does a session interrupted inside the write
-  protocol, which invalidates `spec_stamp` BEFORE spec.md is rewritten for exactly this
-  reason.
-- either stamp is present but **malformed** — not an object, or missing `generation` or
-  `lines`, or carrying a non-integer in either — → **fail closed**, treat as **stale**. Same
-  direction as the `null` rule above and stated separately because it is a different state:
-  `null` is the documented default a well-behaved reader produces, malformed is a value some
-  writer actually put there. Neither may be compared; a `>` or `!=` against a non-integer has
-  no defined answer here, and guessing one is how a stale spec reads clean.
-- the live line count of spec.md cannot be obtained (the gate's own read of spec.md failed) →
-  **fail closed**, treat as **stale**. This is the closest thing left to the mtime mechanism's
-  I/O-failure axis, and it is narrower: it fires when the READ fails, never when the count is
-  merely wrong.
-- `spec_stamp.generation != spec_stamp_at_critic.generation` → **stale**
-  ("critic 이후 spec.md가 변경됨" — phrased subject-neutral; this covers BOTH a user Modify
-  edit and an Auto-revise re-synthesis that was interrupted before Step 2.6's re-critic pass
-  completed — the mechanism cannot and does not need to tell those two apart, since the safe
-  action is identical either way).
-- `spec_stamp.lines != spec_stamp_at_critic.lines` → **stale**. Redundant with the generation
-  check whenever the write protocol ran in full; it is here for the case where it did not — a
-  spec.md rewritten by a site that forgot to advance the generation.
-- the live line count of spec.md `!=` `spec_stamp.lines` → **stale**. This is the only check
-  that sees an edit made OUTSIDE the orchestrator — a user opening spec.md in an editor.
-- otherwise → **not stale**.
-
-**Disclosed limits, inline because they bound what a `not stale` verdict may be taken to
-mean.** Three, kept separate rather than merged into one sentence, because they fail in
-different ways:
-
-1. **Line-count-preserving external edits are not detected.** A word swapped inside one line
-   moves nothing this check reads. The mtime comparison this replaced detected every external
-   edit; the line count narrows that loss, it does not close it.
-2. **The line count is produced by the orchestrator itself**, by counting the content it just
-   read — not by a tool that returns a number. It is therefore as reliable as the model doing
-   the counting, which is a weaker guarantee than a filesystem timestamp, and the failure is
-   silent in both directions: an undercount reads as an edit that did not happen (false
-   stale, harmless), an overcount that happens to match reads as no edit at all (false not
-   stale, not harmless).
-3. **A generation that was simply never advanced is indistinguishable from one that did not
-   need to be.** mtime had no such state — the filesystem stamped it whether or not anyone
-   remembered to.
-
-All three are the price of the one property the stamp has and mtime does not: **it can be
-evaluated by a gate that holds no filesystem tool at all**, which is the whole reason for the
-change (`design/harness-ordering-enforcement/SPEC.md` §3, gitignored — not a public link; the
-committed copy is at that path in this repository).
-
-This determination applies unchanged whether Pass A is rendered for the first time this
-turn, re-presented after a same-turn Modify loop, or reached via §Session Recovery routing
-predicate (c) after a session boundary — see that predicate's note about the
-interrupted-Auto-revise case.
-
-#### Auto-revise Exposure Predicate (single source — Pass A rows ①-a/①-b/①-c and the
-pre-dispatch check in §Step 2 WORKFLOW path — Auto-revise re-entry both cite this by name;
-neither restates it)
-
-Auto-revise is offered ONLY when ALL of:
-1. `path_resolved == "workflow"` AND `runs.plan.runId != null` — this session currently has a
-   live, resolvable Workflow path AND a WORKFLOW-path Plan run is on record (`runs.plan.runId`
-   persists across sessions in state.json, so a non-null value does NOT by itself prove "this
-   session" — session-scoping is carried entirely by the `path_resolved` reinterpretation at
-   §Session Recovery step 6, not by this field; two distinct facts, combined, not substitutes
-   for one another). Step 2.6's permission-denial branch does NOT re-record `path_resolved`.
-2. **proposals.json validity check** passes — `.harness/planner/proposals.json` (a) exists,
-   (b) parses as JSON, (c) parses to an array, (d) the array is non-empty, (e) every element
-   has non-empty `persona` and `summary` fields. All 5 points, not merely "the file exists"
-   — a present-but-malformed file must NOT expose Auto-revise only to fail at dispatch time.
-3. `plan_critic.round` is unset or `0` (below its bound of 1 — see §Step 2.6's single-write
-   note).
-4. The Stale Determination above resolved to **not stale**.
-
-If Auto-revise is not exposed, the gate still functions fully — see Pass A's row-by-row
-option sets below, none of which depend on Auto-revise being available.
-
-#### Well-formedness Determination (single source — computed fresh once per gate render,
-frozen for the remainder of that render; referenced by NAME — never restated — by every Pass A
-row condition below and by §State-Space Derivation just below it)
-
-Applies only when `plan_critic.applied == "executed"` (the carried-over, `"failed"`, and
-unrecorded states never reach this check — see §State-Space Derivation). A record is
-**well-formed** when ALL of:
-- `plan_critic.counts.critical` and `plan_critic.counts.major` are both present and are
-  non-negative integers (this is also what makes the dirty condition's literal `>= 1` exactly
-  the negation of `== 0` below — no third case is possible), AND
-- `plan_critic.last_findings_path != null`, AND
-- the file at that path actually exists on disk — an I/O check, evaluated exactly ONCE per
-  gate render and never re-checked per row, so a filesystem change mid-render cannot make two
-  rows match or none match.
-
-If the existence check's I/O fails for any reason (permission error, path unavailable, tool
-error) → **fail closed**, treat as malformed (the same fail-closed direction as the Stale
-Determination above — an unreadable "yes it's there" must never be read as a pass). A record
-that is `"executed"` but NOT well-formed is **malformed**.
-
-#### State-Space Derivation (single source — Pass A's seven rows below implement exactly what
-this table derives; re-run this derivation, don't patch individual rows, if a future change
-adds a `plan_critic.applied` value or a new Step 2.6 failure branch)
-
-**Top axis — `plan_critic.applied`, 4 values, exhaustive and mutually exclusive** (slice A
-fixed the recorded value set to exactly `"executed"` / `"skipped"` / `"failed"`; the 4th value
-is the absence of a record, `unrecorded`):
-
-| `applied` | Reachable via | → Row |
-|---|---|---|
-| unrecorded | no Step 2.6 write yet, OR failure branch (ii) (the only branch that reaches Step 3 without writing `plan_critic` — same-turn, `run_style == "auto"` only; see branch (ii) above) | ④ |
-| `"skipped"` | §Step 2.6 Skip-vs-run's carried-over branch — the sole writer of `"skipped"`, which always co-writes `source = "carried_over"` in the SAME write (see that branch above); `applied == "skipped"` therefore structurally implies `source == "carried_over"`, not an independent condition | ③ |
-| `"failed"` | failure branch (iii) | ④ |
-| `"executed"` | success path, or a fresh "Run Critic anyway" / "Retry Critic" / Auto-revise re-dispatch | split below |
-
-**`"executed"` splits on the Well-formedness Determination** (above): **malformed** → row ④
-(joins unrecorded and `"failed"` there via an explicit OR — not a fallthrough default). Row ④
-is therefore also expressible as the plain complement: every state that is neither row ③
-(`applied == "skipped"`) nor rows ①-a/①-b/①-c/②/②-b (`applied == "executed"` AND
-well-formed) — this equivalent phrasing is what keeps row ④ closed even against a future
-`applied` value outside today's 3-plus-unrecorded set.
-
-**Well-formed** splits clean/dirty: `counts.critical == 0 AND counts.major == 0` → **clean**;
-otherwise → **dirty** (well-formedness already guarantees both counts are non-negative
-integers, so "otherwise" here is exactly `critical >= 1 OR major >= 1` — the literal condition
-rows ①-a/①-b/①-c use; the two phrasings are equivalent by construction).
-
-- **Clean** then splits on the Stale Determination alone (AC-C22: staleness applies to clean
-  exactly as it applies to dirty) — **not stale** → row ②; **stale** → row ②-b.
-  (Well-formedness guarantees `last_findings_path != null` and file existence, so the Stale
-  Determination's **stale-unknown** outcome — which fires only when `last_findings_path ==
-  null` — cannot occur inside "well-formed"; only its stale/not-stale range is reachable here.
-  This is a consequence of well-formedness, not a redefinition of the Stale Determination
-  itself, which keeps its full 3-value range as the single source.)
-- **Dirty** splits on the Stale Determination first — **stale** → row ①-b (Exposure Predicate
-  points 1–3 are moot here: point 4 alone already closes Auto-revise, regardless of 1–3).
-  **Not stale** then splits on the Auto-revise Exposure Predicate's points 1–3 — **all three
-  hold** → row ①-a; **one or more fails** → row ①-c.
-
-**Coverage — 9 cells → 7 rows, 0 overlap · 0 gap** (each axis above is total and mutually
-exclusive over its own domain, so this holds independent of evaluation order; first-match-wins
-at Pass A below remains the rendering rule but is redundant with, not load-bearing for, this
-proof):
-
-| `applied` | well-formed? | clean/dirty | stale? | Exposure pts 1-3 | → Row |
-|---|---|---|---|---|---|
-| unrecorded | — | — | — | — | ④ |
-| `"skipped"` | — | — | — | — | ③ |
-| `"failed"` | — | — | — | — | ④ |
-| `"executed"` | malformed | — | — | — | ④ |
-| `"executed"` | well-formed | clean | not stale | — | ② |
-| `"executed"` | well-formed | clean | stale | — | ②-b |
-| `"executed"` | well-formed | dirty | stale | — | ①-b |
-| `"executed"` | well-formed | dirty | not stale | all 3 hold | ①-a |
-| `"executed"` | well-formed | dirty | not stale | ≥1 fails | ①-c |
-
-Row ④ absorbs 3 cells (unrecorded / `"failed"` / malformed); row ③ absorbs 1; the remaining 5
-cells are each their own row — 9 cells, 7 rows.
-
-**Latch / staleness asymmetry (by design, both conservative)**: the `applied = "executed"`
-latch (§Step 2.6 above) asks whether THIS pass wrote a findings file — answered by existence,
-which means something only because that section deletes the file before dispatching; a pass
-that wrote nothing fails the latch (→ failure branch (iii) → row ④; the record never gets a
-chance to be evaluated for well-formedness). The Stale Determination — a separate check,
-evaluated at Pass A render time — asks whether the recorded verdict is about the CURRENT
-spec.md, by comparing stamps. These are two different questions at two different moments, not
-one check reused twice — the asymmetry does not create a gap because each is independently
-exhaustive on its own axis. **This paragraph was titled "Equal-mtime asymmetry" and turned on
-a same-second tie-break**; integer stamps have no tie case, so that rule is gone rather than
-relocated — recorded here because its disappearance is a real narrowing of what the two checks
-between them cover, not a simplification.
-
-#### Pass A (conditional — row ② renders NOTHING; row ②-b DOES render)
-
-When `plan_critic.source == "own"` AND `plan_critic.applied == "executed"` AND the record is
-well-formed (§Well-formedness Determination above), render this status line immediately before
-the table below — never when `source == "carried_over"`, `applied == "failed"`, `applied` is
-unrecorded, or the record is malformed (rows ③/④ carry their own literal instead, so this line
-never duplicates them and never dereferences a null `counts`):
-`Critic: <workflow (schema-validated) | inline (1-line parse)> — C=<counts.critical>
-M=<counts.major>` — the bracketed alternative is whichever branch Step 2.6's own dispatch
-used (`path_resolved` at that time), and the literal is the exact same string Step 2.6
-already prints (§Step 2.6's WORKFLOW/INLINE branches above); single space after the colon,
-unaligned — do NOT apply §Standard Status Format's aligned convention here, or AC-4's
-`grep -F` check breaks. This re-render exists because a `run_style == "phase"` session halts
-right after §Step 2.6's own print, and the session that reaches Step 3 is a DIFFERENT one,
-routed here by routing predicate (c) — without this line the assurance-level literal would
-never reach the user in that later session.
-
-Rows are evaluated top-to-bottom — **first match wins**.
-
-| Row | Condition | Options |
-|---|---|---|
-| ①-a dirty, predicate holds | `plan_critic.applied == "executed"` AND well-formed (§Well-formedness Determination) AND (`counts.critical >= 1` OR `counts.major >= 1`) AND the Auto-revise Exposure Predicate holds on ALL 4 points | `{"Auto-revise", "Proceed as-is", "Modify", "Stop"}` |
-| ①-b dirty, stale | well-formed (§Well-formedness Determination) AND same counts condition as ①-a, and the Stale Determination says stale (Exposure Predicate point 4 fails — regardless of whether points 1–3 also fail) | `{"Run Critic anyway", "Proceed as-is", "Modify", "Stop"}` — same option swap as row ③; a badge line "⚠ critic 이후 spec.md가 변경됨 — 아래 카운트는 그 이전 spec 기준" precedes the question. **This is how an interrupted Auto-revise loop actually resolves on resume**: §Session Recovery routes here per routing predicate (c); this row detects the staleness and offers the equivalent of a fresh Step 2.6 pass via "Run Critic anyway", instead of an automatic phase jump back to Step 2.6. |
-| ①-c dirty, not stale, predicate fails on 1/2/3 | well-formed (§Well-formedness Determination) AND same counts condition, the Stale Determination says NOT stale (point 4 holds), but the Exposure Predicate fails on point 1 (no WORKFLOW-path Plan run on record), point 2 (proposals.json invalid or missing), and/or point 3 (`round` already at its bound) | `{"Run Critic anyway", "Proceed as-is", "Modify", "Stop"}` — same option set as row ①-b, but the banner names the actual non-exposure reason instead of staleness: "⚠ Auto-revise unavailable — <no WORKFLOW-path Plan run on record / proposals.json invalid or missing / revision round limit reached>" (never silently blank; required even though the option labels match row ①-b, because the underlying cause differs and a user comparing sessions should be able to tell which one applies). |
-| ② clean, not stale | `plan_critic.applied == "executed"` AND well-formed (§Well-formedness Determination) AND `counts.critical == 0` AND `counts.major == 0` AND the Stale Determination says NOT stale | **Pass A does NOT render** — the "clean AND not stale ⇒ exactly one interrupt" case (AC-7's clean case). Go straight to Pass B. Clean AND stale is a DIFFERENT case — see row ②-b, which AC-C22 requires to render even though the record itself is clean. |
-| ②-b clean, stale | `plan_critic.applied == "executed"` AND well-formed (§Well-formedness Determination) AND `counts.critical == 0` AND `counts.major == 0` AND the Stale Determination says stale | `{"Run Critic anyway", "Proceed as-is", "Modify", "Stop"}` — badge line reused VERBATIM from row ①-b ("⚠ critic 이후 spec.md가 변경됨 — 아래 카운트는 그 이전 spec 기준"; no separate `(C=0 M=0)` suffix — the status line immediately above this table already prints the current counts, and repeating them in the badge would be a second, driftable copy of the same string). This is AC-C22's clean+stale case: the 0/0 shown is the count as of the PRE-edit spec.md, not the current one — without this row that fact would be silently lost, exactly the gap AC-C22 clause 1 exists to close. |
-| ③ carried-over | `plan_critic.applied == "skipped"` AND `plan_critic.source == "carried_over"` | `{"Run Critic anyway", "Proceed as-is", "Modify", "Stop"}`. Counts for display are parsed from `{docs_path}critic_findings.md`'s `## Summary` line — if that parse fails (the file is `(none)`-only, absent from a prior `dispatch_failed`, hand-edited without a `## Summary` line, or a stale leftover from a different `--output-dir` reuse), render `C=? M=?` (never `0`); show the `carried over from /spec` literal either way. |
-| ④ failed / unrecorded / unknown | `plan_critic.applied == "failed"` OR `state.plan_critic` has no recorded `applied` value (unrecorded — §Step 2.6 failure branch (ii) is the only source of this state; see §State-Space Derivation) OR (`plan_critic.applied == "executed"` AND the record is malformed — §Well-formedness Determination above); equivalently, every state that is neither row ③ (`applied == "skipped"`) nor rows ①-a/①-b/①-c/②/②-b (`applied == "executed"` AND well-formed) | `{"Retry Critic", "Proceed as-is", "Modify", "Stop"}` + a banner showing `plan_critic.failure_reason` if present, or — when `applied` is unrecorded (`failure_reason` is absent-or-null there, since branch (ii) never writes it; null-safe per the guard rule above) — the default banner "critic 미실행 — Workflow 권한 거부 등". A THIRD combination reaches this row and matches neither clause: `applied == "executed"` with a malformed record and no `failure_reason` (the record was written by a successful pass, so nothing set that field; §Step 2.6's pre-dispatch delete then removed the file a later interrupted pass was about to replace). Render "critic 기록이 현재 spec에 대해 무효 — 재실행 필요" for it. Never silently blank in any of the three. Counts render as `C=? M=?` (unknown, never `0`). **"Retry Critic" dispatches on the INLINE branch only** whenever `failure_reason` indicates a permission denial OR `applied` is unrecorded (both are footprints of branch (ii), which never leaves a distinguishing `failure_reason` behind) — it never re-issues the same denied Workflow call inside this turn (`templates/_shared/mode_gate.md` rule 3: retry only after the user states in a NEW message that something changed). Choosing anything other than "Retry Critic" here while `applied` is unrecorded leaves `plan_critic` permanently unrecorded for this task (see failure branch (ii) above). |
-
-**Exhaustiveness**: rows ①-a/①-b/①-c/②/②-b/③/④ — seven rows covering all four `applied`
-states (`executed` well-formed: clean × stale-or-not, dirty × stale-or-not × Exposure-points
-1–3; `executed` malformed; `skipped`; `failed`; unrecorded). See §State-Space Derivation above
-for the full axis-by-axis derivation and the 9-cell → 7-row coverage table proving 0 overlap
-and 0 gap — it is not re-derived here.
-
-"Run Critic anyway" / "Retry Critic" (rows ①-b / ①-c / ②-b / ③ / ④): dispatch §Step 2.6's
-own-critic dispatch again (a fresh single write to `plan_critic`, `source = "own"`), then
-re-present starting at Pass A — this re-presentation observes the FRESH `plan_critic` state,
-landing on whichever row now matches (typically ①-a or ②). For rows ①-b/②-b/③ it does not
-re-land on the same row for the same spec.md, since a completed own dispatch writes a
-non-null `last_findings_path` and records `spec_stamp_at_critic` equal to that spec.md's
-current `spec_stamp` — row ④ CAN recur if the fresh dispatch itself fails again, e.g. a second permission denial or a second parse failure.
-
-**Exception — row ①-c.** That row's non-exposure cause may be §Auto-revise Exposure Predicate
-point 3 (`plan_critic.round` already at its bound), and a critic re-run does not reset it — so
-①-c DOES re-land whenever point 3 is the cause, at which point Auto-revise stays unavailable
-for that spec.md. The staleness reasoning above closes the stamp axis only. Observed
-2026-08-19: the run predicted the re-landing before pressing the option and then saw it. A
-full pass over this file's other blanket `never`/`always` claims is tracked separately in
-ROADMAP.md rather than done here.
-
-"Auto-revise" (row ①-a only): dispatch §Step 2 WORKFLOW path's Auto-revise re-entry,
-which itself re-runs Step 2.6 in the same turn before control returns here — so the NEXT
-thing the user sees is a fresh Pass A render against the revised spec.md (never a stale
-badge for a revision Auto-revise itself just produced, since Step 2.6's own write records
-`spec_stamp_at_critic` as a copy of the `spec_stamp` belonging to the spec.md it just
-critiqued — the re-entry advanced that stamp before the re-critic read it).
-
-"Modify" (every row): **the orchestrator itself** updates spec.md — never a dispatched
-sub-agent, and always under §Step 2's `spec_stamp` write protocol (by name), so the edit
-advances `spec_stamp.generation` like any other spec.md write. Then re-present **starting at
-Pass A** — its condition table is re-evaluated fresh, including the Stale Determination (which
-will now find `spec_stamp.generation` ahead of `spec_stamp_at_critic.generation` and render the
-row-①-b / row-②-b / row-③ shape as appropriate, depending on which side of the record's
-clean/dirty split applies — row ④ is not on this list, since malformed/unrecorded/`"failed"`
-records never consult the Stale Determination at all). See Modify Interaction below for the
-contract shared with Pass B's own "Modify".
-
-"Proceed as-is" (every row) / "Stop" (every row): same semantics as Pass B's identical
-options — "Proceed as-is" does NOT itself advance the phase; control falls through to Pass
-B, which is where the phase actually advances. "Stop" halts immediately, here, without
-reaching Pass B.
-
-#### Pass B (unconditional — always renders exactly once, immediately after Pass A resolves
-with "Proceed as-is" or is skipped by row ② — row ②-b does NOT skip: it renders Pass A like
-any other row and only reaches Pass B via a subsequent "Proceed as-is")
-
-Which of "Proceed as single" / "Plan as epic" leads is set by §Scale Assessment
-(recommendation and/or `cli_flags.epic` override) — never re-derived here:
-
-| Condition | Leading option |
-|---|---|
-| `cli_flags.epic` is non-null (a `--epic`/`--no-epic` override was given) | the OVERRIDDEN choice — "Plan as epic" if `true`, "Proceed as single" if `false`. Must never contradict the override the user explicitly gave (§Scale Assessment §3). |
-| `cli_flags.epic == null` AND `state.scale.slice_hint` is present (a recommendation exists) | whichever of single/epic `sliceHint.recommendation` favors (§Scale Assessment §2, verbatim — never re-derived from counts) |
-| `cli_flags.epic == null` AND `state.scale.slice_hint` is absent (INLINE path, or any degraded resume with no recommendation to lead with) | plain "Proceed" — undecorated, no recommendation framing (there is nothing to recommend) |
-
-Print the `## Scale Assessment` block (its Step 3 render site — the other render site is
-§After Plan Phase; the two are mutually exclusive, see that section's header) immediately
-before this question, using the values frozen in `state.scale.*` at the end of Step 2.
-
-- "Proceed as single" / "Proceed" / "Continue implementation as one slice" → advances
-  `phase → "generate_ready"` — the ONLY option across BOTH passes that advances the phase.
-  Also, if `epic.boundaries` is currently non-null, reset it to `null` in the same write —
-  clears any boundary Q&A answer a prior §Step 3.5 visit this task recorded, so no ghost
-  boundary state survives choosing single-slice instead (so §Step 3.6's epic-exit predicate cannot fire for a single-slice session).
-- "Plan as epic" / "Split this task via a dedicated Slice Plan" → hand control to §Step 3.5
-  (Slice Plan), by name — that section owns everything from here. It does NOT advance
-  `phase` (stays `plan_done`, per its own entry contract below), so this gate's own
-  `phase → "generate_ready"` write does not apply to this option.
-- "Modify" / "Edit the spec, then re-confirm" → the orchestrator updates spec.md under
-  §Step 2's `spec_stamp` write protocol (by name), then re-presents **starting at Pass A**
-  (not Pass B) — see Modify Interaction below.
-- "Stop" / "Halt the workflow" → halt.
-
-#### Modify Interaction (shared contract — both passes' "Modify" option)
-
-1. Whichever pass is re-presented after a Modify always shows critic-related counts
-   (Pass A rows ①-a/①-b/①-c/②-b/③/④) computed against the spec.md version that was current
-   BEFORE this Modify's edit, until a fresh Step 2.6 / "Run Critic anyway" dispatch updates
-   them — the Stale Determination above is exactly what surfaces this ("critic 이후 spec.md가
-   변경됨").
-2. Once a Modify has changed spec.md, Auto-revise is NEVER offered on the immediate
-   re-presentation — the Stale Determination's stamp comparison (point 4 of the Auto-revise
-   Exposure Predicate) already enforces this structurally; no separate flag is needed. This
-   holds whether the re-presentation happens in the SAME turn (the ordinary Modify loop) or
-   after a §Session Recovery re-entry into Step 3 across a session boundary (routing
-   predicate (c)) — the stamps live in state.json and the comparison is recomputed fresh
-   either way (see the Stale Determination header note), so the rule cannot silently expire at
-   a session boundary. Item 1's "computed against the spec.md version that was current BEFORE
-   this Modify's edit" is what `spec_stamp_at_critic` now records literally.
-3. Re-presentation after Modify ALWAYS restarts at Pass A (never Pass B directly) — even
-   when the edit was made from Pass B's own "Modify" — so the fresh staleness state gets a
-   chance to render its row before Pass B is reached again.
-</HARD-GATE>
-
-Update state.json: `phase → "generate_ready"`, `updated_at → now` (written by whichever
-option actually advanced the phase — "Proceed as single"/"Proceed" only; never by "Plan as
-epic" (control passes to §Step 3.5 below, `phase` stays `plan_done`), nor by
-"Modify"/"Stop"/"Auto-revise"/"Run Critic anyway"/"Retry Critic", which all either halt or
-loop back inside the gate).
-
-#### Step 3.5: Slice Plan
-
-<!-- SYNC-WITH: skills/harness/SKILL.md §Step 3.5: Slice Plan -->
-
-*Reached two ways: §Step 3 Pass B's "Plan as epic" option (first entry), and §Session Recovery item 7's plan_done
-jump-table row when epic.boundaries is non-null (re-entry after an interruption). Its own AskUserQuestion is (a) data
-collection about a deliverable's shape, not approval before an irreversible action; (b) not one of §Architecture
-Principles #6's 3 counted HARD-GATEs; (c) this path ends the session — it does not resume into Step 4.*
-
-**Entry & routing** (single source — §Step 3 Pass B, §Step 3.6, and §Session Recovery cite this by name, never restated):
-entered from Pass B's "Plan as epic" option, or — on a resume with epic.boundaries already recorded — directly from
-§Session Recovery item 7's plan_done row (by name); never from `cli_flags.epic` directly, on either path.
-`phase == "plan_done"` on entry and stays that way throughout — this section never advances `phase`. The boundary Q&A
-below (skipped on a re-entry that already recorded an answer) determines the rows written to `{docs_path}slice_plan.md`,
-per the format below. Immediately after that write, control passes to §Step 3.6 (Epic Exit) by name — Step 4
-through Step 8 are **not** executed this session (that section defines its own fail-closed re-confirmation predicate
-independently). **Step 8 is now in that list and was not before**: the epic-exit branch used to live inside §Step 8,
-so the hand-off reached into it; now the whole path ends before Step 4, and no epic session enters §Step 8 at all.
-
-**State-space** (axes — `cli_flags.epic` excluded: Pass B's choice is already
-authority by the time control reaches here, so the flag has no further effect):
-
-| `epic.boundaries` | `slice_hint` | `candidates.length` | Action |
-|---|---|---|---|
-| non-null (re-entry) | any | any | Skip the Q&A — render the re-entry disclosure line, go straight to the table write. Absorbs the other 2 cells beneath it (first-match-wins, as §Step 3 Pass A's rows do). |
-| null | absent | — | True degradation — no Q&A, whole-task 1-row table; still records the boundary. |
-| null | present | 0 | Same — a schema-legal but degenerate `candidates: []`; still records the boundary. |
-| null | present | ≥ 1 | Open the Q&A once: candidate selected (mapped by array position) or `Other` free text (below, by name) — its two independent outcomes. |
-
-Column-fill (in-context `PlanResult` present or not) is a second tier under the last row
-only: present (same-turn `auto` entry) fills `In scope`/`AC ids` per the column-source table below; absent (a `phase`
-resume) falls to the restore order below.
-
-**Degraded restore order** (`In scope`/`AC ids`, first that succeeds): ①
-`state.scale.slice_hint` — frozen before `plan_done`, survives resume, always available
-for `Goal`/candidates/recommendation. ② the in-context `PlanResult`, when this turn is
-live. ③ a language-independent `- [ ] AC-` scan of the spec.md content §Step 3's
-`<HARD-GATE>` already read this turn — **not a new read site**, reuses §Architecture
-Principles #1 entry (1)'s `spec.md at plan gate` read verbatim (its body unedited, no 8th
-exception added); never parse heading TEXT — headings render in `user_lang`, same basis as
-§Scale Assessment's INLINE Fallback. ④ whatever is still unfilled renders `—` with one
-degradation-disclosure line — never invent a value.
-
-**True degradation** is narrower than "any resume": only when `slice_hint` is absent OR
-`candidates` is empty. Then skip the Q&A and write one whole-task row — mirroring the
-synthesis template's own degenerate-case rule ("if splitting is unnecessary, still return
-exactly one candidate describing the whole task as a single slice"); the disclosure states the
-row came from spec.md alone, no value invented. Both no-Q&A paths — this one, and `Other`'s zero-piece case below — still write `state.epic.boundaries` in the same single, immediate write (the degenerate whole-task boundary, not a user choice), so §Step 3.6's epic-exit predicate — what actually routes this session — holds on every path that reaches it.
-
-**Boundary Q&A:** one AskUserQuestion call, one question — it asks only how to split work already agreed at the §Step 3 gate, never re-opening requirements (that's §Step 3 Pass B's "Modify" option, not this call). Labels start from
-`candidates[].label`, rendered per `templates/_shared/askuserquestion.md`'s
-translate-everything rule — NOT fixed English raw (that needs a new §Output Language
-Contract — Preserved-English Glossary row plus a `name_manifest.md` entry; neither added).
-Selection maps to a candidate by **position in the returned array** (never translated-label
-matching) — the orchestrator keeps render order identical to `candidates[]`. `description` is
-that candidate's `slices[]` (`user_lang`). The option-count ceiling is that file's per-call
-recommended cap, by name; above it render only that many from the front of the returned order
-and disclose the truncation in one line.
-
-The response writes `state.epic.boundaries` in one single, immediate write, together with
-`epic.id` (computed, not asked — see `Command` below) in the same write. On re-entry with a
-value already recorded, skip the question: render "이전 세션에서 기록된 경계 사용: <선택
-요약>. 다시 정하려면 Restart 필요" and go to the table write. This field's lifetime is narrow —
-only between this Q&A and `.harness/`'s deletion by §Step 3.6, not a general
-re-entry guarantee.
-
-**`Other` free text** (AC-6a — the framework appends this automatically; normal usage, not an
-edge case): the position-mapping rule has no position for `Other` — its stated exception.
-(a) split on newlines first; exactly one line → split on commas instead; trim, drop empty
-pieces. (b) each surviving piece is one row, `Goal` verbatim — neither row count nor wording
-is invented. (c) zero pieces → fall to True Degradation above, no value invented — including its `state.epic.boundaries` write, by name. (d) a piece
-count over the ceiling is **not** truncated (that ceiling bounds the question render, not
-table rows). (e) each piece's `Slice` id uses the same rule below. (f) `In scope`/`AC ids`
-are `—` for every such row (no `PlanResult` correspondence), disclosed like any all-or-nothing
-case. This is the Q&A row's second, independent outcome above.
-
-**`slice_plan.md` format:** 6 columns `| Slice | Goal | In scope | AC ids | Depends on |
-Command |`. `Slice` id and `Command` text are English raw; `Goal` alone is `user_lang`.
-Reproduce only the reference implementation's
-(`docs/harness/harness-handoff-coldreview-epic-slice/slice_plan.md`) column set and language
-contract — never its prose or its absolute line-number citations (this file cites by
-§Section Name only).
-
-`Slice` id: `"slice-" + <position letter a,b,c,…> + "-" + <English raw kebab summary>`,
-≤50 chars, `[a-z0-9-]` only. The same row's `Command` task string is byte-identical, so
-`slugify(task) == task == Slice` **by construction**. On violation (empty, disallowed char,
-too long, duplicate): never ask — regenerate deterministically (shrink the summary, then
-`-2`/`-3`); disclose the generation fact and that hand-edits must keep `Slice`/`Command` in
-sync.
-
-Reserved-word basis (name reference only): a slice session applies
-`templates/_shared/safety_guard.md` step 3's slug constraint, satisfied structurally by the
-`slice-` prefix plus the `[a-z0-9-]`/length filter — separate from §Path Validator's reserved
-first-segment names, which govern `--output-dir` values, not slice ids. `Command`'s
-`--output-dir` value is `docs_path` minus its trailing slash; `epic.id` is defined — once,
-here only — as that value's last segment (`docs/harness/<epic-id>` is just the
-default-`output_base` shape of it).
-
-| Column | Source | If unavailable |
-|---|---|---|
-| `Goal` | selected candidate's `slices[i]` verbatim (or the `Other` piece) | — (always available once a row exists) |
-| `In scope` | in-context `PlanResult.steps[]`, split into `n` contiguous ranges | every row `—` + disclosure, never partial |
-| `AC ids` | ① in-context `acceptanceCriteria[].id`, else ② the already-read spec.md's `- [ ] AC-` scan (same site as restore-order ③) | `—` only when both are absent |
-| `Depends on` | linear chain — row 1 `—`, row N = row N-1's `Slice` (no measured graph exists; conservative, loses only parallelism — user may relax by hand, disclosed) | — |
-
-`AC ids` assignment: each id goes to the row whose `In scope` range contains the step first
-mentioning it; unmentioned ids go to an **unassigned list** (disclosed, never forced into a
-row). When `In scope` is all `—`, `AC ids` is too, same disclosure.
-
-Self-check (disclosed under the table): (i) every `Depends on` is `—` or some row's `Slice`,
-no cycle; (ii) `In scope` fully partitions 1..N with no gap/overlap, or is all `—`; (iii)
-`AC ids` union plus the unassigned list equals the source id set — an id spanning multiple
-rows is allowed and goes in a **spanning list**, so (iii) reads "zero missing, duplicates
-disclosed", not "zero duplicates".
-
----
-
-#### Step 3.6: Epic Exit
-
-Re-confirms, fail-closed: `state.epic.boundaries != null AND state.phase == "plan_done"` —
-sole definition of this predicate in this file (§Step 3.5 and §Session Recovery cite it by
-name, never restate it). `cli_flags.epic` is not read here: a session that started with
-`--epic` can still choose "Proceed as single" at §Step 3 Pass B, and that choice already
-resets `epic.boundaries` to `null`, which alone makes this predicate false — falling through
-to §Step 8's `has_git` routing, by name (this section is reached from §Step 3.5, so a
-false predicate here means the session was never an epic exit and §Step 8 owns it).
-
-Fail-closed order: 1. `{docs_path}slice_plan.md` was already written by §Step 3.5, the
-section that just handed control here — §Architecture Principles #1 entry (1)'s "the
-orchestrator just wrote this final artifact" case, not a fresh write. 2. Confirm it exists and
-is non-empty; on failure do **not** delete `.harness/` — halt with a disclosure (existence/
-size only, never content — outside "reads no intermediate files"'s reach, and does not enlarge
-§Architecture Principles #1's exception list, which stays at 7 items — same phrasing #2 uses).
-3. Apply the Artifact Cleanup Safety Guard — `templates/_shared/safety_guard.md`, the
-single source §Step 8 also cites; this section reads that file directly rather than through
-§Step 8, so moving here changed no rule. On ABORT do not delete `.harness/` — disclose. 4. Write
-`phase → "completed"` **before** step 5 — the 3rd layer of a 3-layer defense (2nd layer:
-§Session Recovery's Resume-suppression condition, by name): a delete failure at step 5 leaves
-`phase == "completed"` with `epic.boundaries` still non-null, exactly what that condition
-detects. 5. Delete `.harness/`. 6. Delete failure → print `[harness] ⚠` with manual-deletion
-guidance, never retry silently. 7. Print the §Session Boundary Type B epic variant (by name).
-
-No commit step exists on this path — "delete regardless of commit outcome" is the absence of
-a commit step, not a relaxation of §Step 8's `has_git == true` branch rule. That branch is
-reached only when this section's predicate is false, so the two never both run.
-
-### Step 4: Generate Phase
-
-Print: `[harness] Phase: Generate`
-
-#### Step 4 — INLINE path (mode: single)
-
-1. Update phase → `"generating"`, `updated_at → now`.
-2. Read template: `generator_single.md`
-3. Prepare prompt: `{spec_content}` from spec.md, `{qa_feedback}` from qa_report.md if round > 1 else "(First round)", `{round_num}`, `{scope}`, `{max_files}`, `{user_lang}`, `{changes_path}` = `{docs_path}changes.md`.
-   - **If retry** (from verify/evaluate failure): add `{verify_failure}` = 1-line FAIL summary, `{verify_report_path}` = `{docs_path}verify_report.md`. **Exception — Layer 2 retries** (from Step 7): override `{verify_report_path}` = `{docs_path}qa_report.md` (Layer 2 findings live in qa_report.md, not the Layer-1 report). **Exception — cold-review feedback retry** (from §Step 7's cold feedback branch, or its §Session Recovery `generating` reconstruction): override `{verify_report_path}` = `{docs_path}cold_review.md`.
-   - Model: if preset ≠ "default", use `model_config.executor`.
-4. **Dispatch 1 sub-agent.**
-5. Parse return. Print: `  ✓ {first line}`
-6. Verify `changes.md` exists.
-7. Update phase → `"generate_done"`, `updated_at → now`.
-
-#### Step 4 — WORKFLOW path (mode: standard | multi)
-
-1. Update phase → `"generating"`, `updated_at → now`.
-2. Run the Build segment:
-   ```
-   Workflow {
-     scriptPath: "${CLAUDE_PLUGIN_ROOT}/workflows/harness.build.workflow.js",
-     args: {
-       specContent: <spec.md content>,
-       qaFeedback: <qa_report.md content if round > 1, else "(First round)">,
-       repoPath, lang, scope, maxFiles: <max_files>, testCmd: <test_cmd>, userLang,
-       verifyFailure: <"" first pass>, verifyReportPath: "{docs_path}verify_report.md",
-       mode, models: { ... as in Step 2 },
-       retry: false
-     }
-   }
-   ```
-3. Record `runs.build → { "runId": "<id>" }`.
-4. The segment returns `{ changes: ChangeSet, planDigest, advisorDigests }`. Store `workflow_ctx → { planDigest, advisorDigests, changedFiles }` in state.json — `changedFiles` = repo-relative paths from `changes.modifiedFiles[].path` + `createdFiles` (reasons stripped; normalize any absolute paths to repo-relative). Digests are reused on retries; `changedFiles` is the sanctioned Step 5 source on resume.
-5. **Orchestrator writes `{docs_path}changes.md` from the ChangeSet object**:
-   - `## Round {round} Changes` header
-   - `### Modified Files` ← `modifiedFiles[]` as `- path — reason` (normalize absolute paths to repo-relative) ; `### Created Files` / `### Deleted Files`
-   - `### Advisor Feedback Applied` ← `advisorFeedbackApplied[]` ; `### Advisor Feedback Declined` ← `advisorFeedbackDeclined[]`
-6. Print per OLC: `  ✓ Code: {changes.summary}`
-7. Verify `changes.md` exists (orchestrator-written).
-8. Update phase → `"generate_done"`, `updated_at → now`.
-9. **On Workflow error**: graceful fallback → re-run this step on the INLINE path (generator_single).
-
-**Retry entries (from Step 5/7 failure loops)** — regardless of path, a retry NEVER re-plans or re-reviews:
-- INLINE: re-dispatch the single implementation sub-agent with `{verify_failure}` + `{verify_report_path}` (current behavior).
-- WORKFLOW: re-run `harness.build` with `retry: true`, `verifyFailure: <summary from the failing VerifyVerdict>`, `verifyReportPath`, and `planDigest`/`advisorDigests` from `workflow_ctx` — the script skips its Plan/Advise phases and runs one implementation pass.
-
-#### After Generate Phase
-
-Print: `[harness] Generate complete.`
-
-**If `run_style == "phase"` or (`run_style == "step"` and requested step was `generate`):** Print the §Session Boundary block (Type A: After Generate). Halt.
-
-**If `run_style == "auto"`:** Continue to Step 5 (Verify).
-
----
-
-### Step 5: Verify Phase (Layer 1 — Mechanical)
-
-**First entry only** (from generate_done, not from retry loop): Update state.json: `phase → "verify_ready"`, `verify.layer1_result → null`, `verify.layer1_retries → 0`, `updated_at → now`.
-
-**Retry re-entry** (from Generator retry): Update state.json: `phase → "verify_ready"`, `verify.layer1_result → null`, `updated_at → now`. Do NOT reset `layer1_retries` — it was already incremented at retry dispatch.
-
-Print: `[harness] Phase: Verify (Layer 1 — Mechanical)`
-
-#### Cold Review Input Collection
-
-*Definition only — shared, re-run before each site evaluating `cold_dispatch_allowed` (§Step 5
-item 2, the Auto-fix re-verify call, §Step 6 item 7) — an applied patch can add files.*
-
-1. If `cli_flags.cold_pass == false`: skip collection entirely (nothing to gain from running
-   git) — every dispatch/gating site below independently re-checks this flag (AC-28).
-2. Otherwise collect the union of `git -c core.quotePath=false diff HEAD --name-only
-   --diff-filter=d` and the `??` entries of `git -c core.quotePath=false status --porcelain
-   --untracked-files=all`. Never use `git add -N`. If `has_git == false`: collection is
-   impossible — `coldFilesList → null`, `collectionSkipReason → "has_git == false"`
-   (deterministic). If `git diff HEAD` fails because HEAD is unborn (no commits yet): fall
-   back to `git status` alone and continue. If any git command fails for another reason:
-   `coldFilesList → null`, `collectionSkipReason → "git command failed"`
-   (non-deterministic).
-3. Filter: drop any path prefixed `{docs_path}`, `.harness/`, or `.git/`; run
-   `validate_path(kind=file_reference)` on the rest (drop failures, warn per path);
-   de-duplicate and sort (git output order kept, path-alphabetical tiebreak); truncate to
-   `coldMaxFiles` (20 — a literal, not a new state field; guard: `Number.isInteger(n) && n >
-   0 ? n : 20`, `log()` on invalid input). Record the dropped/truncated counts — **WORKFLOW
-   path**: into `cold_review.md`, the file the orchestrator itself writes (AC-27); **INLINE
-   path**: into the §Step 6 console line instead, because there the sub-agent owns that file
-   and is handed no variable carrying these counts. The split follows AC-27's exclusive write
-   assignment; it narrows AC-11's "record" to the only writer each path actually has.
-4. If the filtered/truncated list is empty: `coldFilesList → null`, `collectionSkipReason →
-   "no files after filtering"` (non-deterministic — never report this as `clean`; see the
-   spec's edge cases).
-5. **`coldFilesList` format**: a newline-separated string, one repo-relative path per line —
-   same convention as `changedFilesList` (§Step 5 — WORKFLOW path item 2). The two lists
-   legitimately differ, and the reason is the point: `coldFilesList` is WIDER because newly
-   created files are untracked and so never appear in `git diff`, which `changedFilesList`
-   derives from. That asymmetry is intended (AC-13), not a collection defect.
-
-**`cold_dispatch_allowed(skipL1)`** — the single predicate every gating site below cites by
-name: `cli_flags.cold_pass == true AND skipL1 != true AND verify.cold_round != round AND
-coldFilesList != null`. Sites cite it rather than re-deriving it, with ONE declared exception:
-§Step 6 item 7 is first subordinate to §Step 5's gating table latch row (named there, not
-restated here — that row is evaluated ahead of everything below and, once it has fired this
-round, item 7 writes nothing), THEN checks `cli_flags.cold_pass` (unlabeled, its own early exit
-— this predicate's `cold_pass` conjunct), THEN walks the remaining checks in an explicit (a)/(b)/(c)
-order that does NOT map 1:1 onto this predicate's conjunct names: (a) an explicit-PASS text
-check (INLINE's equivalent of the segment's own verdict check — no conjunct of this predicate
-on its own); (b) `verify.cold_round == round` already (the `cold_round` conjunct); (c)
-`verify.layer1_result == "FAIL"` (the `skipL1` conjunct). `coldFilesList != null` is checked
-after that walk via `collectionSkipReason`. INLINE needs a per-conjunct state write or latch,
-not just a boolean, hence the walk — it is an ordering of THIS predicate, not a second
-definition. `skipL1` is the value
-the SPECIFIC call site below is about to use (`false` at §Step 5 WORKFLOW item 2 and the
-Auto-fix re-verify call; `true` at the L1-max-fail "Continue" call; from
-`verify.layer1_result == "FAIL"` at §Step 6's INLINE gate) — not a separate state field.
-
-| When `cold_dispatch_allowed` is false because of… (rows CAN co-fire — evaluate the `verify.cold_round == round` row FIRST, and because it writes neither field an already-recorded cold result is never overwritten; the remaining rows are then top-down, first match wins) | `cold_result` | `cold_round` |
-|---|---|---|
-| `collectionSkipReason = "has_git == false"` | `skipped` | `round` (deterministic) |
-| `collectionSkipReason` = empty-input / git-failure | `skipped` | `null`, unrecorded (non-deterministic — re-evaluate next entry/retry) |
-| `cli_flags.cold_pass == false` | `skipped` | `round` (deterministic; AC-28) |
-| `skipL1 == true` (this call) | `skipped` | `round` (deterministic; AC-15) |
-| `verify.cold_round == round` already | (unchanged — already recorded this round) | (unchanged) |
-
-#### Step 5 — INLINE path
-
-1. Read template: `{CLAUDE_PLUGIN_ROOT}/templates/verify/verify_layer1.md`
-2. Prepare prompt with:
-   - `{build_cmd}` / `{test_cmd}` / `{lint_cmd}` / `{type_check_cmd}`: from state.json (or `"SKIP"` if null)
-   - `{changes_md_path}`: `{docs_path}changes.md`
-   - `{verify_report_path}`: `{docs_path}verify_report.md`
-   - `{todo_blocking}`: from state.json `verify.todo_blocking`
-3. Update phase → `"verifying"`, `updated_at → now`.
-4. **Dispatch Verify sub-agent** with `model: model_config.verifier` (default: haiku; override via --verifier-model).
-5. Parse return — first line (English raw — see §Output Language Contract — Preserved-English Glossary):
-   - Contains `"PASS"` → `verify.layer1_result → "PASS"`
-   - Contains `"FAIL"` → `verify.layer1_result → "FAIL"`
-   - Contains NEITHER `"PASS"` nor `"FAIL"` (malformed / non-conforming return) → **conservative FAIL fallback**: set `verify.layer1_result → "FAIL"` and print per OLC `[harness] ⚠ Verify (Layer 1) 1-line return had no PASS/FAIL keyword — treating as FAIL`. Never silent-pass an unparseable verify result.
-6. Update phase → `"verify_done"`, `updated_at → now`. Branch on result below.
-
-#### Step 5 — WORKFLOW path
-
-1. Update phase → `"verifying"`, `updated_at → now`.
-2. Run the Eval segment (covers Verify L1 AND Evaluate L2/L3 in one autonomous span):
-   ```
-   Workflow {
-     scriptPath: "${CLAUDE_PLUGIN_ROOT}/workflows/harness.eval.workflow.js",
-     args: {
-       buildCmd, testCmd, lintCmd, typeCheckCmd,
-       changesMdPath: "{docs_path}changes.md", verifyReportPath: "{docs_path}verify_report.md",
-       todoBlocking: <verify.todo_blocking>,
-       specContent: <spec.md content>,
-       changedFilesList: <repo-relative paths only, reasons stripped (anchoring prevention). Source priority, first available wins: (1) the in-context ChangeSet.modifiedFiles+createdFiles when the build segment ran THIS session; (2) state.workflow_ctx.changedFiles on resume after a workflow-path build; (3) if workflow_ctx is null — the build ran INLINE via §Mode Gate graceful fallback, OR a cross-session resume dropped the in-context ChangeSet — extract paths from {docs_path}changes.md (### Modified Files / ### Created Files entries, taking the path before the " — reason" suffix). The changes.md read is a sanctioned path-only reconstruction per Architecture Principles #1 (paths only, no content analysis)>,
-       testAvailable: <bool>, roundNum: <round>, scope, userLang,
-       qaReportPath: "{docs_path}qa_report.md",
-       models: { ... }, skipL1: false, onlyL1: false,
-       coldPass: cold_dispatch_allowed(false), coldMaxFiles: 20, coldFilesList
-     }
-   }
-   ```
-   This `args` block (including the 3 cold-review fields above) is the single source every
-   WORKFLOW `harness.eval` call site uses — including the "Continue to Evaluator" call
-   (item below, `skipL1: true`) and the Auto-fix re-verify call (§Step 5 — Auto-fix
-   proposal, step 5) — each substitutes only its own `skipL1` value into
-   `cold_dispatch_allowed(skipL1)`, never a separate formula.
-3. Record `runs.eval → { "runId": "<id>" }`.
-4. The segment returns a `VerifyVerdict`, optionally merged with `coldFindings` /
-   `coldCounts` / `coldStatus` (only when cold review ran this call — see
-   `workflows/harness.eval.workflow.js`). Branch on **(layer, verdict)** — never verdict alone:
-   - `layer == "L1"` and `verdict == "PASS"` → unreachable (segment continues to evaluate) — treat as L2/L3 verdict below.
-   - `layer == "L1"` and `verdict != "PASS"` → **Layer 1 FAIL**: `verify.layer1_result → "FAIL"`, phase → `"verify_done"`, go to the L1 FAIL branch below. (Cold review never ran this call — no `verify.cold_*` write here.)
-   - `layer == "L2" | "L3"` → Layer 1 passed inside the segment. **Single read-modify-write** — write ALL of the following together, once: `verify.layer1_result → "PASS"`, `phase → "evaluate_done"`, AND the cold-review recording below:
-     - If `coldStatus` is present (`"clean"` / `"findings"` / `"failed"`): `verify.cold_round →
-       round`, `verify.cold_counts → coldCounts` (if `coldStatus == "failed"` and `coldCounts`
-       is undefined — the segment's `catch` branch returns no counts — write
-       `verify.cold_counts → null` alongside, rather than leaving a stale prior-round value in
-       place). If `coldFindings` is a non-empty array (checked directly on the data, narrower
-       than and independent of the `coldStatus == "findings"` label — a defect that ever
-       desyncs the two is still caught): apply
-       `validate_path(kind=file_reference)` to each `coldFindings[].file`, drop failures with
-       a per-path warning and recompute `coldCounts` from the survivors ("recount" below means
-       that recomputed `coldCounts`, never the raw survivor count). Whenever that drop ran,
-       the value the single write above records into `verify.cold_counts` is the recomputed
-       one, on whichever `coldStatus` it ran under; of the ①②③ branches below, only ①
-       departs from this rule, keeping the PRE-drop values instead. The outcomes must stay
-       distinct **in state**, not only in a banner — a banner is transient output, while
-       `Remaining` is re-rendered from state in the NEXT session. These ①②③ branches fire only when `coldStatus == "findings"`. On `"clean"` the drop/recompute above can still run — a Minor-only cold pass reaches `clean` with a non-empty `coldFindings` — and the recompute rule stated above applies here too, so `verify.cold_counts` and the report written below are both drawn from the survivors; `verify.cold_result` stays `"clean"` regardless of survivor count (promoting `clean` → `failed` here is the scenario §엣지 케이스 forbids). On `"failed"` neither path that sets it — the segment's `catch`, and the `else if` that fires when `coldFilesList` fails its non-empty-string re-check — assigns `coldFindings` or `coldCounts`, so normally there is nothing to drop. That is a fact about those two code paths, not a guarantee attached to the data, so the `coldCounts`-undefined guard above remains defense in depth rather than a dead branch, and the non-empty-array test above keeps checking the data rather than the label. When it is `"findings"`, evaluate in this fixed order,
-       first match wins, so the branches cannot overlap: **① zero survivors** (EVERY finding
-       dropped) → `verify.cold_result → "failed"`, `verify.cold_counts` kept at the PRE-drop
-       values, plus a distinct "all cold findings hidden by path validation" banner; **② ≥1
-       survivor AND recount Critical+Major == 0** → `verify.cold_result → "clean"`; **③
-       otherwise** → `"findings"`. Reusing `failed` in ① (rather than a 7th value,
-       which AC-16 fixes at 6 + `null`) is a deliberate compromise — it is the only existing
-       value whose `Remaining` row does not collapse to `none`, so the fact survives a session
-       boundary. Otherwise `verify.cold_result → coldStatus` unchanged (`"clean"` stays
-       `"clean"`, `"failed"` stays `"failed"`). THEN write `{docs_path}cold_review.md` from the
-       (possibly recomputed) findings, opening it with the dropped/truncated counts (AC-11's
-       WORKFLOW sink — written even on `"failed"`), and only after that file write succeeds, set
-       `verify.cold_review_path → "{docs_path}cold_review.md"` — still inside this same write.
-       **If that file write FAILS**: `verify.cold_result → "failed"`, `cold_review_path` stays
-       `null`, banner shown — never leave `"findings"` paired with a null path, which would
-       make §Session Boundary point `Remaining` at a file that does not exist.
-     - If `coldStatus` is undefined (cold review did not run this call): when this call's own
-       `cold_dispatch_allowed(skipL1)` was false, apply — **here, in this same single
-       read-modify-write** — the row of §Step 5's gating table that fired; that table is the
-       single authority for BOTH `verify.cold_result` and `verify.cold_round`, and its latch
-       row writes neither field, so a recorded result survives. This site IS the
-       WORKFLOW-path writer: the collection subsection above is **Definition only** and writes
-       nothing, so leaving the fields untouched here would mean no path ever records a
-       `skipped` (AC-14). Only when `cold_dispatch_allowed` was true yet `coldStatus` is still
-       undefined (a segment that returned no cold fields at all) leave `verify.cold_*`
-       untouched.
-     Record the verdict for Step 7 (skip Steps 5-PASS print and 6 — already evaluated). Print
-     per OLC: `  ✓ Verify (Layer 1): PASS → Evaluate: {verdict.verdict}` and go to **Step 7**
-     with this verdict.
-5. **On Workflow error**: graceful fallback → run Step 5 INLINE, then continue the inline route (Step 6 inline evaluate).
-
-#### If PASS (inline path):
-
-Print per OLC:
-```
-[harness] Verify (Layer 1) complete.
-  Result : PASS
-  {first line from sub-agent}
-```
-Continue to Step 6.
-
-#### If FAIL and retries < 3:
-
-Increment `verify.layer1_retries` in state.json.
-Print per OLC:
-```
-[harness] Verify (Layer 1) FAIL — retrying Generator (attempt {layer1_retries}/3)
-  {failure summary}
-```
-
-**Generator retry** — single implementation pass only (no re-plan, no re-review):
-- INLINE: re-dispatch per Step 4 retry rules (`generator_single.md` with `{verify_failure}`).
-- WORKFLOW: `harness.build` with `retry: true` + `workflow_ctx` digests + `verifyFailure` = the failing verdict's `summary` (+ top `failures[].fix` lines).
-
-Update phase → `"generating"`, `updated_at → now` (skip `generate_ready` — retry is automatic, no user gate).
-After retry completes: phase → `"generate_done"`, `updated_at → now`, then loop back to Step 5 (re-run verify — WORKFLOW path re-runs `harness.eval`).
-
-#### If FAIL and retries >= 3:
-
-Print per OLC:
-```
-[harness] Verify (Layer 1) FAIL — max retries reached (3/3)
-  Latest error: {failure summary}
-  See: {docs_path}verify_report.md
-```
-
-<HARD-GATE>
-Ask via AskUserQuestion (in `user_lang`):
-- header: "Verify"
-- question: "Mechanical verification failed after 3 attempts. [error summary]"
-- options:
-  - "Auto-fix proposal" / "Let AI (Opus) analyze the failure and propose a minimal diff (1 attempt only)" ← **HIDE this option if `verify.autofix_attempted == true OR state.autofix != null`** (see §State Machine — I2)
-  - "Continue to Evaluator" / "Skip remaining verify issues, proceed to QA"
-  - "Stop" / "Halt — resumable next session (`/harness` re-enters this gate directly). Review verify_report.md"
-</HARD-GATE>
-
-If "Continue": INLINE → proceed to Step 6 (evaluator receives the Layer-1-FAILED verify_context). WORKFLOW → run `harness.eval` with `skipL1: true` (so `coldPass: cold_dispatch_allowed(true)` evaluates to `false` — AC-15) and treat its return as the Step 7 verdict, recorded per §Step 5 WORKFLOW item 4 above.
-If "Stop": **(P1-2)** print the §Session Boundary block (Type A: Step 5 L1 max-retry "Stop"), then halt (keep phase as `verify_done` — unchanged; see §Session Recovery `verify_done` branch for re-entry). Selection count stays 3 (`Auto-fix proposal` / `Continue to Evaluator` / `Stop`) and no state-machine field changes — only the "Stop" output gains the boundary block + `/handoff generate` recommendation.
-
-**If "Auto-fix proposal":**
-
-> The Auto-fix Proposer is ALWAYS dispatched inline by the orchestrator (it Reads source directly — Architecture Principle #2) and keeps its 1-line confidence contract in this version (deliberate carve-out; AutoFixProposal schema lands in a later phase).
-> `verify.autofix_attempted` is set to `true` only after the 2nd HARD-GATE decision (Apply/Reject/Stop), NOT at Proposer dispatch. This ensures session interruption between dispatch and the 2nd gate does not consume the once-only right (I1).
-> **On session resume with `autofix.applied == "proposed"`**: re-enter 2nd HARD-GATE directly using saved `autofix.last_patch_path` — skip 1st GATE (I3).
-
-1. Update state.json: `autofix → { "last_patch_path": ".harness/generator/auto_fix_patch.md", "applied": "proposed", "triggered_at": "<ISO8601>" }`
-2. Read template: `{CLAUDE_PLUGIN_ROOT}/templates/generator/auto_fix_proposer.md`
-3. Fill variables (pass **paths only** — Proposer sub-agent reads files directly):
-   - `{spec_path}` = `{docs_path}spec.md`
-   - `{changes_md_path}` = `{docs_path}changes.md`
-   - `{verify_report_path}` = `{docs_path}verify_report.md`
-   - `{failing_files_list}` = Orchestrator reads verify_report.md directly to extract file paths (explicit exception to §Architecture Principles #1 — path extraction only, no content analysis). After extraction:
-     - Apply `validate_path(path, kind=file_reference)` to each path.
-     - Violations: drop path + print `[harness] ⚠ Path validation failed: <path> — excluded from Proposer input`
-     - Cap: maximum 5 paths. Excess paths dropped silently.
-     - If 0 valid paths remain: print `[harness] ⚠ No valid file paths found — Proposer input will be empty`
-   - `{user_lang}` = from state.json
-   - `{output_path}` = `.harness/generator/auto_fix_patch.md`
-4. **Dispatch Auto-fix Proposer sub-agent** with `model: model_config.advisor ?? "opus"`.
-   - If `model_config.preset == "default"`, use `"opus"` (explicit upgrade — 2nd GATE UI will warn cost).
-5. Parse return 1-line. Extract `confidence` level. If return format is non-standard (cannot parse confidence), treat as `confidence: Unknown` and print `[harness] ⚠ 1-line return parse failed — fallback: confidence Unknown`.
-6. Verify `.harness/generator/auto_fix_patch.md` exists.
-7. **Empty patch check**: verify `auto_fix_patch.md` contains at least one ```` ```diff ```` code block AND at least one `@@` hunk header.
-   - If absent: skip Apply, print `[harness] ⚠ Patch file is empty or has no diff block — apply skipped`, return to HARD-GATE (Auto-fix hidden).
-
-<HARD-GATE>
-Show confidence level + 1-line summary from patch file.
-Print before question: `[harness] ℹ Auto-fix model: {model_config.advisor ?? 'opus'}`
-Ask via AskUserQuestion (in `user_lang`):
-- header: "Auto-fix"
-- question: "Proposed fix generated (confidence: {level}). [If confidence == Low: ⚠ Low confidence — review the diff carefully before applying.] Apply the patch?"
-- options:
-  - "Apply patch" / "Apply the proposed diff and re-run Layer 1 verification (retry counter unchanged)"
-  - "Reject" / "Discard proposal, return to previous gate (Auto-fix option hidden)"
-  - "Stop" / "Halt for manual intervention"
-</HARD-GATE>
-
-After 2nd HARD-GATE decision, set `verify.autofix_attempted = true` in state.json.
-
-**If "Apply patch":**
-1. Before applying: snapshot current state via `git stash` (if `has_git == true`) or copy changed files to `.harness/autofix_pre_apply/` (if `has_git == false`).
-2. **Pre-apply path validation**: parse all `--- a/<path>` and `+++ b/<path>` headers from `auto_fix_patch.md` (metadata only — the `--- a/` / `+++ b/` pair is 2 header lines per file, not per hunk; hunk bodies are not parsed). Apply `validate_path(path, kind=diff_target)` to each path.
-   - Print to user: `[harness] Applying patch to: <path list>`
-   - If any path fails validation: reject Apply, print `[harness] ✗ Diff path validation failed: <path>`, return to HARD-GATE (Auto-fix hidden).
-3. Apply unified diff from `.harness/generator/auto_fix_patch.md` using Edit tool.
-   - If any hunk fails to apply: restore from snapshot, warn user "Apply failed — reverted to pre-apply state.", return to HARD-GATE (retries >= 3, Auto-fix hidden).
-4. Update state.json: `autofix.applied → "applied"`. Reset `verify.layer1_result → null`.
-5. Re-run verification (retry counter `layer1_retries` unchanged — do NOT increment). INLINE → re-dispatch verify_layer1. WORKFLOW → run ONE full `harness.eval` (`skipL1: false, onlyL1: false`) — its L1 phase IS the re-verification (no separate `onlyL1` pre-pass; avoids running L1 twice):
-   - **L1 PASS** → INLINE: proceed to Step 6. WORKFLOW: the same eval run already continued to L2/L3 — take its verdict to Step 7.
-   - **L1 FAIL** (`layer == "L1"`) → update state.json: `autofix.applied → "stopped"`, `layer1_retries = min(layer1_retries, 3)` (clamp — see §State Machine I4). Return to FAIL retries >= 3 HARD-GATE (Auto-fix option hidden since `verify.autofix_attempted == true`).
-
-**If "Reject":**
-1. Update state.json: `autofix.applied → "rejected"`.
-2. Return to FAIL retries >= 3 HARD-GATE (Auto-fix option hidden).
-
-**Layer 2 FAIL path:** Auto-fix proposal does **NOT** apply to Layer 2 structural failures (Step 7). Mechanical diff cannot fix structural issues.
-
-#### After Verify Phase
-
-This is the WORKFLOW + `run_style == "phase"` boundary named in §Step 5's own predicate
-above — the cold-review state recorded by §Step 5 WORKFLOW item 4's single write (or its
-"coldStatus undefined" branch) is confirmed complete before this halt, never deferred to
-Step 6/7 (AC-23).
-
-**If `run_style == "phase"` or (`run_style == "step"` and requested step was `verify`):** Print the §Session Boundary block (Type A: After Verify). Halt.
-
-**If `run_style == "auto"`:** Continue to Step 6 (INLINE) / Step 7 (WORKFLOW — evaluation already ran inside `harness.eval`).
-
----
-
-### Step 6: Evaluate Phase (Layer 2 + Layer 3) — INLINE path only
-
-> On the WORKFLOW path this step is merged into the `harness.eval` segment (Step 5). Skip to Step 7 with the returned VerifyVerdict.
-
-Update state.json: `phase → "evaluate_ready"`, `updated_at → now`.
-
-Print: `[harness] Phase: Evaluate (Layer 2+3)`
-
-1. Read template: `{CLAUDE_PLUGIN_ROOT}/templates/evaluator/evaluator_prompt.md`
-2. Prepare prompt:
-   - `{spec_content}` from spec.md
-   - `{changed_files_list}` — file paths only from changes.md, **strip all "reason" descriptions** (anchoring prevention)
-   - `{test_available}`, `{build_cmd}`, `{test_cmd}`, `{round_num}`, `{scope}`, `{user_lang}`
-   - `{qa_report_path}` = `{docs_path}qa_report.md`
-   - `{verify_context}`:
-     - If `verify.layer1_result == "PASS"`: `"Layer 1 PASSED — build/test/lint/type-check verified. See {docs_path}verify_report.md"`
-     - If `verify.layer1_result == "FAIL"` (user chose Continue): `"Layer 1 FAILED (user proceeded despite failures) — see {docs_path}verify_report.md. Pay extra attention to build/test correctness."`
-     - If verify skipped: `"Layer 1 was not executed for this session."`
-   - **Do NOT include:** Generator reasoning, implementation plans, advisor reviews, or references to "Generator"/"AI"/"agent".
-3. Update phase → `"evaluating"`, `updated_at → now`.
-4. **Dispatch Evaluator sub-agent** using `subagent_type: "superpowers:code-reviewer"` if available.
-   - Model: if preset ≠ "default", use `model_config.evaluator`.
-5. Parse return — first line (English raw — see §Output Language Contract — Preserved-English Glossary):
-   - Contains `"PASS"` → `verify.layer2_result → "PASS"`. Print: `  ✓ {first line}`
-   - Contains `"FAIL L2"` → `verify.layer2_result → "FAIL"`. Print: `  ✗ {first line}`
-   - Contains `"FAIL L3"` → `verify.layer2_result → "PASS"` (Layer 2 passed). Print: `  ✗ {first line}`
-   - Contains `"FAIL"` (no layer indicator) → treat as L3 FAIL. `verify.layer2_result → "PASS"`.
-   - Contains NEITHER `"PASS"` nor `"FAIL"` (malformed / non-conforming return) → **conservative FAIL fallback** (never silent-pass): set `verify.layer2_result → "PASS"` so the failure routes to the Layer 3 user Fix/Accept gate (Step 7) rather than a silent auto-retry, and print per OLC `[harness] ⚠ Evaluate 1-line return had no PASS/FAIL keyword — conservative FAIL fallback`. Step 7 then reads `qa_report.md`'s `### Verdict:` line as the authoritative PASS/FAIL source (the evaluator writes it programmatically); if that line is also absent, treat the verdict as FAIL.
-6. Update phase → `"evaluate_done"`, `updated_at → now`.
-7. **Cold review (INLINE)** — 2nd of 3 `--no-cold-pass` gating points (AC-28); subordinate to §Step 5 gating table's `verify.cold_round == round` row (named, not restated) — that row is evaluated first and, if it already fired this round, every check below is skipped with no state write, same as the table prescribes. Otherwise: if `cli_flags.cold_pass == false`, print nothing here (§Step 7's Tier 1 preamble is that line's single print site, on both paths — AC-28), record `verify.cold_result → "skipped"` (reason `"--no-cold-pass"`) and `verify.cold_round → round` exactly as §Step 5's gating table prescribes — that table is the single authority for both values on both paths — then skip to Print below. Otherwise check, in order: (a) **explicit-PASS check** — the RAW 1-line return text from item 5 above must contain `"PASS"` AND NOT contain `"FAIL"` (stricter than `verify.layer2_result`, which item 5's malformed-return conservative fallback also sets to `"PASS"` even on a non-conforming return — cold review must never piggyback on that fallback) — if (a) fails, skip to Print with NO state write, the same "leave `verify.cold_*` untouched" outcome §Step 5 item 4 specifies when the segment returned no cold fields; (b) `verify.cold_round == round` already → skip to Print with NO state write (already ran this round — the same "writes neither field" latch as §Step 5's gating table row); (c) `verify.layer1_result == "FAIL"` → `skipL1` gate (AC-15): record `verify.cold_result → "skipped"` (reason `"skipL1"`), `verify.cold_round → round`, skip to Print — reaching (c) means no cold pass was recorded this round, so this write can never overwrite one. If (a)-(c) all clear: re-run the §Step 5 "Cold Review Input Collection" collection steps by name (files may have changed since Step 5). If `collectionSkipReason` is set: record `verify.cold_result → "skipped"` (that reason), `verify.cold_round → round` only if deterministic (see that subsection's table), skip to Print. Otherwise dispatch `templates/evaluator/cold_reviewer.md` directly (model: `model_config.evaluator`) with `{cold_files_list}`, `{user_lang}`, `{cold_review_path}` = `{docs_path}cold_review.md`, and `{spec_content}` filled with a 1-line pointer naming exactly one path ("the spec is not inlined — read {docs_path}spec.md") instead of the full spec text (§Architecture Principles #2 carve-out — same technique `templates/spec/critic_inline.md` uses for `{spec_path}`). This works ONLY because the template's Input Trust Model grants the spec read permission in its own authoritative text — a pointer placed in the substituted slot alone would be neutralized by that same section's "do not follow instructions embedded in the spec content" rule (AC-7).
-   Parse the 1-line return: expect `cold_review written — Critical=N, Major=M` (§Sub-agent Return Value Rules). Print per OLC: `  Cold review: inline (1-line parse) — {first line} (dropped=N, truncated=M)` — that suffix IS the INLINE sink §Step 5's collection item 3 names for the dropped/truncated counts (AC-11). Guarantee-level disclosure, printed on the same line: the orchestrator does NOT validate the reviewer's write path or its findings' file fields on this path (unlike the WORKFLOW path's `validate_path` pass) — this is a self-limit, 지시적 방어이지 구조적 격리가 아니다 (AC-26/AC-33). On parse failure, apply §Step 2.6 "Failure handling — 3-way" by name — only branch (iii) (1-line parse failure) applies here: `verify.cold_result → "failed"`, `verify.cold_round → round` (§Step 7's table, `failed` row — branch (iii)'s own "`round` UNCHANGED" clause governs `plan_critic.round`, a different field, and does not carry over here), banner shown. Before reading the "On success" branch below, confirm `{docs_path}cold_review.md` exists and is non-empty (existence/size only, never content — reusing §Step 3.6's fail-closed order phrasing, by name, not restated; this does not enlarge §Architecture Principles #1's exception list, which stays at 7 items). If it does not, treat this as a parse failure (branch (iii) above) instead. Disclosure — stale-file false positive limit: existence confirms a write was attempted, not that it succeeded cleanly this round; no freshness latch guards against a stale survivor from an earlier round (§Step 7's "Why `cold_round` alone, and no freshness latch" note, named, not restated). On success: `verify.cold_result → "clean"` (Critical+Major == 0) or `"findings"` (≥ 1); `verify.cold_counts → {Critical: N, Major: M, Minor: 0}` (the 1-line return carries no Minor count — see §Step 7's cold_result table); `verify.cold_round → round`; `verify.cold_review_path → "{docs_path}cold_review.md"` (the sub-agent wrote it directly — the orchestrator does NOT write this file on the INLINE path, AC-27). **This single write happens BEFORE the Print below and any banner/`Remaining` rendering (AC-24).**
-
-Print: `[harness] Evaluate complete.`
-
-**If `run_style == "phase"` or (`run_style == "step"` and requested step was `evaluate`):** Print the §Session Boundary block (Type A: After Evaluate). Halt.
-
-**If `run_style == "auto"`:** Continue to Step 7.
-
----
-
-### Step 7: Verdict & Loop
-
-Determine the verdict:
-- **INLINE path:** Read `qa_report.md`. Look for `"### Verdict: PASS"` or `"### Verdict: FAIL"`. Also check `verify.layer2_result` from state.json to determine failing layer.
-- **WORKFLOW path:** use the `VerifyVerdict` object from `harness.eval` — `verdict ∈ {PASS, FAIL_L2, FAIL_L3}` with `layer`. Set `verify.layer2_result → "FAIL"` iff `verdict == "FAIL_L2"`, else `"PASS"`. The QA report file was still written by the evaluator agent for the user. **On resume with no in-context VerifyVerdict:** read `qa_report.md`'s `### Verdict:` line (PASS/FAIL) and combine it with `verify.layer2_result` from state.json to reconstruct {PASS, FAIL_L2, FAIL_L3} — mirrors the INLINE procedure (sanctioned read, see §Architecture Principles #1).
-
-**Two-tier evaluation.** Tier 1 (above) settles `verdict` only — `qa_report.md`'s `### Verdict:` line is authoritative for `verdict` alone. Tier 2 (below, inside `#### If PASS:` only) evaluates the separate cold-review branch and neither reads nor writes `verify.layer2_result` — that field belongs to Tier 1 alone. On resume, `### Verdict:` and `verify.cold_*` never conflict: they are two different authorities over two different questions, not one value with two sources.
-
-**`--no-cold-pass` display** (display ONLY — this is not itself a gating point; AC-28's three defenses are the §Step 5 args construction site, the §Step 6 entry check, and the segment's own `A.coldPass === true` strict test): print `Cold review: disabled (--no-cold-pass)` whenever `cli_flags.cold_pass == false`. It sits HERE, in Tier 1's preamble rather than inside `#### If PASS:`, precisely so it prints regardless of verdict as AC-28 requires — a FAIL_L2/FAIL_L3 session must not silently omit it. Separately — and on its own line, because a `disabled` line cannot also report how the pass ran — whenever `cold_ran_this_round` holds (defined once under `#### If PASS:` below, cited here by name), print the guarantee level: `Cold review: workflow (schema-validated)` if `path_resolved == "workflow"`, else `Cold review: inline (1-line parse)`, carrying the anchoring literal — this self-limit is instructive, not structural, 지시적 방어이지 구조적 격리가 아니다 (AC-33). The two branches are exclusive. `failed` and `retried_dispatching` sit outside that derivation, so a cold pass that ran and died prints no guarantee line; that gap is disclosed in changes.md rather than closed with a 7th predicate, which would break this slice's own no-new-vocabulary rule.
-
-#### If PASS:
-
-**Cold review feedback branch (Tier 2 — evaluated BEFORE `phase → "completed"` is written, AC-19 (f)).** `cold_ran_this_round` (single definition, cited by name elsewhere — never restated): `verify.cold_round == round AND verify.cold_result ∈ {clean, findings, retried_unverified}`. Branch condition (single definition): `verdict == PASS AND cold_ran_this_round AND (cold_counts.Critical + cold_counts.Major) >= 1 AND verify.cold_retries == 0` — cold never reads or writes `verify.layer2_result`.
-
-**Why `cold_round` alone, and no freshness latch (AC-21).** §Step 2.6's latch confirms `plan_critic_findings.md` exists after that section deleted it pre-dispatch, so existence alone proves this pass wrote it. Cold review's counterpart baseline, `qa_report.md`, is rewritten by the Evaluator on every L1 retry, every L2 auto-retry and every cold feedback pass, and no section deletes it first — so neither that existence rule nor the mtime comparison this latch used before would carry any freshness meaning there, and the latch is deliberately NOT ported; file existence is used only to confirm a successful write (absent → `failed` + banner). **Correction, recorded rather than rewritten away**: this sentence used to state the latch compares mtimes and that the comparison is sound "because `spec.md` is written once per plan". The mechanism changed; the conclusion — not ported — did not, and it now rests on `qa_report.md` having no pre-dispatch delete rather than on a per-plan single write. **Cost of the non-deterministic `skipped` re-evaluation**: its two reasons (git command failure / empty input) do not write `cold_round`, so re-entering §Step 5 or §Step 6 inside the SAME round can charge one additional cold pass — for those two the ceiling is entry count, not round count.
-
-`verify.cold_result` full vocabulary — 6 values + `null` (extends slice A's already-declared field; not a new field):
-
-| Value | Meaning | `cold_round` written? |
-|---|---|---|
-| `null` | not yet run this session | — |
-| `clean` | ran, 0 Critical/Major findings (Minor-only counts as `clean` — both paths, see the note under this table) | `round` |
-| `findings` | ran, ≥1 Critical/Major finding, feedback not yet tried | `round` |
-| `retried_dispatching` | feedback retry dispatched, not yet confirmed complete | `round` |
-| `retried_unverified` | feedback retry dispatched AND completed; not re-verified by cold | `round` |
-| `skipped` | will not run this round — see §Step 5's table for the deterministic/non-deterministic split | see that table |
-| `failed` | ran, agent failed (schema error / throw) | `round` |
-
-**Minor-only results are `clean` on BOTH paths.** The split is Critical+Major, never total
-finding count: the INLINE 1-line contract (`cold_review written — Critical=N, Major=M`) carries
-no Minor count at all, so a total-count rule would make the identical review land as `findings`
-on WORKFLOW and `clean` on INLINE — opposite `Remaining` rows for the same facts. The feedback
-branch is unaffected either way, since it already tests Critical+Major separately.
-
-If the branch condition holds:
-- (a) **Single read-modify-write, BEFORE dispatch**: `cold_retries += 1`, `cold_result → "retried_dispatching"`.
-- (b) Retry: INLINE = §Step 4 retry rules with its own `{verify_report_path}` → `{docs_path}cold_review.md` exception clause (by name); WORKFLOW = `harness.build {retry:true}` with `verifyReportPath` → `{docs_path}cold_review.md` (same override pattern as the Layer 2 retry above). Both paths ALSO override `{verify_failure}`/`verifyFailure` — entry requires `verdict == PASS`, so no failing verdict exists to summarize and §Step 4's retry contract would leave it undefined, which strands the generator with a report path and no statement of what to fix: supply `cold review: Critical={cold_counts.Critical}, Major={cold_counts.Major} — see {docs_path}cold_review.md` (placeholders, not the INLINE 1-line return's literal). The same two overrides apply at the other dispatcher, §Session Recovery's `generating` reconstruction (AC-20a).
-- (c) `phase → "generating"`. Do NOT reset `layer1_retries`/`layer2_retries`.
-- (d) **TWO writes, in this order, immediately after the retry dispatch completes** — first `phase → "generate_done"`, then a SEPARATE write `cold_result → "retried_unverified"`. They are deliberately NOT combined: a single write leaves `(generate_done, retried_dispatching)` unreachable, so a session that dies after the dispatch finished is indistinguishable from one that died before it started, and §Session Recovery re-dispatches the generator retry on top of edits that are already applied. Split this way, `phase == "generate_done"` IS the "retry finished" signal, and §Session Recovery's `generating`/`generate_done` row (AC-20a) only has to finish the `cold_result` transition rather than re-run the retry. That row owns recovery either way — the same rule as here, generalized to whichever dispatcher actually finishes the retry.
-- (e) Run the full Verify → Evaluate pipeline (as the Layer 3 "Fix" branch below does).
-- (f) If re-evaluation FAILs, the FAIL branch below takes priority; `cold_result` stays `retried_unverified`; mention the cold finding counts in that branch's output too.
-
-**Budget exhausted** (`cold_retries >= 1`, condition still holds): no user gate — proceed to PASS below. Disclosure: `retried_unverified` → "되먹임 수정본은 콜드 재검증을 받지 않았다" (the `retried_dispatching` disclosure moved to the fall-through branch below — see there for why).
-
-**deep-review reuse rejection — 5 reasons, 1:1 with the epic spec's own list (AC-31; item 5 is this slice's own addition):**
-
-| # | reason | basis |
-|---|---|---|
-| 1 | args have no room for a spec — deep-review declares "reviewer never sees spec" unconditionally | epic §결정 2 #1 |
-| 2 | its diffContent is orchestrator-collected, unbounded, an order of magnitude larger than spec | epic §결정 2 #2 |
-| 3 | 2-3 reviewers + synthesis exceeds the 1-pass adversarial budget | epic §결정 2 #3 |
-| 4 | segment is read-only, writes no files — retry feedback needs a file path | epic §결정 2 #4 |
-| 5 | severity vocabulary mismatch — deep-review's `Finding.severity` is lowercase + `suggestion`; cold needs uppercase 3-grade | `workflows/_reference/schemas.md` severity-vocabulary note |
-
-If the branch condition does NOT hold (including after (f) resolves to PASS, or this round already ran clean):
-
-If `cold_result == "retried_dispatching"` at this point (a resume landed here with the cold
-feedback retry still mid-flight when the session ended — the single definition of that value
-lives in the vocabulary table above, not restated here), disclose: "되먹임 재시도가 완료되지
-않았다 — 수정본이 존재하는지 확인되지 않음." This is a narrow window, not the common case:
-§Session Recovery's own `generating`/`generate_done` handling normally advances `cold_result`
-to `retried_unverified` before Step 7 is reached again, so most resumes never see this branch
-fire for this value — disclosed here rather than asserted as a guaranteed-reachable path.
-
-Update state.json: `phase → "completed"`, `updated_at → now`.
-Print: `[harness] ✓ QA PASS — task complete.`
-Proceed to Step 8.
-
-#### If FAIL — Layer 2 (verify.layer2_result == "FAIL") and layer2_retries < 2:
-
-Layer 2 failed. Auto-retry without user gate (same pattern as Layer 1 retry).
-
-Increment `verify.layer2_retries` in state.json.
-Print per OLC:
-```
-[harness] Evaluate FAIL (Layer 2) — retrying Generator (attempt {layer2_retries}/2)
-  {failure summary}
-```
-
-Single implementation pass (retry, no re-plan/re-review) — INLINE per Step 4 retry rules **but override `{verify_report_path}` = `{docs_path}qa_report.md`** (a Layer 2 failure is structural — its findings live in `qa_report.md`, NOT the Layer-1 `verify_report.md`, which PASSED this pass) with `{verify_failure}` = the 1-line L2 FAIL summary; WORKFLOW `harness.build {retry: true}` with `verifyFailure` = the verdict's `summary` + top `failures[].fix` lines, `verifyReportPath` = `{docs_path}qa_report.md`.
-
-Update phase → `"generating"`, `updated_at → now` (skip `generate_ready`).
-After retry completes: phase → `"generate_done"`, `updated_at → now`, then **run the full Verify → Evaluate pipeline** (INLINE: Step 5 → 6 → 7; WORKFLOW: `harness.eval` full → Step 7).
-
-#### If FAIL — Layer 2 and layer2_retries >= 2:
-
-Print per OLC:
-```
-[harness] Evaluate FAIL (Layer 2) — max retries reached (2/2)
-  Failing items: {summary}
-```
-
-Ask via AskUserQuestion (in `user_lang`):
-- header: "QA"
-- question: "Layer 2 structural verification failed after 2 retries. [failing items]"
-- options:
-  - "Fix" / "Run next round"
-  - "Accept as-is" / "Finish without fixing"
-
-If "Fix": same as Layer 3 Fix below.
-If "Accept as-is": phase → `"completed"`, proceed to Step 8.
-
-#### If FAIL — Layer 3 (verify.layer2_result == "PASS") and rounds remaining (round < max_rounds):
-
-Ask via AskUserQuestion (in `user_lang`):
-- header: "QA"
-- question: "QA result: FAIL (Layer 3). [failure summary — INLINE: from qa_report.md Fix Instructions; WORKFLOW: from verdict.failures[].fix]."
-- options:
-  - "Fix" / "Run next round to fix FAIL items"
-  - "Accept as-is" / "Finish without fixing"
-
-If "Fix":
-- Increment `round`, reset `verify.layer1_retries → 0`, `verify.layer1_result → null`, `verify.layer2_result → null`, `verify.layer2_retries → 0`, `verify.cold_retries → 0`, `verify.cold_round → null` (AC-22 — the per-round cold budget/latch resets with every new round, same as the layer retry counters). `verify.cold_result` / `verify.cold_counts` / `verify.cold_review_path` are left UNCHANGED — they keep meaning "the last cold pass that actually ran," not "this round's cold state," until a new cold pass overwrites them (see the state field table's Written-by column). The session cap on cold passes equals `max_rounds` (default 3) (see that same table's note) — not a separate counter.
-- Update `updated_at → now`.
-- Go to Step 4 (Generate) — a NEW round is a full pass: INLINE normal dispatch with `{qa_feedback}`; WORKFLOW `harness.build {retry: false}` with `qaFeedback` = qa_report.md content (fresh plan + advise + implement).
-
-If "Accept as-is":
-- Update phase → `"completed"`, `updated_at → now`.
-- Proceed to Step 8.
-
-#### If FAIL and max rounds reached:
-
-Update phase → `"completed"`, `updated_at → now`.
-Print: `[harness] Max rounds reached. Remaining issues in qa_report.md.`
-Proceed to Step 8.
-
----
-
-### Step 8: Cleanup & Finalize
-
-Routing priority (checked in this order): `has_git == true` → `has_git == false`.
-
-**An epic-exit session never reaches this step.** §Step 3.5 hands control to §Step 3.6 (Epic
-Exit) by name, and that section owns the whole epic-exit path — its predicate, its fail-closed
-order, its `.harness/` delete and its §Session Boundary print. It used to be the first branch
-here, and the routing line above used to open with it; both moved, together, so that the
-sole edge in this file that skips Steps 4–7 no longer lands in the step those steps lead to.
-Nothing about the predicate or the order changed in the move — only where they live.
-
-#### Artifact Cleanup Safety Guard
-
-Cleanup safety rules: see `templates/_shared/safety_guard.md`.
-
-#### If has_git == true:
-
-Ask via AskUserQuestion (in `user_lang`):
-- header: "Commit"
-- question: "Implementation complete. Choose how to finish:"
-- options:
-  - "Commit code only (Recommended)" / "Clean `.harness/` only, commit code + spec/QA evidence, `{docs_path}` preserved on disk"
-  - "Commit all" / "Commit everything including artifacts"
-  - "No commit" / "Clean .harness/ only, keep changes in working tree"
-
-Actions (apply Safety Guard before each delete):
-- "Commit code only": (protect persisted spec/QA artifacts — **`{docs_path}` is never deleted on this path**, P0-2) Apply this exact **commit-first** 4-step sequence:
-  1. **(M8) Safety Guard validation** on `{docs_path}` — apply the full Artifact Cleanup Safety Guard per `templates/_shared/safety_guard.md` (slug check + path depth + `Path.cwd()` containment) BEFORE any staging. Retained as defense-in-depth even though this branch no longer deletes `{docs_path}`: it also guards the `.harness/` delete in step 4 by confirming `{docs_path}` (read from the same state.json) is a well-formed, contained path before any cleanup proceeds. If validation fails, **ABORT**: do NOT stage, do NOT delete `.harness/`. Surface the failed check to the user. Both `.harness/` and `{docs_path}` remain intact for manual recovery.
-  2. **Stage** the code changes plus the spec/QA-persistence files (only if the source file exists — silently skip missing files):
-     - `{docs_path}spec.md`
-     - `{docs_path}qa_report.md`
-     - `{docs_path}qa_notes.md`
-     - `{docs_path}critic_findings.md`
-     - `{docs_path}conventions.md`
-     - `{docs_path}slice_plan.md`
-     - `{docs_path}cold_review.md`
-     - `{docs_path}plan_critic_findings.md`
-
-     `{docs_path}slice_plan.md` is always missing from this list on an epic-exit session —
-     not because this branch is skipped, but because §Step 3.6 (by name) ends the session
-     before §Step 8 is reached at all; that section's own fail-closed order handles that
-     artifact on its own. Before the epic-exit path moved out of this step, the reason was
-     that the branch never reached a staging step; now the step itself is never entered. `{docs_path}cold_review.md` is now written by
-     §Step 5 (WORKFLOW) / §Step 6 (INLINE) (this slice) whenever cold review actually ran that
-     round — the silent-skip rule above already covers rounds where it did not. This repository's
-     `docs/` is gitignored, so `git add` on any listed `{docs_path}` artifact that does exist will fail —
-     that failure is handled by the warn-and-continue rule immediately below, never by the
-     silent-skip rule above (which applies only when the source file itself does not exist).
-
-     **(s4) Per-file staging failure handling**: if `git add <file>` fails for a specific artifact file (permission, `.gitignore` conflict, etc.), warn the user (in `user_lang`): "Failed to stage `<file>`: <error>. Artifact may not be in git history — it remains on disk at `{docs_path}` regardless (this path never deletes `{docs_path}`)." Continue with remaining files — do NOT abort the whole sequence on a single staging failure. The code commit (step 3) is more critical than any individual artifact preservation. Because `{docs_path}` is never deleted here, a staging failure can never strand a file — it stays on disk even when `git add` failed for it (e.g. `docs/` is `.gitignore`d, the common case in this repo itself — `.gitignore:7`).
-  3. **Commit** the staged code changes plus artifacts, then **confirm the commit succeeded** (git exit 0 / a new commit object exists). **If the commit FAILS** (pre-commit hook rejection, signing failure, locked index, disk error, nothing-to-commit): **STOP without deleting anything** — `.harness/` and `{docs_path}` stay intact so the session is resumable and all artifacts recoverable. Surface the git error (in `user_lang`) and tell the user to resolve it and re-run, or commit manually. Do NOT proceed to step 4. **This sub-path does not end the session** — do NOT print the §Session Boundary block here.
-  4. **Delete `.harness/`** — only after a confirmed-successful commit (the Safety Guard already validated the parent context). `{docs_path}` is **never deleted** on this path.
-
-  **(m2) commit-first, no-delete-of-docs_path ordering note**: the commit (step 3) precedes the only delete in this sequence (`.harness/`, step 4), so artifacts physically exist on disk at commit time and are captured normally when staging succeeds. `{docs_path}` itself is never deleted by this branch (P0-2 removes the prior "delete `{docs_path}` working-directory contents" step), so `spec.md` / `qa_report.md` remain on disk even when `docs/` is `.gitignore`d and staging silently fails per (s4). Because nothing is deleted until the commit is confirmed, a commit failure can never strand the session: `state.json` (`.harness/`) and `{docs_path}` survive for resume/manual recovery. (This supersedes the prior stage→delete→commit order, in which a final-step commit failure left state and docs already deleted.)
-
-  On success, print the §Session Boundary block (Type B — `Commit` = the new commit sha).
-- "Commit all": **stage + commit** `{docs_path}` + code, **confirm the commit succeeded**, then delete `.harness/` (on commit failure, keep `.harness/` intact and surface the error — same recovery rule as "Commit code only" step 3; that failure sub-path does not end the session, so no boundary block there). On success, print the §Session Boundary block (Type B — `Commit` = the new commit sha).
-- "No commit": delete `.harness/` only. Print the §Session Boundary block (Type B — `Commit` row omitted, no commit was made).
-
-#### If has_git == false:
-
-Inform user artifacts are in `{docs_path}`.
-Delete `.harness/` only. No git operations. Print the §Session Boundary block (Type B — `Branch`/`Commit` rows omitted).
 
 ---
 
@@ -2591,16 +1515,18 @@ ignored wholesale rather than merged. When no source declares anything — the c
 A green ① or ④ says the copies on disk are current. It does not say the skill body this process is
 running was loaded from them.
 
+<!-- BLOCK-START:hx-model-selection v1 — shared by /harness, /harness-build; edit every copy in one commit and bump the version -->
 ## Model Selection
 
 Preset table + rules: see `templates/_shared/model_config.md`.
 
-Role map: Architect / Senior Developer / QA Specialist / Synthesis → advisor; Lead Developer & Implementation & Generator(single) → executor; Combined / Code Quality / Test & Stability Advisor → advisor; Evaluator → evaluator; Verify (Layer 1) → verifier (haiku default); Cold review → evaluator (same role as Evaluator — it is the same review tier, §Step 5 "Cold Review Input Collection" / §Step 6).
+Role map: Architect / Senior Developer / QA Specialist / Synthesis → advisor; Lead Developer & Implementation & Generator(single) → executor; Combined / Code Quality / Test & Stability Advisor → advisor; Evaluator → evaluator; Verify (Layer 1) → verifier (haiku default); Cold review → evaluator (same role as Evaluator — it is the same review tier, `skills/harness-build/SKILL.md` §Step 5 "Cold Review Input Collection" / `skills/harness-build/SKILL.md` §Step 6).
 
 - INLINE path: pass `model` per role at sub-agent launch (preset ≠ "default").
 - WORKFLOW path: pass the whole resolved map once as `args.models` (`{executor, advisor, evaluator, verifier}`; null role = inherit) — segment scripts apply it per agent.
 
 > **Verifier defaults to haiku across all presets.** Layer 1 only executes commands and parses exit codes — lowest-cost model is always sufficient. Override with `--verifier-model sonnet|opus` for sensitive mechanical verification (e.g., concurrency, complex test failures). Opt-in only. When set to `sonnet` or `opus`, a cost warning is shown in Setup Summary.
+<!-- BLOCK-END:hx-model-selection v1 -->
 
 ## User Interaction Rules
 
@@ -2611,25 +1537,25 @@ See `templates/_shared/askuserquestion.md`.
 The following principles are invariant constraints for the harness Orchestrator.
 
 1. **Orchestrator reads no intermediate files.** Exceptions — reads only, exactly 7 (writes are a separate category, not counted in this list — see the `>` notes below; three follow, of which the second covers writes):
-   - (1) spec.md at plan gate and at the After-Plan boundary (§Scale Assessment signal computation, including the INLINE fallback) — the orchestrator also WRITES spec.md/changes.md/slice_plan.md from returned objects, and `cold_review.md` on the WORKFLOW path only (§Step 5, from the segment's returned `coldFindings`) — the INLINE path's `cold_review.md` is instead written by the cold-review sub-agent itself (§Step 6), never by the orchestrator (AC-27); writing final artifacts is not reading intermediates.
+   - (1) spec.md at plan gate and at the After-Plan boundary (§Scale Assessment signal computation, including the INLINE fallback) — the orchestrator also WRITES spec.md/changes.md/slice_plan.md from returned objects, and `cold_review.md` on the WORKFLOW path only (`skills/harness-build/SKILL.md` §Step 5, from the segment's returned `coldFindings`) — the INLINE path's `cold_review.md` is instead written by the cold-review sub-agent itself (`skills/harness-build/SKILL.md` §Step 6), never by the orchestrator (AC-27); writing final artifacts is not reading intermediates.
    - (2) qa_report.md at verdict gate (INLINE path; WORKFLOW path on session resume — verdict reconstruction)
-   - (3) changes.md path-extraction on WORKFLOW-path resume when `workflow_ctx` is null (changedFilesList reconstruction — repo-relative paths only, reasons stripped; no content analysis). See §Step 5 — WORKFLOW path `changedFilesList` source priority.
+   - (3) changes.md path-extraction on WORKFLOW-path resume when `workflow_ctx` is null (changedFilesList reconstruction — repo-relative paths only, reasons stripped; no content analysis). See `skills/harness-build/SKILL.md` §Step 5 — WORKFLOW path `changedFilesList` source priority.
    - (4) verify_report.md path (for the user message) and verify_report.md failing-file extraction for Auto-fix Proposer dispatch:
      Orchestrator reads verify_report.md to extract failing file paths only (no content analysis).
      Extracted paths pass through Path Validator (kind=file_reference) and are capped at 5.
-     See §Step 5 — Auto-fix dispatch for the exact procedure.
+     See `skills/harness-build/SKILL.md` §Step 5 — Auto-fix dispatch for the exact procedure.
    - (5) Step 2's Discovery Notes Injection reads (`qa_notes.md` / `critic_findings.md` content passed to the planner). Not a newly introduced exception — this documents an existing read that this list previously omitted; see §Step 2 (Plan Phase) — Discovery Notes Injection.
    - (6) `plan_critic_findings.md` Summary parsing + `.harness/planner/proposals.json` re-entry read.
    - (7) Gate-display critic count parsing (the carried-over branch's `{docs_path}critic_findings.md`; the resume redisplay's `plan_critic_findings.md`) — distinct in purpose from (5)'s planner-injection read.
 
    > Apply-before `--- a/` / `+++ b/` diff header lines (2 metadata lines per file — hunk body is delegated to Edit tool). This is NOT a violation of this principle.
    > `.harness/planner/proposals.json` write: an intermediate file, but the orchestrator writes it as a direct serialization of the segment's returned proposals object — no content analysis. Writing it is not "reading intermediates" either.
-   > §Step 2.6's pre-dispatch delete of `{docs_path}plan_critic_findings.md` is a third category again — neither a read nor a write of content — and does not enlarge this list, on the same footing as §Step 8's `.harness/` delete, which has never been counted here. Stated because the delete is new and the list's count is quoted in several places: removing a file reads nothing from it.
-   > Of entries (1), (6) and (7): `§Scale Assessment`, `§Step 2.6`, `plan_critic_findings.md`, `.harness/planner/proposals.json`, and `slice_plan.md` are now real, written sections/artifacts — those reads fire today. `cold_review.md` is no longer declared only either — §Step 5 (WORKFLOW) / §Step 6 (INLINE) write it starting this slice, per the path split in entry (1) above.
+   > §Step 2.6's pre-dispatch delete of `{docs_path}plan_critic_findings.md` is a third category again — neither a read nor a write of content — and does not enlarge this list, on the same footing as `skills/harness-build/SKILL.md` §Step 8's `.harness/` delete, which has never been counted here. Stated because the delete is new and the list's count is quoted in several places: removing a file reads nothing from it.
+   > Of entries (1), (6) and (7): `§Scale Assessment`, `§Step 2.6`, `plan_critic_findings.md`, `.harness/planner/proposals.json`, and `slice_plan.md` are now real, written sections/artifacts — those reads fire today. `cold_review.md` is no longer declared only either — `skills/harness-build/SKILL.md` §Step 5 (WORKFLOW) / `skills/harness-build/SKILL.md` §Step 6 (INLINE) write it starting this slice, per the path split in entry (1) above.
 
 2. **Auto-fix Proposer is the only sub-agent that directly Reads SOURCE files among orchestrator-dispatched agents.** (Segment-script agents explore the codebase themselves by design — they run inside the engine's autonomous span.) Other inline sub-agents receive content only through template variables, with one narrower exception: an inline sub-agent MAY instead receive a `{docs_path}` artifact PATH that the orchestrator explicitly hands it (e.g. `templates/spec/critic_inline.md`'s `{spec_path}`) and read that one file itself — this is distinct from "source files" (the Auto-fix Proposer's exclusive carve-out above covers repository source, not `{docs_path}` artifacts) and does not enlarge §Architecture Principles #1's exception list, which stays at 7 items (AC-27).
 
-3. **Paths only to sub-agents; never file contents** (ephemeral digests passed inside a segment run excepted — they never enter the orchestrator's context beyond `workflow_ctx` storage; `specContent` passed as a Build segment arg (§Step 4 — WORKFLOW path) and as an Eval segment arg (§Step 5 — WORKFLOW path) is also an explicit exception — spec.md content, not a path, crosses into segment `args` because size, not path-vs-content, is the actual constraint; the same exception now also covers `specContent` passed to `workflows/spec.eval.workflow.js` at §Step 2.6's WORKFLOW branch).
+3. **Paths only to sub-agents; never file contents** (ephemeral digests passed inside a segment run excepted — they never enter the orchestrator's context beyond `workflow_ctx` storage; `specContent` passed as a Build segment arg (`skills/harness-build/SKILL.md` §Step 4 — WORKFLOW path) and as an Eval segment arg (`skills/harness-build/SKILL.md` §Step 5 — WORKFLOW path) is also an explicit exception — spec.md content, not a path, crosses into segment `args` because size, not path-vs-content, is the actual constraint; the same exception now also covers `specContent` passed to `workflows/spec.eval.workflow.js` at §Step 2.6's WORKFLOW branch).
 
 4. **Session-wide invariants** (see §State Machine — Auto-fix State Transition Table):
    - Auto-fix: at most 1 attempt per session (`verify.autofix_attempted` once-only — not reset on round increment).
@@ -2637,8 +1563,9 @@ The following principles are invariant constraints for the harness Orchestrator.
 
 5. **All external paths pass through Path Validator before use** (see §Path Validator below).
 
-6. **Gates never enter segment scripts.** The 3 HARD-GATEs (spec-confirm / verify-fail / auto-fix-apply) are rendered by this orchestrator between segment runs. `scripts/verify_meta_literal.py` guards this at lint time by rejecting gate-marker tokens — the `<HARD-GATE>` tag form, `AskUserQuestion`, and the `Apply patch` option label — inside any segment script. This is a marker-based tripwire, not a proof of gate-freedom: it deliberately does NOT flag the spaced prose form `HARD GATE #N`, which segment scripts legitimately use in comments to note that gates live here in the orchestrator. The spec-confirm gate (§Step 3) renders as up to two sequential passes (Pass A, Pass B) inside ONE `<HARD-GATE>` tag — a pass is not a separate gate, so the count above stays 3.
+6. **Gates never enter segment scripts.** The 3 HARD-GATEs (spec-confirm / verify-fail / auto-fix-apply) are rendered by this orchestrator between segment runs. `scripts/verify_meta_literal.py` guards this at lint time by rejecting gate-marker tokens — the `<HARD-GATE>` tag form, `AskUserQuestion`, and the `Apply patch` option label — inside any segment script. This is a marker-based tripwire, not a proof of gate-freedom: it deliberately does NOT flag the spaced prose form `HARD GATE #N`, which segment scripts legitimately use in comments to note that gates live here in the orchestrator. The spec-confirm gate (`skills/harness-gate/SKILL.md` §Step 3) renders as up to two sequential passes (Pass A, Pass B) inside ONE `<HARD-GATE>` tag — a pass is not a separate gate, so the count above stays 3.
 
+<!-- BLOCK-START:hx-path-validator v1 — shared by /harness, /harness-gate, /harness-build; edit every copy in one commit and bump the version -->
 ### Path Validator
 
 Orchestrator internal conceptual function. Call sites: `--output-dir` parsing (Step 1.2), `{failing_files_list}` injection (Step 5), Edit tool unified diff Apply (Step 5), Session Recovery re-validation (Session Recovery), cold-review input list collection (Step 5, `kind=file_reference`), cold `finding.file` validation — WORKFLOW path only (Step 5, `kind=file_reference`).
@@ -2677,6 +1604,7 @@ validate_path(path, kind) where kind ∈ {output_dir, file_reference, diff_targe
 | `--output-dir /absolute/path` | Step 2 (absolute path rejection) |
 | `--output-dir memory/foo` | Step 4 (first segment reserved) |
 | `--output-dir ` (empty) | Step 0 (empty string, kind=output_dir) |
+<!-- BLOCK-END:hx-path-validator v1 -->
 
 ## Key Rules
 

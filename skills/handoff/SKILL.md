@@ -85,9 +85,9 @@ Gather, in this order:
    - Next Steps — ordered, first step concrete enough to start cold. **Slice command
      convention**: when item 1 names a specific epic slice's command (a Progress Ledger row
      applies — see item 5 below), write it using the exact `Slice`/`Command` format
-     `skills/harness/SKILL.md` §Step 3.5: Slice Plan defines for `slice_plan.md` — name
+     `skills/harness-build/SKILL.md` §Step 3.5: Slice Plan defines for `slice_plan.md` — name
      that format here, do not restate it.
-     <!-- SYNC-WITH: skills/harness/SKILL.md §Step 3.5: Slice Plan -->
+     <!-- SYNC-WITH: skills/harness-build/SKILL.md §Step 3.5: Slice Plan -->
      **Slice identifier requirement — the no-command case.** When a Progress Ledger row applies
      but the next step is NOT a single command (the epic-slice shape, where a slice is
      implemented directly from an epic plan instead of being invoked as a skill), item 1 MUST
@@ -670,7 +670,7 @@ Scan `docs/harness/handoff/*.md` (only files whose first line starts with `# HAN
   still never invokes anything before the gate is answered, and `generate` never chains at all.
 - No automatic generation on session end — generate is always an explicit user action.
 - `/handoff` does not read `slice_plan.md` — the slice command convention (generate Step 1
-  item 4) names its format by pointing at `skills/harness/SKILL.md` §Step 3.5: Slice Plan, it
+  item 4) names its format by pointing at `skills/harness-build/SKILL.md` §Step 3.5: Slice Plan, it
   never opens that file itself; the `Next :`/`Next cmd:` derivation (resume Step 5) is built
   the same way, entirely from THIS document's own recorded text.
 - Not a replacement for `/harness` Session Recovery; when `.harness/state.json` exists, the
