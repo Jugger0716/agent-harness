@@ -20,13 +20,15 @@ enum tokens co-exist in each marked file, not that surrounding prose is identica
 Add a SYNC_GROUPS entry whenever a new SYNC-WITH contract is introduced.
 
 It ALSO runs a section-reference check (see SECTION_REF_TARGETS). That list now
-carries TWO entries with DIFFERENT modes, so no single sentence describes both:
+carries FOUR entries under TWO modes (one anchor-heading target and, since the C5 split of
+/harness on 2026-09-07, three harness-steps targets), so no single sentence describes them all:
 
   * mode "anchor-heading" (workflows/_reference/study_measurements.md) -- every
     `<file>` §<Section> pointer into that side-file must resolve to a real
     `## §<Section>` heading there. Behaviour unchanged since it shipped.
-  * mode "harness-steps" (skills/harness/SKILL.md) -- that file uses NO `## §Name`
-    headings at all, so the anchor-heading rule cannot apply to it. Instead six
+  * mode "harness-steps" (skills/harness/SKILL.md, skills/harness-gate/SKILL.md and
+    skills/harness-build/SKILL.md -- one entry each, each with its OWN pins) -- those files
+    use NO `## §Name` headings at all, so the anchor-heading rule cannot apply. Instead six
     layers check the `§Step N(.N)` citation family and the path-anchored cross-file
     pointers against structural pins. See check_section_refs() for the layers and
     §What this does not check below for the disclosed limits.
@@ -47,6 +49,12 @@ this repository already fixed twice for absolute line-number citations.
      check moved -- the counted document did. That is the ordinary case for every
      figure in this block, which is why each carries its command rather than a date
      alone.
+     RE-MEASURED 2026-09-07, after C5 split the file three ways (same counting rule, one
+     figure per file): skills/harness/SKILL.md 285 §citations, 130 of them §Step tokens
+     (54 checked in-file + 76 carrying another file's path anchor); harness-gate 101 / 27
+     (0 + 27); harness-build 204 / 103 (91 + 12). The 155 / 74 / 101 non-Step citations
+     are unchecked exactly as before. Reproduce with `grep -o '§[A-Za-z0-9]' <file> | wc -l`
+     and `grep -o '§Step [0-9]' <file> | wc -l`; the checked/anchored split is the OK line.
   2. NUMBERS, NOT TITLES. Renaming `Step 5: Verify Phase` to `Step 5: Mechanical Check`
      passes. A rename sweep over all 80 headings is caught for 21 of them.
   3. SCAN SCOPE. Every layer here iterates SCAN_DIRS (skills/, templates/, workflows/),
@@ -67,6 +75,10 @@ this repository already fixed twice for absolute line-number citations.
      the SCOPE compared against it is still `(ROOT / entry['path']).parent`. So a second
      target in its own directory is still invisible to the first target's PIN-FILES,
      and silently de-registering that second entry trips nothing here.
+     C5 (2026-09-07) made this mutual: skills/harness/, skills/harness-gate/ and
+     skills/harness-build/ each pin only their own directory, so none of the three sees a
+     sibling directory appear or vanish -- only de-registration of an entry is loud, and
+     only because check_section_refs() would then stop printing that target's OK lines.
   6. MISATTRIBUTION, BOTH DIRECTIONS. Passing-for-the-wrong-reason: the `§Step 1.5`
      token quoted inside that file's §Sub-command: doctor prose resolves against this
      file's own Step 1.5 although the sentence is about team-memory. Failing-for-the-
@@ -178,8 +190,10 @@ SYNC_GROUPS = [
         "tokens": ["§Ad-hoc Dispatch Contract"],
         # 9 multi-path skills + ship + md-generate + md-optimize = 12 files, one marker each
         # (raw site count equals file count in this group too). Prior value (11) was measured
-        # with zero slack before /study; 12 = 11 + 1 (this skill).
-        "min_sites": 12,
+        # with zero slack before /study; 12 = 11 + 1 (this skill). C5: 13 = 12 + 1 --
+        # skills/harness-build/SKILL.md §Key Rules carries its own marker (harness-gate does
+        # not dispatch anything and has none).
+        "min_sites": 13,
     },
     {
         "id": "handoff-state-record",
@@ -189,7 +203,9 @@ SYNC_GROUPS = [
         # the 5-field fixed-label record /handoff generate writes and /handoff resume Step 3.5
         # + /harness Session Boundary both reference (P0-4, v8.8 epic-continuity wiring)
         "tokens": ["Skill :", "Task :", "Phase :", "Mode :", "Docs :"],
-        "min_sites": 2,                        # skills/handoff/SKILL.md (self) + skills/harness/SKILL.md
+        # C5: 3 = the two above + skills/harness-build/SKILL.md, whose hx-handoff-fields BLOCK
+        # copy carries the same marker (byte-identical with the harness copy by construction).
+        "min_sites": 3,
     },
     {
         # harness-handoff-coldreview-epic-slice slice-f, group (b): the workflows/spec.eval.workflow.js
@@ -219,7 +235,9 @@ SYNC_GROUPS = [
         # own edit seeded it (a section name-citation, not a restated format -- see spec
         # §접근 방식 ④); `--output-dir` alone is never used as a token (epic AC-29 bans that form).
         "id": "slice-command-format",
-        "target_file": "skills/harness/SKILL.md",
+        # C5: §Step 3.5 moved to skills/harness-build/SKILL.md with the rest of the build half;
+        # the target, the self marker and handoff's marker all moved together.
+        "target_file": "skills/harness-build/SKILL.md",
         "section": "Step 3.5: Slice Plan",
         "target_anchor": "slugify(task) == task == Slice",
         # HONEST COVERAGE NOTE: the token `§Step 3.5` is itself a substring of this group's
@@ -228,7 +246,7 @@ SYNC_GROUPS = [
         # (`slice_plan.md`, `Next cmd`), not 3. Recorded rather than silently counted as 3;
         # replacing the token needs an epic AC-6 literal revision, which is out of slice-f scope.
         "tokens": ["§Step 3.5", "slice_plan.md", "Next cmd"],
-        "min_sites": 2,                        # skills/harness/SKILL.md (self) + skills/handoff/SKILL.md
+        "min_sites": 2,                        # skills/harness-build/SKILL.md (self) + skills/handoff/SKILL.md
     },
     {
         # release-readiness review 2026-08-19, working-tree round 1 finding [7]: the
@@ -351,7 +369,9 @@ SYNC_GROUPS = [
         # Reverting one converging commit on its own (harness, say) drops sites to 6 and this
         # floor turns red immediately. That is intended, not a bug: revert the floor in the same
         # operation.
-        "min_sites": 7,
+        # C5: 8 = 7 + the hx-session-entry BLOCK copy in skills/harness-build/SKILL.md, which
+        # carries the marker byte-identically. harness-gate has no session gate and no marker.
+        "min_sites": 8,
     },
 ]
 
@@ -432,16 +452,21 @@ PATH_ANCHOR_RE = re.compile(
 # raising the pin in the SAME change, and removing one fails immediately. These pins, not
 # a citation-count floor, are what makes a heading rename un-silenceable -- deleting the
 # citations to hide a rename trips PIN-STEP instead.
-HARNESS_STEP_IDS = {
-    "1", "1.5", "2", "2.6", "3", "3.5", "3.6", "4", "5", "6", "7", "8",
-}  # 12 -- 3.6 (Epic Exit) added when that path moved out of Step 8
-HARNESS_SUBPATHS = {
-    ("2", "INLINE"), ("2", "WORKFLOW"),
-    ("4", "INLINE"), ("4", "WORKFLOW"),
-    ("5", "INLINE"), ("5", "WORKFLOW"),
-}  # 6
+HARNESS_STEP_IDS = {"1", "1.5", "2", "2.6"}  # 4 -- C5 moved 3 to harness-gate and 3.5-8 to harness-build
+HARNESS_SUBPATHS = {("2", "INLINE"), ("2", "WORKFLOW")}  # 2 -- (4,*) and (5,*) went with Step 4/5
 HARNESS_FILES = {"skills/harness/SKILL.md"}  # the whole of skills/harness/*.md
-HARNESS_MIN_CROSS_FILES = 7  # FILES, not occurrences: prose rewording must not trip it
+HARNESS_MIN_CROSS_FILES = 9  # FILES, not occurrences: prose rewording must not trip it. 7 -> 9 at C5 (the two new skills point here)
+# C5 (harness-ordering-enforcement): the other two thirds of the former single file. Each
+# entry pins ITS OWN step ids / sub-paths / directory; the min_cross_files values are the
+# measured file counts at the split commit, zero slack, same convention as the harness pin.
+GATE_STEP_IDS = {"3"}
+GATE_SUBPATHS: set[tuple[str, str]] = set()
+GATE_FILES = {"skills/harness-gate/SKILL.md"}
+GATE_MIN_CROSS_FILES = 3  # measured at C5: skills/harness, skills/harness-build, workflows/_reference/schemas.md
+BUILD_STEP_IDS = {"3.5", "3.6", "4", "5", "6", "7", "8"}
+BUILD_SUBPATHS = {("4", "INLINE"), ("4", "WORKFLOW"), ("5", "INLINE"), ("5", "WORKFLOW")}
+BUILD_FILES = {"skills/harness-build/SKILL.md"}
+BUILD_MIN_CROSS_FILES = 4  # measured at C5: skills/harness, skills/harness-gate, skills/handoff, workflows/_reference/schemas.md
 # Anchors that are genuinely not headings. The value is the literal that MUST exist in the
 # target -- an allowlist that is never compared against the file is a pass, not a check.
 HARNESS_NON_HEADING_ANCHORS = {
@@ -510,6 +535,24 @@ SECTION_REF_TARGETS = [
         "files": HARNESS_FILES,
         "min_cross_files": HARNESS_MIN_CROSS_FILES,
         "non_heading_anchors": HARNESS_NON_HEADING_ANCHORS,
+    },
+    {
+        "path": "skills/harness-gate/SKILL.md",
+        "mode": "harness-steps",
+        "step_ids": GATE_STEP_IDS,
+        "subpaths": GATE_SUBPATHS,
+        "files": GATE_FILES,
+        "min_cross_files": GATE_MIN_CROSS_FILES,
+        "non_heading_anchors": {},
+    },
+    {
+        "path": "skills/harness-build/SKILL.md",
+        "mode": "harness-steps",
+        "step_ids": BUILD_STEP_IDS,
+        "subpaths": BUILD_SUBPATHS,
+        "files": BUILD_FILES,
+        "min_cross_files": BUILD_MIN_CROSS_FILES,
+        "non_heading_anchors": {},
     },
 ]
 
