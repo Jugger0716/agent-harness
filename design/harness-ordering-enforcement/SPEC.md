@@ -5,7 +5,7 @@
 >
 > 본문은 그 밖의 한 글자도 수정하지 않았다.
 
-# SPEC — `harness-ordering-enforcement` (rev.8)
+# SPEC — `harness-ordering-enforcement` (rev.9)
 
 > **성격**: 후속 에픽의 요구사항 명세. 입력은 `docs/harness/plan/REMEASURE-harness-split.md`(gitignored)와
 > `docs/harness/plan/PROBE-FINDINGS-enforcement.md`(gitignored), 그리고 `ROADMAP.md`의 W7 행·phase-P 4행.
@@ -34,7 +34,7 @@
 
 | # | 항목 | 결정 | 근거 / 파급 |
 |---|---|---|---|
-| ① | 광고 명제 | **(b) 무도구 게이트 스킬 3분할** | (a) 명제 하향은 P-10이 이미 무료로 주는 것이라 분할이 새로 사는 것이 없다 (REMEASURE §1-c 안 2) |
+| ① | 광고 명제 | **(b) 무도구 게이트 스킬 3분할** — **rev.9 (2026-09-07) 사람이 재확인: 유지.** C4가 확정한 교환(+62 KB·재앵커 62·영구 3중 동기화 대 게이트 턴 무능력 1문장)을 제시하고 유지/철회/보류 중 유지가 선택됐다. 그 직후 §5.4의 배분이 비용 산식을 +26 KB(6절 기준)/+35 KB(전체)로 정정했으므로, 판정은 rev.8의 수치로 내려졌고 실제 비용은 그보다 작다 | (a) 명제 하향은 P-10이 이미 무료로 주는 것이라 분할이 새로 사는 것이 없다 (REMEASURE §1-c 안 2) |
 | ② | Stale Determination | **mtime → 세대 카운터** (강제) | 무도구 게이트는 `Bash`도 `Glob`도 없어 mtime 순서조차 얻지 못한다. 동률(same-second) 규칙 문제도 함께 소멸 |
 | ③ | `Modify` 수행 주체 | **명문화 + 형태 변경**: plan 스킬 오케스트레이터가 수행, 게이트는 halt + 재진입 안내 (강제) | 무도구 게이트는 `update spec.md`를 수행할 수 없다 |
 | A | 게이트 통과 기록 | **`phase`를 감사 전용으로 강등** — 게이트 증거로 쓰지 않는다 | 게이트가 `phase → "generate_ready"`를 쓸 수 없다(§Step 3 Pass B). 위조 가능한 값을 게이트 근거로 쓰는 척을 그만둔다 |
@@ -50,10 +50,53 @@
   이 저장소에 선례가 없다. 현행 `mode_gate.md` 관례는 「요약 인라인 + 전문 단일소스」이지 완전 추출이 아니다.
 - **OQ-2** — 세 스킬의 이름. 본 spec은 `harness` / `harness-gate` / `harness-build`를 가정한다(진입점 이름 보존).
 - **OQ-3** — ⑦ description 실제 문안과 `TOTAL_CEILING` 상향 폭.
-- **OQ-4** — `harness-gate`가 `Glob`을 보유할 것인가. 세대 카운터 채택으로 mtime 정렬이 불필요해졌으므로
-  기본은 **미보유**로 두었으나, Reading Order 성격의 파일 존재 확인에 필요한지 미검증.
+- ~~**OQ-4** — `harness-gate`가 `Glob`을 보유할 것인가. 세대 카운터 채택으로 mtime 정렬이 불필요해졌으므로
+  기본은 **미보유**로 두었으나, Reading Order 성격의 파일 존재 확인에 필요한지 미검증.~~ → **rev.9 종결:
+  미보유.** 파일 존재 확인은 `Read` 실패가 곧 답이고(§5.4.5 항목 7), Glob의 다른 용도는 없다.
 
 ### Changed in this revision
+
+**rev.9 (2026-09-07) — 결정 ①을 사람이 재확인해 「유지」로 확정했고, 잔여 74%를 실제로 배분했다.
+배분해 보니 rev.8의 비용 산식 자체가 틀렸다 — 두 방향으로.**
+
+결정 ① 재확인은 `/handoff resume` 뒤 rev.8 §Changed in this revision 표와 교환 조건(사는 것 1문장 /
+치르는 것 +62 KB·재앵커 62·영구 3중 동기화·SKILL.md 3개 500줄 초과·메시지 3회)을 제시하고 받았다.
+선택지는 유지 / 철회 / 보류 세 가지였고 **유지**가 선택됐다. 이 판정은 이 rev의 전제이지 결과가 아니다.
+
+배분은 §5.4에 있다. 뒤집히는 것 4건:
+
+1. **「§Session Recovery 12,368 B는 세 스킬 전부 필요」는 gate에 대해 거짓이다.** gate는 `Bash`·`Write`·
+   `Edit`가 없으므로 Session Conflict gate의 "Delete and start", 7(a)의 "Restart"/"Stop", 4옵션 게이트의
+   "Restart"/"Stop" 중 **어느 것도 실행할 수 없다**. 실행 못 하는 옵션을 렌더하는 것은 계약이 아니라 거짓
+   약속이다. 따라서 gate의 진입 로직은 그 12 KB의 사본이 아니라 **판정 + 리다이렉트 신작(≈1.5 KB, §5.4.5)**
+   이며, AskUserQuestion 사이트가 0개다 — gate 스킬의 유일한 AskUserQuestion은 HARD GATE #1(Pass A/B)뿐이
+   된다. 그 12,368 B가 실제로 필요한 것은 **두 스킬**(harness·build)이고, 그중 바이트 동일로 복제되는 것은
+   9,505 B, 나머지는 소유자별 jump row다.
+2. **C4는 build가 필요로 하는 preamble 계약 6개를 세지 않았다.** §Version & Compatibility 1,416 ·
+   §Zero-Setup 239 · §User Language Detection 736 · §Mode Gate 2,560 · §Standard Status Format 764 ·
+   §run_style 2,639 = **8,354 B**. C4가 잰 것은 build 본문이 *이름으로 인용하는* 6개 절이었고, 이것들은
+   인용 없이 실행되는 계약이라 누락됐다. 비용은 이만큼 **늘어난다**.
+3. **「그룹 6개」는 성립하지 않는다 — 인접성이 14개를 강제한다.** BLOCK-sync는 연속 구간에만 걸리는데,
+   §Session Recovery item 7은 harness 전용 (b)와 소유자별 jump row가 공유 산문 *사이에* 끼어 있어 블록
+   3개로 쪼개진다. §Architecture Principles는 #1이 소유자별 부분집합, #2·#4가 build 전용이라 #3·#5·#6이
+   불연속이 되므로 **Path Validator만** 블록이고 나머지 1,474 B는 동기화 없이 복제된다(공시).
+4. **재계산한 비용**: 6절 기준 **+26.0 KB**(rev.8 +62 KB의 42%), C4가 빠뜨린 preamble까지 포함한 전체
+   기준 **+35.1 KB** + gate 신작 ≈1.5 KB. 「영구 3중 동기화」는 3그룹(5,730 B)에만 해당하고 나머지
+   11그룹은 2중이다. **rev.8의 +62 KB는 「31 KB × 3 − 31 KB」라는 산식에서 왔고, 그 산식은 세 스킬이
+   같은 것을 필요로 한다는 전제 위에 있었다 — 그 전제가 틀렸다.** 재앵커 62건은 불변이다.
+
+함께 닫힌 것: **OQ-4(gate의 `Glob` 보유)는 미보유로 종결.** Glob의 유일한 용도였던 mtime 정렬은 ②로
+소멸했고, 파일 존재 확인은 `Read` 실패가 곧 답이다. §2.1 갱신.
+
+함께 드러난 것(설계 변경 아님, C5 문면에 반영할 사실): (a) §Scale Assessment의 「render (2)·(3)은 세션당
+상호배타」가 분할 후 거짓이 된다 — plan 스킬은 **항상** `plan_done`에서 세션을 끝내므로 §After Plan Phase
+render가 항상 발화하고, Pass B render는 다음 턴에 또 발화한다. (b) 같은 이유로 `run_style: auto`의
+「Step 2 → 2.6 → 3 직행」이 Plan→Gate 경계에서 소멸한다 — **auto 세션도 `plan_done`에서 멈춘다.** 이는
+§2.2가 이미 함의하는 것이지만 §run_style 본문이 그렇게 말해야 한다. (c) Session Conflict gate 문안의
+「Starting /harness here will delete it」은 바이트 동일 복제를 위해 스킬 중립 문장으로 바꿔야 한다.
+(d) §Session Boundary 머리말 812 B는 렌더 사이트를 열거하므로 파일별로 다시 써야 하고 동기화 대상이
+아니다. (e) harness의 Session Recovery `plan_done` 행은 더 이상 파일 안의 Step 3으로 라우팅하지 않고
+`/harness-gate`를 안내하고 halt한다; build의 `completed` 행은 「활성 세션 없음 — `/harness`를 실행하라」다.
 
 **rev.8 (2026-09-07) — 결정 ④를 「소유권 분할」로 확정하고 경계를 실측했다. 분할이 커버하는
 것은 26%이고, 나머지 74%는 원리적으로 전역이다 — 이 수치가 에픽의 비용을 처음으로 확정한다.**
@@ -285,7 +328,7 @@ REMEASURE §1-③-c 안 1은 §Step 8의 `#### If epic exit:` 블록을 「§Ste
 | **`harness-gate`** (게이트 전용) | §Step 3 (Pass A / Pass B) | **`Bash`, `Write`, `Edit`, `NotebookEdit`, `WebSearch`, `WebFetch`, `Task`, `Agent`, `Workflow`** | **없음 — 쓰기 0** |
 | **`harness-build`** (구현 단계) | §Step 3.5, **§Step 3.6 (신설 — epic exit)**, §Step 4~§Step 8 | `NotebookEdit` | 전 산출물 |
 
-`harness-gate`의 보유 도구는 `Read` + `AskUserQuestion` + `Glob`(OQ-4)뿐이다.
+`harness-gate`의 보유 도구는 `Read` + `AskUserQuestion`뿐이다 — `Glob`은 rev.9에서 OQ-4를 닫으며 **미보유**로 확정했다(`disallowed-tools`에 `Glob`을 추가). 그 진입 검사는 §5.4.5.
 
 **꼬리 섹션 잔류**(REMEASURE §2.4): `## Sub-command: doctor`·`## Model Selection`·`## User Interaction Rules`·
 `## Architecture Principles`(§Path Validator 포함)·`## Key Rules`는 **`harness`에 잔류**한다.
@@ -491,6 +534,171 @@ Modify 1회당 **+2회**.
 
 ---
 
+### 5.4 잔여분 배분 설계 (rev.9 — 결정 ① 유지 확정 후, 실측)
+
+기준 트리: `develop @ 328d9518023e2d06241724ce111595243374ede9`, `skills/harness/SKILL.md` 2,699행 /
+228,414 B. 모든 크기는 행 범위의 UTF-8 바이트(개행 포함)이며 재현 명령은 §5.4.7에 있다.
+
+#### 5.4.1 네 부류 — 「공유」는 하나의 축이 아니다
+
+| 부류 | 뜻 | 기제 | 복제 비용 |
+|---|---|---|---|
+| **O** (owner) | 한 스킬만 실행한다 | 그 스킬로 이동. 복제 0 | 0 |
+| **B2** | `harness`·`harness-build`가 **동일하게** 실행한다 | BLOCK-sync ×2 | ×1 |
+| **B3** | 세 스킬 전부가 동일하게 실행한다 | BLOCK-sync ×3 | ×2 |
+| **N** (new) | gate 전용 신작 — 어느 절의 사본도 아니다 | 문안 신규 | 신작 크기 |
+
+rev.8은 O와 「나머지」 두 부류만 두고 나머지를 전부 ×3으로 셌다. gate가 실행할 수 있는 것을 도구
+집합에서 거꾸로 세면 B3는 세 조각뿐이다.
+
+#### 5.4.2 §Session Recovery 16,192 B — 조각별 배분
+
+| 행 | 조각 | B | 부류 | 근거 |
+|---|---|---:|---|---|
+| 148–164 | doctor carve-out + positional args | 1,286 | O harness | `doctor`는 꼬리 잔류(§2.1); build·gate는 플래그가 없다 |
+| 166–168 | continuity 문장 + 「state.json 확인」 | 307 | B2 | |
+| 170–213 | item 1 라우팅 표 + Session Conflict gate | 4,271 | B2 | gate는 "Delete and start"를 실행 못 함 → N으로 대체. 문안의 `/harness`를 스킬 중립으로 (rev.9 (c)) |
+| 215–217 | item 2 version | 269 | B2 | |
+| 219–222 | item 3–6 (status·model_config·conventions·has_git/Mode Gate) | 371 | B2 | 둘 다 세그먼트를 디스패치한다 |
+| 224–233 | item 6.5 docs_path drift | 749 | O harness | `--output-dir` + task 둘 다 필요; build는 task 인자가 없어 「skip entirely」로 구조적 미발화 |
+| 235–247 | item 7(a) epic residue | 959 | B2 | gate: N에서 리다이렉트만 |
+| 248–255 | item 7(b) drift 게이트 | 697 | O harness | 6.5와 같은 이유 |
+| 256–264 | item 7 otherwise 4옵션 게이트 | 686 | B2 | |
+| 266–274 | Resume → Safety Guard 재검증 + jump 도입부 | 978 | B2 | |
+| 275–283 | jump rows `plan_ready`·`planning`/`plan_done` | 1,822 | O harness | `plan_done` 행은 `/harness-gate` 안내 + halt로 **재작성** (rev.9 (e)); 범위 밖 phase → 소유 스킬 안내 |
+| 284–296 | jump rows `generate_ready` … `evaluating` | 1,538 | O build | 범위 밖 phase → 소유 스킬 안내 |
+| 297 | `completed` 행 | 95 | O (둘 다, 문안 다름) | harness → Step 1; build → 「활성 세션 없음, `/harness`」 |
+| 298–316 | Restart / Stop / View state only | 1,664 | B2 | |
+| 318 | state.json 부재 → Step 1 | 1 | O (둘 다, 문안 다름) | harness → Step 1; build → `/harness` 안내 + halt |
+| — | **gate 진입 검사** | ≈1,500 | **N** | §5.4.5 |
+
+합: B2 **9,505** / O harness 4,554 / O build 1,633 / 양쪽 문안 상이 96 / N ≈1,500.
+**rev.8의 「12,368 B 전역」은 B2 9,505 + 양쪽 상이 96 + (b)·6.5 1,446 + carve-out 1,286 + jump 도입부의
+합이었다** — 그중 gate가 실제로 지니는 것은 0 B다.
+
+#### 5.4.3 나머지 5개 절 + C4가 세지 않은 preamble 계약
+
+| 절 | 조각 | B | 부류 | 비고 |
+|---|---|---:|---|---|
+| §Session Boundary | 머리말(사이트 열거) | 812 | O (파일별 재작성) | rev.9 (d) |
+| | Type A 블록 껍데기 | 446 | B2 | |
+| | Type A 표 + residual | 1,638 | O (harness 1행 / build 4행) | |
+| | Type B (+ epic variant, Remaining 표) | 5,305 | O build | §Step 3.6·§Step 8 둘 다 build |
+| | `/handoff generate` 필드 계약 | 791 | B2 | 기존 SYNC-WITH 마커와 공존 |
+| §Output Language Contract | Invariant + Glossary + Print Translation | 2,750 | **B3** | Glossary 주석의 「this file (`/harness`)」 → 「this skill」 |
+| | 1-line Return Translation | 1,101 | B2 | gate는 서브에이전트 없음 |
+| §Sub-agent Return Value Rules | 전체 | 1,321 | B2 | |
+| §State Machine | 다이어그램 + Transition Rules | 1,273 | B2 | 「하나의 기계」— gate는 전이를 쓰지 않으므로 불필요(결정 A) |
+| | Auto-fix 전이표 + I1–I4 | 1,200 | O build | |
+| §Architecture Principles | #1 예외 7건 registry | 3,284 | O harness (SSOT) + 부분집합 | build: (2)(3)(4); gate: (1)(7). 각자 「N of the 7 — registry: `skills/harness/SKILL.md` §Architecture Principles」로 가리킨다. registry는 근거, 부분집합이 실행 규칙 — rev.7의 분업 그대로 |
+| | #2 Auto-fix Proposer | 783 | O build | |
+| | #3 paths-only / #5 Path Validator 의무 / #6 gates-never-in-segments | 1,474 | **복제, 동기화 없음** | #4가 사이에 끼어 불연속. 3문장이라 BLOCK 3개를 더 만드는 것보다 공시가 싸다 — **C5 이후 이 1,474 B가 드리프트하면 그때 블록화** |
+| | #4 세션 불변식 | 273 | O build | |
+| | Path Validator | 2,244 | **B3** | gate도 state.json의 `docs_path`를 검증한 뒤에야 spec.md를 읽는다 |
+| §Version & Compatibility | | 1,416 | B2 | C4 미계상 |
+| §Zero-Setup Environment Detection | | 239 | B2 | item 6의 has_git 재감지. C4 미계상 |
+| §User Language Detection | | 736 | **B3** | gate도 `user_lang`으로 렌더. C4 미계상 |
+| §Mode Gate | | 2,560 | B2 | build도 세그먼트 opt-in을 해석. C4 미계상 |
+| §Standard Status Format | | 764 | B2 | C4 미계상 |
+| §run_style | | 2,639 | B2 | Generate/Verify/Evaluate 뒤 halt. **Plan→Gate 경계 문장은 재작성**(rev.9 (b)). C4 미계상 |
+| §Scale Assessment | render 형식 | ≤1,235 | B2 (harness·**gate**) | Pass B가 `state.scale.*` 동결값으로 블록을 찍는다. compute(§1·§3·§4·Signal Domain·INLINE Fallback)는 O harness. **render 조각을 §Compute-once 절에서 분리할 수 있는지는 C5 착수 시 실측** — 이 표에서 유일하게 미확정인 행 |
+
+#### 5.4.4 BLOCK-sync 그룹 — `verify_block_sync.py` `GROUPS` 등록안
+
+형식은 기존 `(tag, version, files, shared_source)` 그대로. `shared_source`는 전부 `None` — 네 번째
+사본을 만들지 않고 스킬 사본끼리 SHA256을 대조한다(기존 두 그룹은 `templates/planner/` 4파일이 대상이라
+단일소스가 필요했지만, 여기서는 harness 사본이 곧 정본이다).
+
+| # | tag | 대상 | 원본 행 | B |
+|---|---|---|---|---:|
+| 1 | `hx-preamble-a` | harness, build | 18–45 (Sub-agent RV + Version + Zero-Setup) | 2,976 |
+| 2 | `hx-user-lang` | harness, gate, build | 46–57 | 736 |
+| 3 | `hx-olc-core` | harness, gate, build | 58–91 | 2,750 |
+| 4 | `hx-olc-inline-returns` | harness, build | 93–103 | 1,101 |
+| 5 | `hx-preamble-b` | harness, build | 104–145 (Mode Gate + Standard Status) | 3,324 |
+| 6 | `hx-session-entry` | harness, build | 166–222 | 5,218 |
+| 7 | `hx-session-gate-a` | harness, build | 235–247 | 959 |
+| 8 | `hx-session-gate-b` | harness, build | 256–274 | 1,664 |
+| 9 | `hx-session-actions-tail` | harness, build | 298–316 | 1,664 |
+| 10 | `hx-run-style` | harness, build | 319–360 | 2,639 |
+| 11 | `hx-boundary-shell` | harness, build | 373–384 | 446 |
+| 12 | `hx-handoff-fields` | harness, build | 475–490 | 791 |
+| 13 | `hx-state-machine` | harness, build | 612–639 | 1,273 |
+| 14 | `hx-path-validator` | harness, gate, build | 2642–2680 | 2,244 |
+| (15) | `hx-scale-render` | harness, gate | §Scale Assessment render 조각 — **C5 실측 후 확정** | ≤1,235 |
+
+**왜 6이 아니라 14인가.** BLOCK은 연속 구간이고, 공유 산문 사이에 소유자 전용 조각이 끼면 블록이 갈라진다.
+§Session Recovery 하나가 4개(#6·#7·#8·#9)로 갈라지는 이유가 정확히 그것이다 — 6.5·7(b)·jump row가
+사이에 있다. 산문을 재배열해 하나로 합칠 수는 있지만 item 7은 「priority order」를 명문화한 절이라
+순서를 바꾸면 의미가 바뀐다. 블록 수를 줄이려고 실행 순서를 건드리지 않는다.
+
+**버전 규칙**: 어느 사본이든 바꾸면 tag의 version을 올리고 전 사본을 같은 커밋에서 갱신한다 — 기존
+`spec-context-block v1`/`input-trust-model v2` 관례 그대로. 이것이 「영구 동기화」의 실체이며, 14그룹 중
+3중은 #2·#3·#14 셋(5,730 B)뿐이다.
+
+#### 5.4.5 gate의 진입 검사 — 신작 문안 초안 (N, ≈1.5 KB)
+
+`harness-gate`는 `Read` + `AskUserQuestion`만 가진다. 아래는 사본이 아니라 그 도구 집합에서 도출한
+새 절이다. **AskUserQuestion 사이트 0개** — 삭제·재시작을 제안할 수 없으므로 묻지도 않는다.
+
+```
+## Entry Check (read-only — this skill holds no Bash, Write or Edit; it can delete nothing)
+
+Evaluate in order; the first match halts.
+1. `.harness/state.json` absent → `[harness-gate] No /harness session here — run /harness "<task>" first.`
+2. Parse failure → print the path and the parse error only. (Same rule as §Session Recovery
+   "View state only" in the owning skill — no partial recovery.)
+3. `skill != "harness"` OR `version != "3.0"` → `[harness-gate] Not a /harness v3 session
+   (skill: {skill|absent}, version: {version|absent}). This skill cannot delete or repair it —
+   run /harness, which renders the Session Conflict gate.`
+4. `epic.boundaries != null AND phase == "completed"` → `[harness-gate] Epic session residue —
+   run /harness, which offers Restart / Stop.`
+5. `phase != "plan_done"` → `[harness-gate] phase is {phase}; this gate only reads plan_done.
+   Owner: /harness for plan_ready|planning, /harness-build for generate_ready…completed.`
+6. `validate_path(docs_path, kind=output_dir)` fails (§Path Validator — this skill's own copy)
+   → print the validator's halt message. No Restart is offered; that belongs to /harness.
+7. Otherwise → Pass A. `{docs_path}spec.md` and `plan_critic_findings.md` are read from here on;
+   a missing file is detected by the failed Read itself (no Glob — OQ-4 closed).
+```
+
+이 절이 §Session Recovery의 어떤 문장과도 바이트 동일하지 않은 것은 의도다 — 동일하게 만들려면
+실행 못 하는 옵션을 넣어야 한다.
+
+#### 5.4.6 비용 재계산 — rev.8 산식 대체
+
+| 기준 | rev.8 | rev.9 | 산식 |
+|---|---:|---:|---|
+| 6절만 (C4와 같은 분모) | +62.0 KB | **+26.0 KB** | B2 15,815 ×1 + B3 5,090 ×2 |
+| 전체 (C4 미계상 preamble 8,354 B 포함) | — | **+35.1 KB** | B2 23,433 ×1 + B3 5,826 ×2 |
+| gate 신작 | — | +≈1.5 KB | §5.4.5 |
+| 재앵커 | 62건 | 62건 | 불변 |
+| 동기화 다중도 | 「영구 3중」 | 3중 3그룹 / 2중 11그룹 | §5.4.4 |
+| 동기화 없는 복제 | — | 1,474 B (§Architecture Principles #3·#5·#6) | 공시 |
+
+B2 15,815 = SR 9,505 + SB 1,237 + OLC-inline 1,101 + Sub-agent RV 1,321 + SM 1,273 + AP #3·#6 1,378.
+B3 5,090 = OLC core 2,750 + Path Validator 2,244 + AP #5 96. 전체 기준은 여기에 preamble B2 7,618
+(Version·Zero-Setup·Mode Gate·Status·run_style)과 B3 736(User Language Detection)을 더한 값이다.
+
+두 기준을 함께 적는 이유: rev.8의 62 KB는 6절 기준이었으므로 같은 분모로 비교해야 「줄었다」가 성립하고,
+동시에 그 분모가 build의 실제 필요를 다 담지 못했음을 숨기면 안 되기 때문이다. 정직한 한 줄은
+**「6절 기준 58% 감소, 그러나 실제 총증가는 35 KB」**다.
+
+#### 5.4.7 재현
+
+```
+PYTHONIOENCODING=utf-8 python - <<'PY'
+L=open('skills/harness/SKILL.md',encoding='utf-8').read().split('\n')
+b=lambda a,z: sum(len(l.encode('utf-8'))+1 for l in L[a-1:z])
+for name,(a,z) in {'SR item1':(170,213),'SR 7(a)':(235,247),'SR tail':(298,316),'OLC core':(58,91),
+  'Path Validator':(2642,2680),'run_style':(319,360),'Mode Gate+Status':(104,145)}.items(): print(b(a,z),name)
+PY
+```
+행 번호는 `develop @ 328d951` 기준이며 이 절의 표에서만 쓴다 — C5는 행이 아니라 헤딩과 BLOCK 마커로
+자른다(CLAUDE.md 「Cite by §Section Name, never by absolute line number」는 문서 인용 규칙이고, 측정
+기록의 행 범위는 커밋 sha에 고정된 재현 좌표다).
+
+---
+
 ## 6. 커밋 계획 (결정 ⑥)
 
 각 커밋은 **독립적으로 lint green + 리뷰 가능**해야 한다.
@@ -501,7 +709,7 @@ Modify 1회당 **+2회**.
 | **C2** | 세대 카운터 도입 | `skills/harness/SKILL.md` 단일 파일. §3.3의 사이트 전건 | 린트 7종 rc=0. 분할 전이므로 인용 무영향 |
 | **C3** | epic-exit 분리 → §Step 3.6 승격 — **완료** | `skills/harness/SKILL.md` 블록 이동 + 인용 15곳, `skills/handoff/SKILL.md` 1곳, `HARNESS_STEP_IDS` 11→12 재고정(같은 커밋) | 린트 7종 rc=0, 정본 Step id 12개 (**충족**) |
 | **C4** | 공유 계약 추출 | `templates/_shared/` 6파일 신설 + `skills/harness/SKILL.md`에서 참조로 대체. **R-1 프로브 선행** | 린트 7종 rc=0 + 프로브 기록 |
-| **C5** | 3분할 | 스킬 디렉터리 2개 신설 + `SECTION_REF_TARGETS` 등록(C1이 가능하게 만든 것) + 핀 재고정 + 경계 넘는 `§Step` 인용 재앵커 | 린트 7종 rc=0 |
+| **C5** | 3분할 | 스킬 디렉터리 2개 신설 + `SECTION_REF_TARGETS` 등록(C1이 가능하게 만든 것) + 핀 재고정 + 경계 넘는 `§Step` 인용 재앵커 + **BLOCK 그룹 14개 등록(§5.4.4; #15는 실측 후) + gate 진입 검사 신작(§5.4.5) + rev.9 (a)~(e) 문면 반영** | 린트 7종 rc=0, `verify_block_sync.py`가 새 그룹 전건 대조, gate frontmatter에 `Glob` 포함(AC-14) |
 | **C6** | description 문안 + 예산 | 3스킬 문안 + `PER_SKILL_CEILING` 3항목 + `TOTAL_CEILING` 상향 | `verify_description_budget.py` rc=0 |
 
 ### 6.1 C1 실측 (2026-09-04, base `b1df306`)
@@ -679,6 +887,10 @@ OK: 9 sync group(s), 51 marker site(s)
 | AC-9 | **R-1 프로브**: `templates/_shared/` 파일을 이름으로만 인용한 스킬이 그 계약을 실제로 준수하는지 | **라이브 프로브 1회 — C4 착수 전 필수** |
 | AC-10 | C6 적용 후 `verify_description_budget.py` rc=0, `TOTAL_CEILING`이 같은 커밋에서 상향 | 린트 + `git show` |
 | AC-11 | 이 spec의 핵심 3건(광고 명제 확정 / phase 감사 전용 강등 / 3분할)이 **ROADMAP에 등재**됨 | `docs/`가 gitignored이므로 영속 경로 확보 |
+| AC-12 | C5 적용 후 §5.4.4의 BLOCK 그룹이 `verify_block_sync.py` `GROUPS`에 전건 등재되고 rc=0 — 그룹 수는 14(#15 실측 결과에 따라 15) | `python scripts/verify_block_sync.py` → 기존 2 + 신규 N 그룹 |
+| AC-13 | `harness-gate`에 AskUserQuestion 사이트가 **정확히 1개**(HARD GATE #1; Pass A/B는 한 태그 안의 두 패스)이고, 진입 검사(§5.4.5)에는 "Restart"/"Stop"/"Delete" 문자열이 없음 | `grep -c AskUserQuestion skills/harness-gate/SKILL.md`, 진입 검사 절 grep |
+| AC-14 | `harness-gate` frontmatter `disallowed-tools`가 `Bash`·`Write`·`Edit`에 더해 `Glob`을 이름 형식으로 나열 | frontmatter 직접 확인 (AC-7의 확장) |
+| AC-15 | C5 적용 후 §Scale Assessment·§run_style에 「render (2)·(3) 상호배타」/「auto는 Step 2→2.6→3 직행」 문장이 남아 있지 않음 (rev.9 (a)(b)) | 해당 절 grep |
 
 ---
 
@@ -693,3 +905,5 @@ OK: 9 sync group(s), 51 marker site(s)
 - **`§Step` 인용을 정규식으로 일괄 재앵커하지 마라** — 12건 중 2건 오탐.
 - **`skills/harness/SKILL.md` 안에 그 파일의 §citation 수치를 적지 마라** — 자기무효화가 3회 발화한 이력.
 - **2분할 실측치를 3분할에 그대로 쓰지 마라** — 52/10은 **두 번째 컷**의 비용일 뿐이다.
+- **gate가 실행할 수 없는 옵션을 gate에 렌더하지 마라** — "Restart"/"Stop"/"Delete and start"는 `Bash`가 없는 스킬에서 거짓 약속이다. gate의 진입 검사는 §5.4.5의 리다이렉트뿐이다.
+- **rev.8의 +62 KB를 인용하지 마라** — §5.4.6이 대체했다(6절 기준 +26 KB / 전체 +35 KB).
