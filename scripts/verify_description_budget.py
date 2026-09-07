@@ -22,7 +22,7 @@ characters are the outer double quotes of the three deprecation stubs (2 chars x
 no other skill quotes its description. Measured pairs, each tagged with the commit
 they were taken at -- a bare total without a SHA goes stale silently:
 
-    18b5e47   7,660 unquoted / 7,666 raw
+    a4bfc5e   7,660 unquoted / 7,666 raw
     4295156   7,709 unquoted / 7,715 raw
 
 FIGURE PROVENANCE -- four classes, each with its own required annotation

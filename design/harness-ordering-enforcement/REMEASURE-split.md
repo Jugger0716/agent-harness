@@ -9,7 +9,7 @@
 
 # BLOCKING 3건 복원 판정 및 분할 재측정 기록
 
-기준: `C:/workspace/agent-harness`, `develop @ 490f4a6`, 작업 종료 시 `git status --porcelain` 빈 출력(원본 무수정). 모든 분할 실험은 스크래치패드 사본에서만 수행 후 삭제.
+기준: `C:/workspace/agent-harness`, `develop @ 8f293a9`, 작업 종료 시 `git status --porcelain` 빈 출력(원본 무수정). 모든 분할 실험은 스크래치패드 사본에서만 수행 후 삭제.
 
 ---
 
@@ -300,4 +300,4 @@ OK: 9 sync group(s), 51 marker site(s)
 | SYNC 마커 2517의 귀속 | boundary는 file B로 간다고 했다. 꼬리 잔류 분할(권고안)에서는 **file A에 남는다**. |
 | `HARNESS_FILES` 사각지대 | boundary가 「미확인」으로 남긴 것을 **실측 확인**: 별도 스킬 디렉터리 분할에서 이 핀은 발화하지 않는다. |
 
-**이번 조사에서 원본 파일은 한 줄도 수정하지 않았다.** 최종 확인: `git status --porcelain` 빈 출력, `git log --oneline -1` = `490f4a6`, `python scripts/verify_sync_markers.py` exit 0.
+**이번 조사에서 원본 파일은 한 줄도 수정하지 않았다.** 최종 확인: `git status --porcelain` 빈 출력, `git log --oneline -1` = `8f293a9`, `python scripts/verify_sync_markers.py` exit 0.

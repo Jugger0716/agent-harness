@@ -67,7 +67,7 @@ Higher modes cost more per run but save total cost by reducing retry rounds. Sta
 **Fixed orchestrator overhead.** The multipliers above are relative to a baseline that is not
 zero: before any planning happens, `/harness`'s own contract document is loaded. It is the
 largest skill in this repository, so it is the honest floor for what the orchestrator costs
-you. Measured on **2026-08-31** at commit **`118015d51aa15ee67f409b945fcd43c65a61d4f5`**:
+you. Measured on **2026-08-31** at commit **`9023897c4c59632cea884afca98beb1cc88f4496`**:
 
 | Basis | Value | Command |
 |-------|-------|---------|
@@ -80,7 +80,7 @@ you. Measured on **2026-08-31** at commit **`118015d51aa15ee67f409b945fcd43c65a6
 Three of these rows hold at that commit for **every** clone — the index-blob byte count, the
 character count and the line count, all three of which read the committed blob rather than the
 file on disk. **The other two — the working-tree byte row and the EOL row — describe a checkout
-instead of a commit**, because `*.md text eol=lf` did not exist at `118015d`; it lands in this
+instead of a commit**, because `*.md text eol=lf` did not exist at `9023897`; it lands in this
 release, so at the basis commit the `attr/` column was empty and the working tree was CRLF.
 (Rows are named rather than numbered here on purpose: an earlier revision counted positions and
 put the working-tree row among the commit-fixed three and the line count among the two that

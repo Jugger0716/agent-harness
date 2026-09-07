@@ -28,7 +28,7 @@
   (The `${A.userLang}` forms in the schema blocks below are shorthand — copy them as
   `${LANG}` with the fallback const, exactly as the three shipped scripts do.)
 - **Enum/identifier fields stay English raw** (verdicts, severities, personas, paths) —
-  shrinks the translation surface (user-lang leak guard, 2a2aa68).
+  shrinks the translation surface (user-lang leak guard, 77c619b).
 - Verdict enum is fixed: `PASS | FAIL_L2 | FAIL_L3`.
 
 ## AnalysisResult
