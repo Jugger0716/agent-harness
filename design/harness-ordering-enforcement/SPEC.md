@@ -731,8 +731,8 @@ PY
 | **C2** | 세대 카운터 도입 | `skills/harness/SKILL.md` 단일 파일. §3.3의 사이트 전건 | 린트 7종 rc=0. 분할 전이므로 인용 무영향 |
 | **C3** | epic-exit 분리 → §Step 3.6 승격 — **완료** | `skills/harness/SKILL.md` 블록 이동 + 인용 15곳, `skills/handoff/SKILL.md` 1곳, `HARNESS_STEP_IDS` 11→12 재고정(같은 커밋) | 린트 7종 rc=0, 정본 Step id 12개 (**충족**) |
 | **C4** | 공유 계약 추출 | `templates/_shared/` 6파일 신설 + `skills/harness/SKILL.md`에서 참조로 대체. **R-1 프로브 선행** | 린트 7종 rc=0 + 프로브 기록 |
-| **C5** | 3분할 | 스킬 디렉터리 2개 신설 + `SECTION_REF_TARGETS` 등록(C1이 가능하게 만든 것) + 핀 재고정 + 경계 넘는 `§Step` 인용 재앵커 + **BLOCK 그룹 16개 등록(§5.4.4, rev.10) + gate 진입 검사 신작(§5.4.5) + rev.9 (a)~(e) 문면 반영 + Pass A 리다이렉트(rev.10)** | 린트 7종 rc=0, `verify_block_sync.py`가 새 그룹 전건 대조, gate frontmatter에 `Glob` 포함(AC-14) |
-| **C6** | description 문안 + 예산 | 3스킬 문안 + `PER_SKILL_CEILING` 3항목 + `TOTAL_CEILING` 상향 | `verify_description_budget.py` rc=0 |
+| **C5** | 3분할 — **완료** `231e2f5` (PLAN-c5.md; 커밋 순서는 재앵커 → 분할·등록 → 문서) | 스킬 디렉터리 2개 신설 + `SECTION_REF_TARGETS` 등록(C1이 가능하게 만든 것) + 핀 재고정 + 경계 넘는 `§Step` 인용 재앵커 + **BLOCK 그룹 16개 등록(§5.4.4, rev.10) + gate 진입 검사 신작(§5.4.5) + rev.9 (a)~(e) 문면 반영 + Pass A 리다이렉트(rev.10)** | 린트 7종 rc=0, `verify_block_sync.py`가 새 그룹 전건 대조, gate frontmatter에 `Glob` 포함(AC-14) |
+| **C6** | description 문안 + 예산 — **완료**(C5-c 커밋: harness 555 / gate 401 / build 379, 합 1,335, `TOTAL_CEILING` 7,706) | 3스킬 문안 + `PER_SKILL_CEILING` 3항목 + `TOTAL_CEILING` 상향 | `verify_description_budget.py` rc=0 |
 
 ### 6.1 C1 실측 (2026-09-04, base `b1df306`)
 
@@ -902,17 +902,17 @@ OK: 9 sync group(s), 51 marker site(s)
 | AC-4b | epic 세션이 §Step 8에 **진입하지 않음** — 무게이트 구현-스킬 진입 경로가 소멸 | §Step 3.5 → §Step 3.6 직행, §Step 8 라우팅에서 epic 분기 제거 (**충족**) |
 | AC-4c | 이동으로 거짓이 된 문장이 남지 않음 | §Session Boundary 적용범위 2곳 정정 (**충족**) |
 | AC-4d | 「20 of 80 caught」류 수치를 추정하지 않고 실측 | sentinel 80회 실행 → **21 of 80** (**충족**) |
-| AC-5 | C5 적용 후 린트 7종 rc=0, **SYNC 9그룹 무손상** | `verify_sync_markers.py` → `9 sync group(s), 51 marker site(s)` — **rev.10 정정: 53**(블록 복제로 `session-conflict`·`handoff-state-record` 마커가 build에 1곳씩 생긴다) |
-| AC-6 | C5의 재앵커가 `skills/team-memory/SKILL.md` 앵커 2건을 **건드리지 않음** | `git diff` 해당 2행 부재 |
-| AC-7 | `harness-gate`의 frontmatter가 `Bash`·`Write`·`Edit`를 **이름 형식으로** 나열 (스코프 패턴 금지 — no-op) | frontmatter 직접 확인 |
+| AC-5 | C5 적용 후 린트 7종 rc=0, **SYNC 9그룹 무손상** | `verify_sync_markers.py` → `9 sync group(s), 51 marker site(s)` — **rev.10 정정: 53**(블록 복제로 `session-conflict`·`handoff-state-record` 마커가 build에 1곳씩 생긴다) — **실측 54**(`adhoc-dispatch`도 build §Key Rules에 1곳 더) (**충족** — `231e2f5`) |
+| AC-6 | C5의 재앵커가 `skills/team-memory/SKILL.md` 앵커 2건을 **건드리지 않음** | `git diff` 해당 2행 부재 (**충족** — `231e2f5`) |
+| AC-7 | `harness-gate`의 frontmatter가 `Bash`·`Write`·`Edit`를 **이름 형식으로** 나열 (스코프 패턴 금지 — no-op) | frontmatter 직접 확인 (**충족** — `231e2f5`) |
 | AC-8 | `harness-gate` 세션에서 `Bash` 호출이 `No such tool available`로 실패 | **라이브 프로브 1회** |
 | AC-9 | **R-1 프로브**: `templates/_shared/` 파일을 이름으로만 인용한 스킬이 그 계약을 실제로 준수하는지 | **라이브 프로브 1회 — C4 착수 전 필수** |
-| AC-10 | C6 적용 후 `verify_description_budget.py` rc=0, `TOTAL_CEILING`이 같은 커밋에서 상향 | 린트 + `git show` |
+| AC-10 | C6 적용 후 `verify_description_budget.py` rc=0, `TOTAL_CEILING`이 같은 커밋에서 상향 | 린트 + `git show` (**충족** — C5-c 커밋: 6,841 → 7,706, 세 항목 제로 슬랙, `harness` LOWER_BOUND 400 추가) |
 | AC-11 | 이 spec의 핵심 3건(광고 명제 확정 / phase 감사 전용 강등 / 3분할)이 **ROADMAP에 등재**됨 | `docs/`가 gitignored이므로 영속 경로 확보 |
-| AC-12 | C5 적용 후 §5.4.4의 BLOCK 그룹이 `verify_block_sync.py` `GROUPS`에 전건 등재되고 rc=0 — 그룹 수는 16(rev.10) | `python scripts/verify_block_sync.py` → 기존 2 + 신규 N 그룹 |
-| AC-13 | `harness-gate`에 AskUserQuestion 사이트가 **정확히 1개**(HARD GATE #1; Pass A/B는 한 태그 안의 두 패스)이고, 진입 검사(§5.4.5)에는 "Restart"/"Stop"/"Delete" 문자열이 없음 | `grep -c AskUserQuestion skills/harness-gate/SKILL.md`, 진입 검사 절 grep |
-| AC-14 | `harness-gate` frontmatter `disallowed-tools`가 `Bash`·`Write`·`Edit`에 더해 `Glob`을 이름 형식으로 나열 | frontmatter 직접 확인 (AC-7의 확장) |
-| AC-15 | C5 적용 후 §Scale Assessment·§run_style에 「render (2)·(3) 상호배타」/「auto는 Step 2→2.6→3 직행」 문장이 남아 있지 않음 (rev.9 (a)(b)) | 해당 절 grep |
+| AC-12 | C5 적용 후 §5.4.4의 BLOCK 그룹이 `verify_block_sync.py` `GROUPS`에 전건 등재되고 rc=0 — 그룹 수는 16(rev.10) | `python scripts/verify_block_sync.py` → 기존 2 + 신규 16 그룹 (**충족** — `231e2f5`, 18 OK) |
+| AC-13 | `harness-gate`에 AskUserQuestion 사이트가 **정확히 1개**(HARD GATE #1; Pass A/B는 한 태그 안의 두 패스)이고, 진입 검사(§5.4.5)에는 "Restart"/"Stop"/"Delete" 문자열이 없음 | `grep -c AskUserQuestion skills/harness-gate/SKILL.md`, 진입 검사 절 grep (**충족** — `231e2f5`: `<HARD-GATE>` 태그 안 사이트 1; 파일 전체 `grep -c`는 5로 나머지 4는 산문 언급; 진입 검사 절에 Restart/Delete 리터럴 0, §Next command 표의 "Stop"은 삭제 없는 halt 옵션) |
+| AC-14 | `harness-gate` frontmatter `disallowed-tools`가 `Bash`·`Write`·`Edit`에 더해 `Glob`을 이름 형식으로 나열 | frontmatter 직접 확인 (AC-7의 확장) (**충족** — `231e2f5`) |
+| AC-15 | C5 적용 후 §Scale Assessment·§run_style에 「render (2)·(3) 상호배타」/「auto는 Step 2→2.6→3 직행」 문장이 남아 있지 않음 (rev.9 (a)(b)) | 해당 절 grep (**충족** — `231e2f5`: 3파일 0건) |
 
 ---
 

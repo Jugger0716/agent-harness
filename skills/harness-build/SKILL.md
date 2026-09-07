@@ -1,7 +1,7 @@
 ---
 name: harness-build
 disallowed-tools: NotebookEdit
-description: Implementation half of the /harness pipeline — Slice Plan and Epic Exit, Generate, Verify (Layer 1), Evaluate (Layer 2+3), the Verdict loop and Cleanup. Consumes only a spec.md that /harness-gate has confirmed; `/harness-build --epic` writes slice_plan.md and exits instead of implementing. Same opt-in Workflow segments and inline fallback as /harness. Not an entry point — run /harness first.
+description: Implementation half of the /harness pipeline — Slice Plan / Epic Exit, Generate, Verify (Layer 1), Evaluate (Layer 2+3), Verdict loop, Cleanup. Consumes only a spec.md confirmed at /harness-gate; `/harness-build --epic` writes slice_plan.md and exits instead of implementing. Same opt-in Workflow segments and inline fallback as /harness. Not an entry point — run /harness first.
 ---
 
 # Agent Harness — /harness-build (v3, implementation half)

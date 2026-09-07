@@ -1,7 +1,7 @@
 ---
 name: harness-gate
 disallowed-tools: Bash, Write, Edit, Glob, NotebookEdit, WebSearch, WebFetch, Task, Agent, Workflow
-description: HARD GATE #1 of the /harness pipeline — spec confirmation, and nothing else. Holds no Bash, Write, Edit, Glob or sub-agent tools; it reads .harness/state.json and spec.md, renders the critic status and the Scale Assessment, asks once, and prints the next command (/harness-build, /harness-build --epic, or a /harness re-entry). It writes nothing. Run after /harness reaches plan_done; any other phase is redirected to its owning skill.
+description: HARD GATE #1 of the /harness pipeline — spec confirmation only. Holds no Bash, Write, Edit, Glob or sub-agent tools — reads .harness/state.json and spec.md, renders critic status and Scale Assessment, asks once, prints the next command (/harness-build, /harness-build --epic, or a /harness re-entry) and writes nothing. Run after /harness reaches plan_done; any other phase is redirected to its owner.
 ---
 
 # Agent Harness — /harness-gate (v3, HARD GATE #1)

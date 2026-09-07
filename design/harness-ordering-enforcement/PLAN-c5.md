@@ -1223,3 +1223,18 @@ git switch develop && git merge --no-ff harness/c5-three-way-split -m "Merge bra
 - **Spec coverage**: §2.1 도구 계약(Task 4 frontmatter) / §2.2 매핑(Task 4 Step 3 + rev.10 3행) / §2.3 phase 강등·generate_ready 이전(Task 4 Step 4, Task 5 Step 3) / §4 Modify(Task 5 Step 2) / §5.4.2~5.4.4 배분(Task 3 표 + split.py) / §5.4.5 Entry Check(Task 4 Step 3) / rev.9 (a)(b)(c)(d)(e)(Task 5 Step 4, Task 1 Step 1, Task 4 Step 6, Task 5 Step 1) / §6 커밋 단위(Task 0·2·6·7) / §7 예산(Task 6 Step 5, Task 7 Step 1) / §9 AC-5·6·7·12·13·14·15(Task 6 Step 8) / AC-8(Task 8) / AC-11(Task 7 Step 3·4). **갭**: `harness-build`의 §Session Boundary Type B 「Handoff : Run `/handoff generate`」는 불변이나, `/handoff generate`가 `.harness/state.json`의 `skill`을 읽어 `Skill : harness`를 적는다 — build가 쓰는 state.json의 `skill` 값은 그대로 `"harness"`다(세 스킬이 한 세션을 공유하므로 **`skill` 필드는 바꾸지 않는다** — §Version & Compatibility의 v3 정의 `skill: "harness"`가 세 파일 B2 블록에 그대로 있다). 이 결정을 Task 4 Step 4의 §Entry 문단 끝에 한 줄로 명시한다: `The \`skill\` field stays \`"harness"\` — one session, three skills; \`/handoff\` and the Session Conflict table read that value unchanged.`
 - **Placeholder scan**: `<측정>`·`<sha>`는 실행 시점에만 존재하는 값(제로 슬랙 라쳇·커밋 sha)이라 계획이 미리 적을 수 없는 것이며, 각 자리에 그 값을 얻는 명령을 붙였다. 그 외 TBD 없음.
 - **Name consistency**: `hx-*` 16 tag는 Task 3 표·split.py·Task 6 Step 1이 동일; `§Fresh Start`·`§Entry Check`·`§Next command`·`§Entry`·`§Gate re-entry flags` 명칭은 Task 1·4·5 전체에서 동일; 플래그 `--modify`/`--auto-revise`/`--critic`은 Task 0·4·5 동일.
+
+---
+
+## 실행 기록 (2026-09-07)
+
+계획대로 실행했고, 계획과 달라진 것만 적는다.
+
+- **커밋 4개** (`harness/c5-three-way-split`): C5-0 `2b0cd3d`(계획+rev.10) → C5-a `e77515e`(제자리 중립화 + 126건 앵커) → C5-b `231e2f5`(분할·등록·문면) → C5-c(설명 확정 + 문서). 각 커밋 린트 7종 rc=0.
+- **C5-b는 Task 3~6을 한 커밋**으로 냈다 — 분할 뒤의 파일이 각각 자기 모순 없이 서게 하려면 진입 검사·리다이렉트·plan_done 행이 분할과 같은 커밋이어야 했다. 재현은 `task5.py → task5b.py → split.py → register.py` 순서(스크래치 worktree와 실제 트리가 바이트 동일).
+- **Task 5 Step 5의 비-Step 인용**은 린트 미검사라 "정확성 목적"으로만 잡았는데, 실측 19곳이 실제로 타 파일 절을 가리키고 있었다(gate의 §Session Recovery 5곳, 공유 블록의 §Session Boundary Type B·§Standard Status Format·§Scale Assessment 등). 전건 경로 앵커.
+- **블록 안의 §Step 인용에 두 번째 앵커 규칙이 필요했다**: 공유 블록이 harness 소유 Step(1/1.5/2/2.6)을 인용하면 build/gate 사본에서 layer 4가 FAIL한다. `split.py`가 블록 본문의 그런 인용에 `skills/harness/SKILL.md` 앵커를 자동으로 붙인다(자기 파일 앵커는 in-scope로 그대로 검사되므로 harness 쪽 의미는 불변). Type B·Auto-fix 표처럼 O-build이면서 원래 A 영역에 있던 조각도 같은 처리.
+- **SYNC 마커 사이트 54** (rev.10의 53이 아니라) — build §Key Rules의 `adhoc-dispatch` 마커를 rev.10이 세지 않았다. SPEC AC-5 행에 정정.
+- **AC-13의 `grep -c AskUserQuestion`은 5** — `<HARD-GATE>` 태그 안 사이트는 1, 나머지 4는 산문 언급. AC 행에 그 분해를 적었다.
+- **description에 `: `가 들어가 YAML 스칼라 검사에 걸렸다**(harness·gate) — em dash로 교체. 확정 길이 555 / 401 / 379, `TOTAL_CEILING` 7,706.
+- **Task 8(AC-8 라이브 프로브)은 미실행** — 설치본 동기화 + 새 프로세스가 필요해 별도 세션.

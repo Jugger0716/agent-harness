@@ -1,7 +1,7 @@
 ---
 name: harness
 disallowed-tools: NotebookEdit
-description: Entry point of the 3-Phase harness (Plan -> Gate -> Generate -> Verify -> Evaluate) with a read-only `doctor` diagnostic. Runs Setup, Convention Scan, Plan and Plan Critic, writes spec.md, then halts at plan_done and hands off to /harness-gate — the spec-confirmation gate lives in that separate, tool-less skill, and /harness-build implements. Plugin-shipped native Workflow segment scripts on the workflow path (ultracode or --mode opt-in) with schema-validated returns; inline single path otherwise. Use for development AND non-development tasks that benefit from structured planning and 3-layer review. (formerly /workflow)
+description: Entry point of the 3-Phase harness (Plan -> Gate -> Generate -> Verify -> Evaluate) — Setup, Convention Scan, Plan and Plan Critic, writes spec.md, then halts at plan_done and hands off to /harness-gate (the tool-less spec-confirmation gate) and /harness-build (implementation). Plugin-shipped native Workflow segments on the workflow path (ultracode or --mode opt-in), inline single path otherwise; read-only `doctor` diagnostic. Use for development AND non-development tasks that benefit from structured planning and 3-layer review. (formerly /workflow)
 ---
 
 # Agent Harness — /harness Orchestrator (v3, plan half)
