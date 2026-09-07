@@ -5,7 +5,7 @@
 >
 > 본문은 그 밖의 한 글자도 수정하지 않았다.
 
-# SPEC — `harness-ordering-enforcement` (rev.7)
+# SPEC — `harness-ordering-enforcement` (rev.8)
 
 > **성격**: 후속 에픽의 요구사항 명세. 입력은 `docs/harness/plan/REMEASURE-harness-split.md`(gitignored)와
 > `docs/harness/plan/PROBE-FINDINGS-enforcement.md`(gitignored), 그리고 `ROADMAP.md`의 W7 행·phase-P 4행.
@@ -54,6 +54,35 @@
   기본은 **미보유**로 두었으나, Reading Order 성격의 파일 존재 확인에 필요한지 미검증.
 
 ### Changed in this revision
+
+**rev.8 (2026-09-07) — 결정 ④를 「소유권 분할」로 확정하고 경계를 실측했다. 분할이 커버하는
+것은 26%이고, 나머지 74%는 원리적으로 전역이다 — 이 수치가 에픽의 비용을 처음으로 확정한다.**
+
+| 절 | 크기 | 분할되는 부분 | 원리적으로 공유 |
+|---|---:|---:|---:|
+| §Session Recovery | 16,191 | **3,822** (phase 점프표 9행) | **12,368** (진입 로직) |
+| §Session Boundary | 9,074 | **6,978** (Type A 1,745 + Type B 5,233) | 2,093 (preamble + handoff 계약) |
+| §Architecture Principles | 8,167 | ~0 | **8,167** (전역 불변식 5 + §Path Validator) |
+| §Output Language Contract | 4,700 | 0 | **4,700** |
+| §State Machine | 2,473 | 일부(각자 수행하는 전이) | 대부분(하나의 기계다) |
+| §Sub-agent Return Value Rules | 1,320 | 0 | **1,320** (harness·build 둘 다 필요, gate는 불필요) |
+| **합** | **41,925** | **~10,800 (26%)** | **~31,100 (74%)** |
+
+**§Session Recovery가 결정적이다.** 16,191 B 중 점프표 3,822 B만 소유자를 따라 갈라지고,
+**12,368 B(76%)는 세 스킬 모두가 가져야 한다** — ⑧에서 확정했듯 `/harness-gate`나
+`/harness-build`를 처음부터 직접 호출하는 것을 막을 수 없으므로, 어느 스킬이든 기존 세션을
+감지하고 version·Session Conflict·epic residue·docs_path drift를 검사하고 4옵션 게이트를
+렌더할 수 있어야 한다. 「진입 로직은 진입점에만」이 성립하지 않는 이유가 바로 ⑧이다.
+
+**따라서 에픽의 실제 비용이 확정된다**: 잔여 ~31 KB를 세 스킬이 각자 지녀야 하므로
+**+62 KB**가 플러그인 전체에 추가된다(31 KB × 3 − 31 KB). 여기에 경계 넘는 인용 62건 재앵커와,
+이후 모든 계약 변경이 **3중 동기화**를 요구하는 상시 비용이 붙는다. 런타임 Read는 rev.7이
+실측으로 배제했으므로, 잔여분의 유일한 기제는 BLOCK-sync 복제다.
+
+**이 수치는 ①의 재검토 재료다.** 에픽이 사는 것은 「게이트 턴에 도구가 없다」 한 문장이고,
+치르는 것은 +62 KB 중복 + 62건 재앵커 + 영구적 3중 동기화다. rev.8은 그 교환을 판정하지 않고
+**수치를 확정해 사람 앞에 놓는다** — 이것이 C4가 실제로 산출할 수 있는 것이고, 코드 변경이
+아니다(분할되지 않은 파일을 분할 소유할 수 없으므로 적용은 C5로 합쳐진다).
 
 **rev.7 (2026-09-07) — R-1 프로브 완료(AC-9). 결정 ④가 명세대로는 구현 불가로 판정됐다.**
 
