@@ -257,10 +257,10 @@ Collect the authored topics into the same `studyGuide = { topics: [...] }` shape
          // AND re-embedded in every lens and bucket prompt (6 agents in deep, 7+ in thorough).
          // Step 1.3's budget caps the cited source files, but until the rungs below existed nothing
          // capped `spec.md` + `changes.md`, and the `--diff` branch's own cap is a LINE cap that
-         // says nothing about characters: measured within ONE target at `a8b97bc`, the two
+         // says nothing about characters: measured within ONE target at `696ba0b`, the two
          // documents are 47,993 characters against the **23,511** that target's 548-line fill
          // gathered — the uncapped part is 2.04× the budgeted part. **Pin a figure like that to a
-         // SHA**: `88c2e5f`, two minutes later, changed a ranked script's length and the fill now
+         // SHA**: `13bec7f`, two minutes later, changed a ranked script's length and the fill now
          // stops elsewhere, so the present tense would already be false (ledger §Repudiated
          // Figures). **Count characters on both sides of every comparison in this
          // block** (an earlier revision compared CRLF BYTES to characters and overstated the ratio
@@ -430,7 +430,7 @@ Collect the authored topics into the same `studyGuide = { topics: [...] }` shape
          // branch of the rule above the whole `35,000 − overhead` goes to that branch's own evidence.
          // Reserving 8,750 here would strand it: nothing is entitled to it.
          //   - `--diff` — the branch's own "first ~3000 lines / ~150 files" cap is a LINE cap and
-         //     says nothing about characters. Measured at `d8fea6d`, `git diff main..d8fea6d` on
+         //     says nothing about characters. Measured at `591f5ed`, `git diff main..591f5ed` on
          //     this repository is 2,145 lines / **199,206 characters**: already inside the line
          //     cap, and 5.7× the character cap and 3.6× the ~56,000 at which the dispatch stops
          //     being executable — so the line cap has never once bound on a real range here, and

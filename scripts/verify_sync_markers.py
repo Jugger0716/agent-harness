@@ -362,7 +362,7 @@ SECTION_HEADING_RE = re.compile(r"^## (§[^\n]+?)\s*$", re.M)
 
 # --- harness-steps mode -----------------------------------------------------------
 # §FIGURE PROVENANCE. Every pinned constant and every count quoted in the module
-# docstring was measured on the tree THIS change produces -- base commit c986901 plus
+# docstring was measured on the tree THIS change produces -- base commit 89fcd10 plus
 # BOTH edits this same change makes to skills/harness/SKILL.md. Naming only one of them
 # would describe a tree that yields 403/203, not the figures below:
 #   (a) repointing a rotted `§state.json schema` at `§Step 1: Setup`. This ADDS NOTHING
@@ -371,7 +371,7 @@ SECTION_HEADING_RE = re.compile(r"^## (§[^\n]+?)\s*$", re.M)
 #   (b) appending a misattribution note to §Sub-command: doctor, written deliberately
 #       with no §-prefixed token of its own so it perturbs no count. Three earlier
 #       revisions of it did carry such tokens and moved the total to 405 each time.
-# So against bare c986901 the TOTAL is unchanged at 403; only `in scope` (202 -> 203) and
+# So against bare 89fcd10 the TOTAL is unchanged at 403; only `in scope` (202 -> 203) and
 # `unchecked` (201 -> 200) move, by the single citation (a) relocates. Re-measure with the
 # command named beside each figure before changing a pin.
 #

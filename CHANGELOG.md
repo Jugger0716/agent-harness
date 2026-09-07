@@ -10,6 +10,34 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
 
 ### Changed
 
+- **History rewritten to drop files that had been committed at now-`.gitignore`d paths, and
+  every commit sha this repository cites was re-pointed.** 1,883 blob paths — `.venv/` 1,862,
+  `__pycache__/` 14, `docs/superpowers/*.md` 7 — were removed from all history with
+  `git filter-repo`. None was tracked at any branch tip; three earlier commits had already
+  untracked them, so this only cleared the objects the history still carried. All ten branches
+  and twenty-five tags were force-pushed.
+
+  Verified before the push, because a rewrite that loses content is unrecoverable in practice:
+  every branch tip tree is byte-identical to its pre-rewrite tree; nine tags' trees differ and
+  each lost only two or three files, all in the removed set, with nothing gained; 367 commits
+  became 357 as ten that touched nothing else became empty.
+
+  **Every commit sha changed**, so the 29 commit citations across `ROADMAP.md`, `CHANGELOG.md`,
+  `README.md`, `workflows/_reference/study_measurements.md`, `workflows/_reference/schemas.md`,
+  `skills/study/SKILL.md`, `skills/handoff/SKILL.md`, `scripts/verify_sync_markers.py`,
+  `scripts/verify_description_budget.py` and the two design documents were re-pointed — 73
+  occurrences, several cited in both short and full form. `filter-repo` wrote no `commit-map`,
+  so the mapping was reconstructed by matching each cited commit's subject and author date
+  against the new history from a pre-rewrite bundle. All 29 mapped; none was guessed. Verified
+  both directions: every new sha resolves to the commit its old form named, and no citation
+  anywhere still names a commit only the old history had.
+
+  **A figure quoted against a rewritten history is anchored to a different object than the one
+  that produced it.** The shas are correct and every branch tip tree is byte-identical — but
+  nine tags no longer contain the files their releases shipped with, so a measurement
+  reproduced at one of those tags will not match what its row records. Recorded here rather
+  than discovered later.
+
 - **`/harness`'s epic-exit path is its own step now (`§Step 3.6: Epic Exit`), not a branch of
   `§Step 8`.** §Step 3.5 wrote `slice_plan.md` and then handed control forward into §Step 8's
   first branch, skipping Steps 4-7 — the only step-skipping edge in the file, and it pointed at
@@ -110,7 +138,7 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
   schema literal the sentence means — the same anchor `CHANGELOG.md`'s 8.10.0 entry already
   uses for it. Found while measuring for the lint above, and **not findable by that lint**: the
   old text began with a lowercase letter, which the `§Step` family never matches. The repoint
-  adds no citation — it swaps one for another — so against `c986901` the **total is unchanged at
+  adds no citation — it swaps one for another — so against `89fcd10` the **total is unchanged at
   403**; what moves is that single citation, from unchecked to checked (202 → 203, 201 → 200).
   The §Sub-command: doctor note added in the same change is written with no §-prefixed token of
   its own for the same reason: three earlier revisions of it each pushed the total to 405 by
@@ -200,7 +228,7 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
   multipliers are relative to a baseline that is not zero, and the largest part of that
   baseline is `/harness`'s own contract document loading before any work starts. It is
   reported on four bases at one commit (LF index bytes 211,235 / UTF-8 characters 207,239 /
-  working-tree bytes / 2,508 lines at `118015d51aa15ee67f409b945fcd43c65a61d4f5`, measured
+  working-tree bytes / 2,508 lines at `9023897c4c59632cea884afca98beb1cc88f4496`, measured
   2026-08-31) with the command for each, because bytes and characters differ here. **The
   working-tree row needed correcting before it shipped, by this release's own doing**: a Windows
   checkout measured 213,743 bytes, one carriage return per line more than the index, and the
@@ -225,7 +253,7 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
 - **Four skill descriptions are shorter, and `/spec` loads again.** `study` drops from 1,009 to
   662 characters and the three deprecation stubs (`code-review`, `memory`, `workflow`) collapse
   to one line each, taking the 17-skill total from 7,709 (at `4295156`, before the trim)
-  to 6,841 (at `118015d`). What `study` lost is the
+  to 6,841 (at `9023897`). What `study` lost is the
   mode clause and the read-only/WebSearch clause: `plugin-shipped native Workflow segment` is
   shared by 9 skills and `opt-in gated` by 8, so neither helps Claude tell `study` apart, while
   everything kept — the seven guide sections, `verified revision material`, the provenance
@@ -607,8 +635,8 @@ out-of-scope** — this batch closed only the rows its own spec named IMPLEMENTA
   `workflows/harness.plan.workflow.js`, whose new revision-notes section cites
   `CLAUDE.md §Conventions` by name — without it that citation points outside the tracked tree.
   **Correction**: an earlier revision of this bullet said "the same commit" and the batch then
-  violated it — the workflow landed in `fe672a5` and this file in `b87354f`, so across
-  `fe672a5`..`b1263e4` the citation did point outside the tracked tree. It resolves at the
+  violated it — the workflow landed in `3f1648d` and this file in `a7fcde6`, so across
+  `3f1648d`..`6efe633` the citation did point outside the tracked tree. It resolves at the
   branch tip, which is what ships; the intra-branch window is disclosed rather than hidden.
 
 ### Fixed
@@ -641,8 +669,8 @@ out-of-scope** — this batch closed only the rows its own spec named IMPLEMENTA
   the FULL re-run and now cites `skills/harness/SKILL.md` §Step 2 — WORKFLOW path by name. That
   edit ships in this same release — **correction**: an earlier revision of this bullet said "this
   same commit", which the batch's own 7-way commit split made false. The narrowing landed in
-  `fe672a5` (the revision-note relocation commit) and B4's `skills/harness/SKILL.md` change in
-  `6e86249`. The `workflows/harness.plan.workflow.js` entry under **Changed** below covers the
+  `3f1648d` (the revision-note relocation commit) and B4's `skills/harness/SKILL.md` change in
+  `66ec76b`. The `workflows/harness.plan.workflow.js` entry under **Changed** below covers the
   relocation only, not this narrowing.
 - **`skills/ship/SKILL.md` §Step 2: Stage — version_bump's `#### Pass 2 — Apply Updates` — an
   unachievable re-serialization instruction.** The step told the orchestrator to re-serialize
@@ -751,11 +779,11 @@ out-of-scope** — this batch closed only the rows its own spec named IMPLEMENTA
   guarantee ("do NOT recompute from `cli_flags.output_dir`") remains true, so this is a
   narrowing of the verdict, not a reversal of the guarantee. A3 (`skills/harness/SKILL.md` line
   count): re-measured a second time, after this batch's own B4+B7 edits to that same file —
-  2,288 lines (working tree, base `f32c3fb`, 2026-08-19) — both ROADMAP locations (the
+  2,288 lines (working tree, base `1ce142d`, 2026-08-19) — both ROADMAP locations (the
   `## Unreleased` mention and the `## v8.8` P2-3 row) now point future readers at `wc -l`
   instead of at a number that this same commit already moved once. **Re-measured a third time,
   after every body edit to that same file landed in this batch — the original B4+B7 edits plus
-  this batch's own QA rounds 1–6 fixes (round 3 = the Layer 3 pass, rounds 4–5 = two adversarial re-verification passes, round 6 = the pre-ship cold review) (working tree, base `f32c3fb`, 2026-08-19):
+  this batch's own QA rounds 1–6 fixes (round 3 = the Layer 3 pass, rounds 4–5 = two adversarial re-verification passes, round 6 = the pre-ship cold review) (working tree, base `1ce142d`, 2026-08-19):
   2,293 lines** — this figure is valid only as of the last body edit to
   `skills/harness/SKILL.md` in this batch and rots the instant that file is edited again, which
   is exactly the mechanism that produced this entry's own prior correction. A4 (`schemas.md`

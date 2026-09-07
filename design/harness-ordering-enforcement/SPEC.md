@@ -10,7 +10,7 @@
 > **성격**: 후속 에픽의 요구사항 명세. 입력은 `docs/harness/plan/REMEASURE-harness-split.md`(gitignored)와
 > `docs/harness/plan/PROBE-FINDINGS-enforcement.md`(gitignored), 그리고 `ROADMAP.md`의 W7 행·phase-P 4행.
 > 이 문서도 `docs/` 아래라 **gitignored — 공개 링크가 아니다**. 영속 경로는 ROADMAP 등재뿐이다.
-> 기준 트리: `develop @ 81227d4061cee9b24d44a13dcbddc2d70efa8400`, working tree clean.
+> 기준 트리: `develop @ c70284320cc5e81f6ca53eb64a054d379de1353d`, working tree clean.
 
 ---
 
@@ -199,7 +199,7 @@ Epic Exit`으로 승격했다. §0-B의 재해석대로 착지점은 「§Step 3
 
 1. **C1의 범위가 줄었다.** rev.1의 C1 행은 「PIN-FILES 메시지의 하드코딩 라벨 버그도 함께」를
    포함했는데, 그 버그는 **이미 고쳐져 있다** — `glob_label`이 타깃 디렉터리에서 계산되며,
-   `81227d4`에서 도입됐다. REMEASURE §4가 그것을 결함으로 적은 것은 측정 기준이 `490f4a6`,
+   `c702843`에서 도입됐다. REMEASURE §4가 그것을 결함으로 적은 것은 측정 기준이 `8f293a9`,
    즉 그 수정 **이전** 커밋이었기 때문이다. REMEASURE는 틀리지 않았고 기준이 낡았다.
 2. **「①+④ → exit 0」은 참이지만 ③이 빠져 있었다.** REMEASURE §4-3은 ①(파라미터화)과
    ④(재앵커)만 적용한 사본이 exit 0에 도달한다고 적었다. 실제로는 **③(재핀)이 함께 필요하다** —
@@ -497,14 +497,14 @@ Modify 1회당 **+2회**.
 
 | # | 커밋 | 범위 | 검증 |
 |---|---|---|---|
-| **C1** | `harness-steps` mode 파라미터화 — **구현 완료, 아래 §6.1 참조** | `scripts/verify_sync_markers.py`만. 손잡이 5개(`HARNESS_STEP_IDS`/`HARNESS_SUBPATHS`/`HARNESS_FILES`/`HARNESS_NON_HEADING_ANCHORS` + `HARNESS_MIN_CROSS_FILES`)를 `SECTION_REF_TARGETS` 엔트리로 이동 + 모드별 필수 키 검사(`_MODE_REQUIRED_KEYS`) + **layer 5 foreign-anchor 배제**(rev.3, BLOCKING). **PIN-FILES 라벨 버그는 범위에서 제외** — 이미 `81227d4`에서 수정됨 | 린트 7종 rc=0, **출력 바이트 동일**(베이스라인 대비 diff 0) + 채택 분할에서 rc=0(§6.2) |
+| **C1** | `harness-steps` mode 파라미터화 — **구현 완료, 아래 §6.1 참조** | `scripts/verify_sync_markers.py`만. 손잡이 5개(`HARNESS_STEP_IDS`/`HARNESS_SUBPATHS`/`HARNESS_FILES`/`HARNESS_NON_HEADING_ANCHORS` + `HARNESS_MIN_CROSS_FILES`)를 `SECTION_REF_TARGETS` 엔트리로 이동 + 모드별 필수 키 검사(`_MODE_REQUIRED_KEYS`) + **layer 5 foreign-anchor 배제**(rev.3, BLOCKING). **PIN-FILES 라벨 버그는 범위에서 제외** — 이미 `c702843`에서 수정됨 | 린트 7종 rc=0, **출력 바이트 동일**(베이스라인 대비 diff 0) + 채택 분할에서 rc=0(§6.2) |
 | **C2** | 세대 카운터 도입 | `skills/harness/SKILL.md` 단일 파일. §3.3의 사이트 전건 | 린트 7종 rc=0. 분할 전이므로 인용 무영향 |
 | **C3** | epic-exit 분리 → §Step 3.6 승격 — **완료** | `skills/harness/SKILL.md` 블록 이동 + 인용 15곳, `skills/handoff/SKILL.md` 1곳, `HARNESS_STEP_IDS` 11→12 재고정(같은 커밋) | 린트 7종 rc=0, 정본 Step id 12개 (**충족**) |
 | **C4** | 공유 계약 추출 | `templates/_shared/` 6파일 신설 + `skills/harness/SKILL.md`에서 참조로 대체. **R-1 프로브 선행** | 린트 7종 rc=0 + 프로브 기록 |
 | **C5** | 3분할 | 스킬 디렉터리 2개 신설 + `SECTION_REF_TARGETS` 등록(C1이 가능하게 만든 것) + 핀 재고정 + 경계 넘는 `§Step` 인용 재앵커 | 린트 7종 rc=0 |
 | **C6** | description 문안 + 예산 | 3스킬 문안 + `PER_SKILL_CEILING` 3항목 + `TOTAL_CEILING` 상향 | `verify_description_budget.py` rc=0 |
 
-### 6.1 C1 실측 (2026-09-04, base `b1de150`)
+### 6.1 C1 실측 (2026-09-04, base `b1df306`)
 
 스크래치 사본에 Step 4 경계 컷(`### Step 4: Generate Phase` 헤딩 앞)을 적용하고
 새 파일을 `skills/harness-build/SKILL.md`에 두어 네 가지로 돌렸다. 원본 트리는 무수정.

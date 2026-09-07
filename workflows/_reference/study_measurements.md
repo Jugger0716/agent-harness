@@ -57,25 +57,25 @@ Never restore any left-column value as a measurement. Every one of them was publ
 
 | Retired | Correct | Why it was wrong | Retired in |
 |---|---|---|---|
-| `85KB … nearly four times` the code | `47,993` prose vs `23,511` code = **2.04×** | compared the two documents' CRLF **byte** size against the code's **character** size; the cap is a character cap | 3d39129 |
-| remainder `2,935` after a 31,945-char fill | `3,055` | `35,000 − 31,945 = 3,055` | 3d39129 |
-| name-based reservation `19,655` protected / `13,280` remaining | `17,859` / `17,141` | neither reproduces, and `35,000 − 19,655 = 15,345` ≠ 13,280 either | 3d39129 |
-| "the name-based rule admitted ONE file" | it admitted the **same two** | drawn from the bad pair above; freeing 9,232 characters of headroom buys zero extra code there | 3d39129 |
-| `coin-washer-review-fix` subtree total `3,479` | `3,475` | included line terminators that the section figures beside it exclude | 3d39129 |
-| `11,262` as an **achieved** prose length | it is the **ceiling** (`35,000 − 23,511 − 227`); achieved is `10,895` | nothing in the slack-return rule reaches the ceiling | 3d39129 |
-| top-three file characters `3,611 / 13,042 / 13,808` | `3,442 / 12,833 / 13,632` | overstate by 1.6–4.7%; reproduce as neither LF characters, CRLF characters, nor bytes | 3d39129 |
-| sum of the first two, `16,653` | `16,275` | follows from the above | 3d39129 |
-| "all 16 occurrences of `A` are the English indefinite article" | 15 are the `A` of `Q&A`; the 16th is a code span naming a DIFFERENT skill's segment script | a cross-file collision, not an article — a fifth kind alongside §Named By Name's four | 3d39129 |
-| §1.6 gate's `12,238` (= `8,627 + 3,611`) | `12,069` (= `8,627 + 3,442`) | carried the repudiated `3,611` **after** Step 2-W had retired it, so the file asserted and repudiated the same number | 9d25760 |
-| zero-code state `48,015` | `47,993` | counted the 22-character `## Cited Source Files` heading that Step 1.3(7) never appends when no file qualifies | 9d25760 |
+| `85KB … nearly four times` the code | `47,993` prose vs `23,511` code = **2.04×** | compared the two documents' CRLF **byte** size against the code's **character** size; the cap is a character cap | 1fc13ca |
+| remainder `2,935` after a 31,945-char fill | `3,055` | `35,000 − 31,945 = 3,055` | 1fc13ca |
+| name-based reservation `19,655` protected / `13,280` remaining | `17,859` / `17,141` | neither reproduces, and `35,000 − 19,655 = 15,345` ≠ 13,280 either | 1fc13ca |
+| "the name-based rule admitted ONE file" | it admitted the **same two** | drawn from the bad pair above; freeing 9,232 characters of headroom buys zero extra code there | 1fc13ca |
+| `coin-washer-review-fix` subtree total `3,479` | `3,475` | included line terminators that the section figures beside it exclude | 1fc13ca |
+| `11,262` as an **achieved** prose length | it is the **ceiling** (`35,000 − 23,511 − 227`); achieved is `10,895` | nothing in the slack-return rule reaches the ceiling | 1fc13ca |
+| top-three file characters `3,611 / 13,042 / 13,808` | `3,442 / 12,833 / 13,632` | overstate by 1.6–4.7%; reproduce as neither LF characters, CRLF characters, nor bytes | 1fc13ca |
+| sum of the first two, `16,653` | `16,275` | follows from the above | 1fc13ca |
+| "all 16 occurrences of `A` are the English indefinite article" | 15 are the `A` of `Q&A`; the 16th is a code span naming a DIFFERENT skill's segment script | a cross-file collision, not an article — a fifth kind alongside §Named By Name's four | 1fc13ca |
+| §1.6 gate's `12,238` (= `8,627 + 3,611`) | `12,069` (= `8,627 + 3,442`) | carried the repudiated `3,611` **after** Step 2-W had retired it, so the file asserted and repudiated the same number | 00d5ea6 |
+| zero-code state `48,015` | `47,993` | counted the 22-character `## Cited Source Files` heading that Step 1.3(7) never appends when no file qualifies | 00d5ea6 |
 | `--stat` = 794 characters over **15 files** | **14 files** | 794 characters is right; the `--stat` output is 15 *lines* — 14 file rows plus the summary row — and the line count was read as a file count | 2026-08-05 audit |
 | `templates/study/html_shell.html` ≈ **~9,800** characters | **9,962** | never re-measured; the file has not changed, so this was wrong when written, next to a paragraph demanding characters be counted with a script | 2026-08-05 audit |
 | `367 characters unused **because** spec.md has a 457-character paragraph` | 367 = spec **200** + changes **167** | the paragraph accounts for 200; `changes.md` independently loses 167 to its own 177-character line at its snap point | 2026-08-05 audit |
 | `a 457-character paragraph **with no newline in it**` | 456-character body plus its terminator | 457 includes the line terminator that §Prose Reservation elsewhere pins as INCLUDED — the same boundary described both ways in one file | 2026-08-05 audit |
 | room range `10,599-34,978` | **unestablished** | depends on a fill never run for all 10 targets. The upper bound is `35,000 − 22`, and that 22 is the heading constant retired one row above: at `code = 0` Step 1.3(7) appends nothing, so the bound would be 35,000. The clause it supported does not need a room range at all (see §Dead Escape Clauses) | 2026-08-05 audit |
-| `git diff main..HEAD` = 2,145 lines / 199,206 characters | true only **at `d8fea6d`** | a moving range cited in the present tense. At `243867b`, the commit that introduced the figure, the range was already 2,377 lines / 221,207 characters; today it is 2,810 / 248,829, i.e. **7.1×** the cap rather than 5.7× | 2026-08-05 audit |
+| `git diff main..HEAD` = 2,145 lines / 199,206 characters | true only **at `591f5ed`** | a moving range cited in the present tense. At `ca932d3`, the commit that introduced the figure, the range was already 2,377 lines / 221,207 characters; today it is 2,810 / 248,829, i.e. **7.1×** the cap rather than 5.7× | 2026-08-05 audit |
 | "alphabetical order truncates `state.json` to `state.js`" — stated as a property of the ORDERING | a property of the ordering **only once the trailing `\b` is gone**; with the anchor present the alphabetical alternation truncates nothing | measured 2026-08-05 on a fixture carrying `state.json`, `html_shell.html`, `GateService.cs`, `Aptner.Pass.Utility.csproj` and `app.css`: the shipped alternation and a fully alphabetical one return **identical, correct** full paths, while dropping the `\b` from the alphabetical one truncates all five at once. The prohibition stands — the attribution was wrong, and it pointed the next editor at the cheaper of the two guards | 2026-08-05 |
-| `its own **548-line** fill gathers 23,511` (present tense) | true only **at `a8b97bc`** | `88c2e5f`, made two minutes later on the same branch, grew `verify_sync_markers.py` from 221 to 300 lines; the fill now stops at **498 of 550 lines over 2 files**. The figures are correct at the pinned SHA — the tense was the defect | 2026-08-05 audit |
+| `its own **548-line** fill gathers 23,511` (present tense) | true only **at `696ba0b`** | `13bec7f`, made two minutes later on the same branch, grew `verify_sync_markers.py` from 221 to 300 lines; the fill now stops at **498 of 550 lines over 2 files**. The figures are correct at the pinned SHA — the tense was the defect | 2026-08-05 audit |
 
 **One figure is retained deliberately and must not be read as live:** the ranking
 `732 / 221 / 198`, with `workflows/study.analyze.workflow.js` on top. It predates step 3's
@@ -426,7 +426,7 @@ satisfies `reserved + filled + overhead ≤ 35,000` by construction, so "over th
 reached by comparing UNDIMINISHED demand against the cap — and running rung 1 first on that
 comparison drops all the code before any prose is touched.
 
-Measured on `--harness study-skill` **at `a8b97bc`** (198 + 221 + 129 = 548 lines,
+Measured on `--harness study-skill` **at `696ba0b`** (198 + 221 + 129 = 548 lines,
 8,182 + 9,010 + 6,319 = 23,511 characters — see the pinning rule at the top of this file):
 reserved 8,565 + filled code 23,511 + overhead 227 =
 **32,303**, inside the cap with all three ranked files intact. But undiminished demand is
@@ -439,7 +439,7 @@ quote.
 
 **The slack-return pass count is pinned, and leaving it open cost a round.** Snapping down means
 a prefix stops at the last line boundary before its target, so some slack goes unused. Measured
-on `--harness study-skill` **at `a8b97bc`**: slack `11,262 − 8,565 = 2,697` targets spec 9,951 /
+on `--harness study-skill` **at `696ba0b`**: slack `11,262 − 8,565 = 2,697` targets spec 9,951 /
 changes 1,311, which snap to **9,751 / 1,144** — prose lands at **10,895**, returning 2,330 of
 2,697 (86.4%) and leaving **367** characters unused. That 367 is **not** all one document's
 doing, which an earlier wording implied: `spec.md` contributes **200**, losing them to a single
@@ -458,7 +458,7 @@ the fill has three stop conditions. **Character-bound**: the next ranked file's 
 exceeded the remaining characters, and the slack IS that remainder, so the file is too large by
 definition (measured on `--harness feature-face-auth-sse-subscribe`). **Line-bound**: the next
 file's lines exceeded the 550-line budget, and no amount of character slack lifts a line cap
-(measured on `--harness study-skill` **at `a8b97bc`**, where the fill stops at 548 of 550 lines
+(measured on `--harness study-skill` **at `696ba0b`**, where the fill stops at 548 of 550 lines
 and the next ranked file, `templates/study/html_shell.html` at 199 lines, is excluded by lines
 while its **9,962** characters would have fit a larger slack — that file is unchanged since, so
 only the fill's stopping point is SHA-dependent here). **File-count-bound**: the 12-file ceiling,
@@ -804,7 +804,7 @@ than believed.
 ## §Rung Four
 
 The first execution of the `--diff` reduction rung, 2026-08-05, range
-`f50e02f77f3bad85467f2b9bc1b4621e178b6a25..67bb5f34ba418d632f0d75b66c6b91ecd7af201e`
+`493b4a45ada8c3dfcca71d6be5cf50d1a3ef1af5..fc9c529dcaaca678cf54161a69b7ff9896eaf975`
 (v8.7.0 → v8.8.0 on this repository). Until now this rung had never run in any mode; the four
 harness-slug rungs had all been exercised, rung 4 had not.
 

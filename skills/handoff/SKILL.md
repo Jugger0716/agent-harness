@@ -636,7 +636,7 @@ Scan `docs/harness/handoff/*.md` (only files whose first line starts with `# HAN
 
 ```
 [handoff] 3 handoff document(s)
-  2026-07-24  v87-tiering        feature/v8.7-tiering  4adcbca  docs/harness/handoff/2026-07-24-v87-tiering.md
+  2026-07-24  v87-tiering        feature/v8.7-tiering  97ce994  docs/harness/handoff/2026-07-24-v87-tiering.md
   ...
 ```
 
