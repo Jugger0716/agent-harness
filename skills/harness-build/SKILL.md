@@ -963,7 +963,7 @@ Ask via AskUserQuestion (in `user_lang`):
 - options:
   - "Auto-fix proposal" / "Let AI (Opus) analyze the failure and propose a minimal diff (1 attempt only)" ← **HIDE this option if `verify.autofix_attempted == true OR state.autofix != null`** (see §State Machine — I2)
   - "Continue to Evaluator" / "Skip remaining verify issues, proceed to QA"
-  - "Stop" / "Halt — resumable next session (`/harness` re-enters this gate directly). Review verify_report.md"
+  - "Stop" / "Halt — resumable next session (`/harness-build` re-enters this gate directly). Review verify_report.md"
 </HARD-GATE>
 
 If "Continue": INLINE → proceed to Step 6 (evaluator receives the Layer-1-FAILED verify_context). WORKFLOW → run `harness.eval` with `skipL1: true` (so `coldPass: cold_dispatch_allowed(true)` evaluates to `false` — AC-15) and treat its return as the Step 7 verdict, recorded per §Step 5 WORKFLOW item 4 above.
