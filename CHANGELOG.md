@@ -25,8 +25,12 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
   `slice-command-format` re-targeted at `harness-build`). A task now costs three user messages
   minimum (`/harness` → `/harness-gate` → `/harness-build`) and a Modify two more. Description
   budget: `harness` 470 → 555, plus `harness-gate` 401 and `harness-build` 379; `TOTAL_CEILING`
-  6841 → 7706. Design record: `design/harness-ordering-enforcement/SPEC.md` (rev.10) and
-  `PLAN-c5.md`; the split commit is `231e2f5`.
+  6841 → 7706. Ahead of the split, `e77515e` path-anchored the 126 `§Step` citations that
+  would cross a file boundary and neutralised shared-block wording, so every commit of the
+  sequence lints green; `skills/handoff/SKILL.md`'s slice-command pointers (§Step 3.5 / §Step
+  3.6) moved with the sections they name. Design record:
+  `design/harness-ordering-enforcement/SPEC.md` (rev.10 at that commit; rev.12 as of the
+  cold-review entry under Fixed below) and `PLAN-c5.md`; the split commit is `231e2f5`.
 
 - **History rewritten to drop files that had been committed at now-`.gitignore`d paths, and
   every commit sha this repository cites was re-pointed.** 1,883 blob paths — `.venv/` 1,862,
@@ -112,6 +116,18 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
   `"3.0"` session compare `0 == 0` and read clean. `generation` is deliberately not named
   `revision`: `plan_critic.round` already owns that word in this file.
 
+- **`ROADMAP.md` W7-spike entry condition — partially met, verdict still `no-go`.** The
+  condition asked the lint to cover `skills/harness/SKILL.md`; it now covers 203 of that
+  file's 403 in-file citations, numbers only. Recording that as "met" would be the false
+  ledger this repository's own conventions exist to prevent. The row now states a
+  conditional `go` for a split that cuts on canonical Step-section boundaries and re-pins
+  the three constants in the same commit — measured: exporting `## Workflow Steps` to a
+  second file trips all three pins with 87 failures. Three other rows carrying the stale "covers one file" claim were corrected in place
+  (including the one whose conclusion the correction leaves standing), and a fourth was
+  corrected for a different reason — it asserted the W7 verdict independently, so it now
+  defers to the W7 row as SSOT. A fifth site, the verbatim twin of that claim inside the
+  8.11.0 entry below, is corrected there rather than here.
+
 ### Added
 
 - **`harness-steps` mode in `scripts/verify_sync_markers.py`'s section-reference check.**
@@ -150,8 +166,9 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
 ### Fixed
 
 - **The split had not reached the prose that describes it.** A spec-blind cold review before
-  v8.13.0 (four read-only lenses, every finding re-reproduced by hand) found the one-file
-  layout still asserted in eighteen places. `README.md` was the largest: Quick Start and the
+  v8.13.0 (four read-only lenses, every finding re-reproduced by hand) raised eighteen
+  findings; seventeen held, one was refuted. The seventeen are the one-file layout still
+  asserted in the prose. `README.md` was the largest: Quick Start and the
   Execution Styles table still offered `/harness generate | verify | evaluate` (those live on
   `/harness-build` now — typing the old form starts a new task or hits the owner redirect),
   and Before/After, the Terminal Output Sample, the `## workflow` diagram, How it works,
@@ -186,19 +203,6 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
   quoting one, which is the self-invalidating-figure trap this repository names in its own
   conventions.
 
-### Changed
-
-- **`ROADMAP.md` W7-spike entry condition — partially met, verdict still `no-go`.** The
-  condition asked the lint to cover `skills/harness/SKILL.md`; it now covers 203 of that
-  file's 403 in-file citations, numbers only. Recording that as "met" would be the false
-  ledger this repository's own conventions exist to prevent. The row now states a
-  conditional `go` for a split that cuts on canonical Step-section boundaries and re-pins
-  the three constants in the same commit — measured: exporting `## Workflow Steps` to a
-  second file trips all three pins with 87 failures. Three other rows carrying the stale "covers one file" claim were corrected in place
-  (including the one whose conclusion the correction leaves standing), and a fourth was
-  corrected for a different reason — it asserted the W7 verdict independently, so it now
-  defers to the W7 row as SSOT. A fifth site, the verbatim twin of that claim inside the
-  8.11.0 entry below, is corrected there rather than here.
 
 ## [8.12.0] — 2026-09-01
 
