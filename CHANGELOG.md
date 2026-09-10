@@ -6,6 +6,204 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/).
 
+## [8.13.0] — 2026-09-10
+
+### Changed
+
+- **`/harness` is now three skills, and the spec-confirmation gate has no write tool.**
+  `skills/harness/SKILL.md` (Steps 1–2.6, ends every session at `plan_done`),
+  `skills/harness-gate/SKILL.md` (Step 3 only — `disallowed-tools` removes `Bash`, `Write`,
+  `Edit`, `Glob`, `Task`, `Agent`, `Workflow`, so the turn that renders HARD GATE #1 cannot
+  modify a file or run a command) and `skills/harness-build/SKILL.md` (Steps 3.5–8). The gate's
+  options print the next command for the human to type (`/harness-build`,
+  `/harness-build --epic`, `/harness --modify` / `--auto-revise` / `--critic`);
+  `phase → "generate_ready"` is written by `/harness-build` on entry and is never read as proof
+  the gate ran. Operative contracts the skills share are byte-identical BLOCK-sync copies (16
+  `hx-*` groups in `verify_block_sync.py`, three of them three-way); `verify_sync_markers.py`
+  pins all three files under `harness-steps`, and its SYNC floors moved with the copies
+  (`session-conflict` 7→8, `handoff-state-record` 2→3, `adhoc-dispatch` 12→13,
+  `slice-command-format` re-targeted at `harness-build`). A task now costs three user messages
+  minimum (`/harness` → `/harness-gate` → `/harness-build`) and a Modify two more. Description
+  budget: `harness` 470 → 555, plus `harness-gate` 401 and `harness-build` 379; `TOTAL_CEILING`
+  6841 → 7706. Ahead of the split, `e77515e` path-anchored the 126 `§Step` citations that
+  would cross a file boundary and neutralised shared-block wording, so every commit of the
+  sequence lints green; `skills/handoff/SKILL.md`'s slice-command pointers (§Step 3.5 / §Step
+  3.6) moved with the sections they name. Design record:
+  `design/harness-ordering-enforcement/SPEC.md` (rev.10 at that commit; rev.12 as of the
+  cold-review entry under Fixed below) and `PLAN-c5.md`; the split commit is `231e2f5`.
+
+- **History rewritten to drop files that had been committed at now-`.gitignore`d paths, and
+  every commit sha this repository cites was re-pointed.** 1,883 blob paths — `.venv/` 1,862,
+  `__pycache__/` 14, `docs/superpowers/*.md` 7 — were removed from all history with
+  `git filter-repo`. None was tracked at any branch tip; three earlier commits had already
+  untracked them, so this only cleared the objects the history still carried. All ten branches
+  and twenty-five tags were force-pushed.
+
+  Verified before the push, because a rewrite that loses content is unrecoverable in practice:
+  every branch tip tree is byte-identical to its pre-rewrite tree; nine tags' trees differ and
+  each lost only two or three files, all in the removed set, with nothing gained; 367 commits
+  became 357 as ten that touched nothing else became empty.
+
+  **Every commit sha changed**, so the 29 commit citations across `ROADMAP.md`, `CHANGELOG.md`,
+  `README.md`, `workflows/_reference/study_measurements.md`, `workflows/_reference/schemas.md`,
+  `skills/study/SKILL.md`, `skills/handoff/SKILL.md`, `scripts/verify_sync_markers.py`,
+  `scripts/verify_description_budget.py` and the two design documents were re-pointed — 73
+  occurrences, several cited in both short and full form. `filter-repo` wrote no `commit-map`,
+  so the mapping was reconstructed by matching each cited commit's subject and author date
+  against the new history from a pre-rewrite bundle. All 29 mapped; none was guessed. Verified
+  both directions: every new sha resolves to the commit its old form named, and no citation
+  anywhere still names a commit only the old history had.
+
+  **A figure quoted against a rewritten history is anchored to a different object than the one
+  that produced it.** The shas are correct and every branch tip tree is byte-identical — but
+  nine tags no longer contain the files their releases shipped with, so a measurement
+  reproduced at one of those tags will not match what its row records. Recorded here rather
+  than discovered later.
+
+- **`/harness`'s epic-exit path is its own step now (`§Step 3.6: Epic Exit`), not a branch of
+  `§Step 8`.** §Step 3.5 wrote `slice_plan.md` and then handed control forward into §Step 8's
+  first branch, skipping Steps 4-7 — the only step-skipping edge in the file, and it pointed at
+  the step that owns cleanup, commit and the end-of-session summary. The follow-up design
+  splits this file into skills at the Step 4 boundary, which would have put that edge across a
+  skill boundary and let an epic session enter the implementation skill without passing a gate.
+  The block moved unchanged; what changed is where it lives and, consequently, that an epic
+  session now ends before §Step 8 is reached at all. Canonical Step ids go 11 to 12 and
+  `HARNESS_STEP_IDS` is re-pinned in the same commit, as that pin's zero-slack convention
+  requires. Two §Session Boundary sentences that scoped themselves to "every Step 8 branch"
+  became false in the move and are corrected rather than left to rot. Heading count is
+  unchanged at 80 — one heading left, one arrived — but the section-reference lint now catches
+  21 of them on a rename sweep rather than 20, measured with the sentinel method its own
+  docstring names, not inferred from the extra pin.
+
+- **`/harness`'s spec-freshness check moved off filesystem mtime onto a state.json stamp.**
+  `state.spec_stamp` (`{generation, lines}`) and `plan_critic.spec_stamp_at_critic` replace the
+  `mtime(spec.md)` vs `mtime(plan_critic_findings.md)` comparison in §Stale Determination and
+  §Step 2.6's latch. The reason is a capability boundary, not a defect in mtime: the follow-up
+  `harness-ordering-enforcement` design splits the spec-confirmation gate into a skill that
+  holds neither `Bash` nor `Glob`, and such a skill cannot read an mtime at all.
+  Three things the move needed that a straight substitution would have missed, each recorded
+  because each was found by measurement rather than by reading:
+  - **Write order is part of the contract.** A file and a state.json field cannot be written
+    at once, and stamping second leaves a crash window that reads as *not stale* — a window
+    mtime never had, since the filesystem stamps as a side effect of the write itself. The
+    protocol therefore invalidates (`spec_stamp → null`) *before* spec.md changes; `null` is
+    fail-closed.
+  - **The latch's leftover-file guard had to be rebuilt.** mtime was what distinguished "this
+    pass wrote the findings file" from "an earlier pass did", on a fixed, reused path. §Step 2.6
+    now deletes that file before dispatching, which is what lets plain existence carry the same
+    weight; a failed delete takes failure branch (iii) with `findings_file_stale`.
+  - **One detection is genuinely lost and is disclosed inline.** An edit made outside the
+    orchestrator no longer moves anything. A live line-count comparison recovers most of it;
+    an external edit that preserves the line count is not detected, and unlike mtime there is
+    no I/O-failure axis to fall closed on. §Stale Determination states this where the verdict
+    is defined rather than in a footnote.
+  Two further losses, listed because a reader of this entry would otherwise meet them only in
+  the contract file: the same-second tie-break rule is gone (integers have no tie case, so the
+  conservative bias it supplied is simply absent), and a user can no longer check the gate's
+  reasoning independently with `ls -l` — `state.json` is now the only surface a wrong verdict
+  can be diagnosed from, which is why §Session Recovery's `View state only` prints both stamps.
+  **This entry invalidates figures printed in the `harness-steps` entries below**, which
+  quote 403 in-file §citations / 203 checked / 200 unchecked / 195 non-Step for
+  `skills/harness/SKILL.md`. Those were correct when that mode shipped and are correct for the
+  tree it shipped against; this change edits the very document they count. Live at the end of
+  this change: **429 / 220 / 209 / 204**, and 14 rather than 12 sub-path citations —
+  measured after the last edit in this batch, and moved three times by edits inside the
+  batch itself before settling there. The older
+  entries are left as they were written — they describe their own commit — and this sentence is
+  the pointer a reader needs to avoid re-running their commands and concluding the lint broke.
+  Both new fields default to `null`, not `0` — §Version & Compatibility requires readers to
+  treat a missing field as its documented default, so `0` would have made every pre-existing
+  `"3.0"` session compare `0 == 0` and read clean. `generation` is deliberately not named
+  `revision`: `plan_critic.round` already owns that word in this file.
+
+- **`ROADMAP.md` W7-spike entry condition — partially met, verdict still `no-go`.** The
+  condition asked the lint to cover `skills/harness/SKILL.md`; it now covers 203 of that
+  file's 403 in-file citations, numbers only. Recording that as "met" would be the false
+  ledger this repository's own conventions exist to prevent. The row now states a
+  conditional `go` for a split that cuts on canonical Step-section boundaries and re-pins
+  the three constants in the same commit — measured: exporting `## Workflow Steps` to a
+  second file trips all three pins with 87 failures. Three other rows carrying the stale "covers one file" claim were corrected in place
+  (including the one whose conclusion the correction leaves standing), and a fourth was
+  corrected for a different reason — it asserted the W7 verdict independently, so it now
+  defers to the W7 row as SSOT. A fifth site, the verbatim twin of that claim inside the
+  8.11.0 entry below, is corrected there rather than here.
+
+### Added
+
+- **`harness-steps` mode in `scripts/verify_sync_markers.py`'s section-reference check.**
+  `SECTION_REF_TARGETS` was a list of paths and is now a list of `{path, mode}` entries.
+  `skills/harness/SKILL.md` joins it — the first target that carries **zero** `## §Name`
+  headings, which is why it needed a mode of its own rather than a widened regex. The
+  original scoping comment warned that a generic check false-positives across this
+  repository's heading styles; that judgement was honoured, not overturned, and the comment
+  is kept verbatim beside the note explaining what changed around it.
+  Six layers over **four** zero-slack pins (`HARNESS_STEP_IDS` 11 canonical Step ids,
+  `HARNESS_SUBPATHS` 6 `Step N — INLINE|WORKFLOW path` headings, `HARNESS_FILES` the
+  `skills/harness/*.md` file set, `HARNESS_NON_HEADING_ANCHORS` the one anchor that is a
+  bold label rather than a heading), plus the in-file `§Step N(.N)` layer, a sub-path-citation
+  layer, and a path-anchored cross-file layer. **Neither citation layer is repository-wide**:
+  both iterate `SCAN_DIRS`, so the root documents are never scanned, and both narrow to this
+  target by path anchor so another skill's own `Step N — INLINE|WORKFLOW path` section is not
+  judged against harness's pins (`migrate` and `refactor` each own one).
+  **What it does not check is just under half, and is written down rather than implied**: of the
+  **403** in-file §citations, **203** are checked and **200** are not (195 non-Step, 2
+  `§Step Mode Prerequisites`, 3 carrying another file's path anchor). 203 + 200 = 403 — a
+  partition, not a sample. It checks Step **numbers**, never section **titles**: renaming
+  `Step 5: Verify Phase` to `Step 5: Mechanical Check` still passes, and a rename sweep over
+  all **80** headings is caught for **20**. Of these figures only **203** is restated by an OK
+  line; the rest are reproducible solely from the commands in the script's `§FIGURE PROVENANCE`,
+  which this change extends to cover the 80-heading sweep as well. The OK line count for this
+  check goes from 1 to 3, so a later reader quoting "the section ref line" has to say which.
+  Scan scope is its own disclosed limit: 6 sub-path citations and 40 path-anchored pointers in
+  the root documents lie outside every count above.
+  The canonical-heading rule is the load-bearing part: ids 2, 4 and 5 each appear on three
+  headings, so sourcing ids from all 17 Step headings would let a canonical heading be
+  deleted outright while a sub-path heading kept its id alive — measured, that left 38
+  citations pointing at nothing with exit 0.
+  Cross-file matching uses the full relative path, never the basename: 17 skills share the
+  basename `SKILL.md`.
+
+### Fixed
+
+- **The split had not reached the prose that describes it.** A spec-blind cold review before
+  v8.13.0 (four read-only lenses, every finding re-reproduced by hand) raised eighteen
+  findings; seventeen held, one was refuted. The seventeen are the one-file layout still
+  asserted in the prose. `README.md` was the largest: Quick Start and the
+  Execution Styles table still offered `/harness generate | verify | evaluate` (those live on
+  `/harness-build` now — typing the old form starts a new task or hits the owner redirect),
+  and Before/After, the Terminal Output Sample, the `## workflow` diagram, How it works,
+  Confirmation Gates and Session Recovery all narrated one session running from plan to
+  commit; each now shows the `/harness` → `/harness-gate` → `/harness-build` boundary, and the
+  Options table lists `--epic`/`--no-epic`, the three gate re-entry flags and
+  `--no-cold-pass`. In the skills: `skills/harness/SKILL.md` §Step 2.6 failure branch (ii)
+  said an `auto` session reached the gate "in THIS SAME turn", contradicting its own §After
+  Plan Phase — rewritten for the two commands a user can actually type next; its `--critic`
+  row gained the "OR `applied` is unrecorded" half of the INLINE-only condition the gate's row
+  ④ already stated; two build-owned sections were cited without a path anchor (§Step 5 "below",
+  §Auto-fix State Transition Table); failure branch (iii) counted "three" strings while listing
+  four. `skills/harness-gate/SKILL.md` §Stale Determination justified "fresh" by a same-turn
+  Modify loop that no longer exists (every Modify crosses a session now), and its
+  §State-Space Derivation still said branch (ii) was "same-turn, `auto` only"; row ④ gains a
+  one-line hint for `spec_stamp_invalid`. `skills/harness-build/SKILL.md` HARD GATE #2's "Stop"
+  named `/harness` as the re-entry (it is `/harness-build`). `ROADMAP.md` rows 61 and 105 carry
+  an in-row note that their 2026-09-04 figures lost their referent to the split. Design record:
+  `design/harness-ordering-enforcement/SPEC.md` rev.12.
+
+- **A rotted section pointer in `skills/harness/SKILL.md` §Step 1.5: Convention Scan.** It
+  cited `§state.json schema`, which matches no heading in that file — nor anywhere else, since
+  the nearest real heading is `## state.json Schema` in `skills/ship/SKILL.md`, a different
+  skill and a different capitalisation. Repointed at `§Step 1: Setup`, whose item 11 holds the
+  schema literal the sentence means — the same anchor `CHANGELOG.md`'s 8.10.0 entry already
+  uses for it. Found while measuring for the lint above, and **not findable by that lint**: the
+  old text began with a lowercase letter, which the `§Step` family never matches. The repoint
+  adds no citation — it swaps one for another — so against `89fcd10` the **total is unchanged at
+  403**; what moves is that single citation, from unchecked to checked (202 → 203, 201 → 200).
+  The §Sub-command: doctor note added in the same change is written with no §-prefixed token of
+  its own for the same reason: three earlier revisions of it each pushed the total to 405 by
+  quoting one, which is the self-invalidating-figure trap this repository names in its own
+  conventions.
+
+
 ## [8.12.0] — 2026-09-01
 
 ### Added
@@ -75,7 +273,7 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
   multipliers are relative to a baseline that is not zero, and the largest part of that
   baseline is `/harness`'s own contract document loading before any work starts. It is
   reported on four bases at one commit (LF index bytes 211,235 / UTF-8 characters 207,239 /
-  working-tree bytes / 2,508 lines at `118015d51aa15ee67f409b945fcd43c65a61d4f5`, measured
+  working-tree bytes / 2,508 lines at `9023897c4c59632cea884afca98beb1cc88f4496`, measured
   2026-08-31) with the command for each, because bytes and characters differ here. **The
   working-tree row needed correcting before it shipped, by this release's own doing**: a Windows
   checkout measured 213,743 bytes, one carriage return per line more than the index, and the
@@ -100,7 +298,7 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
 - **Four skill descriptions are shorter, and `/spec` loads again.** `study` drops from 1,009 to
   662 characters and the three deprecation stubs (`code-review`, `memory`, `workflow`) collapse
   to one line each, taking the 17-skill total from 7,709 (at `4295156`, before the trim)
-  to 6,841 (at `118015d`). What `study` lost is the
+  to 6,841 (at `9023897`). What `study` lost is the
   mode clause and the read-only/WebSearch clause: `plugin-shipped native Workflow segment` is
   shared by 9 skills and `opt-in gated` by 8, so neither helps Claude tell `study` apart, while
   everything kept — the seven guide sections, `verified revision material`, the provenance
@@ -482,8 +680,8 @@ out-of-scope** — this batch closed only the rows its own spec named IMPLEMENTA
   `workflows/harness.plan.workflow.js`, whose new revision-notes section cites
   `CLAUDE.md §Conventions` by name — without it that citation points outside the tracked tree.
   **Correction**: an earlier revision of this bullet said "the same commit" and the batch then
-  violated it — the workflow landed in `fe672a5` and this file in `b87354f`, so across
-  `fe672a5`..`b1263e4` the citation did point outside the tracked tree. It resolves at the
+  violated it — the workflow landed in `3f1648d` and this file in `a7fcde6`, so across
+  `3f1648d`..`6efe633` the citation did point outside the tracked tree. It resolves at the
   branch tip, which is what ships; the intra-branch window is disclosed rather than hidden.
 
 ### Fixed
@@ -516,8 +714,8 @@ out-of-scope** — this batch closed only the rows its own spec named IMPLEMENTA
   the FULL re-run and now cites `skills/harness/SKILL.md` §Step 2 — WORKFLOW path by name. That
   edit ships in this same release — **correction**: an earlier revision of this bullet said "this
   same commit", which the batch's own 7-way commit split made false. The narrowing landed in
-  `fe672a5` (the revision-note relocation commit) and B4's `skills/harness/SKILL.md` change in
-  `6e86249`. The `workflows/harness.plan.workflow.js` entry under **Changed** below covers the
+  `3f1648d` (the revision-note relocation commit) and B4's `skills/harness/SKILL.md` change in
+  `66ec76b`. The `workflows/harness.plan.workflow.js` entry under **Changed** below covers the
   relocation only, not this narrowing.
 - **`skills/ship/SKILL.md` §Step 2: Stage — version_bump's `#### Pass 2 — Apply Updates` — an
   unachievable re-serialization instruction.** The step told the orchestrator to re-serialize
@@ -572,7 +770,9 @@ out-of-scope** — this batch closed only the rows its own spec named IMPLEMENTA
   WebSearch-fails-fall-back-to-local-sources rule); `:531` → `§Key Rules`' WebSearch fallback
   bullet. Both heading strings verified present, literally, exactly once, in the target file.
   **Honest limit**: §section citations are not machine-checked in this repository
-  (`scripts/verify_sync_markers.py`'s `SECTION_REF_TARGETS` covers one file, not this one) — this
+  (`scripts/verify_sync_markers.py`'s `SECTION_REF_TARGETS` covers one file, not this one — **as of
+  the Unreleased entry above it covers two, and `skills/migrate/SKILL.md` is still not among them,
+  so this limit stands unchanged and only the count went stale**) — this
   buys rot-resistance, not verifiability, and other absolute line citations remain elsewhere in
   the tracked tree (see `ROADMAP.md`'s new deferred rows) — this entry does not claim absolute
   line citations were eliminated, only that this batch's edits reduced their count and added
@@ -624,11 +824,11 @@ out-of-scope** — this batch closed only the rows its own spec named IMPLEMENTA
   guarantee ("do NOT recompute from `cli_flags.output_dir`") remains true, so this is a
   narrowing of the verdict, not a reversal of the guarantee. A3 (`skills/harness/SKILL.md` line
   count): re-measured a second time, after this batch's own B4+B7 edits to that same file —
-  2,288 lines (working tree, base `f32c3fb`, 2026-08-19) — both ROADMAP locations (the
+  2,288 lines (working tree, base `1ce142d`, 2026-08-19) — both ROADMAP locations (the
   `## Unreleased` mention and the `## v8.8` P2-3 row) now point future readers at `wc -l`
   instead of at a number that this same commit already moved once. **Re-measured a third time,
   after every body edit to that same file landed in this batch — the original B4+B7 edits plus
-  this batch's own QA rounds 1–6 fixes (round 3 = the Layer 3 pass, rounds 4–5 = two adversarial re-verification passes, round 6 = the pre-ship cold review) (working tree, base `f32c3fb`, 2026-08-19):
+  this batch's own QA rounds 1–6 fixes (round 3 = the Layer 3 pass, rounds 4–5 = two adversarial re-verification passes, round 6 = the pre-ship cold review) (working tree, base `1ce142d`, 2026-08-19):
   2,293 lines** — this figure is valid only as of the last body edit to
   `skills/harness/SKILL.md` in this batch and rots the instant that file is edited again, which
   is exactly the mechanism that produced this entry's own prior correction. A4 (`schemas.md`

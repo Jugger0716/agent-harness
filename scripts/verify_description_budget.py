@@ -22,7 +22,7 @@ characters are the outer double quotes of the three deprecation stubs (2 chars x
 no other skill quotes its description. Measured pairs, each tagged with the commit
 they were taken at -- a bare total without a SHA goes stale silently:
 
-    18b5e47   7,660 unquoted / 7,666 raw
+    a4bfc5e   7,660 unquoted / 7,666 raw
     4295156   7,709 unquoted / 7,715 raw
 
 FIGURE PROVENANCE -- four classes, each with its own required annotation
@@ -92,7 +92,7 @@ PER_SKILL_CAP = 1024
 # Repository measurement at this commit (C2) -- a ceiling re-fixed in the commit that
 # creates it cannot cite its own SHA, so it is annotated this way rather than left bare.
 # Was 7709 at 4295156, before this slice trimmed four descriptions.
-TOTAL_CEILING = 6841
+TOTAL_CEILING = 7706  # at this commit (C5-c); was 6841 at C2 of review-fixes-v8-12 -- +865 for the /harness split (470 -> 555 + 401 + 379), wordings fixed against SPEC §7.2
 
 # Per-skill ceilings (unquoted basis). Untouched skills keep their 4295156 measurement;
 # the five this commit edits are re-fixed at this commit. The three stub ceilings are the
@@ -103,7 +103,9 @@ PER_SKILL_CEILING = {
     "debug": 495,
     "deep-review": 668,
     "handoff": 617,
-    "harness": 470,
+    "harness": 555,       # at this commit (C5-c); was 470 at 4295156 -- the entry point now names its two siblings
+    "harness-build": 379, # at this commit (C5-c) -- new skill (split of harness)
+    "harness-gate": 401,  # at this commit (C5-c) -- new skill (split of harness)
     "md-generate": 469,
     "md-optimize": 194,
     "memory": 45,     # at this commit (C2); was 229 at 4295156
@@ -128,6 +130,7 @@ LOWER_BOUND = {
     "code-review": 30,   # landed 45
     "memory": 30,        # landed 45
     "workflow": 30,      # landed 41
+    "harness": 400,      # landed 555 at C5-c; the entry point must keep naming the pipeline it fronts
 }
 
 # --------------------------------------------------------------------------------

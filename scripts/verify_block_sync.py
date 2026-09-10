@@ -18,6 +18,9 @@ Each group is `(tag, version, [marker-delimited files], shared-source-file | Non
 Groups:
   - spec-context-block (v1) : 4 planner templates + templates/_shared/spec_context_block.md
   - input-trust-model  (v2) : 4 planner templates + templates/_shared/input_trust_model.md
+  - hx-* (v1)               : 16 groups across skills/harness{,-gate,-build}/SKILL.md with
+                              NO shared source (the /harness copy is canonical) -- see
+                              design/harness-ordering-enforcement/SPEC.md §5.4.4
 
 Exit codes:
   0  All groups' BLOCK contents are byte-identical (after strip-normalization).
@@ -54,9 +57,32 @@ PLANNERS = [
 ]
 
 # (tag, version, marker-delimited files, shared-source file without markers or None)
+HX_HB = ["skills/harness/SKILL.md", "skills/harness-build/SKILL.md"]
+HX_HGB = ["skills/harness/SKILL.md", "skills/harness-gate/SKILL.md", "skills/harness-build/SKILL.md"]
+HX_HG = ["skills/harness/SKILL.md", "skills/harness-gate/SKILL.md"]
+
 GROUPS: list[tuple[str, str, list[str], str | None]] = [
     ("spec-context-block", "v1", PLANNERS, "templates/_shared/spec_context_block.md"),
     ("input-trust-model", "v2", PLANNERS, "templates/_shared/input_trust_model.md"),
+    # harness-ordering-enforcement C5 (SPEC §5.4.4, rev.10): the /harness split keeps the
+    # operative contracts byte-identical across the skill copies. shared_source is None --
+    # the /harness copy is the canonical one; no fourth copy exists under templates/.
+    ("hx-preamble-a", "v1", HX_HB, None),
+    ("hx-user-lang", "v1", HX_HGB, None),
+    ("hx-olc-core", "v1", HX_HGB, None),
+    ("hx-olc-inline-returns", "v1", HX_HB, None),
+    ("hx-preamble-b", "v1", HX_HB, None),
+    ("hx-session-entry", "v1", HX_HB, None),
+    ("hx-session-gate-a", "v1", HX_HB, None),
+    ("hx-session-gate-b", "v1", HX_HB, None),
+    ("hx-session-actions-tail", "v1", HX_HB, None),
+    ("hx-run-style", "v1", HX_HB, None),
+    ("hx-boundary-shell", "v1", HX_HB, None),
+    ("hx-handoff-fields", "v1", HX_HB, None),
+    ("hx-state-machine", "v1", HX_HB, None),
+    ("hx-path-validator", "v1", HX_HGB, None),
+    ("hx-scale-render", "v1", HX_HG, None),
+    ("hx-model-selection", "v1", HX_HB, None),
 ]
 
 

@@ -21,7 +21,14 @@ Inspired by Anthropic's [Harness Design for Long-Running Application Development
 /harness --mode standard "add rate limiting to the API"
 ```
 → Two specialists (Architect + Senior Dev) propose plans independently (native Workflow fan-out)  
-→ Synthesis produces `spec.md` — you review and approve  
+→ Synthesis produces `spec.md`; the session ends with `Next → /harness-gate`  
+```
+/harness-gate
+```
+→ A skill with no write tool shows the spec — you answer `Proceed as single`, it prints `/harness-build`  
+```
+/harness-build
+```
 → Lead Dev + Advisor implement code, write `changes.md`  
 → Layer 1: build ✓ test 42/42 ✓ lint 0e/2w ✓ (auto-retry on fail, up to 3x)  
 → Layer 2 + 3: isolated LLM evaluator reviews against spec, produces `qa_report.md`  
@@ -45,6 +52,12 @@ Inspired by Anthropic's [Harness Design for Long-Running Application Development
   Scope     : (no limit)
   Output    : docs/harness/add-rate-limiting-to-the-api/
 
+[harness] Plan complete.
+Next → /harness-gate
+
+  ← you type /harness-gate: it shows spec.md, you answer "Proceed as single", it prints /harness-build
+  ← you type /harness-build
+
 [harness] Phase: Verify (Layer 1 — Mechanical)
 [harness] Verify (Layer 1) complete.
   Result : PASS — build ✓, test 42/42 ✓, lint 0e/2w, scan 0 TODO
@@ -67,7 +80,7 @@ Higher modes cost more per run but save total cost by reducing retry rounds. Sta
 **Fixed orchestrator overhead.** The multipliers above are relative to a baseline that is not
 zero: before any planning happens, `/harness`'s own contract document is loaded. It is the
 largest skill in this repository, so it is the honest floor for what the orchestrator costs
-you. Measured on **2026-08-31** at commit **`118015d51aa15ee67f409b945fcd43c65a61d4f5`**:
+you. Measured on **2026-08-31** at commit **`9023897c4c59632cea884afca98beb1cc88f4496`**:
 
 | Basis | Value | Command |
 |-------|-------|---------|
@@ -80,7 +93,7 @@ you. Measured on **2026-08-31** at commit **`118015d51aa15ee67f409b945fcd43c65a6
 Three of these rows hold at that commit for **every** clone — the index-blob byte count, the
 character count and the line count, all three of which read the committed blob rather than the
 file on disk. **The other two — the working-tree byte row and the EOL row — describe a checkout
-instead of a commit**, because `*.md text eol=lf` did not exist at `118015d`; it lands in this
+instead of a commit**, because `*.md text eol=lf` did not exist at `9023897`; it lands in this
 release, so at the basis commit the `attr/` column was empty and the working tree was CRLF.
 (Rows are named rather than numbered here on purpose: an earlier revision counted positions and
 put the working-tree row among the commit-fixed three and the line count among the two that
@@ -103,7 +116,9 @@ matches what you are measuring; they are not interchangeable.
 
 | Skill | Command | Description |
 |-------|---------|-------------|
-| **Harness** | `/harness <task>` | 3-Phase (Planner -> Generator -> Evaluator) orchestrator. Inline single path by default; opt-in workflow path (ultracode or `--mode standard/multi`) runs plugin-shipped native Workflow segment scripts with schema-validated returns. Works with or without git. _(formerly `/workflow` — old name kept as a deprecation alias)_ `/harness doctor` gives a read-only environment diagnostic. |
+| **Harness** | `/harness <task>` | Entry point of the 3-Phase (Planner -> Generator -> Evaluator) pipeline: Setup, Convention Scan, Plan and Plan Critic, then every session ends at `plan_done` with `Next → /harness-gate`. Inline single path by default; opt-in workflow path (ultracode or `--mode standard/multi`) runs plugin-shipped native Workflow segment scripts with schema-validated returns. Works with or without git. _(formerly `/workflow` — old name kept as a deprecation alias)_ `/harness doctor` gives a read-only environment diagnostic. |
+| **Harness gate** | `/harness-gate` | HARD GATE #1 (spec confirmation) as its own skill, with `Bash`, `Write`, `Edit`, `Glob` and every sub-agent tool removed — the turn that renders the gate cannot modify a file or run a command. It reads `state.json` and `spec.md`, asks once, and prints the next command for you to type (`/harness-build`, `/harness-build --epic`, or a `/harness --modify` / `--auto-revise` / `--critic` re-entry). Writes nothing. |
+| **Harness build** | `/harness-build [--epic \| generate \| verify \| evaluate]` | The implementation half: Slice Plan / Epic Exit, Generate, Verify (Layer 1), Evaluate (Layer 2+3), Verdict loop, Cleanup. Performs the `generate_ready` write on entry; consumes only a `spec.md` the gate confirmed. Not an entry point. |
 | **Refactor** | `/refactor <target>` | Safe, behavior-preserving code structure improvement. Single (inline) or multi/comprehensive (2-3 analysts + cross-critique, native Workflow path). Execution stays gated and step-tested in the orchestrator. |
 | **Migrate** | `/migrate <target> [--from v4 --to v5]` | Staged migration of frameworks, libraries, and dependencies. Single (inline) or multi (parallel external-research + codebase-impact analysts + synthesis, native Workflow path) with WebSearch research. Staged execution stays gated and step-tested in the orchestrator. |
 | **Debug** | `/debug <error>` | Hypothesis-driven debugging with mandatory executable verification. Quick (inline) or deep (2 analysts + adversarial cross-verify, native Workflow path). |
@@ -134,7 +149,7 @@ Old names are scheduled for removal no earlier than the next MAJOR release.
 
 ### Repository Layout
 
-Six top-level directories, each with a fixed role:
+Seven top-level directories, each with a fixed role:
 
 | Directory | Role |
 |-----------|------|
@@ -144,6 +159,7 @@ Six top-level directories, each with a fixed role:
 | `scripts/*.{mjs,py}` | Repository self-verification lints (`check_workflow_syntax.mjs`, `verify_block_sync.py`, `verify_description_budget.py`, `verify_manifest_sync.py`, `verify_meta_literal.py`, `verify_sync_markers.py`) — they check this repo's own `workflows/`/`skills/`/`templates/`/`.claude-plugin/` source, and are never executed at skill runtime. |
 | `.claude-plugin/*.json` | Plugin and marketplace manifests. The version string lives at three key paths across these two files. |
 | `.github/` | CI: `workflows/lint.yml` runs the lint layer on push and PR; `scripts/check_lint_wiring.sh` checks that every lint is actually wired into it. Also holds the issue and PR templates. |
+| `design/<epic>/` | Committed design records for a follow-up epic — the spec plus the measurements it rests on. Skill *runtime* output goes to `docs/`, which is `.gitignore`d; anything that must outlive the session that produced it lives here instead. Nothing at skill runtime reads this directory, and no lint scans it. |
 
 One additional asset type lives under `templates/`: a **skill-only static asset** (e.g. `templates/study/html_shell.html`) — a non-`.md` file a skill reads and splices content into directly (never dispatched to a sub-agent, never a `SYNC-SOURCE` embed target), author-time-authored once and reused unchanged across runs.
 
@@ -188,14 +204,17 @@ inline-vs-workflow first.)
    whether to scan for existing conventions. Pick **Skip** for the demo — there is nothing to
    find yet.
 3. **HARD GATE #1 — spec confirmation** (this one has no short header of its own, unlike the
-   two above). The planner writes `docs/harness/<slug>/spec.md`, prints it, and stops. Read it.
-   Then answer **`Proceed`** — on the inline path that `--mode single` selects there is no scale
-   recommendation to lead with, so the option is undecorated; on the workflow path the same
-   option reads `Proceed as single`. The others are `Plan as epic` to split the work into
-   slices, `Modify` to edit the spec and re-confirm, and `Stop`.
+   two above). The planner writes `docs/harness/<slug>/spec.md`, prints it, and the `/harness`
+   session ends with `Next → /harness-gate`. Read the spec, then type **`/harness-gate`** — a
+   separate skill that holds no `Bash`, `Write` or `Edit`, so the turn that shows you the gate
+   cannot touch anything. Answer **`Proceed`** — on the inline path that `--mode single` selects
+   there is no scale recommendation to lead with, so the option is undecorated; on the workflow
+   path the same option reads `Proceed as single`. The others are `Plan as epic` to split the
+   work into slices, `Modify` to edit the spec and re-confirm, and `Stop`. The gate prints one
+   line — `/harness-build` — and you type that as your third message.
    **This is the one gate a successful run always shows you.**
 
-Then it implements, runs mechanical verification, and runs the evaluator review. On a clean
+Then `/harness-build` implements, runs mechanical verification, and runs the evaluator review. On a clean
 run there is nothing more to answer — you get a summary and the artifacts under
 `docs/harness/<slug>/`.
 
@@ -206,15 +225,18 @@ run there is nothing more to answer — you get a summary and the artifacts unde
 - **HARD GATE #3 — the auto-fix apply gate.** Renders only if you chose `Auto-fix proposal`
   above, and asks before the patch touches your files.
 
-So a green run answers **one** gate; a run that hits trouble answers up to three. **No file you
-wrote is touched before gate #1** — but the run is not inert before it either: Step 1 creates
-`.harness/`, switches to a `harness/<slug>` branch, and the planner writes the spec document, all
-before the gate renders. What waits for a gate is *your* code: implementation starts only after
-gate #1, and no auto-fix patch is applied before gate #3.
+So a green run answers **one** gate and types **three** commands; a run that hits trouble
+answers up to three gates. **No file you wrote is touched before gate #1** — but the run is not
+inert before it either: Step 1 creates `.harness/`, switches to a `harness/<slug>` branch, and the
+planner writes the spec document, all before the gate renders. What waits for a gate is *your*
+code: implementation starts only after gate #1, and no auto-fix patch is applied before gate #3.
+And the gate itself is structurally inert: the skill that renders it has no write tool at all,
+so nothing can be implemented in the same turn the spec is shown to you.
 
-**If you stop partway**, run `/harness` with no arguments in the same repository — it reads
-`.harness/state.json` and re-enters at the step you left. `/harness doctor` gives a read-only
-environment diagnostic and never touches that state.
+**If you stop partway**, run the skill that owns the phase you stopped in, with no arguments, in
+the same repository — `/harness` up to `plan_done`, `/harness-build` after it; each reads
+`.harness/state.json`, re-enters at the step you left, and names the other skill if the phase is
+not its own. `/harness doctor` gives a read-only environment diagnostic and never touches that state.
 
 ## Quick Start
 
@@ -226,10 +248,14 @@ environment diagnostic and never touches that state.
 /harness fix bug --model-config balanced          # Sonnet executor + Opus advisor (cost-efficient)
 /harness fix bug --model-config frontier          # Sonnet executor + Fable evaluator (top-model judgment)
 
-/harness plan "add user auth"                     # phase mode: plan only, end session
-/harness generate                                 # phase mode: resume from plan, generate only
-/harness verify                                   # step mode: mechanical verification only
-/harness evaluate                                 # step mode: evaluation only
+/harness plan "add user auth"                     # plan only, end session at plan_done (every /harness call ends there)
+/harness-gate                                     # HARD GATE #1: shows spec.md, prints the next command, writes nothing
+/harness-build                                    # implementation half: Generate -> Verify -> Evaluate -> Cleanup
+/harness-build --epic                             # Slice Plan + Epic Exit instead of implementing (what the gate prints for "Plan as epic")
+/harness-build generate                           # phase mode: resume from plan, generate only
+/harness-build verify                             # step mode: mechanical verification only
+/harness-build evaluate                           # step mode: evaluation only
+/harness --modify "<request>"                     # gate re-entry: /harness edits spec.md, then Next → /harness-gate again
 
 /harness draft product requirements spec           # works without git too (non-dev tasks)
 
@@ -324,10 +350,10 @@ All user-facing prompts use **AskUserQuestion** — a numbered selection UI wher
 Key interaction points:
 - **Mode selection** (refactor/migrate/debug/spec — `/harness` derives mode via its Mode Gate, no roundtrip): numbered options with token cost hints and auto-recommendation
 - **Execution-path ambiguity prompt** (no `--mode` + ultracode OFF + interactive session with the Workflow engine available): explicit inline-vs-workflow choice instead of silent auto-resolution — and every run prints `Path : <inline|workflow> (<reason>)` so the chosen path and its cause are always visible
-- **Confirmation gates**: Proceed / Modify / Stop (replaces freeform text approval)
+- **Confirmation gates**: HARD GATE #1 is its own skill, `/harness-gate` — `Proceed as single` (plain `Proceed` on the inline path) / `Plan as epic` / `Modify` / `Stop`, plus critic-status options on its first pass when they apply. It prints the next command instead of proceeding (replaces freeform text approval)
 - **QA retry**: Fix / Accept as-is
 - **Commit**: 3 options — "Commit code only" (recommended) / "Commit all with artifacts" / "No commit" (git environments only; non-git environments skip commit)
-- **Session recovery**: Resume / Restart / Stop — `/harness` adds a 4th, non-destructive **View state only** (prints the recorded session state and halts; `.harness/` is NOT deleted). The other skills sharing this gate shape keep the 3 options
+- **Session recovery**: Resume / Restart / Stop — `/harness` and `/harness-build` add a 4th, non-destructive **View state only** (prints the recorded session state and halts; `.harness/` is NOT deleted); `/harness-gate` offers none of these (it cannot delete anything — it redirects to the owner skill instead). The other skills sharing this gate shape keep the 3 options
 
 Falls back to text-based input when AskUserQuestion is unavailable.
 
@@ -343,7 +369,13 @@ Falls back to text-based input when AskUserQuestion is unavailable.
                            single (inline):     1 agent explores + writes spec.md
                            standard (workflow): harness.plan script — 2 specialists propose -> Synthesis
                            multi (workflow):    harness.plan script — 3 specialists propose -> Synthesis
-                        -> Confirmation Gate: user approves spec
+                        -> Plan Critic -> session ends at plan_done: "Next → /harness-gate"
+── you type the next command ──────────────────────────────────────────────────────
+/harness-gate -> Confirmation Gate (HARD GATE #1): no Bash/Write/Edit in this skill —
+                        shows spec.md, asks once, prints ONE command (/harness-build,
+                        /harness-build --epic, or /harness --modify | --auto-revise | --critic)
+── you type the command it printed ────────────────────────────────────────────────
+/harness-build -> writes phase → generate_ready
                         -> [Generate] Generator
                            single (inline):     1 agent implements code
                            standard (workflow): harness.build script — Lead Dev plan -> Combined Advisor -> Implementation
@@ -407,7 +439,7 @@ After independent proposals, each specialist **cross-critiques** the other two p
 
 **Why this works:** Independent proposals eliminate anchoring bias. Cross-critique surfaces disagreements. Synthesis preserves the strongest ideas from all perspectives.
 
-4. **Confirmation Gate**: Claude shows the spec and waits for explicit user approval before proceeding. Ambiguous responses are re-confirmed.
+4. **Confirmation Gate**: the `/harness` session ends at `plan_done` with `Next → /harness-gate`. You type `/harness-gate` — a separate skill holding no `Bash`, `Write`, `Edit` or `Glob` — which shows the spec, asks once, and prints the next command (`/harness-build`, `/harness-build --epic`, or a `/harness --modify` / `--auto-revise` / `--critic` re-entry). Nothing proceeds until you type that command; the turn boundary is the mechanism.
 
 #### Phase 2 -- Generator (Lead + Advisors)
 
@@ -487,9 +519,9 @@ Higher modes use more tokens per run but have higher first-pass success rates, o
 
 | Style | Usage | Behavior |
 |-------|-------|----------|
-| **auto** (default) | `/harness "task"` | Full pipeline, user gates at spec approval and FAIL only |
-| **phase** | `/harness plan "task"` then `/harness generate` | Each phase ends session; resume in next session for max token savings |
-| **step** | `/harness verify` or `/harness evaluate` | Execute single step only |
+| **auto** (default) | `/harness "task"` → `/harness-gate` → `/harness-build` | Automatic progression *within* a skill. The Plan → Gate boundary is a skill boundary, so every `/harness` session ends at `plan_done`; `/harness-build` then runs Generate → Cleanup, gating at FAIL only |
+| **phase** | `/harness plan "task"` → `/harness-gate` → `/harness-build generate` | Each phase ends the session; resume in the next session for max token savings (`auto` and `phase` are identical up to the gate) |
+| **step** | `/harness-build verify` or `/harness-build evaluate` | Execute single step only |
 
 ### Options
 
@@ -504,6 +536,9 @@ Higher modes use more tokens per run but have higher first-pass success rates, o
 | type-check-cmd | auto-detected | Override type-check command |
 | `--verifier-model <model>` | `haiku` | Override Layer 1 Verifier model. Allowed: `haiku`, `sonnet`, `opus`. Cost warning shown for sonnet/opus. |
 | `--output-dir <path>` | `docs/harness` | Override output directory base for spec, changes, verify, and QA reports. Relative path from repo root. Disallows: absolute paths, `..`, reserved names (`memory`, `spec`, `planner`, `generator`). |
+| `--epic` / `--no-epic` | Scale Assessment recommendation | `/harness` only — force the gate's Pass B to lead with "Plan as epic" / "Proceed as single". The gate then prints `/harness-build --epic` or `/harness-build`. |
+| `--modify "<request>"` / `--auto-revise` / `--critic` | — | `/harness` only, `plan_done` only — the gate re-entries `/harness-gate` prints for "Modify" / "Auto-revise" / "Run Critic anyway". Each ends with `Next → /harness-gate` again. |
+| `--no-cold-pass` | cold pass on | `/harness` only — recorded as `cli_flags.cold_pass=false`; `/harness-build` Step 5 skips the cold-review dispatch. |
 
 Example: `/harness fix auth bug --mode single --model-config balanced`
 Example: `/harness add caching --output-dir build/harness --verifier-model sonnet`
@@ -514,7 +549,7 @@ The workflow automatically detects whether the current directory is a git reposi
 
 ### Session Recovery
 
-If a session is interrupted, the harness detects the existing `.harness/state.json` on next invocation and offers to resume from where you left off.
+If a session is interrupted, run the skill that owns the phase you stopped in, with no arguments: `/harness` up to `plan_done`, `/harness-build` after it. Each detects the existing `.harness/state.json`, offers to resume from where you left off, and names the other skill if the phase is not its own. `/harness-gate` reads only `plan_done` and redirects every other phase to its owner.
 
 ### Sub-command: doctor
 
@@ -524,7 +559,7 @@ If a session is interrupted, the harness detects the existing `.harness/state.js
 
 The Generator phase consumes significant tokens and is hard to undo. The harness enforces **explicit user confirmation** before proceeding:
 
-- **Spec approval**: Only clear affirmatives are accepted. Ambiguous responses trigger re-confirmation.
+- **Spec approval**: rendered by `/harness-gate`, a separate skill with no `Bash`, `Write`, `Edit` or `Glob` — the turn that shows you the spec cannot touch a file. Only a chosen option counts; the gate prints the next command and you type it, so implementation cannot start in the same turn as the approval.
 - **QA retry**: When the Evaluator reports FAIL, the harness asks the user before starting another round.
 
 ### Language Support
