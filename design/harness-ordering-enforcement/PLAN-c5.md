@@ -1237,4 +1237,4 @@ git switch develop && git merge --no-ff harness/c5-three-way-split -m "Merge bra
 - **SYNC 마커 사이트 54** (rev.10의 53이 아니라) — build §Key Rules의 `adhoc-dispatch` 마커를 rev.10이 세지 않았다. SPEC AC-5 행에 정정.
 - **AC-13의 `grep -c AskUserQuestion`은 5** — `<HARD-GATE>` 태그 안 사이트는 1, 나머지 4는 산문 언급. AC 행에 그 분해를 적었다.
 - **description에 `: `가 들어가 YAML 스칼라 검사에 걸렸다**(harness·gate) — em dash로 교체. 확정 길이 555 / 401 / 379, `TOTAL_CEILING` 7,706.
-- **Task 8(AC-8 라이브 프로브)은 미실행** — 설치본 동기화 + 새 프로세스가 필요해 별도 세션.
+- **Task 8(AC-8 라이브 프로브) — 2026-09-10 PASS.** 설치본 2사본 동기화 후 새 프로세스, 비-git 임시 디렉터리. 요령: 게이트 턴 「안」에서 Bash를 시도하게 하려면 AskUserQuestion의 자유 답변(Other)에 명령 실행 요청을 넣는다 — 다음 사용자 메시지는 새 턴이라 도구가 돌아온다(mode_gate.md rule 3). 관측: `Error: No such tool available: Bash. Bash is disabled for this session, in subagents as well as here.` 1차 프로브(09-09)에서 드러난 기존 결함 2건은 분할과 무관: 빈 디렉터리에서 `test_cmd` null → 모델 즉흥 보완(2차 실행에서는 Setup이 언어를 물어 해소), Generator 1줄 반환 계약 위반(다중 행) → ROADMAP 등재 대상.

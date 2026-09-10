@@ -319,7 +319,8 @@ REMEASURE §1-③-c 안 1은 §Step 8의 `#### If epic exit:` 블록을 「§Ste
 > **게이트가 렌더되는 턴에는 파일 수정도 명령 실행도 구조적으로 불가능하다.**
 > 그 턴을 소유하는 스킬(`harness-gate`)의 frontmatter가 `Bash`·`Write`·`Edit`를 제거하므로,
 > 도구가 컨텍스트에서 사라진다(P-9 ⓐ 실측). 서브에이전트 우회도 같은 제거로 닫힌다(오류 메시지의
-> `in subagents as well as here`; 단 **직접 호출 실측은 미실시** — PROBE §2 정정 2).
+> `in subagents as well as here`; **직접 호출 실측 완료 — 2026-09-10 AC-8, 분할된 `harness-gate` 턴 안에서
+> 같은 문자열을 관측**. PROBE §2 정정 2의 미실시 항목은 이것으로 해소).
 
 **(a)와의 차이 — 이것이 분할을 정당화하는 전부다.**
 (a)(2분할 + 명제 하향)에서는 게이트를 렌더하는 턴의 스킬이 `Write`/`Edit`/`Bash`를 전부 갖고 있다.
@@ -905,7 +906,7 @@ OK: 9 sync group(s), 51 marker site(s)
 | AC-5 | C5 적용 후 린트 7종 rc=0, **SYNC 9그룹 무손상** | `verify_sync_markers.py` → `9 sync group(s), 51 marker site(s)` — **rev.10 정정: 53**(블록 복제로 `session-conflict`·`handoff-state-record` 마커가 build에 1곳씩 생긴다) — **실측 54**(`adhoc-dispatch`도 build §Key Rules에 1곳 더) (**충족** — `231e2f5`) |
 | AC-6 | C5의 재앵커가 `skills/team-memory/SKILL.md` 앵커 2건을 **건드리지 않음** | `git diff` 해당 2행 부재 (**충족** — `231e2f5`) |
 | AC-7 | `harness-gate`의 frontmatter가 `Bash`·`Write`·`Edit`를 **이름 형식으로** 나열 (스코프 패턴 금지 — no-op) | frontmatter 직접 확인 (**충족** — `231e2f5`) |
-| AC-8 | `harness-gate` 세션에서 `Bash` 호출이 `No such tool available`로 실패 | **라이브 프로브 1회** |
+| AC-8 | `harness-gate` 세션에서 `Bash` 호출이 `No such tool available`로 실패 | **라이브 프로브 1회** (**충족** — 2026-09-10, 설치본 동기화 + 새 프로세스, 비-git 임시 디렉터리 `C:/workspace/agent-harness-test`, `--mode single`: `/harness`가 `plan_done`에서 halt → `/harness-gate` Pass A row ①-c 렌더 → AskUserQuestion 자유 답변으로 「python --version 실행 + spec.md [C1] 직접 수정」 요청 → 게이트가 Bash를 실제 시도, 하니스 응답 `Error: No such tool available: Bash. Bash is disabled for this session, in subagents as well as here.` — 서브에이전트 우회까지 닫힘(§1의 미실시 항목 해소); Write/Edit 부재로 spec 수정도 거절, `/harness --modify "…"` 한 줄만 출력, `.harness/`·spec.md 무변경. 부수 관찰: 자유 답변을 Modify 선택으로 해석해 재질문 없이 명령을 출력 — 계약 위반 아님) |
 | AC-9 | **R-1 프로브**: `templates/_shared/` 파일을 이름으로만 인용한 스킬이 그 계약을 실제로 준수하는지 | **라이브 프로브 1회 — C4 착수 전 필수** |
 | AC-10 | C6 적용 후 `verify_description_budget.py` rc=0, `TOTAL_CEILING`이 같은 커밋에서 상향 | 린트 + `git show` (**충족** — C5-c 커밋: 6,841 → 7,706, 세 항목 제로 슬랙, `harness` LOWER_BOUND 400 추가) |
 | AC-11 | 이 spec의 핵심 3건(광고 명제 확정 / phase 감사 전용 강등 / 3분할)이 **ROADMAP에 등재**됨 | `docs/`가 gitignored이므로 영속 경로 확보 |
