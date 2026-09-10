@@ -149,6 +149,29 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
 
 ### Fixed
 
+- **The split had not reached the prose that describes it.** A spec-blind cold review before
+  v8.13.0 (four read-only lenses, every finding re-reproduced by hand) found the one-file
+  layout still asserted in eighteen places. `README.md` was the largest: Quick Start and the
+  Execution Styles table still offered `/harness generate | verify | evaluate` (those live on
+  `/harness-build` now — typing the old form starts a new task or hits the owner redirect),
+  and Before/After, the Terminal Output Sample, the `## workflow` diagram, How it works,
+  Confirmation Gates and Session Recovery all narrated one session running from plan to
+  commit; each now shows the `/harness` → `/harness-gate` → `/harness-build` boundary, and the
+  Options table lists `--epic`/`--no-epic`, the three gate re-entry flags and
+  `--no-cold-pass`. In the skills: `skills/harness/SKILL.md` §Step 2.6 failure branch (ii)
+  said an `auto` session reached the gate "in THIS SAME turn", contradicting its own §After
+  Plan Phase — rewritten for the two commands a user can actually type next; its `--critic`
+  row gained the "OR `applied` is unrecorded" half of the INLINE-only condition the gate's row
+  ④ already stated; two build-owned sections were cited without a path anchor (§Step 5 "below",
+  §Auto-fix State Transition Table); failure branch (iii) counted "three" strings while listing
+  four. `skills/harness-gate/SKILL.md` §Stale Determination justified "fresh" by a same-turn
+  Modify loop that no longer exists (every Modify crosses a session now), and its
+  §State-Space Derivation still said branch (ii) was "same-turn, `auto` only"; row ④ gains a
+  one-line hint for `spec_stamp_invalid`. `skills/harness-build/SKILL.md` HARD GATE #2's "Stop"
+  named `/harness` as the re-entry (it is `/harness-build`). `ROADMAP.md` rows 61 and 105 carry
+  an in-row note that their 2026-09-04 figures lost their referent to the split. Design record:
+  `design/harness-ordering-enforcement/SPEC.md` rev.12.
+
 - **A rotted section pointer in `skills/harness/SKILL.md` §Step 1.5: Convention Scan.** It
   cited `§state.json schema`, which matches no heading in that file — nor anywhere else, since
   the nearest real heading is `## state.json Schema` in `skills/ship/SKILL.md`, a different

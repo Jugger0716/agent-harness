@@ -368,7 +368,7 @@ fresh `spec_stamp` / `plan_critic` state (its Modify Interaction contract).
 |---|---|---|
 | `--modify "<request>"` (VALUE-TAKING — listed in the doctor carve-out's flag list above) | apply the request to `{docs_path}spec.md` under §Step 2's `spec_stamp` write protocol (invalidate → write → stamp); never a dispatched sub-agent (SPEC decision ③) | `spec.md`, `spec_stamp` |
 | `--auto-revise` | §Step 2 — WORKFLOW path's Auto-revise re-entry, exactly as the gate's Pass A row ①-a used to trigger it, including its same-turn Step 2.6 re-run | as that re-entry |
-| `--critic` | §Step 2.6's own-critic dispatch, exactly as the gate's "Run Critic anyway" / "Retry Critic" used to trigger it (a fresh single write to `plan_critic`, `source = "own"`; INLINE branch when the recorded failure was a permission denial — `templates/_shared/mode_gate.md` rule 3) | `plan_critic.*` |
+| `--critic` | §Step 2.6's own-critic dispatch, exactly as the gate's "Run Critic anyway" / "Retry Critic" used to trigger it (a fresh single write to `plan_critic`, `source = "own"`; INLINE branch when the recorded failure was a permission denial OR `plan_critic.applied` is unrecorded — both are footprints of §Step 2.6 failure branch (ii), the same two-way condition `skills/harness-gate/SKILL.md` §Step 3 Pass A row ④ states, and a bare `/harness --critic` does not state that anything changed, which is what `templates/_shared/mode_gate.md` rule 3 requires before the denied Workflow call may be re-issued) | `plan_critic.*` |
 
 `--modify` is listed in the VALUE-TAKING list of §Session Recovery's doctor carve-out above —
 otherwise `/harness --modify doctor` would misfire.
@@ -1273,23 +1273,34 @@ above never reaches this):
   exactly as it already was. `plan_critic.applied` is NOT recorded by this branch — the
   record stays unwritten this pass. **Turn control**: this branch does NOT halt — control
   proceeds to §After Plan Phase exactly as failure branch (iii) below does (same "progress is
-  not blocked" policy). What happens next depends on `run_style`: under `run_style ==
-  "phase"`, §After Plan Phase's own halt fires before Step 3 is ever reached, so the NEXT
-  session's §Session Recovery re-enters via routing predicate (b) by name (the routing
-  predicate defined above — not restated here) — landing back on Step 2.6, not Step 3. Under
-  `run_style == "auto"`, §After Plan Phase does not halt, so Step 3 is reached in THIS SAME
-  turn with `plan_critic` still unrecorded — `skills/harness-gate/SKILL.md` §Step 3 Pass A row ④ (failed / unrecorded /
-  unknown, defined below) is what renders in that case. If the user then picks "Proceed as-is"
-  there instead of "Retry Critic", `phase` advances to `generate_ready` and no later session
-  re-enters Step 2.6 for this task — `plan_critic` stays permanently unrecorded for it (a
-  disclosed audit gap, not a silent one: row ④'s banner states this).
+  not blocked" policy). §After Plan Phase halts under EVERY `run_style` (the gate is a
+  separate skill — SPEC rev.9 (b)), so what happens next depends on which command the user
+  types, not on `run_style`: `/harness` with no arguments re-enters through §Session
+  Recovery's routing predicate (b) by name (the routing predicate defined above — not restated
+  here) — landing back on Step 2.6, not Step 3 — while `/harness-gate`, the command §After
+  Plan Phase's `Next →` line names, passes its §Entry Check (`phase` is already `plan_done` —
+  §Step 2 wrote it before this step ran) and renders `skills/harness-gate/SKILL.md` §Step 3
+  Pass A row ④ (failed / unrecorded / unknown) with `plan_critic` still unrecorded. If the
+  user then picks "Proceed as-is" there instead of "Retry Critic", the printed `/harness-build`
+  advances `phase` to `generate_ready` and no later session re-enters Step 2.6 for this
+  task — `plan_critic` stays permanently unrecorded for it (a disclosed audit gap, not a
+  silent one: row ④'s banner states this). An earlier revision of this paragraph said an
+  `auto` session reached Step 3 "in THIS SAME turn"; that was the one-file layout and is
+  false since the split.
 - **(iii) 1-line parse failure** (INLINE only) or the latching check above fails → set
   `plan_critic.applied = "failed"`, `plan_critic.failure_reason = "parse_failed"` (INLINE
   parse) or `"findings_file_missing"` (latch point (a): no findings file after the dispatch)
   or `"spec_stamp_invalid"` (latch point (b): `spec_stamp` was `null` at latch time) or
   `"findings_file_stale"` (the pre-dispatch delete itself failed, so nothing was dispatched) —
-  three distinct causes and therefore three distinct strings, since this field is the only
-  thing row ④'s banner has to tell the user which one happened,
+  four distinct causes and therefore four distinct strings (an earlier revision counted
+  three, before `spec_stamp_invalid` was split out of `findings_file_missing`), since this
+  field is the only thing row ④'s banner has to tell the user which one happened.
+  `spec_stamp_invalid` is written by two sites — the pre-dispatch stamp check above (nothing
+  was dispatched, the old findings file survives) and latch point (b) (a dispatch was paid
+  for) — and the string does not tell them apart; it need not, because the recovery is the
+  same either way (`spec.md` is a partial write — finish it with `/harness --modify`, or
+  Restart), and the second site is a belt-and-braces check that the first makes unreachable
+  in the ordinary flow,
   `plan_critic.last_findings_path = null`,
   `plan_critic.source = "own"`, `plan_critic.counts = null`,
   `plan_critic.spec_stamp_at_critic = null` — **`null`, not UNCHANGED**, unlike `round` on
@@ -1319,7 +1330,7 @@ dispatch (idempotent — it simply re-runs this same own-critic dispatch again).
 
 **Why no `runs` slot is recorded here**: `state.runs` has exactly `{plan, build, eval}` — no
 reserved fourth slot for Step 2.6. Recording under `runs.eval` would silently clobber Step
-5's own record (`runs.eval` is Step 5 — WORKFLOW path item 3, below). Step 2.6's own run id
+5's own record (`runs.eval` is `skills/harness-build/SKILL.md` §Step 5 — WORKFLOW path item 3). Step 2.6's own run id
 (WORKFLOW branch only) is therefore NOT persisted in `state.runs` — a known, accepted gap
 (recorded in this slice's changes.md), not an oversight.
 
@@ -1557,7 +1568,7 @@ The following principles are invariant constraints for the harness Orchestrator.
 
 3. **Paths only to sub-agents; never file contents** (ephemeral digests passed inside a segment run excepted — they never enter the orchestrator's context beyond `workflow_ctx` storage; `specContent` passed as a Build segment arg (`skills/harness-build/SKILL.md` §Step 4 — WORKFLOW path) and as an Eval segment arg (`skills/harness-build/SKILL.md` §Step 5 — WORKFLOW path) is also an explicit exception — spec.md content, not a path, crosses into segment `args` because size, not path-vs-content, is the actual constraint; the same exception now also covers `specContent` passed to `workflows/spec.eval.workflow.js` at §Step 2.6's WORKFLOW branch).
 
-4. **Session-wide invariants** (see §State Machine — Auto-fix State Transition Table):
+4. **Session-wide invariants** (see `skills/harness-build/SKILL.md` §State Machine — Auto-fix State Transition Table):
    - Auto-fix: at most 1 attempt per session (`verify.autofix_attempted` once-only — not reset on round increment).
    - Layer 1 retries: max 3. Do NOT reset after Auto-fix Apply.
 

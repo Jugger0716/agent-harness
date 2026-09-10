@@ -5,7 +5,7 @@
 >
 > 본문은 그 밖의 한 글자도 수정하지 않았다.
 
-# SPEC — `harness-ordering-enforcement` (rev.11)
+# SPEC — `harness-ordering-enforcement` (rev.12)
 
 > **성격**: 후속 에픽의 요구사항 명세. 입력은 `docs/harness/plan/REMEASURE-harness-split.md`(gitignored)와
 > `docs/harness/plan/PROBE-FINDINGS-enforcement.md`(gitignored), 그리고 `ROADMAP.md`의 W7 행·phase-P 4행.
@@ -55,6 +55,42 @@
   미보유.** 파일 존재 확인은 `Read` 실패가 곧 답이고(§5.4.5 항목 7), Glob의 다른 용도는 없다.
 
 ### Changed in this revision
+
+**rev.12 (2026-09-10) — `/ship` 전 spec-blind 콜드 리뷰: 렌즈 4개, 발견 18건 중 성립 17 / 기각 1, 설계 변경 0.**
+
+렌즈는 sonnet 4개(읽기 전용, `design/` 미열람), 판정은 오케스트레이터가 전건 직접 재현했다. 기준 트리
+`develop @ fe56aba`(CI green — Linux 체크아웃 첫 검증). 슬라이스 `cold-review-pre-ship`.
+
+1. **렌즈 i(세 파일 산문 정합성) 2건, 전건 성립·수정** — `skills/harness/SKILL.md`가 build 소유 절을
+   앵커 없이 자기 것처럼 부른 곳 2곳(§Step 2.6 「`runs.eval` is Step 5 … below」, §Architecture
+   Principles #4 「§State Machine — Auto-fix State Transition Table」). 비-Step §인용 271종 전수 대조,
+   잘못된 앵커 0.
+2. **렌즈 ii(gate ↔ harness ↔ build 명령 매핑) 2건, 전건 성립·수정** — (a) harness §Step 2.6 failure
+   branch (ii)가 「`auto`면 같은 턴에 Step 3 도달」이라 적어 §After Plan Phase(모든 run_style halt)와 모순
+   — 1파일 시절 잔재. 재작성: 다음 세션에서 `/harness`(predicate (b) → Step 2.6) 또는 `/harness-gate`
+   (phase는 이미 `plan_done`이라 §Entry Check 통과 → row ④)로 갈린다. gate §State-Space Derivation의
+   「same-turn, `run_style == "auto"` only」도 같은 잔재로 정정. (b) harness `--critic` 행의 INLINE 강제
+   조건이 gate row ④의 「permission denial OR unrecorded」 중 후자를 누락 — 보강. 심각도는 렌즈가 매긴
+   blocking이 아니라 major: 누락의 결과는 거부 반복이지 무음 손상이 아니다. 5개 명령 × 4파일 대조표는 전건
+   일치.
+3. **렌즈 iii(README ↔ 3메시지 흐름) 10건, 전건 성립·수정** — `## Skills` 표와 5분 가이드만 분할을 알았고
+   나머지는 1파일 시절이었다. blocking 1: Quick Start·Execution Styles의 `/harness generate|verify|evaluate`
+   (→ `/harness-build …`). major 6: Before/After, Terminal Output Sample, `## workflow` 다이어그램,
+   How it works 4항, Execution Styles `auto` 행, Confirmation Gates. minor 3: Interactive UX 2불릿, Options
+   표(`--epic`/`--no-epic`/`--modify`/`--auto-revise`/`--critic`/`--no-cold-pass` 부재). 덤으로 build
+   §Step 5 HARD GATE #2 "Stop" 설명의 `/harness` → `/harness-build` 오기 1건.
+4. **렌즈 iv(반증 0회 7건 재검증) — RESOLVED 3(#5·#10·#15) / PARTIAL 4(#6·#7·#11·#16)**. PARTIAL 처리:
+   #7 gate §Stale Determination의 「same-turn Modify loop」 정당화 2곳이 분할 후 거짓 전제 → 세션 경계
+   문면으로 재작성(「fresh」 규칙 자체는 유효). #11 ROADMAP 61·105행의 2026-09-04 재측정치가 분할로 다시
+   referent를 잃음 → 같은 행 안에 3파일 실측(린트 OK 라인)을 append. #16(1) failure branch (iii)가 값 4개를
+   열거하며 「three distinct」 → four로 정정. #6 「Step 2를 다시 돌릴 경로 없음」은 결정 ③(Modify는
+   오케스트레이터 편집)의 귀결이라 설계 변경 없이 row ④ `spec_stamp_invalid` 배너에 안내 한 줄
+   (`--modify`로 완성 또는 Restart) 추가. **기각 1**: #16(2) 「`spec_stamp_invalid`가 사전/사후 두 사이트에
+   재사용돼 새 뭉개기」 — 회복 절차가 동일하고 사후 사이트는 사전 검사가 통상 흐름에서 도달 불가능하게
+   만든 belt-and-braces라 구분할 가치가 없다; 그 사실을 failure branch (iii)에 명문화.
+5. **린트 7종 rc=0 유지, BLOCK 그룹 무변경**(수정은 전건 소유자 전용 절). 이 rev의 판정 근거는 각 렌즈의
+   보고가 아니라 오케스트레이터의 재현이다 — 렌즈 보고 원문은 커밋하지 않는다(세션 트랜스크립트에만 있음;
+   `project_workflow_artifacts_recovery` 메모리 참조).
 
 **rev.11 (2026-09-10) — C2 적대 리뷰의 「미판정 15건」을 판정했다: 성립 11 / 기각 4. 설계 변경 0.**
 
