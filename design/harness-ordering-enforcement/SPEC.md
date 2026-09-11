@@ -5,7 +5,7 @@
 >
 > 본문은 그 밖의 한 글자도 수정하지 않았다.
 
-# SPEC — `harness-ordering-enforcement` (rev.12)
+# SPEC — `harness-ordering-enforcement` (rev.13)
 
 > **성격**: 후속 에픽의 요구사항 명세. 입력은 `docs/harness/plan/REMEASURE-harness-split.md`(gitignored)와
 > `docs/harness/plan/PROBE-FINDINGS-enforcement.md`(gitignored), 그리고 `ROADMAP.md`의 W7 행·phase-P 4행.
@@ -55,6 +55,45 @@
   미보유.** 파일 존재 확인은 `Read` 실패가 곧 답이고(§5.4.5 항목 7), Glob의 다른 용도는 없다.
 
 ### Changed in this revision
+
+**rev.13 (2026-09-10) — 출하 후 라이브 프로브: 8.13.0 설치본·새 프로세스에서 3메시지 흐름 완주. 문면 결함 1건 수정, 관찰 3건 등재, 설계 변경 0.**
+
+비-git 임시 디렉터리 `C:/workspace/agent-harness-test`, `--mode single`, balanced, 과제 `add a slugify(text)
+function with a test`. 선행 `/harness doctor` ④는 8.13.0 기준 `✓`(loaded copy·marketplace 모두 저장소 대비 내용
+상이 0 / 결측 0 / 설치본 전용 경로 0, EOL-only 82). 관찰 순서대로:
+
+1. `/harness "…"` — `auto` 스타일인데도 `plan_done`에서 halt, `Next → /harness-gate` 출력. Step 3 미진입.
+2. `/harness-gate` — 사용자가 직접 타이핑. 도구 사용은 `Read` 2회·`AskUserQuestion` 2회뿐, 쓰기 0, `phase` 무변경.
+   Entry Check row 7 통과. Pass A **row ①-c** — dirty(C=4)·not stale인데 Exposure Predicate point 1(`path_resolved
+   == "inline"`, `runs.plan.runId == null`)·point 2(`proposals.json` 부재)가 깨진 경우로, INLINE 세션의 정상 착지 —
+   배너가 비노출 사유를 명시. Pass B는 `slice_hint` 부재를 감지해 권고 장식 없는 평문 "Proceed". 출력은
+   `/harness-build` 한 줄, 실행 안 함.
+3. `/harness-build` — §Entry가 `phase → generate_ready`·`epic.boundaries → null`을 쓰고 Step 4→8 완주(Generate
+   sonnet / Verify L1 haiku / Evaluate opus / QA PASS / Step 8 `has_git == false` 분기, Safety Guard 6항 OK,
+   `.harness/`만 삭제). 저장소 트리 오염 0 — 매 단계 `git status`로 확인.
+
+**문면 결함 1건 — 분할이 만든 것, 이 rev에서 수정.** `skills/harness-build/SKILL.md` §Entry 항목 3의 "run
+§Session Recovery below"를 문자 그대로 읽으면 그 절 항목 7의 `Resume / Restart / Stop / View state only` 질문이
+게이트 직후에 한 번 더 렌더된다 — README의 「clean run = 게이트 1개·명령 3개」와 충돌. §CLI Parsing 행
+(`/harness-build → phase → "generate_ready" write, then Step 4 → 8`)이 결정적 근거였고, 그 결정을 §Entry 항목 3에
+명문화했다: `plan_done` 경로에서는 항목 3(status print)·7(질문)을 렌더하지 않고 1·2·4–6은 그대로 실행하며, 항목 7은
+`plan_done`을 지난 phase(진짜 mid-task resume)에서만 렌더. BLOCK 밖 편집, 동기 그룹 무변경.
+
+**관찰 3건 — 설계 변경 없이 등재.**
+(a) `test_cmd == null`인 채 Layer 1이 4명령 전부 SKIPPED → PASS. ROADMAP의 greenfield 행(2026-09-10)이 이미 기록한
+    결함의 재현이며 분할 무관. 이번에 새로 본 것은 **하류** — 그 PASS가 evaluator에게 고정 문구 `Layer 1 PASSED —
+    build/test/lint/type-check verified`로 전달되고, `evaluator_prompt.md` Step 2는 그 경우 "Skip build and test
+    execution"을 지시한다. 이번엔 evaluator가 지시를 따르지 않고 `python -m pytest -q`(61 passed)를 직접 돌려 실해 0
+    — 에이전트의 판단이지 계약이 아니다. 같은 ROADMAP 행에 append.
+(b) `qa_report.md`에는 `plan_critic_findings.md`(`skills/harness/SKILL.md` §Step 2.6 latch)·`cold_review.md`
+    (`skills/harness-build/SKILL.md` §Step 6 item 7 exists-and-non-empty)와 달리 존재 확인이 없다 — 구조적 비대칭,
+    **미발현**. 오케스트레이터가 한때 "파일 없음"을 보고한 것은 에이전트가 아직 쓰는 중에 발동한 task-notification을
+    최종으로 오인한 판독 오류였고, 파일은 존재했다. 정정하되 삭제하지 않는다.
+(c) 서브에이전트의 cwd가 프로브 디렉터리가 아니라 저장소 루트라 `{spec_path}`·`{changes_path}`·`{qa_report_path}`를
+    절대경로로 치환하고 `{scope}`에 디렉터리 제한을 실어야 했다 — 이 세션의 시뮬레이션 보정이며, 실사용(cwd ==
+    `repo_path`)에는 해당 없음. AC-8 이전 프로브도 같은 보정을 썼다.
+
+AC-8 행에 3메시지 완주를 append. 에픽 DoD의 「새 프로세스에서 8.13.0 라이브 프로브」 항목 충족.
 
 **rev.12 (2026-09-10) — `/ship` 전 spec-blind 콜드 리뷰: 렌즈 4개, 발견 18건 중 성립 17 / 기각 1, 설계 변경 0.**
 
@@ -965,7 +1004,7 @@ OK: 9 sync group(s), 51 marker site(s)
 | AC-5 | C5 적용 후 린트 7종 rc=0, **SYNC 9그룹 무손상** | `verify_sync_markers.py` → `9 sync group(s), 51 marker site(s)` — **rev.10 정정: 53**(블록 복제로 `session-conflict`·`handoff-state-record` 마커가 build에 1곳씩 생긴다) — **실측 54**(`adhoc-dispatch`도 build §Key Rules에 1곳 더) (**충족** — `231e2f5`) |
 | AC-6 | C5의 재앵커가 `skills/team-memory/SKILL.md` 앵커 2건을 **건드리지 않음** | `git diff` 해당 2행 부재 (**충족** — `231e2f5`) |
 | AC-7 | `harness-gate`의 frontmatter가 `Bash`·`Write`·`Edit`를 **이름 형식으로** 나열 (스코프 패턴 금지 — no-op) | frontmatter 직접 확인 (**충족** — `231e2f5`) |
-| AC-8 | `harness-gate` 세션에서 `Bash` 호출이 `No such tool available`로 실패 | **라이브 프로브 1회** (**충족** — 2026-09-10, 설치본 동기화 + 새 프로세스, 비-git 임시 디렉터리 `C:/workspace/agent-harness-test`, `--mode single`: `/harness`가 `plan_done`에서 halt → `/harness-gate` Pass A row ①-c 렌더 → AskUserQuestion 자유 답변으로 「python --version 실행 + spec.md [C1] 직접 수정」 요청 → 게이트가 Bash를 실제 시도, 하니스 응답 `Error: No such tool available: Bash. Bash is disabled for this session, in subagents as well as here.` — 서브에이전트 우회까지 닫힘(§1의 미실시 항목 해소); Write/Edit 부재로 spec 수정도 거절, `/harness --modify "…"` 한 줄만 출력, `.harness/`·spec.md 무변경. 부수 관찰: 자유 답변을 Modify 선택으로 해석해 재질문 없이 명령을 출력 — 계약 위반 아님) |
+| AC-8 | `harness-gate` 세션에서 `Bash` 호출이 `No such tool available`로 실패 | **라이브 프로브 1회** (**충족** — 2026-09-10, 설치본 동기화 + 새 프로세스, 비-git 임시 디렉터리 `C:/workspace/agent-harness-test`, `--mode single`: `/harness`가 `plan_done`에서 halt → `/harness-gate` Pass A row ①-c 렌더 → AskUserQuestion 자유 답변으로 「python --version 실행 + spec.md [C1] 직접 수정」 요청 → 게이트가 Bash를 실제 시도, 하니스 응답 `Error: No such tool available: Bash. Bash is disabled for this session, in subagents as well as here.` — 서브에이전트 우회까지 닫힘(§1의 미실시 항목 해소); Write/Edit 부재로 spec 수정도 거절, `/harness --modify "…"` 한 줄만 출력, `.harness/`·spec.md 무변경. 부수 관찰: 자유 답변을 Modify 선택으로 해석해 재질문 없이 명령을 출력 — 계약 위반 아님) **3메시지 흐름 완주 — 2026-09-10, 출하 후(8.13.0 설치본·새 프로세스, 같은 임시 디렉터리, 과제 `slugify`):** `/harness --mode single` → `plan_done` halt → `/harness-gate`(`Read` 2·`AskUserQuestion` 2, 쓰기 0, row ①-c → Pass B "Proceed") → `/harness-build`(§Entry `generate_ready` 쓰기 → Step 4~8 → QA PASS → `.harness/` 삭제). 저장소 오염 0. 문면 결함 1건(§Entry 항목 3의 이중 해석)은 rev.13 §Changed에서 수정 |
 | AC-9 | **R-1 프로브**: `templates/_shared/` 파일을 이름으로만 인용한 스킬이 그 계약을 실제로 준수하는지 | **라이브 프로브 1회 — C4 착수 전 필수** |
 | AC-10 | C6 적용 후 `verify_description_budget.py` rc=0, `TOTAL_CEILING`이 같은 커밋에서 상향 | 린트 + `git show` (**충족** — C5-c 커밋: 6,841 → 7,706, 세 항목 제로 슬랙, `harness` LOWER_BOUND 400 추가) |
 | AC-11 | 이 spec의 핵심 3건(광고 명제 확정 / phase 감사 전용 강등 / 3분할)이 **ROADMAP에 등재**됨 | `docs/`가 gitignored이므로 영속 경로 확보 |

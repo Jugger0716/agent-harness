@@ -6,6 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/).
 
+## [Unreleased]
+
+### Fixed
+
+- **`/harness-build` no longer reads as asking "Resume?" one message after the gate printed it.**
+  `skills/harness-build/SKILL.md` §Entry item 3 said "run §Session Recovery below", and that
+  section's item 7 renders a `Resume / Restart / Stop / View state only` question whenever
+  `state.json` exists — read literally, the advertised three-message run (`/harness` →
+  `/harness-gate` → `/harness-build`) became four. The §CLI Parsing row (`/harness-build → phase →
+  "generate_ready" write, then Step 4 → 8`) was already decisive; §Entry item 3 now states it: on
+  the `plan_done` route items 1, 2 and 4–6 run and items 3 and 7 do not, and item 7 renders only
+  for a phase past `plan_done`. Found by the post-release live probe (2026-09-10) recorded in
+  `design/harness-ordering-enforcement/SPEC.md` rev.13; no BLOCK group touched.
+
 ## [8.13.0] — 2026-09-10
 
 ### Changed
