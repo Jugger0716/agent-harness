@@ -271,13 +271,24 @@ Total for run C: 1 user message and 2 AskUserQuestion answers (Fast Gate, Commit
 |---|---|---|
 | 1 | Live probe B (`SLICE5.md` §Acceptance criteria) | **Setup line yes; Step 7 and `Remaining` not observed** — the run stopped at `plan_done` as planned. `Lint : none` from wholesale shadowing confirmed, and disclosed here as the acceptance text asks. The checkbox stays open |
 | 2 | Live probe C | **warning yes; `Cold : on` / `cold_pass_source == null` not observed** — `--fast` was typed, so the flag's `"fast"` overrode the key's absence. The fall-through to source 2 is the new fact: an all-invalid line does not shadow the team line. The checkbox stays open; a run without `--fast` closes it |
-| 3 | The WORKFLOW path launches from an installed plugin | **no** — the `Workflow` tool refuses a `scriptPath` outside the working directory or an added directory, and the plugin cache is neither. Every prior workflow-path run in this repository's history ran the script from the repository checkout (`workflows/…`), which is the one place the tool accepts |
+| 3 | The WORKFLOW path launches from an installed plugin | **no** — the `Workflow` tool refuses a `scriptPath` outside the working directory or an added directory, and the plugin cache is neither. Every prior workflow-path run in this repository's history ran the script from the repository checkout (`workflows/…`), which is the one place the tool accepts — **correction, appended:** that sentence is an inference; `design/` records no successful segment run from any path, and the first four probes were all `Path : inline` |
 | 4 | The Layer 2 auto-retry reaches PASS within its budget | **yes, 1 of 2** — the FAIL was two spec-checkable facts, both fixed in one pass |
 | 5 | Sub-agents honor the 1-line Output Contract with the "entire reply" sentence | **yes, 8 of 8** across both runs (opus ×4, sonnet ×2, haiku ×2) — twelve consecutive compliant returns since the fourth probe |
 
 ## Findings
 
 1. **The plugin-root `scriptPath` cannot launch here.** `skills/harness/SKILL.md` §Architecture dispatches every segment as `${CLAUDE_PLUGIN_ROOT}/workflows/<skill>.<segment>.workflow.js` "a plugin-root path, never a repository-relative one", and the `Workflow` tool answers that only a path it returned, or a file under the working directory or an added directory, is allowed. In this repository the fallback is invisible in outcome — the same script exists at `workflows/` in the checkout — but for any OTHER repository the WORKFLOW path of an installed plugin degrades to INLINE on every run, with the fallback banner as the only trace. Whether adding the plugin directory to the session (the tool's own remedy) is available to a skill is not measured here. Candidates, not decided: teach `doctor` item ② to try the launch, not just the tool's presence; or document the added-directory step where the Mode Gate opt-in is described.
+   **Measured and fixed the same day (appended, not rewritten):** a zero-agent probe script at
+   `.harness/wf/probe.workflow.js` launched on the first try via its repository-relative path
+   (0 agents, 26 ms, `{ok: true}` returned), so the copy-then-launch procedure in
+   `templates/_shared/segment_launch.md` is what every dispatch site now does; `doctor` ② was not
+   taught to launch (it writes nothing) and instead discloses that the launch surface is untested.
+   Two corrections to the paragraph above, appended rather than rewritten: the quoted rule "a
+   plugin-root path, never a repository-relative one" was `CLAUDE.md` §Architecture's sentence, not
+   `skills/harness/SKILL.md`'s (that file has no §Architecture section), and the same-day fix
+   replaced it, so the quoted string now exists only here; and "the fallback is invisible in outcome"
+   overstated — the refusal in run B was visible (banner, `path_resolved → "inline"`), and the
+   checkout's `workflows/` copy played no part in that run.
 2. **A stale `docs/<slug>/` directory carries artifacts across sessions.** Run C reused run B's slug; `plan_critic_findings.md` from run B's Step 2.6 sat next to run C's `--fast` session (which never runs a critic) and was picked up by Step 8's staging list. Harmless here (gitignored, warn-and-continue), but on a repository that commits `docs/`, "Commit code only" would have committed a critic report the session never produced. The slug collision rule covers branches (§Step 1 item 8), not the docs directory.
 3. **AC-28's FAIL-path rendering is now observed.** The `Cold review: disabled (--fast)` line printed on a `FAIL_L2` verdict before the auto-retry, which the third and fourth probes could not show (both passed first time).
 4. **Bare `§Step N` in `design/` documents is a real trap, and the evaluator caught it.** The generator wrote `§Step 7` meaning `/harness-build`'s step; in this repository that bare form is judged against `/harness`'s own ids, which have no Step 7 (`scripts/verify_sync_markers.py` `harness-steps` mode). `design/` is outside the lint, so only Layer 2 caught it — the third probe's finding 3 again: cross-file consistency is the evaluator's whole value on a documentation repository.

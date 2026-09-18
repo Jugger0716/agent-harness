@@ -281,7 +281,7 @@ Update state.json: `phase` → `"analyzing"`.
    **WORKFLOW path (mode: multi):** run the Analyze segment via the Workflow tool (pass `args` as a JSON object — the script defensively parses; the field set below is the 1:1 contract with the script's `// contract` comment — a field missing on either side silently renders as ''):
    ```
    Workflow {
-     scriptPath: "${CLAUDE_PLUGIN_ROOT}/workflows/test-gen.analyze.workflow.js",
+     scriptPath: ".harness/wf/test-gen.analyze.workflow.js",   // FIRST apply templates/_shared/segment_launch.md: copy ${CLAUDE_PLUGIN_ROOT}/workflows/test-gen.analyze.workflow.js here; delete the copy once this call returns
      args: {
        target: <target>, framework: <framework>, mockLibrary: <mock_library>,
        repoPath: <repo_path>, userLang: <user_lang>,
@@ -437,7 +437,7 @@ For each **new test** generated, perform mutation testing on its target function
 2. **Run the Judge segment (propose-only)** via the Workflow tool (1:1 contract with the script's `// contract` comment):
    ```
    Workflow {
-     scriptPath: "${CLAUDE_PLUGIN_ROOT}/workflows/test-gen.judge.workflow.js",
+     scriptPath: ".harness/wf/test-gen.judge.workflow.js",   // FIRST apply templates/_shared/segment_launch.md: copy ${CLAUDE_PLUGIN_ROOT}/workflows/test-gen.judge.workflow.js here; delete the copy once this call returns
      args: {
        targets: <the targets[] above>,
        userLang: <user_lang>,

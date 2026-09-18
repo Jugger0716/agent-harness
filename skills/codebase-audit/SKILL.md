@@ -248,7 +248,7 @@ Proceed to Step 4 with findings.
 1. **Run the Analysis segment** via the Workflow tool (pass `args` as a JSON object — the script defensively parses; the field set below is the 1:1 contract with the script's `// contract` comment — a field missing on either side silently renders as ''):
    ```
    Workflow {
-     scriptPath: "${CLAUDE_PLUGIN_ROOT}/workflows/codebase-audit.analysis.workflow.js",
+     scriptPath: ".harness/wf/codebase-audit.analysis.workflow.js",   // FIRST apply templates/_shared/segment_launch.md: copy ${CLAUDE_PLUGIN_ROOT}/workflows/codebase-audit.analysis.workflow.js here; delete the copy once this call returns
      args: {
        mode: <"deep"|"thorough">,
        projectPath: <repo path>, scope: <scope or "(full project)">,

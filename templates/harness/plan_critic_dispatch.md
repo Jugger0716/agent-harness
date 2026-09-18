@@ -6,7 +6,7 @@
 <!-- SYNC-WITH: workflows/spec.eval.workflow.js §contract -->
 ```
 Workflow {
-  scriptPath: "${CLAUDE_PLUGIN_ROOT}/workflows/spec.eval.workflow.js",
+  scriptPath: ".harness/wf/spec.eval.workflow.js",   // FIRST apply templates/_shared/segment_launch.md: copy ${CLAUDE_PLUGIN_ROOT}/workflows/spec.eval.workflow.js here; delete the copy once this call returns
   args: { task: <task>, userLang: <user_lang>, specContent: <{docs_path}spec.md content>,
           qaNotes: <qa_discovery_notes>,
           criticFindingsPath: "{docs_path}plan_critic_findings.md",

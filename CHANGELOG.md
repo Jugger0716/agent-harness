@@ -121,6 +121,21 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
 
 ### Fixed
 
+- **Workflow segments launch from a `.harness/wf/` copy, because the plugin-root path never
+  launched.** The `Workflow` tool accepts a `scriptPath` only under the working directory (or a
+  directory the user added), and refuses `${CLAUDE_PLUGIN_ROOT}/workflows/…` with `scriptPath
+  must be a script path this tool returned, or a file you can already read`. The fifth live probe
+  (`design/harness-prompt-diet/PROBE.md`, run B) hit it on the first recorded WORKFLOW-path
+  attempt from an installed copy — no earlier such run is recorded anywhere in `design/`; the
+  first four probes all ran `Path : inline`. Every dispatch site (15 in nine skills, 2 in
+  `templates/harness/`) now copies the shipped script to `.harness/wf/`, launches that path and
+  deletes the copy once the call returns (so the skills whose cleanup removes `.harness/` only
+  "if empty" keep working);
+  the procedure, the zero-agent measurement and the failure routing are the new single source
+  `templates/_shared/segment_launch.md`, and `mode_gate.md` rule 3 classifies a path refusal as a
+  launch failure (graceful INLINE fallback), never as a permission denial. `/harness doctor` item
+  ② still reports tool presence only and now says that the launch surface is not exercised.
+
 - **`/harness-build` no longer reads as asking "Resume?" one message after the gate printed it.**
   `skills/harness-build/SKILL.md` §Entry item 3 said "run §Session Recovery below", and that
   section's item 7 renders a `Resume / Restart / Stop / View state only` question whenever

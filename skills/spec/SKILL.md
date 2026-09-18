@@ -489,7 +489,7 @@ Print status in the standard format, prefixed with `[harness] Spec draft ready.`
 3. **Run the Plan segment** via the Workflow tool (pass `args` as a JSON object — the script defensively parses; the field set below is the 1:1 contract with the script's `// contract` comment — a field missing on either side silently renders as `''`):
    ```
    Workflow {
-     scriptPath: "${CLAUDE_PLUGIN_ROOT}/workflows/spec.plan.workflow.js",
+     scriptPath: ".harness/wf/spec.plan.workflow.js",   // FIRST apply templates/_shared/segment_launch.md: copy ${CLAUDE_PLUGIN_ROOT}/workflows/spec.plan.workflow.js here; delete the copy once this call returns
      args: {
        task: <task>, userLang: <user_lang>,
        conventions: <resolved content from step 1, or "">,
@@ -534,7 +534,7 @@ Print status in the standard format, prefixed with `[harness] Spec draft ready.`
 1. **Run the Eval segment** via the Workflow tool (field set = 1:1 contract with the script's `// contract` comment):
    ```
    Workflow {
-     scriptPath: "${CLAUDE_PLUGIN_ROOT}/workflows/spec.eval.workflow.js",
+     scriptPath: ".harness/wf/spec.eval.workflow.js",   // FIRST apply templates/_shared/segment_launch.md: copy ${CLAUDE_PLUGIN_ROOT}/workflows/spec.eval.workflow.js here; delete the copy once this call returns
      args: {
        task: <task>, userLang: <user_lang>,
        specContent: <docs/harness/<slug>/spec.md content>,
@@ -585,7 +585,7 @@ This phase runs only when Critic Gate selected Auto-revise or Modify.
 1. Set `phase → "re_synthesis_active"`. **Re-run the Plan segment in re-synthesis re-entry form** — analysts are NOT re-run (mirrors the old "re-dispatch Synthesis only" behavior; the script skips its Propose phase):
    ```
    Workflow {
-     scriptPath: "${CLAUDE_PLUGIN_ROOT}/workflows/spec.plan.workflow.js",
+     scriptPath: ".harness/wf/spec.plan.workflow.js",   // FIRST apply templates/_shared/segment_launch.md: copy ${CLAUDE_PLUGIN_ROOT}/workflows/spec.plan.workflow.js here; delete the copy once this call returns
      args: {
        task, userLang, conventions: <resolved content, as Plan-segment step 1>,
        qaNotes: <qa_discovery_notes content, or "">,
@@ -719,7 +719,7 @@ Update state.json: `phase` → `"completed"`.
 
    Do NOT rename either side without updating both: renaming the file (e.g., `qa_notes.md` → `qa_discovery_notes.md`) without updating Phase 3 step 3 here AND `/harness` Step 1.5 / Step 2 read sites silently breaks the handoff (file-missing → empty-string fallback → planners receive empty Discovery Notes). Renaming the variable requires updating all template files that reference it — see grep `qa_discovery_notes` and `qa_notes` for the full surface.
 
-4. **Cleanup:** Delete `.harness/` directory (state.json, `spec/`, `conventions.md`, and the directory itself). The final `docs/harness/<slug>/spec.md` AND the artifacts persisted in step 3 are preserved. (Halted sessions do NOT reach this step — see Halt semantics in Phase 2d-D.)
+4. **Cleanup:** Delete `.harness/` directory (state.json, `spec/`, `conventions.md`, any `wf/` a segment launch left behind, and the directory itself). The final `docs/harness/<slug>/spec.md` AND the artifacts persisted in step 3 are preserved. (Halted sessions do NOT reach this step — see Halt semantics in Phase 2d-D.)
 
 5. **If has_git == false:** Do not attempt any git operations.
 

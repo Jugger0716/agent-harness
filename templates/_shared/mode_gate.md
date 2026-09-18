@@ -18,10 +18,21 @@ At Setup, resolve the execution path:
      per-project opt-in — sources & search order: `templates/_shared/project_defaults.md`),
      OR the skill's own instructions direct the model to call the `Workflow` tool
      (a documented valid opt-in).
+   **Launch precondition, once both hold:** every `Workflow` call is preceded by the copy step
+   and followed by the delete step of `templates/_shared/segment_launch.md` — the tool refuses
+   a plugin-root `scriptPath`, so without the copy the opt-in silently lands in rule 3.
 3. **Graceful fallback — for genuine engine failure only.** If the `Workflow` tool is
    unavailable, or a Workflow call *errors* (launch failure, script error, schema-invalid
    result), silently fall back to the INLINE path — **never error out**. Optionally tell the
    user they can re-invoke with ultracode / `--mode` for the deeper path.
+
+   **A `scriptPath` refusal is a launch failure, not a denial.** The tool accepts only a path it
+   returned or a file under the working directory (or an added directory); an installed plugin's
+   `${CLAUDE_PLUGIN_ROOT}/workflows/` is neither, so every dispatch site launches from the
+   `.harness/wf/` copy that `templates/_shared/segment_launch.md` prescribes. A refusal of THAT
+   path, or a failed copy, lands here — INLINE with the banner — never in the denial branch below
+   (measured 2026-09-18, `design/harness-prompt-diet/PROBE.md` fifth probe §Observed sequence —
+   run B item 3, and finding 1).
 
    **A permission DENIAL is not an engine error, and must not be downgraded SILENTLY.**
    `Permission to use Workflow has been denied.` is a policy or human decision, not a fault,

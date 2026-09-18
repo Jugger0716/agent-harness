@@ -462,7 +462,7 @@ Print: `[harness] Phase: Generate`
 2. Run the Build segment:
    ```
    Workflow {
-     scriptPath: "${CLAUDE_PLUGIN_ROOT}/workflows/harness.build.workflow.js",
+     scriptPath: ".harness/wf/harness.build.workflow.js",   // FIRST apply templates/_shared/segment_launch.md: copy ${CLAUDE_PLUGIN_ROOT}/workflows/harness.build.workflow.js here; delete the copy once this call returns
      args: {
        specContent: <spec.md content>,
        qaFeedback: <qa_report.md content if round > 1, else "(First round)">,
@@ -587,7 +587,7 @@ Auto-fix re-verify call; `true` at the L1-max-fail "Continue" call; from
 2. Run the Eval segment (covers Verify L1 AND Evaluate L2/L3 in one autonomous span):
    ```
    Workflow {
-     scriptPath: "${CLAUDE_PLUGIN_ROOT}/workflows/harness.eval.workflow.js",
+     scriptPath: ".harness/wf/harness.eval.workflow.js",   // FIRST apply templates/_shared/segment_launch.md: copy ${CLAUDE_PLUGIN_ROOT}/workflows/harness.eval.workflow.js here; delete the copy once this call returns
      args: {
        buildCmd, testCmd, lintCmd, typeCheckCmd,
        changesMdPath: "{docs_path}changes.md", verifyReportPath: "{docs_path}verify_report.md",

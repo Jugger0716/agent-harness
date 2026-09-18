@@ -61,7 +61,7 @@ There is no build, test, dev, or deploy command.
 |---|---|
 | `skills/<name>/SKILL.md` | one skill = one directory = one contract file |
 | `skills/harness{,-gate,-build}/SKILL.md` | one contract split three ways (C5, 2026-09-07): `/harness` owns Steps 1–2.6 plus the `--fast` Fast Gate, `/harness-gate` owns Step 3 with no `Bash`/`Write`/`Edit`/`Glob`, `/harness-build` owns Steps 3.5–8. Since the v8.14 prompt diet most of what they shared lives in `templates/_shared/` single sources they cite by name; only four `hx-*` BLOCK groups remain byte-identical (`verify_block_sync.py`), for text that must stay inline. §Architecture Principles #3·#5·#6 and §User Interaction Rules are duplicated WITHOUT a sync group — disclosed here, to be blocked the day they drift |
-| `templates/_shared/` | cross-skill single sources (`mode_gate.md`, `status_format.md`, `project_defaults.md`, `session_conflict.md`, `orchestrator_contract.md`, `output_language.md`, `session_recovery.md`, `session_boundary.md`, `run_style.md`, `scale_assessment.md`, `path_validator.md`, `architecture_principles.md`, `slugify.md`, ...) |
+| `templates/_shared/` | cross-skill single sources (`mode_gate.md`, `status_format.md`, `project_defaults.md`, `session_conflict.md`, `orchestrator_contract.md`, `output_language.md`, `session_recovery.md`, `session_boundary.md`, `run_style.md`, `scale_assessment.md`, `path_validator.md`, `architecture_principles.md`, `slugify.md`, `segment_launch.md`, ...) |
 | `templates/harness/` | `/harness`-only procedures and static payloads read on demand (`doctor.md`, `state_schema.md`, `setup_summary.md`, `setup_prompts.md`, `auto_revise.md`, `spec_render.md`, `plan_segment_call.md`, `plan_critic_dispatch.md`, `plan_critic_failures.md`) — the v8.14 prompt diet's destination for everything that is not an execution rule |
 | `templates/<skill>/` | skill-specific prompt templates |
 | `templates/planner/` | shared by `/harness` and `/spec` — hence the `verify_block_sync.py` BLOCK groups |
@@ -83,8 +83,11 @@ the default, and the native Workflow path runs only on opt-in (ultracode ON, an 
 repository's largest cross-file contract; `verify_sync_markers.py` enforces it through the
 `ambiguity-prompt` (`min_sites=10`) and `project-defaults` (`min_sites=9`) groups.
 
-Skills dispatch their segments as `${CLAUDE_PLUGIN_ROOT}/workflows/<skill>.<segment>.workflow.js` —
-a plugin-root path, never a repository-relative one.
+Skills dispatch their segments as `${CLAUDE_PLUGIN_ROOT}/workflows/<skill>.<segment>.workflow.js`,
+the plugin-root file — but they LAUNCH it from a copy at `.harness/wf/<skill>.<segment>.workflow.js`
+(`templates/_shared/segment_launch.md`): the `Workflow` tool refuses a `scriptPath` outside the
+working directory, so a plugin-root path never launched (measured 2026-09-18). Never write a
+repository-relative `workflows/…` path at a dispatch site — that only works in this checkout.
 
 Every `SKILL.md` carries YAML frontmatter with `name`, `description`, and `disallowed-tools`. That
 frontmatter is the plugin's exposure contract, so treat it as part of the skill's surface.

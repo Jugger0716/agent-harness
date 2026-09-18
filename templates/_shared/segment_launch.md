@@ -1,0 +1,75 @@
+# Segment launch — copy the script under the working directory, launch, delete the copy (single source)
+
+> Cited by name from every `Workflow { scriptPath: … }` site in `skills/*/SKILL.md` and
+> `templates/harness/*.md`, and from `templates/_shared/mode_gate.md` rules 2 and 3. Apply it at
+> every Workflow call — the dispatch sites say so in the imperative. Nothing here changes which
+> segment runs or what it receives; it changes only WHERE the script is read from, and adds one
+> deletion: the copy this procedure itself creates.
+
+## Why a copy
+
+The `Workflow` tool accepts a `scriptPath` only when it is a path the tool itself returned, or a
+file under the working directory or a directory the user added to the session. An installed
+plugin's `${CLAUDE_PLUGIN_ROOT}/workflows/` is neither, and the call is refused with
+`scriptPath must be a script path this tool returned, or a file you can already read`. Measured
+2026-09-18 in this repository (`design/harness-prompt-diet/PROBE.md`, fifth probe §Observed
+sequence — run B item 3, and finding 1): the plugin-root path was refused twice in one run,
+opening the file with the Read tool first did not lift the refusal, and the run fell back to
+INLINE with the banner — visibly, not silently. A zero-agent probe script placed at
+`.harness/wf/probe.workflow.js` then launched on the first try via that repository-relative path.
+No WORKFLOW-path run from an installed copy is recorded anywhere in `design/`; the checkout's own
+`workflows/` directory played no part in the fallback and is not a launch surface for a dispatch
+site (`CLAUDE.md` §Architecture forbids writing a repository-relative `workflows/…` path there).
+
+## Procedure (every launch — first launch, retry and re-run alike)
+
+0. Confirm `${CLAUDE_PLUGIN_ROOT}` resolves to a non-empty value and that
+   `${CLAUDE_PLUGIN_ROOT}/workflows/<skill>.<segment>.workflow.js` exists. Either check failing
+   is a launch failure (§Failure) — `templates/harness/doctor.md` items ① and ④ already treat an
+   unresolved root as a diagnosable condition, and a `cp` from an empty root would fail anyway.
+1. `mkdir -p .harness/wf` — `.harness/` is the directory every launching skill already creates
+   or touches (a stateless skill declares it session-scoped audit space; that declaration is not
+   weakened, because step 4 removes what this procedure adds).
+2. `cp "${CLAUDE_PLUGIN_ROOT}/workflows/<skill>.<segment>.workflow.js" .harness/wf/` — overwrite
+   unconditionally, then confirm the copy exists. `cp` preserves whatever bytes the source has:
+   an LF source stays LF, and a CR-contaminated installed copy (the condition
+   `templates/harness/doctor.md` item ① exists to detect) is copied CR-contaminated, which the
+   permission layer then refuses — §Failure routes that to INLINE, and item ①'s remediation is
+   the fix, not anything in this file.
+3. Launch with the repository-relative path: `scriptPath: ".harness/wf/<skill>.<segment>.workflow.js"`.
+   `args` are unchanged — the script is byte-identical to the shipped one.
+4. **Delete `.harness/wf/` as soon as the `Workflow` call has returned** — success, engine error
+   or refusal alike. The copy is launch-scoped: a retry or re-run performs steps 0–3 again, and
+   the pipeline skills re-RUN segments across sessions rather than `runId`-resuming them, so no
+   later step needs the file. This deletion is what keeps the skills' existing cleanup steps
+   true — `codebase-audit`, `deep-review` and `study` remove `.harness/` only "if empty", and
+   `/debug` has no end-of-session cleanup at all; a copy left behind would defeat the first three
+   and leak in the fourth.
+
+The dispatch sites write the plugin-root path beside the `.harness/wf/` one so the shipped file is
+still named at the point of use; the copy is a launch mechanism, not a second source.
+
+## Failure
+
+A failed step 0 or 2 (unresolved root, missing source, no `Bash` tool, `cp` error, `.harness/`
+not writable, copy absent afterwards) is a **launch failure** and takes
+`templates/_shared/mode_gate.md` rule 3's graceful fallback — INLINE, with the banner. So does a
+refusal of the `.harness/wf/` path itself, which would mean the working directory is not what the
+session believes it is. Neither is a permission denial; rule 3's denial branch is for
+`Permission to use Workflow has been denied.` only. Step 4 runs on every one of these outcomes too.
+
+## In a repository that does not ignore `.harness/`
+
+This repository's `.gitignore` covers `.harness/`; a target repository may not. There the copy is
+an untracked file for exactly the call window between steps 2 and 4 — never longer, because step 4
+is unconditional — and `/ship`'s pre-commit check for `.harness/` files in the staging list
+(`skills/ship/SKILL.md`) is the existing net for anything a crashed session leaves behind.
+
+## What this does not do
+
+- It does not make `/harness doctor` launch anything — item ② keeps reporting the tool's presence
+  from the session's tool list, because doctor writes nothing, and this file's copy is a write.
+- It does not change any skill's own cleanup step: the copy is removed by step 4, inside the
+  launching step, before those cleanup steps run.
+- It does not apply to `/harness-gate`, which holds neither `Bash` nor `Workflow` and launches
+  nothing.

@@ -64,7 +64,10 @@ to match, the re-add stages the entire tree as deleted.
 output that the finding holds for this session only. Do not run an active probe: the condition
 cited from `templates/_shared/mode_gate.md` rule 2 is an observational one, so probing it would
 contradict the rule being reported. The tool being absent from that list is not a fault: print
-`— (Workflow tool not offered this session)`, which is **not** a `⚠`.
+`— (Workflow tool not offered this session)`, which is **not** a `⚠`. The tool being offered says
+nothing about whether a plugin-root `scriptPath` launches — it does not (measured 2026-09-18);
+segments launch from the `.harness/wf/` copy `templates/_shared/segment_launch.md` prescribes,
+which this diagnostic never creates because it writes nothing. Say so in the row.
 
 ③ **git work tree.** Run `git rev-parse --is-inside-work-tree` and decide on whether stdout is
 exactly `true` — not on the exit code, which is zero while `false` is printed inside a `.git/`
@@ -151,7 +154,7 @@ ignored wholesale rather than merged. When no source declares anything — the c
 ```
 [harness doctor]
   ① Installed-copy CR   : ✓
-  ② Workflow tool       : ✓  (this session's tool list only)
+  ② Workflow tool       : ✓  (tool list only — launch surface .harness/wf/ not exercised)
   ③ git work tree       : ✓
   ④ Install drift       : ⚠  <measured summary>
   ⑤ Memory store ignore : ⚠  <measured summary>

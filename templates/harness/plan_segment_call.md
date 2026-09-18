@@ -7,7 +7,7 @@
 
 ```
 Workflow {
-  scriptPath: "${CLAUDE_PLUGIN_ROOT}/workflows/harness.plan.workflow.js",
+  scriptPath: ".harness/wf/harness.plan.workflow.js",   // FIRST apply templates/_shared/segment_launch.md: copy ${CLAUDE_PLUGIN_ROOT}/workflows/harness.plan.workflow.js here; delete the copy once this call returns
   args: { task, repoPath, lang, scope, userLang, conventions: <resolved content or "">,
           qaNotes: <qa_discovery_notes>, criticFindings: <critic_findings>,
           mode: <"standard"|"multi">,
