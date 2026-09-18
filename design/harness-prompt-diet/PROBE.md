@@ -172,3 +172,56 @@ Total: 1 user message and 4 AskUserQuestion answers (Fast Gate, QA Fix ×2, Comm
 
 - Fast Gate "Modify spec"; `gate.approved == true` while `phase == plan_done`; WORKFLOW-path `verify.verdict`; the Layer 2 auto-retry (`FAIL L2`); "Max rounds reached".
 - Live probes A/B/C for `cold-pass` itself (`SLICE5.md` §Acceptance criteria) — they need the installed copies re-synced and a fresh process, since the skill bodies this run executed predate `49eec8f`.
+
+---
+
+# Fourth probe — `cold-pass` live probe A: the `--fast` reason renders end to end (2026-09-18)
+
+> A fresh `claude` process after `exit` (the handoff's precondition), on
+> `harness/token-performance-optimization` at `15dfb92`, both installed copies sha-identical to
+> HEAD for the four files the probe reads. The injected `/harness` body carried
+> `cold_pass_source`, which is the proof the process loaded the post-`49eec8f` copy — the third
+> probe could not run this for exactly that reason. The task was the smallest true edit available:
+> SLICE5.md's own header still said `designed, not implemented`. Nothing in this file is a rule.
+
+## Setup
+
+| Item | Value |
+|---|---|
+| Entry | `/handoff resume` → "Briefing only" (the resume turn rendered no "Start next step", because the handoff's Do NOT forbids chaining `/harness` there) → `/harness --fast "<task>"` typed as its own message |
+| Task | replace SLICE5.md line 4's status phrase with `implemented (49eec8f, merged 71c5c02); live probes A/B/C pending` — one file under `design/`, outside every lint's scan |
+| Defaults line | source 1 absent (`settings.local.json` has no `env` key); source 2 `CLAUDE.md` supplies `lint-cmd` only — no `cold-pass` key, so `--fast` is the sole `cold_pass` writer |
+| Slug | `update-the-status-line-in-design-harness-prompt-di` — the 50-char cut lands mid-word again (`prompt-di`), third probe finding 4 unchanged |
+| Model preset | `balanced` (fast default) |
+
+## Observed sequence
+
+1. **Step 1 Setup**: `cli_flags = {fast: true, cold_pass: false, cold_pass_source: "fast"}` written in one checkpoint. Setup Summary printed `Cold      : off (--fast)` between `TypeCheck` and `Scope` — **acceptance line 1 of live probe A**. `Lint` echoed `(project default)`; `Language : unknown`, build/test/type-check `none`, and the (P1-3) warning did not fire because `lint_cmd` is set.
+2. **Step 1.5**: `CLAUDE.md` 224 lines → rich → copied, no question.
+3. **Step 2 INLINE**: `spec_stamp → null` before dispatch; planner (opus) returned `spec.md generated — 8 acceptance criteria, 5 edge cases` (90 lines); `spec_stamp {generation: 1, lines: 90}`; Scale Assessment frozen (8 checkboxes, 1-signal), not rendered; `plan_critic = {applied: "skipped", source: "fast"}` → `Critic: skipped (--fast)`.
+4. **Fast Gate → Build now** → `gate = {approved: true, mode: "fast"}` → `[harness] Fast Gate approved — chaining into /harness-build.` → Skill tool → `/harness-build` §Entry admitted on the fast row and wrote `generate_ready` / `epic.boundaries → null`.
+5. **Round 1**: Generator (sonnet) `1 files changed — SLICE5.md`; `git diff --numstat` 1/1. Verify (haiku) `PASS — build SKIPPED, test SKIPPED, lint 0e/0w, scan 0 TODO`. Evaluator (opus) `PASS — 완료 기준 8건 전건 YES …` — it re-ran numstat, the byte comparison against `HEAD:` excluding line 4, the LF/BOM check and the lint chain itself, and confirmed the three factual claims (`49eec8f`, `71c5c02`, PROBE.md:174) against the repository.
+6. **§Step 6 item 7**: `cli_flags.cold_pass == false` → `verify.cold_result → "skipped"`, `cold_round → 1`, nothing printed there. **§Step 7 preamble** printed `Cold review: disabled (--fast)` — **acceptance line 2**. Verdict from `verify.verdict == "PASS"`; the qa_report was never opened.
+7. **Step 8**: the human chose "Commit code only" (the handoff had planned "No commit"; the gate is the human's). `spec.md` / `qa_report.md` failed to stage (gitignored, warn-and-continue), commit `cd6c190`, `.harness/` deleted. Type B block printed `Remaining : none (cold pass skipped — --fast)` — **acceptance line 3**. Merged `--no-ff` as `f08e25c`.
+
+Total: 1 user message and 2 AskUserQuestion answers (Fast Gate, Commit). Sub-agent cost, from the task notifications: planner 84k tokens / 205 s; generator 66k / 27 s; verifier 44k / 39 s; evaluator 78k / 199 s — about 272k tokens for a 1-line change, of which the planner and evaluator are 60%.
+
+## Verdicts
+
+| # | Question | Result |
+|---|---|---|
+| 1 | Live probe A (`SLICE5.md` §Acceptance criteria): `Cold : off (--fast)` at Setup, `Cold review: disabled (--fast)` at Step 7, `Remaining : none (cold pass skipped — --fast)` in Type B | **yes, all three** — the `--no-cold-pass` literal the first two probes recorded is gone from every rendered line; the checkbox is ticked in this commit |
+| 2 | `cold_pass_source` is written once at Setup and only read afterwards | **yes** — three render sites, one state field, no re-derivation from flags in `/harness-build` |
+| 3 | Sub-agents honor the 1-line Output Contract when the prompt says "your entire reply must be exactly that one line" | **yes, 4 of 4** (opus, sonnet, haiku, opus) — the third probe's finding 1 hypothesis (wording, not model) holds on this run; no re-ask was needed |
+
+## Findings
+
+1. **`user_lang` detection is under-specified for an ASCII task typed by a non-English speaker.** `templates/_shared/output_language.md` says "the user's most recent message"; that message was the English task string (the slugify rule wants ASCII), so a literal reading yields `en` while every other message in the session was Korean. The orchestrator recorded `ko` — the conversation's language, which the user-level CLAUDE.md also sets as the default — and the sub-agent prompts carried an explicit Korean directive. Recorded as a judgment call, not a defect in the skill: the rule should probably say "the language the user is conversing in, not the task string's script", and it does not.
+2. **`Commit code only` on a probe branch leaves a merge to do.** Nothing wrong with it — but a `--fast` session cut from an epic branch ends on `harness/<slug>` at a commit the epic branch does not have, and neither the Type B block nor `/handoff` says so. The first three probes hit the same thing and merged by hand each time.
+3. **Cost floor.** A 1-line documentation edit cost 272k sub-agent tokens; the third probe's 9-file change cost 1.16M. The planner (84k) explored git history and PROBE.md to verify two commit shas the task already named; the evaluator (78k) re-ran the whole lint chain the verifier had just run. Both are correct per their templates; the floor is the templates' thoroughness, not the change size.
+
+## Still not observed
+
+- Live probes B and C for `cold-pass` (`settings.local.json` `env.AGENT_HARNESS_DEFAULTS = "cold-pass=off"` → `Cold : off (project default (settings.local.json))` with `Lint : none` from wholesale shadowing; `cold-pass=maybe` → one warning, `Cold : on`, `cold_pass_source == null`).
+- The `null` `cold_pass_source` → `source not recorded` branch (needs a pre-`49eec8f` state file resumed with `cold_pass == false`).
+- Everything the third probe listed: Fast Gate "Modify spec"; `gate.approved == true` while `phase == plan_done`; WORKFLOW-path `verify.verdict`; the Layer 2 auto-retry; "Max rounds reached".

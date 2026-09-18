@@ -172,7 +172,7 @@ markers, `scripts/`.
       `workflows/_reference/state_fields.md`, `templates/harness/setup_summary.md`.
 - [ ] Root-document path-anchored `§` tallies unchanged before/after (`verify_sync_markers.py`
       docstring item 3 figures: harness 42 / harness-gate 2 / harness-build 7; sub-path 7).
-- [ ] Live probe A — `/harness --fast "<task>"` on this repository: Setup Summary shows
+- [x] Live probe A — `/harness --fast "<task>"` on this repository: Setup Summary shows
       `Cold : off (--fast)`; Step 7 prints `Cold review: disabled (--fast)`; Type B block prints
       `Remaining : none (cold pass skipped — --fast)` on a PASS.
 - [ ] Live probe B — `.claude/settings.local.json` `env.AGENT_HARNESS_DEFAULTS = "cold-pass=off"`
