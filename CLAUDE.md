@@ -85,8 +85,10 @@ repository's largest cross-file contract; `verify_sync_markers.py` enforces it t
 
 Skills dispatch their segments as `${CLAUDE_PLUGIN_ROOT}/workflows/<skill>.<segment>.workflow.js`,
 the plugin-root file — but they LAUNCH it from a copy at `.harness/wf/<skill>.<segment>.workflow.js`
-(`templates/_shared/segment_launch.md`): the `Workflow` tool refuses a `scriptPath` outside the
-working directory, so a plugin-root path never launched (measured 2026-09-18). Never write a
+(`templates/_shared/segment_launch.md`): the `Workflow` tool accepts a `scriptPath` only when it
+returned that path itself or the file sits under the working directory (or an added directory),
+and the plugin-root path was refused on the only recorded attempt (2026-09-18; earlier
+successful runs are recorded by `runId` without their launch path). Never write a
 repository-relative `workflows/…` path at a dispatch site — that only works in this checkout.
 
 Every `SKILL.md` carries YAML frontmatter with `name`, `description`, and `disallowed-tools`. That

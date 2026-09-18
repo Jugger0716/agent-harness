@@ -154,7 +154,7 @@ ignored wholesale rather than merged. When no source declares anything — the c
 ```
 [harness doctor]
   ① Installed-copy CR   : ✓
-  ② Workflow tool       : ✓  (tool list only — launch surface .harness/wf/ not exercised)
+  ② Workflow tool       : ✓  (this session's tool list only — launch surface .harness/wf/ not exercised)
   ③ git work tree       : ✓
   ④ Install drift       : ⚠  <measured summary>
   ⑤ Memory store ignore : ⚠  <measured summary>

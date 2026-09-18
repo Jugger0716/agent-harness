@@ -121,13 +121,15 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
 
 ### Fixed
 
-- **Workflow segments launch from a `.harness/wf/` copy, because the plugin-root path never
-  launched.** The `Workflow` tool accepts a `scriptPath` only under the working directory (or a
-  directory the user added), and refuses `${CLAUDE_PLUGIN_ROOT}/workflows/…` with `scriptPath
+- **Workflow segments launch from a `.harness/wf/` copy, because the plugin-root path is
+  refused.** The `Workflow` tool accepts a `scriptPath` only when it returned that path itself or
+  the file sits under the working directory (or a directory the user added), and refuses
+  `${CLAUDE_PLUGIN_ROOT}/workflows/…` with `scriptPath
   must be a script path this tool returned, or a file you can already read`. The fifth live probe
   (`design/harness-prompt-diet/PROBE.md`, run B) hit it on the first recorded WORKFLOW-path
-  attempt from an installed copy — no earlier such run is recorded anywhere in `design/`; the
-  first four probes all ran `Path : inline`. Every dispatch site (15 in nine skills, 2 in
+  attempt from an installed copy — no earlier such run is recorded in `design/`, the first four
+  probes all ran `Path : inline`, and the successful segment runs this file and `ROADMAP.md`
+  record by `runId` do not record their launch path. Every dispatch site (15 in nine skills, 2 in
   `templates/harness/`) now copies the shipped script to `.harness/wf/`, launches that path and
   deletes the copy once the call returns (so the skills whose cleanup removes `.harness/` only
   "if empty" keep working);

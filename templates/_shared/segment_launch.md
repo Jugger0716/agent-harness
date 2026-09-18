@@ -12,20 +12,22 @@ The `Workflow` tool accepts a `scriptPath` only when it is a path the tool itsel
 file under the working directory or a directory the user added to the session. An installed
 plugin's `${CLAUDE_PLUGIN_ROOT}/workflows/` is neither, and the call is refused with
 `scriptPath must be a script path this tool returned, or a file you can already read`. Measured
-2026-09-18 in this repository (`design/harness-prompt-diet/PROBE.md`, fifth probe §Observed
+2026-09-18 in the plugin repository (its `design/harness-prompt-diet/PROBE.md`, fifth probe §Observed
 sequence — run B item 3, and finding 1): the plugin-root path was refused twice in one run,
 opening the file with the Read tool first did not lift the refusal, and the run fell back to
 INLINE with the banner — visibly, not silently. A zero-agent probe script placed at
 `.harness/wf/probe.workflow.js` then launched on the first try via that repository-relative path.
-No WORKFLOW-path run from an installed copy is recorded anywhere in `design/`; the checkout's own
-`workflows/` directory played no part in the fallback and is not a launch surface for a dispatch
-site (`CLAUDE.md` §Architecture forbids writing a repository-relative `workflows/…` path there).
+No WORKFLOW-path run from an installed copy is recorded in the plugin repository's `design/`
+probe records; the successful segment runs its CHANGELOG and ROADMAP record by `runId` do not
+record their launch path. The checkout's own `workflows/` directory played no part in the
+fallback and is not a launch surface: a dispatch site never carries a repository-relative
+`workflows/…` path, because that resolves only inside the plugin's own checkout.
 
 ## Procedure (every launch — first launch, retry and re-run alike)
 
 0. Confirm `${CLAUDE_PLUGIN_ROOT}` resolves to a non-empty value and that
    `${CLAUDE_PLUGIN_ROOT}/workflows/<skill>.<segment>.workflow.js` exists. Either check failing
-   is a launch failure (§Failure) — `templates/harness/doctor.md` items ① and ④ already treat an
+   is a launch failure (§Failure) — `templates/harness/doctor.md` item ④ already treats an
    unresolved root as a diagnosable condition, and a `cp` from an empty root would fail anyway.
 1. `mkdir -p .harness/wf` — `.harness/` is the directory every launching skill already creates
    or touches (a stateless skill declares it session-scoped audit space; that declaration is not
@@ -40,8 +42,9 @@ site (`CLAUDE.md` §Architecture forbids writing a repository-relative `workflow
    `args` are unchanged — the script is byte-identical to the shipped one.
 4. **Delete `.harness/wf/` as soon as the `Workflow` call has returned** — success, engine error
    or refusal alike. The copy is launch-scoped: a retry or re-run performs steps 0–3 again, and
-   the pipeline skills re-RUN segments across sessions rather than `runId`-resuming them, so no
-   later step needs the file. This deletion is what keeps the skills' existing cleanup steps
+   no launching skill performs a `runId` resume at all (`resumeFromRunId` appears in the skills
+   only as a same-session audit note or a prohibition), so no later step needs the file. This
+   deletion is what keeps the skills' existing cleanup steps
    true — `codebase-audit`, `deep-review` and `study` remove `.harness/` only "if empty", and
    `/debug` has no end-of-session cleanup at all; a copy left behind would defeat the first three
    and leak in the fourth.
@@ -69,7 +72,8 @@ is unconditional — and `/ship`'s pre-commit check for `.harness/` files in the
 
 - It does not make `/harness doctor` launch anything — item ② keeps reporting the tool's presence
   from the session's tool list, because doctor writes nothing, and this file's copy is a write.
-- It does not change any skill's own cleanup step: the copy is removed by step 4, inside the
-  launching step, before those cleanup steps run.
+- It does not change what any skill's own cleanup step deletes: the copy is removed by step 4,
+  inside the launching step, before those cleanup steps run (`/spec`'s cleanup sentence now
+  names `wf/` in its enumeration, which changes the wording, not the deletion).
 - It does not apply to `/harness-gate`, which holds neither `Bash` nor `Workflow` and launches
   nothing.
