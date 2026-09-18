@@ -31,3 +31,12 @@ monospace alignment; **values** follow the Preserved-English Glossary.
   block shape + label rules are shared here.
 - **Phase-label → human-string maps stay in each skill** (they differ per skill, e.g.
   `plan_ready → "Plan — ready"`). Do not centralize them here.
+
+## §Harness phase labels
+
+> Used by `skills/harness/SKILL.md`, `skills/harness-gate/SKILL.md` and
+> `skills/harness-build/SKILL.md` wherever a `phase` value is rendered.
+
+Status block shape + label rules: `templates/_shared/status_format.md`. Mode enum `<single | standard | multi>`; additional row `Path : <inline | workflow>  (<reason>)`.
+
+Phase labels: `plan_ready` "Plan — ready" · `planning` "Plan — in progress" · `plan_done` "Plan — complete" · `generate_ready` "Generate — ready" · `generating` "Generate — in progress" · `generate_done` "Generate — complete" · `verify_ready` "Verify — ready" · `verifying` "Verify — running checks" · `verify_done` "Verify — complete" · `evaluate_ready` "Evaluate — ready" · `evaluating` "Evaluate — in progress" · `evaluate_done` "Evaluate — complete" · `completed` "Completed".

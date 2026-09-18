@@ -19,3 +19,12 @@ Sub-agents run on models chosen by the session's `model_config` preset (role →
 - **Interactive pickers hold max 4 options** (AskUserQuestion limit) — `frontier` replaces `all-opus` in the picker. `all-opus` stays fully supported via `--model-config all-opus` or "Other" (a bare preset name `all-opus`, or `executor:opus,advisor:opus,evaluator:opus`).
 - **Judgment-type sub-agents (cross-verification, critic, evaluator) map to the `evaluator` role.** Pre-8.7 presets have identical advisor/evaluator cells, so this mapping is behavior-preserving for them; only `frontier` distinguishes the two. A skill mode that dispatches no evaluator-role agent gets `balanced`-equivalent behavior from `frontier`.
 - **Model fallback chain (deprecation safety):** if a sub-agent dispatch fails because the cell's model id is unknown/unavailable (a sunset model — e.g. a future `fable` retirement), downgrade THAT cell step-by-step along `fable → opus → sonnet → haiku → (parent inherit)` until a dispatch succeeds. Warn once per session (in `user_lang`), remember the downgraded cell for the rest of the session (never repeat a failing dispatch), and echo the actually-used model in the Setup Summary / final report. Applies on both paths — the orchestrator carries the downgraded cell into `args.models` on any segment (re-)run. Preset names are indirection: a model sunset needs only a one-line patch to the preset table above, and persistent `model-config=<preset>` project defaults keep working across model generations.
+
+## §Harness role map
+
+Role map: Architect / Senior Developer / QA Specialist / Synthesis → advisor; Lead Developer & Implementation & Generator(single) → executor; Combined / Code Quality / Test & Stability Advisor → advisor; Evaluator → evaluator; Verify (Layer 1) → verifier (haiku default); Cold review → evaluator (the same review tier as Evaluator — `skills/harness-build/SKILL.md` §Step 5 "Cold Review Input Collection" / `skills/harness-build/SKILL.md` §Step 6).
+
+- INLINE path: pass `model` per role at sub-agent launch (preset ≠ "default").
+- WORKFLOW path: pass the whole resolved map once as `args.models` (`{executor, advisor, evaluator, verifier}`; null role = inherit) — segment scripts apply it per agent.
+
+> **Verifier defaults to haiku across all presets** — Layer 1 only executes commands and parses exit codes. Override with `--verifier-model sonnet|opus` for sensitive mechanical verification (opt-in only; a cost warning is shown in the Setup Summary).

@@ -205,7 +205,11 @@ SYNC_GROUPS = [
         "tokens": ["Skill :", "Task :", "Phase :", "Mode :", "Docs :"],
         # C5: 3 = the two above + skills/harness-build/SKILL.md, whose hx-handoff-fields BLOCK
         # copy carries the same marker (byte-identical with the harness copy by construction).
-        "min_sites": 3,
+        "min_sites": 2,  # LOWERED 3 -> 2 by the v8.14 prompt diet, deliberately and in the
+        # same change: the /harness and /harness-build copies of this block were PROMOTED to the
+        # single source templates/_shared/session_boundary.md, so two marker sites became one.
+        # A promotion to a single source is the one reason this floor may fall -- it removes
+        # duplication rather than dropping a check. Sites now: session_boundary.md + skills/handoff.
     },
     {
         # harness-handoff-coldreview-epic-slice slice-f, group (b): the workflows/spec.eval.workflow.js
@@ -371,7 +375,10 @@ SYNC_GROUPS = [
         # operation.
         # C5: 8 = 7 + the hx-session-entry BLOCK copy in skills/harness-build/SKILL.md, which
         # carries the marker byte-identically. harness-gate has no session gate and no marker.
-        "min_sites": 8,
+        "min_sites": 7,  # LOWERED 8 -> 7 by the v8.14 prompt diet, same reason and same
+        # rule as handoff-state-record above: the /harness and /harness-build copies of the
+        # session-entry block became the single source templates/_shared/session_recovery.md,
+        # collapsing two marker sites into one.
     },
 ]
 

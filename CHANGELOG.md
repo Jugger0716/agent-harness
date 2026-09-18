@@ -8,6 +8,62 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
 
 ## [Unreleased]
 
+### Added
+
+- **`/harness --fast` — an in-session Fast Gate for small changes.** `--fast` (alias `--quick`)
+  forces the inline single path, skips the Plan Critic and the cold pass, takes `balanced`
+  silently instead of asking for a model, skips the Convention Scan question, and replaces the
+  `Next → /harness-gate` ending with an AskUserQuestion gate rendered in the same session:
+  `Build now` / `Modify spec` / `Stop`. "Build now" writes `gate.approved` /`gate.approved_at` /
+  `gate.mode` and invokes `/harness-build` through the Skill tool in that same turn, so a small
+  fix no longer needs three typed commands.
+  **The gate is moved, not removed.** `skills/harness-build/SKILL.md` §Entry now refuses the
+  `plan_done` route of any `cli_flags.fast` session whose `gate.approved != true`, evaluated
+  before the two routes that would advance `phase`, so a fast session can never reach Generate
+  without the question having been answered. A non-fast session is unchanged — the human typing
+  `/harness-build` after `/harness-gate` is still its only proof (SPEC decision A), and
+  `/harness-gate` still holds no write tool and never writes `gate.*`.
+  `skills/harness-gate/SKILL.md` §Step 3 Pass A row ③ gained the third `plan_critic.source`
+  value, `"fast"`, rendering a `skipped by --fast` literal with `C=? M=?` counts; the
+  §State-Space Derivation row that claimed `applied == "skipped"` structurally implies
+  `source == "carried_over"` is corrected, because that is now one of two writers.
+
+### Changed
+
+- **Prompt diet: `skills/harness/SKILL.md` is 135,693 → 49,982 bytes (1,638 → 392 lines).**
+  The three pipeline skills together drop from 310,657 to ~193,000 bytes. Nothing was deleted:
+  every rule either stayed inline or moved to a single source the skill cites by name, which is
+  the convention `templates/_shared/mode_gate.md` already established for the most safety-critical
+  logic in the repository.
+  New single sources under `templates/_shared/`: `orchestrator_contract.md` (sub-agent returns,
+  version compatibility, environment detection), `output_language.md` (the Preserved-English
+  Glossary table, user-language detection, 1-line return translation), `session_recovery.md`
+  (items 1–7, shared verbatim by `/harness` and `/harness-build`), `run_style.md`,
+  `session_boundary.md`, `scale_assessment.md` (the render fragment), `path_validator.md` and
+  `architecture_principles.md`. New on-demand procedures under `templates/harness/`:
+  `doctor.md`, `state_schema.md`, `setup_summary.md`, `setup_prompts.md`, `auto_revise.md`,
+  `spec_render.md`, `plan_segment_call.md`, `plan_critic_dispatch.md`,
+  `plan_critic_failures.md`. `workflows/_reference/state_fields.md` keeps the full
+  writer/reader map for every additive-optional state.json field.
+  Held inline deliberately, because a missed read would change behaviour silently rather than
+  merely cost a turn: the Mode Gate resolution table and its fallback branches, Session
+  Recovery's doctor carve-out and phase jump table, the whole of Steps 1 / 1.5 / 2 / 2.6 as a
+  flow, the Fast Gate, and Key Rules.
+  Reasoning that is not a rule — the `spec_stamp` ordering argument, the Plan Critic crash
+  windows, the branch-collision rationale — moved to `design/harness-prompt-diet/RATIONALE.md`,
+  which is committed rather than written under the gitignored `docs/`.
+- **`scripts/verify_block_sync.py`: 16 `hx-*` BLOCK groups → 4.** A promotion to a single source
+  is strictly stronger than byte-identity, because there is then one copy and nothing to compare.
+  What remains a group is the text that must stay inline and therefore still exists in more than
+  one file: `hx-mode-gate` (new, carved out of the former `hx-preamble-b`), `hx-state-machine`,
+  `hx-path-validator` and `hx-scale-render`, all at `v2`. The dissolved tags and their
+  destinations are listed in that script's own comment.
+- **`scripts/verify_sync_markers.py`: two `min_sites` floors lowered, deliberately and in the
+  same change.** `handoff-state-record` 3 → 2 and `session-conflict` 8 → 7, because the
+  `/harness` and `/harness-build` copies of those marked blocks became one single source each.
+  Each comment records that a promotion to a single source is the one reason a zero-slack floor
+  may fall, since it removes duplication rather than dropping a check.
+
 ### Fixed
 
 - **`/harness-build` no longer reads as asking "Resume?" one message after the gate printed it.**
