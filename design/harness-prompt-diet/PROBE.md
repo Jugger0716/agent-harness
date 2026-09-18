@@ -150,7 +150,7 @@ The round-1 Layer 3 FAIL was again genuine, and it is the more interesting of th
 5. **Fix → Round 3**: Generator fixed all three (3 files) — and returned a multi-line report with the contract line LAST (finding 2). Verify PASS. Evaluator: `PASS` — all 19 criteria, the `<why>` cross-check across four files, the reader list against `state_fields.md`, the root tally 48/48, BLOCK/SYNC unchanged.
 6. **Step 8**: Commit code only → `49eec8f`; the two `docs/` artifacts failed to stage (gitignored, warn-and-continue as §Step 8 (s4) prescribes) → `.harness/` deleted → Type B block. Merged `--no-ff` into `harness/token-performance-optimization` as `71c5c02`.
 
-Total: 1 user message and 5 AskUserQuestion answers (Fast Gate, QA ×2, Commit… plus the Fix decisions). Sub-agent cost, from the task notifications: planner 147k tokens / 582 s; generator 187k / 556 s, 134k / 334 s, 82k / 118 s; verifier 47k, 45k, 46k (≈ 65 s each); evaluator 136k / 451 s, 179k / 844 s, 156k / 484 s — about 1.16M tokens for a 9-file, 50-line change.
+Total: 1 user message and 4 AskUserQuestion answers (Fast Gate, QA Fix ×2, Commit). Sub-agent cost, from the task notifications: planner 147k tokens / 582 s; generator 187k / 556 s, 134k / 334 s, 82k / 118 s; verifier 47k, 45k, 46k (≈ 65 s each); evaluator 136k / 451 s, 179k / 844 s, 156k / 484 s — about 1.16M tokens for a 9-file, 50-line change.
 
 ## Verdicts
 
