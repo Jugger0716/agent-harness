@@ -32,6 +32,14 @@ defect.
 | Description budget ratchet | `python scripts/verify_description_budget.py` |
 | Lint wiring equality | `bash .github/scripts/check_lint_wiring.sh` |
 
+The same chain is declared once, below, as this repository's project default so a `/harness`
+session runs it as Layer 1 without a `--lint-cmd` flag (`templates/_shared/project_defaults.md`;
+the line must start at column 0 and not sit inside a code fence, which is why it is bare prose
+here). The `export` covers the cp949 console: `verify_sync_markers.py` prints `§` and dies with
+`UnicodeEncodeError` without it.
+
+agent-harness-defaults: lint-cmd=`export PYTHONIOENCODING=utf-8 && python scripts/verify_sync_markers.py && python scripts/verify_manifest_sync.py && python scripts/verify_meta_literal.py && python scripts/verify_block_sync.py && node scripts/check_workflow_syntax.mjs && python scripts/verify_description_budget.py && bash .github/scripts/check_lint_wiring.sh`
+
 Run all six after changing anything under `skills/`, `templates/`, `workflows/`, `scripts/`, or
 `.claude-plugin/`. Re-run `check_lint_wiring.sh` as well whenever `.github/workflows/lint.yml`
 changes or a file matching `scripts/verify_*.py` or `scripts/*.mjs` is added or removed.
@@ -53,7 +61,7 @@ There is no build, test, dev, or deploy command.
 |---|---|
 | `skills/<name>/SKILL.md` | one skill = one directory = one contract file |
 | `skills/harness{,-gate,-build}/SKILL.md` | one contract split three ways (C5, 2026-09-07): `/harness` owns Steps 1–2.6 plus the `--fast` Fast Gate, `/harness-gate` owns Step 3 with no `Bash`/`Write`/`Edit`/`Glob`, `/harness-build` owns Steps 3.5–8. Since the v8.14 prompt diet most of what they shared lives in `templates/_shared/` single sources they cite by name; only four `hx-*` BLOCK groups remain byte-identical (`verify_block_sync.py`), for text that must stay inline. §Architecture Principles #3·#5·#6 and §User Interaction Rules are duplicated WITHOUT a sync group — disclosed here, to be blocked the day they drift |
-| `templates/_shared/` | cross-skill single sources (`mode_gate.md`, `status_format.md`, `project_defaults.md`, `session_conflict.md`, `orchestrator_contract.md`, `output_language.md`, `session_recovery.md`, `session_boundary.md`, `run_style.md`, `scale_assessment.md`, `path_validator.md`, `architecture_principles.md`, ...) |
+| `templates/_shared/` | cross-skill single sources (`mode_gate.md`, `status_format.md`, `project_defaults.md`, `session_conflict.md`, `orchestrator_contract.md`, `output_language.md`, `session_recovery.md`, `session_boundary.md`, `run_style.md`, `scale_assessment.md`, `path_validator.md`, `architecture_principles.md`, `slugify.md`, ...) |
 | `templates/harness/` | `/harness`-only procedures and static payloads read on demand (`doctor.md`, `state_schema.md`, `setup_summary.md`, `setup_prompts.md`, `auto_revise.md`, `spec_render.md`, `plan_segment_call.md`, `plan_critic_dispatch.md`, `plan_critic_failures.md`) — the v8.14 prompt diet's destination for everything that is not an execution rule |
 | `templates/<skill>/` | skill-specific prompt templates |
 | `templates/planner/` | shared by `/harness` and `/spec` — hence the `verify_block_sync.py` BLOCK groups |

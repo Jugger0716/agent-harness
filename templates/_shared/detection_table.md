@@ -16,7 +16,7 @@ Auto-detect project language and commands. Scan the working directory.
 
 If none match, set language to "unknown", test/build commands to null.
 
-## Lint (skip if `--lint-cmd` provided)
+## Lint (skip if `--lint-cmd` provided, or if the project-defaults line declares `lint-cmd` — `templates/_shared/project_defaults.md`; a declared command always beats detection)
 
 Check in order, stop at first match:
 
@@ -31,7 +31,7 @@ Check in order, stop at first match:
 
 If none match → `null` (SKIPPED during verify).
 
-## Type-check (skip if `--type-check-cmd` provided)
+## Type-check (skip if `--type-check-cmd` provided, or if the project-defaults line declares `type-check-cmd`)
 
 Check in order, stop at first match:
 

@@ -341,6 +341,7 @@ can live in three places — the first source that declares it wins wholesale:
 
 - `path=workflow` is a standing opt-in — the Mode Gate resolves the workflow path at the skill's ultracode-target tier without ultracode or `--mode` (§Path Transparency reason: `project default (<source>)`); `path=inline` pins the inline path.
 - `model-config=<preset>` replaces the interactive model picker when no `--model-config` flag is given (echoed as `(project default)` in the Setup Summary). Without a flag AND without a defaults line, behavior is unchanged: skills that dispatch sub-agents ask via AskUserQuestion (exception: test-gen has no picker — it silently uses the `default` preset).
+- **`lint-cmd`** / **`type-check-cmd`** — a shell command, wrapped in backticks on the defaults line (e.g. ``lint-cmd=`npm run lint && npm run typecheck` ``) — consumed by `/harness` when the flag is absent, and BEFORE auto-detection, so a repository whose lint lives only in its own docs (this one: seven commands in `CLAUDE.md`, matching no detection row) still gets a real Layer 1. The backticks are what let `&&`, commas and `=` inside the command survive the `key=value` parse; the value is echoed `(project default)` in the Setup Summary. Skills that do not consume a key ignore it silently.
 - Session input always wins: explicit flags override the line, `--mode single/quick` still forces inline, and invalid values warn once and are ignored (never a halt).
 
 ## Interactive UX

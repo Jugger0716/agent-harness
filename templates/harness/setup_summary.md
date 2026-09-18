@@ -16,8 +16,8 @@
   Language  : <lang>
   Test      : <test_cmd or "none">
   Build     : <build_cmd or "none">
-  Lint      : <lint_cmd or "none">
-  TypeCheck : <type_check_cmd or "none">
+  Lint      : <lint_cmd or "none">     ← append "(project default)" when the defaults line supplied it
+  TypeCheck : <type_check_cmd or "none">     ← same
   Scope     : <scope>
   Output    : <docs_path>
 ```

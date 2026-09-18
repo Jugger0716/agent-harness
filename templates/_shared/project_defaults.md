@@ -36,6 +36,8 @@ injection. Malformed JSON in source 1 → skip that source silently and continue
 | `path` | `workflow` \| `inline` | Standing opt-in, resolved at Mode Gate §Ambiguity Prompt step 4.5 — `workflow` runs the skill's ultracode-target tier (same tier rule as ultracode ON); `inline` forces the inline path silently. |
 | `model-config` | `default` / `all-opus` / `frontier` / `balanced` / `economy` | Used when no `--model-config` flag is given — the interactive model picker is skipped. |
 | `verifier-model` | `haiku` \| `sonnet` \| `opus` | Used when no `--verifier-model` flag is given. |
+| `lint-cmd` | a shell command, **wrapped in backticks** (see the parse rule below) | Used by `/harness` when no `--lint-cmd` flag is given, BEFORE `templates/_shared/detection_table.md` auto-detection — a declared command is never second-guessed by detection. The value lands in state.json `lint_cmd`, so `/harness-build`'s Layer 1 reads it from there. |
+| `type-check-cmd` | same form as `lint-cmd` | Same rule for `--type-check-cmd` / state.json `type_check_cmd`. |
 
 **Resolution orders (session input always wins):**
 
@@ -44,12 +46,21 @@ injection. Malformed JSON in source 1 → skip that source silently and continue
 - Model config: `--model-config` > **project default** > AskUserQuestion (or the skill's
   documented fallback).
 - Verifier: `--verifier-model` > **project default** > `haiku`.
+- Lint / type-check commands (`/harness` only): `--lint-cmd` / `--type-check-cmd` > **project
+  default** > detection table > `null` (Layer 1 skips that command).
 
 **Parse rule:** in sources 2–3, take the FIRST line matching `^agent-harness-defaults:` at
 column 0 — indented lines and lines inside fenced code blocks (```) are EXAMPLES, excluded
 from matching;
 in source 1, take the `env.AGENT_HARNESS_DEFAULTS` string value. Split the remainder on commas
-into `key=value` pairs; trim whitespace; keys and values are case-insensitive. An invalid
+into `key=value` pairs; trim whitespace; keys and values are case-insensitive — except a
+**backtick value**: a value that begins with a backtick runs to the next backtick on the same
+line, verbatim and case-preserved; commas, `=` and `&&` inside it are content, not separators,
+and the two backticks themselves are stripped. An unclosed backtick is an invalid value for that
+key (warn, ignore the key). This form exists for `lint-cmd` / `type-check-cmd`, whose values are
+shell commands; the other keys never need it. A key a skill does not consume (`lint-cmd` for
+`/debug`, say) is ignored silently by that skill — the unknown-key warning is for keys no skill
+defines. An invalid
 value → warn once (in `user_lang`) and ignore that key — NEVER halt on a malformed defaults
 line (defaults are a convenience, not a contract). A matched line that yields ZERO valid keys
 is treated as NO declaration for stage 1 — warn once and CONTINUE the source search (it does

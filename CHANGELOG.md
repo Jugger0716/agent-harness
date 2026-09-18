@@ -10,6 +10,21 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
 
 ### Added
 
+- **`lint-cmd` / `type-check-cmd` keys on the `agent-harness-defaults:` line.** A repository
+  whose lint lives only in its own docs matched no row of `templates/_shared/detection_table.md`,
+  so the first `--fast` live probe (`design/harness-prompt-diet/PROBE.md`, finding 2) ran Layer 1
+  with every command skipped. The `/harness` Setup step now resolves each command as flag >
+  project default > detection table > `null`, echoes `(project default)` in the Setup Summary,
+  and the defaults parser gains a backtick-value form (``lint-cmd=`a && b` ``) so `&&`, commas
+  and `=` inside a command survive the `key=value` split. This repository's `CLAUDE.md` now
+  declares its seven-lint chain that way.
+- **`templates/_shared/slugify.md` — one slug rule for `/harness` and `/spec`.** The old rule
+  said "transliterate non-ASCII to ASCII", which is not reproducible and turned the probe's Korean
+  task into the branch `harness/scriptsverify_sync_markerspy-modyul-docstringui-wh` (PROBE.md
+  finding 1). The single source drops non-ASCII instead, treats `/`, `.`, `_` and whitespace as
+  separators so path-like tokens stay readable, and falls back to `task-<YYYYMMDD-HHMM>` for a
+  task with no ASCII at all. Only the two skills that share `docs/harness/<slug>/` cite it; the
+  other six slug sites keep their inline rules, since those slugs never cross a skill boundary.
 - **`/harness --fast` — an in-session Fast Gate for small changes.** `--fast` (alias `--quick`)
   forces the inline single path, skips the Plan Critic and the cold pass, takes `balanced`
   silently instead of asking for a model, skips the Convention Scan question, and replaces the

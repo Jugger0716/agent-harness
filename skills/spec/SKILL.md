@@ -224,7 +224,7 @@ When the user provides a task description (via $ARGUMENTS or in conversation), e
 
 0. **Sub-command dispatch:** if the argument immediately after `/spec` is `digest` → jump to `## Sub-command: digest` (read-only; skips state.json, git branch, Q&A, and every gate below).
 1. **Detect user language** from the task description. Store as `user_lang`.
-2. **Slugify the task:** lowercase, transliterate non-ASCII to ASCII, remove non-word chars except hyphens, replace spaces with hyphens, truncate to 50 chars. Store as `<slug>`.
+2. **Slugify the task** per `templates/_shared/slugify.md` (single source, shared with `/harness` — the two derive the same `docs/harness/<slug>/` from the same task, which is what makes Phase 3's persisted artifacts reachable by the `/harness` run that follows): non-ASCII dropped, never transliterated; `/`, `.`, `_` and whitespace → hyphens; 50 chars; all-non-ASCII → `task-<YYYYMMDD-HHMM>`. Store as `<slug>`.
 
    **(M15) Slug collision check** (NEW in 8.4 hardening): before creating directories in step 3, check whether `docs/harness/<slug>/` already contains any of the spec-persisted artifacts (`spec.md`, `qa_notes.md`, `critic_findings.md`, `conventions.md`). If yes, the slug collides with a prior /spec run — Phase 3 step 3 would silently overwrite those artifacts on cleanup. Resolve via AskUserQuestion (translate to `user_lang`):
    ```
