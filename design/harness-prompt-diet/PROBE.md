@@ -225,3 +225,65 @@ Total: 1 user message and 2 AskUserQuestion answers (Fast Gate, Commit). Sub-age
 - Live probes B and C for `cold-pass` (`settings.local.json` `env.AGENT_HARNESS_DEFAULTS = "cold-pass=off"` → `Cold : off (project default (settings.local.json))` with `Lint : none` from wholesale shadowing; `cold-pass=maybe` → one warning, `Cold : on`, `cold_pass_source == null`).
 - The `null` `cold_pass_source` → `source not recorded` branch (needs a pre-`49eec8f` state file resumed with `cold_pass == false`).
 - Everything the third probe listed: Fast Gate "Modify spec"; `gate.approved == true` while `phase == plan_done`; WORKFLOW-path `verify.verdict`; the Layer 2 auto-retry; "Max rounds reached".
+
+---
+
+# Fifth probe — `cold-pass` live probes B and C, the Workflow launch refusal, and the Layer 2 auto-retry (2026-09-18)
+
+> Same process as the fourth probe, on `harness/token-performance-optimization` at `137a8f1`
+> (the fourth probe's commit). Two runs, one task each, both with
+> `.claude/settings.local.json` carrying `env.AGENT_HARNESS_DEFAULTS` — `cold-pass=off` for the
+> first, `cold-pass=maybe` for the second — and removed after. The task was the same both times:
+> one cross-reference line in `RATIONALE.md` pointing at the fourth probe. Nothing in this file is
+> a rule.
+
+## Setup
+
+| Item | Value |
+|---|---|
+| Run B | plain `/harness "<task>"` (no `--fast`), env line `cold-pass=off`; stopped at `plan_done` by design (the handoff planned it) — `.harness/` deleted by hand, empty branch deleted |
+| Run C | `/harness --fast "<task>"`, env line `cold-pass=maybe`. The handoff planned this without `--fast`; the flag was typed anyway, which hides the `Cold : on` half of live probe C (see verdicts) and buys a second `--fast` end-to-end run instead |
+| Slug | `add-a-one-line-cross-reference-from-design-harness` both times — run C reused run B's `docs/` directory (a stale `spec.md` and `plan_critic_findings.md` were still there; the planner overwrote the former, the latter survived into run C's Step 8 staging list) |
+| Model preset | `balanced` — chosen at the Model question in run B (no `model-config` on the env line), `(fast default)` in run C |
+
+## Observed sequence — run B (`cold-pass=off`)
+
+1. **Step 1 Setup**: source 1 resolved wholesale — `Cold      : off (project default (settings.local.json))` and `Lint      : none` (the team `CLAUDE.md` `lint-cmd` was shadowed, exactly as `SLICE5.md`'s edge case says), plus the (P1-3) "no build/test/lint/type-check command" warning, which had never fired on this repository before. `cli_flags.cold_pass_source = "default:settings.local.json"`. **Live probe B's Setup line holds.**
+2. **§Ambiguity Prompt** fired (no `--mode`, no `path` key, ultracode undetermined → `multi` carried "(Recommended)"); the human chose `multi`, then `balanced` at the Model question. `Path : workflow  (you chose multi (ultracode undetermined))`.
+3. **Step 2 WORKFLOW**: the `Workflow` call was refused twice with `scriptPath must be a script path this tool returned, or a file you can already read (the working directory or a directory you have added)` — the plugin-root path `${CLAUDE_PLUGIN_ROOT}/workflows/harness.plan.workflow.js`. Opening the script with the Read tool first did not change the answer. Not a permission denial, so §Mode Gate's graceful fallback applied: banner, `path_resolved → "inline"`, `mode → "single"`, Step 2 re-run inline (finding 1).
+4. **Step 2 INLINE**: planner (opus) `spec.md generated — 8 acceptance criteria, 7 edge cases`. **Step 2.6 INLINE**: pre-dispatch delete (nothing to delete), critic (opus) `critic_findings written — Critical=2, Major=7, Minor=5`, file confirmed, `plan_critic.applied = "executed"`. After Plan rendered the INLINE-fallback Scale Assessment, the Type A block and `Next → /harness-gate`. The gate was never entered.
+
+Sub-agent cost: planner 78k tokens / 211 s, critic 67k / 156 s.
+
+## Observed sequence — run C (`cold-pass=maybe`, `--fast`)
+
+1. **Step 1 Setup**: one warning in `user_lang` — the value is invalid, the key is ignored, and because the line then yields zero valid keys it is "no declaration" for stage 1, so the search continued to `CLAUDE.md`: `Lint : … (project default)` came back. `Cold      : off (--fast)` — the flag outranks the (absent) default, as the resolution order says.
+2. **Plan → Fast Gate → Build now** → chain → `/harness-build` §Entry. Planner (opus) `spec.md generated — 9 acceptance criteria, 8 edge cases`.
+3. **Round 1**: Generator (sonnet) `1 files changed — RATIONALE.md`; Verify (haiku) `PASS`; Evaluator (opus) **`FAIL L2 — 2 items`**: the added line was 151 columns against the file's 104-column maximum, and it cited a bare `§Step 7` (which belongs to `skills/harness-build/SKILL.md`, not to `skills/harness/SKILL.md`). `verify.verdict = "FAIL_L2"`, `layer2_result = "FAIL"`, `cold_result = "skipped"`, `cold_round = 1`.
+4. **§Step 7 preamble** printed `Cold review: disabled (--fast)` on the FAIL path — AC-28's "regardless of verdict" requirement, observed for the first time on a non-PASS verdict. Then the **Layer 2 auto-retry** fired with no user gate: `layer2_retries → 1`, generator re-dispatched with `{verify_report_path}` = `qa_report.md`; it wrapped the sentence to 95/94/33 columns and anchored the citation. Verify PASS; Evaluator `PASS — 9개 완료 기준 전건 YES …`. `cold_round == round` latched, so §Step 6 item 7 wrote nothing the second time.
+5. **Step 8**: Commit code only → `92fef23`; three `docs/` artifacts failed to stage (gitignored, warn-and-continue — one of them run B's leftover `plan_critic_findings.md`); `.harness/` deleted; `Remaining : none (cold pass skipped — --fast)`. Merged `--no-ff` as `1765aee`; env key removed.
+
+Total for run C: 1 user message and 2 AskUserQuestion answers (Fast Gate, Commit). Sub-agent cost: planner 79k / 258 s; generator 101k / 312 s then 85k / 89 s; verifier 45k and 46k; evaluator 89k / 302 s then 86k / 251 s — about 531k tokens for a 4-line addition, two of the six dispatches being the retry.
+
+## Verdicts
+
+| # | Question | Result |
+|---|---|---|
+| 1 | Live probe B (`SLICE5.md` §Acceptance criteria) | **Setup line yes; Step 7 and `Remaining` not observed** — the run stopped at `plan_done` as planned. `Lint : none` from wholesale shadowing confirmed, and disclosed here as the acceptance text asks. The checkbox stays open |
+| 2 | Live probe C | **warning yes; `Cold : on` / `cold_pass_source == null` not observed** — `--fast` was typed, so the flag's `"fast"` overrode the key's absence. The fall-through to source 2 is the new fact: an all-invalid line does not shadow the team line. The checkbox stays open; a run without `--fast` closes it |
+| 3 | The WORKFLOW path launches from an installed plugin | **no** — the `Workflow` tool refuses a `scriptPath` outside the working directory or an added directory, and the plugin cache is neither. Every prior workflow-path run in this repository's history ran the script from the repository checkout (`workflows/…`), which is the one place the tool accepts |
+| 4 | The Layer 2 auto-retry reaches PASS within its budget | **yes, 1 of 2** — the FAIL was two spec-checkable facts, both fixed in one pass |
+| 5 | Sub-agents honor the 1-line Output Contract with the "entire reply" sentence | **yes, 8 of 8** across both runs (opus ×4, sonnet ×2, haiku ×2) — twelve consecutive compliant returns since the fourth probe |
+
+## Findings
+
+1. **The plugin-root `scriptPath` cannot launch here.** `skills/harness/SKILL.md` §Architecture dispatches every segment as `${CLAUDE_PLUGIN_ROOT}/workflows/<skill>.<segment>.workflow.js` "a plugin-root path, never a repository-relative one", and the `Workflow` tool answers that only a path it returned, or a file under the working directory or an added directory, is allowed. In this repository the fallback is invisible in outcome — the same script exists at `workflows/` in the checkout — but for any OTHER repository the WORKFLOW path of an installed plugin degrades to INLINE on every run, with the fallback banner as the only trace. Whether adding the plugin directory to the session (the tool's own remedy) is available to a skill is not measured here. Candidates, not decided: teach `doctor` item ② to try the launch, not just the tool's presence; or document the added-directory step where the Mode Gate opt-in is described.
+2. **A stale `docs/<slug>/` directory carries artifacts across sessions.** Run C reused run B's slug; `plan_critic_findings.md` from run B's Step 2.6 sat next to run C's `--fast` session (which never runs a critic) and was picked up by Step 8's staging list. Harmless here (gitignored, warn-and-continue), but on a repository that commits `docs/`, "Commit code only" would have committed a critic report the session never produced. The slug collision rule covers branches (§Step 1 item 8), not the docs directory.
+3. **AC-28's FAIL-path rendering is now observed.** The `Cold review: disabled (--fast)` line printed on a `FAIL_L2` verdict before the auto-retry, which the third and fourth probes could not show (both passed first time).
+4. **Bare `§Step N` in `design/` documents is a real trap, and the evaluator caught it.** The generator wrote `§Step 7` meaning `/harness-build`'s step; in this repository that bare form is judged against `/harness`'s own ids, which have no Step 7 (`scripts/verify_sync_markers.py` `harness-steps` mode). `design/` is outside the lint, so only Layer 2 caught it — the third probe's finding 3 again: cross-file consistency is the evaluator's whole value on a documentation repository.
+
+## Still not observed
+
+- Live probe B's Step 7 / `Remaining` lines (`project default (settings.local.json)` rendered past Setup) and live probe C without `--fast` (`Cold : on`, `cold_pass_source == null`).
+- The `null` `cold_pass_source` → `source not recorded` branch.
+- WORKFLOW-path anything from the installed plugin (finding 1); Fast Gate "Modify spec"; `gate.approved == true` while `phase == plan_done`; "Max rounds reached".
