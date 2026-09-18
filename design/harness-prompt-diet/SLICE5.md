@@ -1,7 +1,7 @@
 # Slice 5′ — `cold-pass=on|off` as a project default (design, 2026-09-18)
 
 > Replacement for HANDOFF_IMPROVEMENT_PLAN Slice 5 (`.harness/config.json` governance
-> presets). Companion to `RATIONALE.md` and `PROBE.md`. Status: **designed, not implemented**.
+> presets). Companion to `RATIONALE.md` and `PROBE.md`. Status: **implemented** (49eec8f, merged 71c5c02); live probes A/B/C pending.
 > Nothing in this file is a rule until the sections it names are edited.
 
 ## Why the original Slice 5 is not built
