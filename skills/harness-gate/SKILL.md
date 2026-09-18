@@ -143,7 +143,7 @@ second — both by name, neither restated here), plus the line count of `{docs_p
 read **fresh at every Pass A render**, never carried over from an earlier render in the same
 turn. That is not a new read site: §Architecture Principles #1's exception list entry (1) is
 "spec.md at plan gate", and re-executing a declared read is not declaring another one — the
-list stays at 7 items. **The word "fresh" is load-bearing and is why this is spelled out
+list keeps its 7 numbered slots (6 live). **The word "fresh" is load-bearing and is why this is spelled out
 rather than phrased as reusing what the gate already read.** Every Modify now crosses a
 session boundary (`/harness --modify` edits in its own turn; this gate re-renders in the
 next), so the count is taken from the file as it stands when THIS session's Pass A renders;
@@ -468,7 +468,7 @@ write, and `/harness` owns every re-entry (`--modify` / `--auto-revise` / `--cri
 The registry of invariants is `skills/harness/SKILL.md` §Architecture Principles; this skill
 exercises the subset below and nothing beyond it.
 
-1. **Orchestrator reads no intermediate files** — of the registry's 7 read exceptions this skill
+1. **Orchestrator reads no intermediate files** — of the registry's 6 live read exceptions (7 numbered slots) this skill
    performs **2**: (1) `spec.md` at the plan gate (the line count for the Stale Determination is
    re-read at every Pass A render), and (7) gate-display critic count parsing
    (`plan_critic_findings.md` / `critic_findings.md` `## Summary` line). It performs NO write —

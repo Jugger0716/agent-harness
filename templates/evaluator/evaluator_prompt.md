@@ -162,14 +162,14 @@ Write the report (in `{user_lang}`) to: `{qa_report_path}`
 ## Constraints
 
 - **Verdict** is **PASS** only if ALL Layer 2 checks pass AND all Layer 3 criteria are PASS and all tests pass. Any single FAIL makes the verdict FAIL.
-- **Keep `### Verdict: PASS` or `### Verdict: FAIL` exactly as shown — do not translate.** Parsed programmatically.
+- **Keep `### Verdict: PASS` or `### Verdict: FAIL` exactly as shown — do not translate.** It is the human reader's summary line and must agree with the 1-line return below; the orchestrator reads only that return, never this file.
 - Do not modify source files — your only output is the QA report.
 - Fix instructions must be concrete so the implementer can act directly.
 - Be concise — evidence over explanation.
 
 ## Output Contract
 
-CRITICAL: Your response must be EXACTLY ONE LINE in this format:
+CRITICAL: Your response must be EXACTLY ONE LINE, and it must BEGIN with one of exactly three tokens — `PASS`, `FAIL L2`, `FAIL L3` — followed by ` — ` and a short summary. The orchestrator reads only this line's leading token and never opens the QA report. A line that starts with anything else (a sentence, a heading, backticks, bold) is treated as FAIL L3 and sent to the human gate, so do not decorate it.
 
 If PASS (all layers passed):
 ```
@@ -186,4 +186,4 @@ If Layer 3 FAIL (Layer 2 passed, Layer 3 failed):
 FAIL L3 — {N} items failed: {brief list}
 ```
 
-No other text after this line. Write all detailed results to the QA report file.
+No other text after this line. Write all detailed results to the QA report file — that file is for the human reader, and its `### Verdict:` line must agree with this one.

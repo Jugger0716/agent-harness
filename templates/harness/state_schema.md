@@ -36,6 +36,7 @@
 | `epic.id`, `epic.boundaries` | `null` | `skills/harness-build/SKILL.md` §Step 3.5; `epic.boundaries` is reset by `/harness-build` §Entry and read by §Session Recovery item 7 (a) |
 | `verify.cold_result`, `verify.cold_round`, `verify.cold_counts` (`{Critical, Major, Minor}`, uppercase — `CriticReport.items[].severity`), `verify.cold_review_path` | `null` | `skills/harness-build/SKILL.md` §Step 5 and the Steps 6–7 cold-review branches there |
 | `verify.cold_retries` | `0` | same |
+| `verify.verdict` (`"PASS"` / `"FAIL_L2"` / `"FAIL_L3"`) | `null` | `skills/harness-build/SKILL.md` §Step 6 item 5 (INLINE, from the 1-line return's leading token) / §Step 5 item 4 (WORKFLOW, from `VerifyVerdict`); reset to `null` on round increment. §Step 7 reads it on both paths and treats `null` as `FAIL_L3` |
 | `cli_flags.epic` (tri-state) | `null` | §Step 1 item 2 |
 | `cli_flags.cold_pass` | `true` | §Step 1 item 2 (`--no-cold-pass`, `--fast`) |
 | `cli_flags.fast` | `false` | §Step 1 item 2 |

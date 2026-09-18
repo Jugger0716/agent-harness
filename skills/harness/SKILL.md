@@ -358,9 +358,9 @@ Preset table, rules and the harness role map: `templates/_shared/model_config.md
 
 ## Architecture Principles
 
-Invariant constraints for the harness orchestrator skills. Full text — principle #1's exhaustive 7-item exception list and its write/delete carve-outs included — is `templates/_shared/architecture_principles.md`, which `skills/harness-gate/SKILL.md` and `skills/harness-build/SKILL.md` reach through this section.
+Invariant constraints for the harness orchestrator skills. Full text — principle #1's exhaustive exception list (7 numbered slots, 6 live) and its write/delete carve-outs included — is `templates/_shared/architecture_principles.md`, which `skills/harness-gate/SKILL.md` and `skills/harness-build/SKILL.md` reach through this section.
 
-1. **Orchestrator reads no intermediate files** — exactly 7 read exceptions, enumerated there. Writing final artifacts from returned objects is not reading intermediates.
+1. **Orchestrator reads no intermediate files** — 6 live read exceptions in 7 numbered slots, enumerated there. Writing final artifacts from returned objects is not reading intermediates.
 2. **The Auto-fix Proposer is the only orchestrator-dispatched sub-agent that directly reads SOURCE files** — others get content through template variables, or one `{docs_path}` artifact PATH handed to them explicitly (AC-27).
 3. **Paths only to sub-agents; never file contents** — except ephemeral in-segment digests and the `specContent` segment args.
 4. **Session-wide invariants** — Auto-fix at most 1 attempt per session; Layer 1 retries max 3, NOT reset after an Auto-fix Apply.

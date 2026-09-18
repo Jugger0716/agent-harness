@@ -71,6 +71,19 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
   `TPL_COLD_REVIEWER`; a missing `specPath` falls back to `specContent` with a log line rather
   than silently. The Evaluator still consumes `specContent`, and `ColdFindingSchema` is
   untouched — the "intended deviation vs. pure defect" split stays a ROADMAP item.
+- **The Evaluator's verdict is state, not a file parse.** New additive state.json field
+  `verify.verdict` (`PASS` / `FAIL_L2` / `FAIL_L3`), written from the 1-line return's LEADING
+  token on the INLINE path (`skills/harness-build/SKILL.md` §Step 6 item 5 — anything else is a
+  conservative `FAIL_L3` routed to the human gate) and from the `VerifyVerdict` object on the
+  WORKFLOW path (§Step 5 item 4, in the same single write as `verify.layer2_result`). §Step 7
+  reads that field on both paths, in-session and on resume: the `### Verdict:` regex over
+  `qa_report.md` and the WORKFLOW-resume "verdict reconstruction" are gone, and the report is
+  written for the human only. Architecture Principle #1's exception (2) is retired — 7 numbered
+  slots, 6 live, numbering kept so citations of (3)–(7) stay valid — across the single source
+  and all three skill copies. `templates/evaluator/evaluator_prompt.md`'s Output Contract now
+  requires the leading token and no longer claims the report line is parsed. The WORKFLOW
+  `VerifyVerdictSchema` is untouched. Scope: `/harness-build` only — `/migrate` and `/refactor`
+  keep their own `qa_report.md` `### Verdict:` parse over their own evaluator templates.
 
 ### Fixed
 

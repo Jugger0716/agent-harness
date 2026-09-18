@@ -244,8 +244,10 @@ Fix instructions in **{user_lang}**; enum values English raw. Do NOT emit a 1-li
 
 // SYNC-SOURCE: templates/evaluator/evaluator_prompt.md
 // AUTHOR-TIME TRANSFORMS: '## Output Contract' (1-line PASS/FAIL L2/FAIL L3) -> VerifyVerdict
-// schema note; 'Keep ### Verdict ... Parsed programmatically' constraint dropped (the object is
-// the machine-readable result); report destination made explicit ({qa_report_path}).
+// schema note; the source's '### Verdict ... must agree with the 1-line return' constraint is
+// dropped (here the object is the machine-readable result, and the orchestrator reads the
+// verdict from state.json verify.verdict on both paths -- never from the report); report
+// destination made explicit ({qa_report_path}).
 // The QA report file write is KEPT (user-facing artifact).
 const TPL_EVALUATOR = `# Evaluator Phase — Round {round_num}
 
