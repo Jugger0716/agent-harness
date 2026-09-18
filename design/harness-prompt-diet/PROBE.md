@@ -120,3 +120,55 @@ The round-1 Layer 3 FAIL was again genuine, and it is the more interesting of th
 - `gate.approved == true` while `phase == plan_done` — the interrupted-chain message.
 - WORKFLOW-path `verify.verdict` write (§Step 5 item 4).
 - The Layer 2 auto-retry loop (`FAIL L2`); both probes' evaluators returned `FAIL L3` or `PASS`.
+
+---
+
+# Third probe — a nine-file change through the Fix loop, and two 1-line contract breaches (2026-09-18)
+
+> Same day, same process as the second probe, on `harness/token-performance-optimization` at
+> `d6e5a30` (the commit that added `SLICE5.md`). The task was the implementation of that design —
+> nine files, two of them the `harness-steps` lint targets — so this run is the first `--fast`
+> session whose diff is wide enough to exercise the spec's per-file anchors and the round loop
+> more than once. Nothing in this file is a rule.
+
+## Setup
+
+| Item | Value |
+|---|---|
+| Entry | `/harness --fast "<task>"` as its own message; no `.harness/` existed; branch cut from HEAD (`d6e5a30`) |
+| Task | implement `design/harness-prompt-diet/SLICE5.md` — 9 files, with the root-document `§` tally constraint and the `harness-steps` pins as stated limits |
+| Lint | `lint-cmd` project default, echoed `(project default)` |
+| Slug | `implement-slice-5-prime-exactly-as-specified-in-de` — the 50-char cut lands mid-word (`in-de`); usable, ugly |
+| Model preset | `balanced` (fast default) |
+
+## Observed sequence
+
+1. **Plan**: planner (opus) returned `spec.md generated — 19 acceptance criteria, 16 edge cases`; 423 lines, one section per file with a verbatim anchor sentence and approximate line for every edit site. `spec_stamp {generation: 1, lines: 423}`; `plan_critic = {applied: "skipped", source: "fast"}`.
+2. **Fast Gate → Build now** → `gate.approved` → same-turn chain → §Entry admitted.
+3. **Round 1**: Generator (sonnet) edited all nine files in one pass, 47+/9−, and reported the root-document `§` tally 48 → 48 in `changes.md`. Verify (haiku) ran the chain: exit 0 — but its reply was a multi-line markdown report whose first line was `## Layer 1 Mechanical Verification Complete`, carrying neither `PASS` nor `FAIL` (finding 1). Evaluator (opus): `FAIL L3 — 1 item` — `templates/_shared/project_defaults.md` defined `<why>` as the recorded value `"default:<source>"` while the §Step 7 table, README and Setup Summary define it as the rendered `project default (<source>)`; and the §Step 7 reader list named §Step 6 item 7 (never rendered) while omitting the Setup Summary `Cold` row. All 19 Layer 2 criteria passed.
+4. **Fix → Round 2**: Generator fixed both (3 files). Verify PASS (one line, as instructed with a stronger contract sentence). Evaluator: `FAIL L3 — 1 item` — the `CHANGELOG.md` entry said `cold-pass=on|off` resolves "exactly as `--no-cold-pass` does", which is false for `on` (an explicit no-op). Two non-blocking WARNs: a wrapped bullet line in `project_defaults.md` beginning with `> ` (CommonMark blockquote), and a two-column `→` misalignment in `run_style.md`.
+5. **Fix → Round 3**: Generator fixed all three (3 files) — and returned a multi-line report with the contract line LAST (finding 2). Verify PASS. Evaluator: `PASS` — all 19 criteria, the `<why>` cross-check across four files, the reader list against `state_fields.md`, the root tally 48/48, BLOCK/SYNC unchanged.
+6. **Step 8**: Commit code only → `49eec8f`; the two `docs/` artifacts failed to stage (gitignored, warn-and-continue as §Step 8 (s4) prescribes) → `.harness/` deleted → Type B block. Merged `--no-ff` into `harness/token-performance-optimization` as `71c5c02`.
+
+Total: 1 user message and 5 AskUserQuestion answers (Fast Gate, QA ×2, Commit… plus the Fix decisions). Sub-agent cost, from the task notifications: planner 147k tokens / 582 s; generator 187k / 556 s, 134k / 334 s, 82k / 118 s; verifier 47k, 45k, 46k (≈ 65 s each); evaluator 136k / 451 s, 179k / 844 s, 156k / 484 s — about 1.16M tokens for a 9-file, 50-line change.
+
+## Verdicts
+
+| # | Question | Result |
+|---|---|---|
+| 1 | A spec with per-file anchors lets a sonnet generator land a 9-file contract edit in one pass with the lint chain green | **yes** — Round 1 was lint-clean and Layer-2-clean; every later round was a factual-consistency fix |
+| 2 | The Layer 3 Fix loop reaches `PASS` within `max_rounds` on a multi-file docs change | **yes** — in exactly 3 of 3; a fourth defect would have hit "Max rounds reached" |
+| 3 | The evaluator catches cross-file contradictions the generator cannot see from one hunk | **yes** — both FAILs were one file disagreeing with three others about the same token |
+| 4 | Sub-agents honor the 1-line Output Contract | **no, twice** — see findings 1 and 2 |
+
+## Findings
+
+1. **The haiku verifier broke the 1-line contract, and the contract's own fallback would have been wrong.** §Step 5 item 5 says a first line with neither `PASS` nor `FAIL` is a conservative FAIL, which increments `layer1_retries` and re-dispatches the *generator* with a nonsense failure summary. The orchestrator instead sent the same agent one follow-up asking for the contract line alone and parsed that. This is outside the written contract: the skill has no "re-ask the verifier" branch. Two candidates, not decided here: add that branch (one re-ask, then the conservative FAIL), or move the verifier's report into the file only and make the reply schema-forced on the INLINE path too. Round 2 and 3 prompts carried a stronger contract sentence ("your entire reply must be exactly one line") and the same haiku model complied both times — so prompt wording, not the model, was the variable.
+2. **The sonnet generator returned a multi-line report with the contract line last** (Round 3). §Orchestrator Contract reads the first line only, so the parse fell to `confidence: Unknown` and the run continued on `changes.md`'s existence — no state effect, same class as first-probe finding 3. The pattern across three probes: sonnet and haiku both drift from a 1-line contract when the prompt gives them a lot to report; opus (planner, evaluator) never has.
+3. **Every FAIL in three rounds was factual, none structural.** Layer 2 passed 19/19 every round. On a documentation repository the value of Layer 3 is the cross-file consistency pass — a token defined in four files agreeing — which no lint here checks. The two defects were exactly the kind `SLICE5.md`'s cold review had warned about (recorded value vs rendered string).
+4. **The slugify cut lands mid-word.** `…-specified-in-de` from "in design/…" — rule followed, output unlovely. A cut at the last hyphen before 50 would cost nothing.
+
+## Still not observed
+
+- Fast Gate "Modify spec"; `gate.approved == true` while `phase == plan_done`; WORKFLOW-path `verify.verdict`; the Layer 2 auto-retry (`FAIL L2`); "Max rounds reached".
+- Live probes A/B/C for `cold-pass` itself (`SLICE5.md` §Acceptance criteria) — they need the installed copies re-synced and a fresh process, since the skill bodies this run executed predate `49eec8f`.
