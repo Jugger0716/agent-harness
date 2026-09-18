@@ -23,6 +23,7 @@
 /harness --model-config balanced "task"  → auto + balanced preset
 /harness "task" --epic | --no-epic       → cli_flags.epic = true | false (skills/harness/SKILL.md §Scale Assessment override); with --epic the gate's Pass B leads with "Plan as epic" and prints /harness-build --epic
 /harness "task" --no-cold-pass           → cli_flags.cold_pass = false — read by skills/harness-build/SKILL.md §Step 5 "Cold Review Input Collection"
+(project line) agent-harness-defaults: cold-pass=off → same effect as --no-cold-pass, standing — templates/_shared/project_defaults.md §agent-harness-defaults
 /harness --modify "<request>"            → gate re-entry (plan_done only) — skills/harness/SKILL.md §Gate re-entry flags
 /harness --auto-revise | --critic        → gate re-entry (plan_done only) — same section
 /harness doctor                          → read-only diagnostic (dispatch: skills/harness/SKILL.md §Session Recovery carve-out; contract: ## Sub-command: doctor)
