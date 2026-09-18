@@ -63,6 +63,14 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
   `/harness` and `/harness-build` copies of those marked blocks became one single source each.
   Each comment records that a promotion to a single source is the one reason a zero-slack floor
   may fall, since it removes duplication rather than dropping a check.
+- **Cold reviewer spec injection is now symmetric across paths.** The INLINE path
+  (`skills/harness-build/SKILL.md` §Step 6 item 7) already handed the cold reviewer a 1-line
+  pointer naming `{docs_path}spec.md`; the WORKFLOW path inlined the whole spec through
+  `specContent`. `workflows/harness.eval.workflow.js` takes a new additive `specPath` arg
+  (§Step 5's args block passes `{docs_path}spec.md`) and renders the identical pointer into
+  `TPL_COLD_REVIEWER`; a missing `specPath` falls back to `specContent` with a log line rather
+  than silently. The Evaluator still consumes `specContent`, and `ColdFindingSchema` is
+  untouched — the "intended deviation vs. pure defect" split stays a ROADMAP item.
 
 ### Fixed
 
