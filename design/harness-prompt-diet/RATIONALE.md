@@ -89,3 +89,7 @@ These stayed inline because a missed read would change behaviour silently, not m
   ordered steps and Step 2.6's routing predicate, latch and three failure branches;
 - §Fast Gate, in full — it is the gate;
 - §Key Rules.
+
+The Fast Gate claim above was measured end to end: `--fast` writes the skip reason once, and it
+renders at Setup, at `skills/harness-build/SKILL.md` §Step 7 and in that file's Step 8 Type B
+block (`PROBE.md`, fourth probe).
