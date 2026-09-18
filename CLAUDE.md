@@ -152,7 +152,13 @@ in `.github/workflows/lint.yml`, are the entire verification layer:
   renames do** — it checks Step numbers, not section titles. **Just under
   half its in-file citations are deliberately unchecked**, and the scan never reaches the
   repository's root documents at all — the script's own `§What this does not check` docstring
-  carries all seven limits with the command that produces each figure. Only one figure is restated
+  carries all seven limits with the command that produces each figure. Correction (dated, deliberate
+  exception to the "read the docstring" rule below — do not treat this as license to copy other
+  numbers here): the "just under half" sentence above has been false for harness and harness-gate
+  since the 2026-09-07 C5 re-measurement, not merely since the latest one; the RE-MEASURED
+  2026-09-18 line of that docstring's item 1 supplies the current shares — harness 86/102 (84%),
+  harness-gate 81/81 (100%), harness-build 86/176 (49%), so "just under half" is now approximate
+  only for harness-build, which itself read 113/204 (55%) on 2026-09-07. Only one figure is restated
   by an OK line; read the docstring rather than copying a number into this file.
   It is a marker-and-token check, **not** a
   semantic diff: it proves tokens coexist, not that the surrounding prose still agrees.

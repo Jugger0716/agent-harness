@@ -60,3 +60,63 @@ The evaluator's Layer 3 FAIL was genuine: it found two false statements in the g
 - WORKFLOW-path `verify.verdict` write (§Step 5 item 4) — this was an inline run by construction.
 - "Modify spec" and "Stop" branches of the Fast Gate.
 - Fast Gate re-render on a resumed `plan_done` fast session, and the `gate.approved == true` while `phase == plan_done` interrupted-chain message.
+
+---
+
+# Second probe — the refusal path, Stop / resume, and the Fix loop (2026-09-18)
+
+> Same day, same installed copies, a later `claude` process on branch
+> `harness/token-performance-optimization` at `a3df2c9` (the commit that closed findings 1 and 2).
+> The task was real work — registering HANDOFF_IMPROVEMENT_PLAN Slice 4 as deferred in
+> `ROADMAP.md` and appending the unchecked-share correction to `CLAUDE.md` §Verification — so the
+> run doubles as the deliberate follow-up finding 4 asked for. Nothing in this file is a rule.
+
+## Setup
+
+| Item | Value |
+|---|---|
+| Entry | `/harness --fast "<task>"` typed as its own message; no `.harness/` existed |
+| Task | 2 root documents, additions only, with the constraint that no new `§` citation may follow a `skills/harness*/SKILL.md` path anywhere in either file |
+| Lint | resolved from the `agent-harness-defaults:` line in this repository's `CLAUDE.md` (`lint-cmd`, backtick value) — echoed `(project default)` in the Setup Summary |
+| Slug | `1-roadmap-md-v8-3-planned-handoff-improvement-plan` from a Korean task string, per `templates/_shared/slugify.md` |
+| Model preset | `balanced` (fast default) |
+
+## Observed sequence
+
+1. **Setup**: `Path : inline (--fast)`, `Lint : … (project default)`, no Model question, no Ambiguity Prompt, conventions copied (CLAUDE.md rich) without a question. The branch was cut from the checked-out branch, not from `develop` — §Step 1 item 8 cuts from wherever HEAD is.
+2. **Plan**: planner returned `spec.md generated — 11 acceptance criteria, 8 edge cases`; `spec_stamp {generation: 1, lines: 126}`; `plan_critic = {applied: "skipped", source: "fast"}`. The spec flagged three task claims the code only partly supported, including that "just under half" is approximate only for harness-build **as of 2026-09-18**, while the sentence had been false for harness since the 2026-09-07 re-measurement.
+3. **Fast Gate → Stop**: nothing written; the Type A boundary block printed with `Resume : /harness`.
+4. **`/harness-build` typed directly**: §Entry read `phase == plan_done`, `cli_flags.fast == true`, `gate.approved == null` and printed `[harness-build] This is a --fast session whose Fast Gate has not been answered — run /harness to answer it.` Nothing written. **This is the refusing branch finding 4 asked for.**
+5. **`/harness` typed**: Session Recovery printed the status block and the Resume / Restart / Stop / View state only question → Resume → the Fast Gate **re-rendered** (the routing predicate's branch (c): `plan_critic.applied` recorded) → Build now → `gate.approved = true` → Skill-tool chain into `/harness-build` in the same turn → §Entry admitted, `phase → generate_ready`.
+6. **Round 1**: Generator (sonnet) edited both files, 1-line contract obeyed. Verify (haiku) actually ran the seven-script lint chain: `PASS — build SKIPPED, test SKIPPED, lint 0e/0w, scan 0 TODO`. Evaluator (opus) returned `FAIL L3 — 1 item failed`: the `CLAUDE.md` correction dated the onset of the falsehood to 2026-09-18 rather than to the 2026-09-07 re-measurement the spec's fact B8 records. All 11 completion criteria, scope, and the diff-risk checks passed; the path-anchored `§` count was 16 → 16 with `CLAUDE.md` at 0.
+7. **Layer 3 gate → Fix**: `round → 2`, layer counters and `cold_round` reset, `phase → generating`. Generator R2 reworded only the correction (now: false for harness and harness-gate since 2026-09-07; current shares re-measured 2026-09-18 = 86/102, 81/81, 86/176; harness-build read 113/204 on 2026-09-07). Verify R2 `PASS` (lint 0e/0w). Evaluator R2 `PASS`, having compared every figure against the docstring's lines and the Layer 1 OK lines.
+8. **Step 8**: Commit gate → No commit → `.harness/` deleted → Type B block with `Remaining : none (cold pass skipped — --no-cold-pass)`.
+
+Total: 3 user messages (`/harness --fast …`, `/harness-build`, `/harness`) and 5 AskUserQuestion answers (Fast Gate, Session, Fast Gate, QA, Commit). Sub-agent cost, from the task notifications: planner 102.1k tokens / 299 s; generator 87.1k / 122 s and 87.4k / 67 s; verifier 45.3k / 43 s and 46.0k / 47 s; evaluator 107.1k / 407 s and 98.5k / 310 s — 573k tokens and 21.6 minutes of sub-agent time for an 8-line change.
+
+## Verdicts
+
+| # | Question | Result |
+|---|---|---|
+| 1 | `/harness-build` §Entry refuses a fast session whose Fast Gate was not answered (first-probe finding 4) | **yes** — halt with the documented message, no write |
+| 2 | Fast Gate "Stop" writes nothing and prints the Type A block with `Resume : /harness` | **yes** |
+| 3 | A resumed `plan_done` fast session re-renders the Fast Gate instead of printing `Next → /harness-gate` | **yes** — but only after the Session Recovery question, so Stop-then-resume costs two answers |
+| 4 | The Layer 3 "Fix" branch runs a full second round and the round-2 evaluator can reach `PASS` | **yes** |
+| 5 | The `lint-cmd` project-default key closes first-probe finding 2 | **yes** — Layer 1 ran the chain instead of skipping it |
+| 6 | The slugify single source closes first-probe finding 1 | **yes** — usable identifier; the `(1)` in the task survives as a leading `1-`, harmless |
+
+The round-1 Layer 3 FAIL was again genuine, and it is the more interesting of the two probes' catches: the planner had already flagged the date issue in the spec, the generator still wrote the wrong onset, and the evaluator caught it from the docstring. The three layers compensated for a spec-to-generator transfer loss, not just for a generator error.
+
+## Findings
+
+1. **Stop-then-resume costs an extra question.** After "Stop", `/harness` renders the Session Recovery question before the Fast Gate, so the cheapest re-entry is two answers. `/harness`'s Session Recovery has no equivalent of `/harness-build` §Entry's plan_done suppression. Not a defect — the question is the documented resume gate — but it is the first concrete input to the "`--fast` questions 4 → 2" item in the plan review.
+2. **Layer 1 now costs ~45k tokens per round to run one command chain.** The first probe's waste (four `SKIP`s dispatched) is gone; what remains is the dispatch itself. Running a declared command inline in the orchestrator and dispatching a verifier only when there is output to interpret would cut both rounds' verify cost to near zero.
+3. **The branch is cut from HEAD, not from `develop`.** Not new behavior, but worth stating because a `--fast` run on a feature branch silently stacks on that branch's unpushed commits; here that was the intended base.
+4. **Turn-scoped `NotebookEdit` toggling at the chain boundary** was observed again (first-probe finding 5). No effect on the run.
+
+## Still not observed
+
+- Fast Gate "Modify spec" (both the "Other" free-text path and the follow-up question).
+- `gate.approved == true` while `phase == plan_done` — the interrupted-chain message.
+- WORKFLOW-path `verify.verdict` write (§Step 5 item 4).
+- The Layer 2 auto-retry loop (`FAIL L2`); both probes' evaluators returned `FAIL L3` or `PASS`.
