@@ -18,6 +18,7 @@
   Build     : <build_cmd or "none">
   Lint      : <lint_cmd or "none">     ← append "(project default)" when the defaults line supplied it
   TypeCheck : <type_check_cmd or "none">     ← same
+  Cold      : <on | off>     ← "off" when cli_flags.cold_pass == false; if off, append "(<why>)" derived from cli_flags.cold_pass_source per the §Step 7 rendering rule (`skills/harness-build/SKILL.md`)
   Scope     : <scope>
   Output    : <docs_path>
 ```

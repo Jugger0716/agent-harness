@@ -42,6 +42,22 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
   value, `"fast"`, rendering a `skipped by --fast` literal with `C=? M=?` counts; the
   §State-Space Derivation row that claimed `applied == "skipped"` structurally implies
   `source == "carried_over"` is corrected, because that is now one of two writers.
+- **`cold-pass=on|off` on the `agent-harness-defaults:` line, and the display defect it would
+  otherwise make worse.** `cli_flags.cold_pass` already had two writers that set it `false` —
+  `--no-cold-pass` and `--fast` — but `/harness-build`'s three display sites unconditionally
+  printed the literal `--no-cold-pass`. Both live `--fast` probes recorded this: the first
+  printed `Cold review: disabled (--no-cold-pass)` and a `Remaining` line with the same reason;
+  the second printed `Remaining : none (cold pass skipped — --no-cold-pass)`
+  (`design/harness-prompt-diet/PROBE.md`) — a false line that adding a third writer would have
+  made the common case. The fix comes first: a new additive field, `cli_flags.cold_pass_source`
+  (`"flag"` / `"fast"` / `"default:<source>"` / `null`, no `version` bump), records *why* the
+  boolean is `false` once at Setup, and all three display sites now cite one rendering rule by
+  name instead of hardcoding the flag. Only then does the new key land: `cold-pass=off`
+  resolves, when neither `--no-cold-pass` nor `--fast` is given, exactly as `--no-cold-pass`
+  does, while `cold-pass=on` is an explicit no-op that only documents intent; either value
+  is echoed in the Setup Summary `Cold` row. The boolean gate itself, and AC-28's
+  three gating points, are unchanged — this is a fourth source of the same boolean, not a
+  fourth gating point.
 
 ### Changed
 
@@ -67,6 +83,9 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
   Reasoning that is not a rule — the `spec_stamp` ordering argument, the Plan Critic crash
   windows, the branch-collision rationale — moved to `design/harness-prompt-diet/RATIONALE.md`,
   which is committed rather than written under the gitignored `docs/`.
+  **Restated (this slice):** the file has grown since that figure was captured and now measures
+  50,660 bytes at `db13efd`. The `135,693 → 49,982` figure above stays as the historical
+  baseline rather than being silently overwritten; `50,660 bytes at db13efd` is the current one.
 - **`scripts/verify_block_sync.py`: 16 `hx-*` BLOCK groups → 4.** A promotion to a single source
   is strictly stronger than byte-identity, because there is then one copy and nothing to compare.
   What remains a group is the text that must stay inline and therefore still exists in more than

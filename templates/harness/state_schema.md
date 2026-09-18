@@ -39,6 +39,7 @@
 | `verify.verdict` (`"PASS"` / `"FAIL_L2"` / `"FAIL_L3"`) | `null` | `skills/harness-build/SKILL.md` §Step 6 item 5 (INLINE, from the 1-line return's leading token) / §Step 5 item 4 (WORKFLOW, from `VerifyVerdict`); reset to `null` on round increment. §Step 7 reads it on both paths and treats `null` as `FAIL_L3` |
 | `cli_flags.epic` (tri-state) | `null` | §Step 1 item 2 |
 | `cli_flags.cold_pass` | `true` | §Step 1 item 2 (`--no-cold-pass`, `--fast`) |
+| `cli_flags.cold_pass_source` (`"flag"` / `"fast"` / `"default:<source>"` / `null`) | `null` | §Step 1 item 2, in the same write as `cli_flags.cold_pass` |
 | `cli_flags.fast` | `false` | §Step 1 item 2 |
 | `gate.approved`, `gate.approved_at`, `gate.mode` (`"fast"`) | `null` | §Fast Gate "Build now" only — never `/harness-gate`, which holds no write tool |
 
