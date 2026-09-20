@@ -98,7 +98,7 @@ Write all output in **{user_lang}**.
 
 ## Output Contract
 
-CRITICAL: Your response must be EXACTLY ONE LINE in this format:
+CRITICAL: Your response must be EXACTLY ONE LINE in this format. Your entire reply must be exactly that one line — no preamble, no report text before it, no trailing notes after it.
 ```
 spec.md generated — {N} acceptance criteria, {M} edge cases
 ```

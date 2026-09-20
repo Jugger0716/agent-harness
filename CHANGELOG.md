@@ -61,6 +61,18 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
 
 ### Changed
 
+- **Every INLINE sub-agent template's Output Contract now says the whole reply is the one line.**
+  The third `--fast` live probe (`design/harness-prompt-diet/PROBE.md`, findings 1 and 2) saw a haiku
+  verifier and a sonnet generator return multi-line reports around the contract line; the fourth
+  and fifth probes ran every dispatch with the sentence "your entire reply must be exactly that one
+  line" added to the prompt and got 12 compliant returns in 12 (opus, sonnet and haiku alike). The
+  sentence is now in `templates/planner/planner_single.md`, `templates/generator/generator_single.md`,
+  `templates/verify/verify_layer1.md`, `templates/evaluator/evaluator_prompt.md`,
+  `templates/spec/critic_inline.md` and `templates/evaluator/cold_reviewer.md`. The two DUAL-USE
+  templates' author-time copies inside `workflows/harness.eval.workflow.js` carry a schema-return
+  Output Contract instead of the 1-line one, so they are unchanged. No "re-ask the verifier"
+  branch was added: wording, not a new state-machine path, was the measured variable.
+
 - **Prompt diet: `skills/harness/SKILL.md` is 135,693 → 49,982 bytes (1,638 → 392 lines).**
   The three pipeline skills together drop from 310,657 to ~193,000 bytes. Nothing was deleted:
   every rule either stayed inline or moved to a single source the skill cites by name, which is
@@ -86,6 +98,10 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
   **Restated (this slice):** the file has grown since that figure was captured and now measures
   50,660 bytes at `db13efd`. The `135,693 → 49,982` figure above stays as the historical
   baseline rather than being silently overwritten; `50,660 bytes at db13efd` is the current one.
+  **Restated again (2026-09-21):** 51,280 bytes at `dc36a23` — Slice 5′ (`49eec8f`) added the
+  `cold_pass_source` write and its Setup echo, and the fourth probe's `--fast` disclosures came after
+  `db13efd`. `skills/harness-build/SKILL.md` measures 102,709 bytes at the same commit. Each figure
+  names the commit it was taken at; none of the earlier ones is overwritten.
 - **`scripts/verify_block_sync.py`: 16 `hx-*` BLOCK groups → 4.** A promotion to a single source
   is strictly stronger than byte-identity, because there is then one copy and nothing to compare.
   What remains a group is the text that must stay inline and therefore still exists in more than

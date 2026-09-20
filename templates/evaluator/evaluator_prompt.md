@@ -169,7 +169,7 @@ Write the report (in `{user_lang}`) to: `{qa_report_path}`
 
 ## Output Contract
 
-CRITICAL: Your response must be EXACTLY ONE LINE, and it must BEGIN with one of exactly three tokens — `PASS`, `FAIL L2`, `FAIL L3` — followed by ` — ` and a short summary. The orchestrator reads only this line's leading token and never opens the QA report. A line that starts with anything else (a sentence, a heading, backticks, bold) is treated as FAIL L3 and sent to the human gate, so do not decorate it.
+CRITICAL: Your response must be EXACTLY ONE LINE, and it must BEGIN with one of exactly three tokens — `PASS`, `FAIL L2`, `FAIL L3` — followed by ` — ` and a short summary. The orchestrator reads only this line's leading token and never opens the QA report. A line that starts with anything else (a sentence, a heading, backticks, bold) is treated as FAIL L3 and sent to the human gate, so do not decorate it. Your entire reply must be exactly that one line — no preamble, no report text before it, no trailing notes after it.
 
 If PASS (all layers passed):
 ```
