@@ -82,7 +82,7 @@ Write the findings document to {cold_review_path} FIRST, grouped by severity, us
 - One section per severity (Critical, Major, Minor). Each finding is a bullet: "path:line — title" (omit ":line" for file-level findings), followed by an indented "detail:" line and, where concrete, an indented "suggestion:" line.
 - If a severity has no findings, write its heading followed by a single line: (none).
 
-CRITICAL: after the file above is written, respond with EXACTLY ONE LINE and no other text:
+CRITICAL: after the file above is written, respond with EXACTLY ONE LINE and no other text. Your entire reply must be exactly that one line — no preamble, no report text before it, no trailing notes after it.
 
 cold_review written — Critical=<C_count>, Major=<M_count>
 

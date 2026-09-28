@@ -32,6 +32,14 @@ defect.
 | Description budget ratchet | `python scripts/verify_description_budget.py` |
 | Lint wiring equality | `bash .github/scripts/check_lint_wiring.sh` |
 
+The same chain is declared once, below, as this repository's project default so a `/harness`
+session runs it as Layer 1 without a `--lint-cmd` flag (`templates/_shared/project_defaults.md`;
+the line must start at column 0 and not sit inside a code fence, which is why it is bare prose
+here). The `export` covers the cp949 console: `verify_sync_markers.py` prints `§` and dies with
+`UnicodeEncodeError` without it.
+
+agent-harness-defaults: lint-cmd=`export PYTHONIOENCODING=utf-8 && python scripts/verify_sync_markers.py && python scripts/verify_manifest_sync.py && python scripts/verify_meta_literal.py && python scripts/verify_block_sync.py && node scripts/check_workflow_syntax.mjs && python scripts/verify_description_budget.py && bash .github/scripts/check_lint_wiring.sh`
+
 Run all six after changing anything under `skills/`, `templates/`, `workflows/`, `scripts/`, or
 `.claude-plugin/`. Re-run `check_lint_wiring.sh` as well whenever `.github/workflows/lint.yml`
 changes or a file matching `scripts/verify_*.py` or `scripts/*.mjs` is added or removed.
@@ -52,8 +60,9 @@ There is no build, test, dev, or deploy command.
 | Path | Role |
 |---|---|
 | `skills/<name>/SKILL.md` | one skill = one directory = one contract file |
-| `skills/harness{,-gate,-build}/SKILL.md` | one contract split three ways (C5, 2026-09-07): `/harness` owns Steps 1–2.6, `/harness-gate` owns Step 3 with no `Bash`/`Write`/`Edit`/`Glob`, `/harness-build` owns Steps 3.5–8. The parts they share are byte-identical `hx-*` BLOCK groups (`verify_block_sync.py`); §Architecture Principles #3·#5·#6 and §User Interaction Rules are duplicated WITHOUT a sync group — disclosed here, to be blocked the day they drift |
-| `templates/_shared/` | cross-skill single sources (`mode_gate.md`, `status_format.md`, `project_defaults.md`, `session_conflict.md`, ...) |
+| `skills/harness{,-gate,-build}/SKILL.md` | one contract split three ways (C5, 2026-09-07): `/harness` owns Steps 1–2.6 plus the `--fast` Fast Gate, `/harness-gate` owns Step 3 with no `Bash`/`Write`/`Edit`/`Glob`, `/harness-build` owns Steps 3.5–8. Since the v8.14 prompt diet most of what they shared lives in `templates/_shared/` single sources they cite by name; only four `hx-*` BLOCK groups remain byte-identical (`verify_block_sync.py`), for text that must stay inline. §Architecture Principles #3·#5·#6 and §User Interaction Rules are duplicated WITHOUT a sync group — disclosed here, to be blocked the day they drift |
+| `templates/_shared/` | cross-skill single sources (`mode_gate.md`, `status_format.md`, `project_defaults.md`, `session_conflict.md`, `orchestrator_contract.md`, `output_language.md`, `session_recovery.md`, `session_boundary.md`, `run_style.md`, `scale_assessment.md`, `path_validator.md`, `architecture_principles.md`, `slugify.md`, `segment_launch.md`, ...) |
+| `templates/harness/` | `/harness`-only procedures and static payloads read on demand (`doctor.md`, `state_schema.md`, `setup_summary.md`, `setup_prompts.md`, `auto_revise.md`, `spec_render.md`, `plan_segment_call.md`, `plan_critic_dispatch.md`, `plan_critic_failures.md`) — the v8.14 prompt diet's destination for everything that is not an execution rule |
 | `templates/<skill>/` | skill-specific prompt templates |
 | `templates/planner/` | shared by `/harness` and `/spec` — hence the `verify_block_sync.py` BLOCK groups |
 | `templates/{generator,verify,evaluator}/` | `/harness` only, despite the role-based naming |
@@ -74,8 +83,13 @@ the default, and the native Workflow path runs only on opt-in (ultracode ON, an 
 repository's largest cross-file contract; `verify_sync_markers.py` enforces it through the
 `ambiguity-prompt` (`min_sites=10`) and `project-defaults` (`min_sites=9`) groups.
 
-Skills dispatch their segments as `${CLAUDE_PLUGIN_ROOT}/workflows/<skill>.<segment>.workflow.js` —
-a plugin-root path, never a repository-relative one.
+Skills dispatch their segments as `${CLAUDE_PLUGIN_ROOT}/workflows/<skill>.<segment>.workflow.js`,
+the plugin-root file — but they LAUNCH it from a copy at `.harness/wf/<skill>.<segment>.workflow.js`
+(`templates/_shared/segment_launch.md`): the `Workflow` tool accepts a `scriptPath` only when it
+returned that path itself or the file sits under the working directory (or an added directory),
+and the plugin-root path was refused on the only recorded attempt (2026-09-18; earlier
+successful runs are recorded by `runId` without their launch path). Never write a
+repository-relative `workflows/…` path at a dispatch site — that only works in this checkout.
 
 Every `SKILL.md` carries YAML frontmatter with `name`, `description`, and `disallowed-tools`. That
 frontmatter is the plugin's exposure contract, so treat it as part of the skill's surface.
@@ -143,7 +157,13 @@ in `.github/workflows/lint.yml`, are the entire verification layer:
   renames do** — it checks Step numbers, not section titles. **Just under
   half its in-file citations are deliberately unchecked**, and the scan never reaches the
   repository's root documents at all — the script's own `§What this does not check` docstring
-  carries all seven limits with the command that produces each figure. Only one figure is restated
+  carries all seven limits with the command that produces each figure. Correction (dated, deliberate
+  exception to the "read the docstring" rule below — do not treat this as license to copy other
+  numbers here): the "just under half" sentence above has been false for harness and harness-gate
+  since the 2026-09-07 C5 re-measurement, not merely since the latest one; the RE-MEASURED
+  2026-09-18 line of that docstring's item 1 supplies the current shares — harness 86/102 (84%),
+  harness-gate 81/81 (100%), harness-build 86/176 (49%), so "just under half" is now approximate
+  only for harness-build, which itself read 113/204 (55%) on 2026-09-07. Only one figure is restated
   by an OK line; read the docstring rather than copying a number into this file.
   It is a marker-and-token check, **not** a
   semantic diff: it proves tokens coexist, not that the surrounding prose still agrees.
@@ -153,7 +173,10 @@ in `.github/workflows/lint.yml`, are the entire verification layer:
 - `verify_meta_literal.py` — `meta` literal purity, module-syntax ban, nondeterministic-API ban,
   gate-token tripwire, and the defensive-args guard.
 - `verify_block_sync.py` — SHA256 comparison of BLOCK-delimited content. `GROUPS` declares
-  `(tag, version, files, shared_source)`.
+  `(tag, version, files, shared_source)`. The v8.14 prompt diet cut the `hx-*` groups from 16 to
+  4 by PROMOTING the rest to `templates/_shared/` single sources — one copy, nothing to compare,
+  which is strictly stronger than byte-identity. A promotion is also the one sanctioned reason a
+  `min_sites` floor in `verify_sync_markers.py` may be LOWERED; two were, in that change.
 - `verify_manifest_sync.py` — `.claude-plugin/plugin.json` and `marketplace.json`: the plugin
   description, the keywords set, and the version string at all three key paths.
   `metadata.description` and `owner` are marketplace-only, and `author` is carried by both files

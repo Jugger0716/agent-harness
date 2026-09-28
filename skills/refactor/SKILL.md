@@ -277,7 +277,7 @@ Read `mode` and `path_resolved` from state.json and branch accordingly.
 2. **Run the Plan segment** via the Workflow tool (pass `args` as a JSON object — the script defensively parses; the field set below is the 1:1 contract with the script's `// contract` comment — a field missing on either side silently renders as ''):
    ```
    Workflow {
-     scriptPath: "${CLAUDE_PLUGIN_ROOT}/workflows/refactor.plan.workflow.js",
+     scriptPath: ".harness/wf/refactor.plan.workflow.js",   // FIRST apply templates/_shared/segment_launch.md: copy ${CLAUDE_PLUGIN_ROOT}/workflows/refactor.plan.workflow.js here; delete the copy once this call returns
      args: {
        target: <target>, repoPath: <repo_path>, lang: <lang>, scope: <scope>,
        userLang: <user_lang>,
@@ -467,7 +467,7 @@ Read `mode` from state.json and branch accordingly.
 3. **Run the Eval segment** via the Workflow tool (field set = 1:1 contract with the script's `// contract` comment):
    ```
    Workflow {
-     scriptPath: "${CLAUDE_PLUGIN_ROOT}/workflows/refactor.eval.workflow.js",
+     scriptPath: ".harness/wf/refactor.eval.workflow.js",   // FIRST apply templates/_shared/segment_launch.md: copy ${CLAUDE_PLUGIN_ROOT}/workflows/refactor.eval.workflow.js here; delete the copy once this call returns
      args: {
        planGoals: <refactor_plan_content (structural goals only)>,
        changedFilesList: <file paths only, reasons stripped>,

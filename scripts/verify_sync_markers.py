@@ -55,6 +55,25 @@ this repository already fixed twice for absolute line-number citations.
      (0 + 27); harness-build 204 / 103 (91 + 12). The 155 / 74 / 101 non-Step citations
      are unchecked exactly as before. Reproduce with `grep -o '§[A-Za-z0-9]' <file> | wc -l`
      and `grep -o '§Step [0-9]' <file> | wc -l`; the checked/anchored split is the OK line.
+     RE-MEASURED 2026-09-18, after the v8.14 prompt diet (741d306) promoted shared
+     text out of these three files into templates/_shared/ single sources; b867925
+     and aa4dab2 are the only other edits to them since (same counting rule, one
+     figure per file): skills/harness/SKILL.md 102
+     §citations, 33 of them §Step tokens (16 checked in-file + 17 carrying another
+     file's path anchor); harness-gate 81 / 25 (0 + 25); harness-build 176 / 101
+     (90 + 11). The 69 / 56 / 75 non-Step citations are unchecked exactly as before.
+     Reproduce with `grep -o '§[A-Za-z0-9]' <file> | wc -l` and `grep -o '§Step
+     [0-9]' <file> | wc -l`; the checked/anchored split is the OK line, and for every
+     file the §Step grep total equals that OK line's in-file + foreign exactly
+     (33 = 16 + 17, 25 = 0 + 25, 101 = 90 + 11) -- zero §Step citations currently wrap
+     across a line in any of the three files. `§Step Mode Prerequisites`, the
+     Step-prefixed non-numeric category this item's own text names above, is now 0
+     occurrences in all three files (`grep -o '§Step Mode Prerequisites' <file> |
+     wc -l`). The unchecked share is now 86/102 for harness, 81/81 for harness-gate,
+     and 86/176 for harness-build; "the unchecked share is just under half" above now
+     holds only for harness-build (49%), not for harness (84%) or harness-gate
+     (100%) -- corrected here rather than in that sentence. Nothing about the check
+     moved -- the counted documents shrank.
   2. NUMBERS, NOT TITLES. Renaming `Step 5: Verify Phase` to `Step 5: Mechanical Check`
      passes. A rename sweep over all 80 headings is caught for 21 of them.
   3. SCAN SCOPE. Every layer here iterates SCAN_DIRS (skills/, templates/, workflows/),
@@ -63,6 +82,38 @@ this repository already fixed twice for absolute line-number citations.
      (CHANGELOG.md 27, ROADMAP.md 12, README.md 1) sit outside every count below.
      These two are DATED figures, not invariants: prose about them lives in the very
      files they count, so writing this disclosure moved the second one twice.
+     RE-MEASURED 2026-09-18, the first re-measurement since 8f293a9 (2026-09-04); C5
+     (2026-09-07) split "this target" into three files, so the original 40 (27/12/1)
+     above is a pre-C5, single-target figure superseded by a per-target decomposition,
+     not contradicted by one. Same counting rule: layer 6 (CROSS)'s own compiled
+     regex -- a target path anchor, then a general §Section (not restricted to
+     §Step), with an optional second "and §Section" group, joined by the
+     newline-tolerant separator used elsewhere in this file -- applied to each root
+     document this docstring counts (outside SCAN_DIRS): CHANGELOG.md, ROADMAP.md,
+     README.md, CLAUDE.md and HANDOFF_IMPROVEMENT_PLAN.md; the last two score 0 on
+     both series below and move no figure, but both are counted. path-anchored
+     pointers: skills/harness/SKILL.md 42 (CHANGELOG.md 28, ROADMAP.md 13,
+     README.md 1); skills/harness-gate/SKILL.md 2 (CHANGELOG.md 2);
+     skills/harness-build/SKILL.md 7 (CHANGELOG.md 4, ROADMAP.md 3). sub-path
+     citations (layer 5's `Step N -- INLINE|WORKFLOW path` family): 7 total
+     (ROADMAP.md 5, CHANGELOG.md 2). Layer 5's own strict path-anchor rule attributes
+     6 of the 7: harness 5 (2 in CHANGELOG.md, 3 in ROADMAP.md) and harness-build 1
+     (in ROADMAP.md); with the 7th (below) attributed by context, the per-target
+     totals are harness 6 and harness-build 1 -- 6 + 1 = 7 exactly. That 7th, a
+     ROADMAP.md sub-path citation, carries no path anchor of its own; the same
+     ROADMAP.md table row (line 61) names skills/harness/SKILL.md 55 characters
+     later in that same sentence, so it is attributed to harness by context rather
+     than by regex match --
+     a judgement call C5's three-way split introduced, since pre-C5 there was one
+     target and no attribution question. Neither series reproduces from a
+     single-line grep: `grep -oE 'skills/harness/SKILL.md.{0,10}§[A-Za-z0-9]+'
+     CHANGELOG.md | wc -l` returns 25 against the actual 28 (-3), since it cannot
+     express the "and §Section" group or the newline-tolerant separator the real
+     regex carries; both figures above were reproduced from the script's own
+     compiled regex objects against each root document's text, not from grep.
+     scripts/ sits outside SCAN_DIRS and is not a root document, so nothing this
+     change adds anywhere in this docstring is counted by any layer above -- no
+     figure in item 1 or here moves because of it.
      Widening is not a one-line change: iter_files() is shared with collect_markers(),
      so touching it moves the SYNC marker-site total too.
   4. PIN-STEP IS A SET COMPARISON. It sees heading TEXT only -- never order, nesting
@@ -205,7 +256,11 @@ SYNC_GROUPS = [
         "tokens": ["Skill :", "Task :", "Phase :", "Mode :", "Docs :"],
         # C5: 3 = the two above + skills/harness-build/SKILL.md, whose hx-handoff-fields BLOCK
         # copy carries the same marker (byte-identical with the harness copy by construction).
-        "min_sites": 3,
+        "min_sites": 2,  # LOWERED 3 -> 2 by the v8.14 prompt diet, deliberately and in the
+        # same change: the /harness and /harness-build copies of this block were PROMOTED to the
+        # single source templates/_shared/session_boundary.md, so two marker sites became one.
+        # A promotion to a single source is the one reason this floor may fall -- it removes
+        # duplication rather than dropping a check. Sites now: session_boundary.md + skills/handoff.
     },
     {
         # harness-handoff-coldreview-epic-slice slice-f, group (b): the workflows/spec.eval.workflow.js
@@ -371,7 +426,10 @@ SYNC_GROUPS = [
         # operation.
         # C5: 8 = 7 + the hx-session-entry BLOCK copy in skills/harness-build/SKILL.md, which
         # carries the marker byte-identically. harness-gate has no session gate and no marker.
-        "min_sites": 8,
+        "min_sites": 7,  # LOWERED 8 -> 7 by the v8.14 prompt diet, same reason and same
+        # rule as handoff-state-record above: the /harness and /harness-build copies of the
+        # session-entry block became the single source templates/_shared/session_recovery.md,
+        # collapsing two marker sites into one.
     },
 ]
 

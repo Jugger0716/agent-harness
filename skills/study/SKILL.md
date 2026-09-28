@@ -246,7 +246,7 @@ Collect the authored topics into the same `studyGuide = { topics: [...] }` shape
 1. **Run the Author segment** via the Workflow tool (pass `args` as a JSON object — the script defensively parses; this field set is the 1:1 contract with the script's `// contract` comment):
    ```
    Workflow {
-     scriptPath: "${CLAUDE_PLUGIN_ROOT}/workflows/study.analyze.workflow.js",
+     scriptPath: ".harness/wf/study.analyze.workflow.js",   // FIRST apply templates/_shared/segment_launch.md: copy ${CLAUDE_PLUGIN_ROOT}/workflows/study.analyze.workflow.js here; delete the copy once this call returns
      args: {
        mode: <"deep"|"thorough">,
        userLang: <user_lang>,

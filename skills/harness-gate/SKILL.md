@@ -18,56 +18,23 @@ Pipeline: `/harness` (Steps 1–2.6, ends at `plan_done`) → **this skill** (St
 `/harness-build` (Steps 3.5–8). See `skills/harness/SKILL.md` §Session Recovery for the full
 phase machine; this file only needs §Entry Check below.
 
-<!-- BLOCK-START:hx-user-lang v1 — shared by /harness, /harness-gate, /harness-build; edit every copy in one commit and bump the version -->
 ## User Language Detection
 
-Detect the user's language from their **most recent message**. Store as `user_lang` in state.json.
+Single source: `templates/_shared/output_language.md` §User Language Detection. Detect `user_lang` from the user's most recent message, store it in state.json and re-check every message. All user-facing output is in `user_lang`; template instructions, state.json field names, file names, git branch names and Workflow `args` field names stay English. On the WORKFLOW path pass `userLang` in `args`.
 
-**All user-facing communication** in `user_lang`: progress updates, questions, confirmations, errors, spec sections, QA narrative, commit messages (if has_git).
-
-**Stays in English:** template instructions, state.json field names, file names, git branch names, Workflow `args` field names.
-
-**Re-detection:** On every user message, check if language changed. If so, update `user_lang`.
-
-**WORKFLOW path:** pass `userLang` in `args` — the segment scripts build schema descriptions from it (`render in <userLang>`), which forces sub-agent free-text output language; enum/identifier fields stay English raw.
-<!-- BLOCK-END:hx-user-lang v1 -->
-
-<!-- BLOCK-START:hx-olc-core v1 — shared by /harness, /harness-gate, /harness-build; edit every copy in one commit and bump the version -->
 ## Output Language Contract
-
-> ⚠ Maintainers: any new `Print:` directive or user-facing output block added below MUST conform to this contract. CI lint enforcement is a TODO (not yet implemented).
-> This contract applies to v3 sessions.
 
 ### Invariant
 
-All orchestrator output visible to the user MUST be rendered in `user_lang`. Backtick-inline English inside `Print:` directives is a *template format*, not an output language declaration. When `user_lang == "en"`, this contract is a natural no-op (English → English is identity).
+All orchestrator output visible to the user renders in `user_lang`. Backtick-inline English inside a `Print:` directive is a template format, not an output-language declaration; when `user_lang == "en"` this contract is a no-op. Every new `Print:` directive must conform (CI enforcement is a TODO).
 
 ### Preserved-English Glossary
 
-The following tokens MUST remain English raw in all output. Translation is forbidden.
-
-| Category | Tokens |
-|---|---|
-| Status keywords | `PASS`, `FAIL`, `FAIL_L2`, `FAIL_L3`, `Verdict`, `Verdict: PASS`, `Verdict: FAIL` |
-| Confidence | `confidence: High`, `confidence: Medium`, `confidence: Low`, `confidence: Unknown` |
-| 1-line return verbs (INLINE path only) | `generated`, `changed`, `written`, `conventions written`, `auto_fix_patch written` (only as leading keyword tokens in inline sub-agent 1-line returns; natural-language usage in prose is exempt) |
-| Prefix | `[harness]` |
-| Status format labels | `Task`, `Mode`, `Path`, `Model`, `Style`, `Phase`, `Round`, `Branch`, `Scope`, `Directory`, `Verifier`, `Language`, `Test`, `Build`, `Lint`, `TypeCheck`, `Output`, `Decision`, `Critic`, `Next cmd` (rendered by `/handoff` — this skill has no `Next cmd` output site of its own) (monospace alignment preservation) |
-| Session Boundary Type B `Reason` value | `Epic planned` (a *value*, not a label — see `skills/harness-build/SKILL.md` §Session Boundary Type B) |
-| Identifiers | state.json field names (e.g. `verify.layer1_retries`, `runs.plan.runId`), file paths (`{docs_path}verify_report.md`, `.harness/...`), git branch names (`harness/<slug>`), commands (e.g. `./gradlew test`, `npm run lint`), state-machine phase keys (`plan_ready`, `generating`, ...), schema field names (`acceptanceCriteria`, `modifiedFiles`, ...) |
-
-> `Decision`, `Critic`, `Next cmd`, and `Epic planned` are new to this Glossary. The existing `Reason` values (`QA PASS` / `Accept as-is` / `Max rounds reached`) are unchanged and are NOT added here — adding them would newly fix values that are currently translated, changing existing sessions' output. `Decision` (`skills/harness/SKILL.md` §Scale Assessment §3 override display), `Critic` (`skills/harness/SKILL.md` §Step 2.6 gate display), and `Epic planned` (`skills/harness-build/SKILL.md` §Session Boundary Type B epic variant — `skills/harness-build/SKILL.md` §Step 3.6) are now written by this file (this slice). `Next cmd` (rendered by `/handoff` resume Step 5 — see `skills/handoff/SKILL.md` §Sub-command: resume — not this file) is now written there (harness-handoff-coldreview-epic-slice slice-f); this skill still has no `Next cmd` output site of its own — that ownership is unchanged, only the "not yet written" status above was stale.
+Token table: `templates/_shared/output_language.md`. Cite it, never restate it. Status keywords (`PASS` / `FAIL` / `FAIL_L2` / `FAIL_L3` / `Verdict`), the `confidence: *` values, the INLINE 1-line return verbs, the `[harness]` prefix, the Status Format labels, `Epic planned`, and every identifier (state.json fields, paths, branch names, commands, phase keys, schema fields) stay English raw.
 
 ### Print Translation Pattern
 
-When rendering a `Print:` directive:
-- Translate natural-language portions to `user_lang`.
-- Glossary tokens above remain English raw.
-- Variable substitutions (`{first line}`, `{layer1_retries}`, `{docs_path}...` etc.) follow §1-line Return Translation or §Glossary rules above.
-- AskUserQuestion option label/description also follows this rule.
-- Note: `(in user_lang)` markers on AskUserQuestion sites refer to UI prompt translation and are a separate context from the label-preservation rule for Status Format / Setup Summary labels.
-- Note: When this contract refers to `Print` directives, the token MUST be wrapped in backtick inline code spans to avoid visual collision with column-0 `Print:` directives in the body.
-<!-- BLOCK-END:hx-olc-core v1 -->
+When rendering a `Print:` directive: translate natural-language portions to `user_lang`; Glossary tokens stay raw; variable substitutions follow the Glossary; AskUserQuestion labels and descriptions follow the same rule. **Shorthand:** "Print per OLC" = render per this pattern.
 
 ## Entry Check (read-only — this skill holds no Bash, Write or Edit; it can delete nothing)
 
@@ -120,12 +87,12 @@ boundary is the mechanism (SPEC §2.2), and this skill has no tool that could.
 
 ---
 
-> The comparison-operator prohibition below applies to every rendered line in §1–§4 /
-> §Signal Domain / §INLINE Fallback of the §Scale Assessment section that follows: never
-> phrase a rendered line as a numeric threshold comparison (no ">=", "이상", "초과", "미만").
-> This note is placed OUTSIDE that section on purpose — a grep restricted to the section's
-> line range must return 0 hits, and stating the prohibition INSIDE the range it governs
-> would trip its own grep.
+> The comparison-operator prohibition applies to every line §Scale Assessment renders, wherever
+> that text now lives: never phrase a rendered line as a numeric threshold comparison (no ">=",
+> "이상", "초과", "미만"). It is stated OUTSIDE that section on purpose — a grep restricted
+> to the section's line range must return 0 hits, and stating the prohibition INSIDE the range it
+> governs would trip its own grep. `templates/_shared/scale_assessment.md` carries it too, for a
+> reader who arrives there first.
 
 ## Scale Assessment
 
@@ -133,101 +100,19 @@ boundary is the mechanism (SPEC §2.2), and this skill has no tool that could.
 > ONCE by `skills/harness/SKILL.md` §Step 2 and frozen into `state.scale.*`; this skill reads
 > them from state.json and never re-derives anything — it has no `PlanResult`, and it must not
 > try to rebuild one. **If `state.scale` is missing entirely** (a pre-split session, or one
-> that reached `plan_done` without computing it), treat every signal as `absent` and render
-> per §INLINE Fallback below — never error, never block the gate on a missing block; the
-> INLINE Fallback's one `ok` signal is counted from the `spec.md` this gate already reads
-> (`Read` suffices — no Glob). The fragment below is byte-identical with `/harness`'s copy.
+> that reached `plan_done` without computing it), treat every signal as `absent` and render the
+> INLINE Fallback that `templates/_shared/scale_assessment.md` defines — never error, never block
+> the gate on a missing block; that fallback's one `ok` signal is counted from the `spec.md` this
+> gate already reads (`Read` suffices — no Glob). The pointer below is byte-identical with
+> `/harness`'s copy.
 
-<!-- BLOCK-START:hx-scale-render v1 — shared by /harness, /harness-gate; edit every copy in one commit and bump the version -->
-### 1. Raw signal counts
+<!-- BLOCK-START:hx-scale-render v2 — shared by /harness, /harness-gate; edit every copy in one commit and bump the version -->
+### Render fragment
 
-Four raw signals, each independently tagged with its own measurement state (`ok` /
-`absent` / `malformed` — see §Signal Domain below) rather than a bare number: AC count
-(`acceptanceCriteria.length`), steps count (`steps.length`), in-scope count
-(`scope.inScope.length`), risks count (`risks.length`).
+What a render site prints — the four raw signal counts, the verbatim `sliceHint` recommendation and rationale, the `cli_flags.epic` override line and its `Decision :` row, the confirmation-ownership line, the `ok` / `absent` / `malformed` Signal Domain, and the INLINE Fallback degraded 1-signal mode — is `templates/_shared/scale_assessment.md`. Read it at the render site and follow it verbatim; never restate or summarize it here.
 
-### 2. Recommendation (verbatim render)
-
-Render `sliceHint.recommendation` and `sliceHint.rationale` **verbatim** — copy the
-strings, do not summarize, requote, or re-derive them. **The orchestrator does NOT derive
-the recommendation from the counts in §1 above** — §1 is informational context only; the
-recommendation comes exclusively from `sliceHint`, which the Synthesis sub-agent already
-produced with full qualitative judgment (see `workflows/harness.plan.workflow.js` `##
-Scale Hint`, which itself forbids numeric-threshold phrasing). This one rule is what makes
-the "no comparison operator next to a count" requirement below structural rather than a
-style guideline — there is no code path here that computes a threshold, so there is nothing
-for a comparison phrase to attach to.
-
-### 3. Override state
-
-If `cli_flags.epic` is non-null, render the override: `true` → "epic 강제 적용 (사용자
-지정 `--epic`)"; `false` → "single-slice 강제 적용 (사용자 지정 `--no-epic`)" (render in
-`user_lang` per §Output Language Contract — these are natural-language values, not Glossary
-tokens). If `cli_flags.epic == null`, render "override 없음 — 위 권고안이 그대로 유효".
-
-**When an override is active, §1's raw signal counts and §2's verbatim recommendation still
-render unchanged** — an override never suppresses the measured signal, it only changes which
-choice ultimately wins at Step 3 Pass B. In that case append one more Status-Format-style
-line, using the ONE place in this section where `skills/harness/SKILL.md` §Standard Status Format's aligned
-`Label     : value` convention (unlike the unaligned `Critic:` gate literals in `skills/harness/SKILL.md` §Step 2.6)
-applies literally:
-```
-Decision : forced by --epic     ← or "forced by --no-epic", matching whichever flag was given
-```
-
-### 4. Confirmation ownership
-
-Always render a closing line: the recommendation/override above is informational only —
-the actual epic-vs-single decision is confirmed by the user, at Step 3 Pass B (or, for a
-`phase`/`step` session, at whichever future `/harness` invocation next reaches Step 3).
-§Scale Assessment never itself advances the state machine or makes the epic/single choice.
-
-### Signal Domain (`ok` / `absent` / `malformed`)
-
-Each of the 4 raw signals in §1 is stored in `state.scale.signals` as one of three states —
-never collapsed to a bare count:
-
-- **`ok`** — the field is present AND `Array.isArray(field) == true`; render its `.length`.
-- **`absent`** — the field is missing (`undefined`/`null`) from `PlanResult`. Render
-  "measured: 없음" (never `0` — a plan that omits `steps` and a plan with an empty
-  `steps: []` are different facts and must not collapse to the same rendered value).
-- **`malformed`** — the field is present but `Array.isArray(field) == false` (e.g. `scope`
-  collapsed into the `background` string — the failure actually observed during slice B
-  measurement; `PlanResultSchema.required` does not cover `scope`, so this passes schema
-  validation). Render "measured: 손상됨 (배열 아님)".
-
-**Rule**: never call `.length` on a field without first confirming `Array.isArray(field) ==
-true`. A `malformed` field's `.length` (a string has one too) is NOT an item count and MUST
-NOT be rendered as one — that is exactly the failure this rule exists to prevent (a string
-that absorbed `scope` would render its character count as an "in-scope item count",
-deterministically biasing the assessment toward "epic").
-
-If any of the 4 signals is `absent` or `malformed`, append one closing line: "결측되거나
-손상된 신호가 있음 — 위 권고는 그만큼 불완전한 근거에 기반함" (qualitative disclosure
-only — no numbers, no comparison).
-
-### INLINE Fallback (degraded, 1-signal mode)
-
-The INLINE path (and any resume that lands in §INLINE Fallback per the rule above) has no
-`sliceHint` — `planner_single.md` never produces one — and no structured
-`acceptanceCriteria`/`steps`/`scope`/`risks` fields to measure. Render as a **1-signal
-degraded mode**, not a silent 3-of-4 failure:
-
-- The ONLY `ok` signal: a language-independent scan of spec.md for GFM checkbox lines
-  matching the literal pattern `- [ ]` (used under `### Completion Criteria` — see `skills/harness/SKILL.md` §Step 2
-  WORKFLOW path spec.md render mapping) — count occurrences. **Do NOT parse the heading
-  TEXT** (`### Completion Criteria` or any other) to locate the section — spec.md headings
-  are rendered in `user_lang` per §Output Language Contract, so an English heading match
-  silently returns 0 in every non-English session. The checkbox glyph itself is
-  language-independent.
-- The other 3 signals: `absent` (steps/scope/risks have no INLINE spec.md equivalent to
-  scan for).
-- Recommendation: render "없음 (INLINE 경로 — 권고를 만드는 sliceHint가 이 경로에는 없음)"
-  — state the degradation explicitly, never omit the recommendation line silently.
-- Append the closing disclosure line above AND one more: "이 폴백은 독립적인 2차 방어가
-  아니라 spec.md 자체(`skills/harness/SKILL.md` §Step 2 INLINE 산출물)의 하류임 — spec.md가 이미 손상된 scope를
-  반영했다면 이 신호도 같은 오염을 반영함".
-<!-- BLOCK-END:hx-scale-render v1 -->
+Two rules are repeated because they govern that read: the recommendation is **never** derived from the counts (it comes only from `sliceHint`, which Synthesis produced with full qualitative judgment), and no rendered line may be phrased as a numeric threshold comparison.
+<!-- BLOCK-END:hx-scale-render v2 -->
 
 ---
 
@@ -258,7 +143,7 @@ second — both by name, neither restated here), plus the line count of `{docs_p
 read **fresh at every Pass A render**, never carried over from an earlier render in the same
 turn. That is not a new read site: §Architecture Principles #1's exception list entry (1) is
 "spec.md at plan gate", and re-executing a declared read is not declaring another one — the
-list stays at 7 items. **The word "fresh" is load-bearing and is why this is spelled out
+list keeps its 7 numbered slots (6 live). **The word "fresh" is load-bearing and is why this is spelled out
 rather than phrased as reusing what the gate already read.** Every Modify now crosses a
 session boundary (`/harness --modify` edits in its own turn; this gate re-renders in the
 next), so the count is taken from the file as it stands when THIS session's Pass A renders;
@@ -379,7 +264,7 @@ is the absence of a record, `unrecorded`):
 | `applied` | Reachable via | → Row |
 |---|---|---|
 | unrecorded | no Step 2.6 write yet, OR `skills/harness/SKILL.md` §Step 2.6 failure branch (ii) (the only branch that leaves `plan_done` without writing `plan_critic`; it reaches this gate when the user types `/harness-gate` — the command §After Plan Phase names — instead of re-running `/harness`, whose routing predicate (b) would land back on Step 2.6) | ④ |
-| `"skipped"` | `skills/harness/SKILL.md` §Step 2.6 Skip-vs-run's carried-over branch — the sole writer of `"skipped"`, which always co-writes `source = "carried_over"` in the SAME write (see that branch above); `applied == "skipped"` therefore structurally implies `source == "carried_over"`, not an independent condition | ③ |
+| `"skipped"` | TWO writers, each co-writing its own `source` in the SAME write: `skills/harness/SKILL.md` §Step 2.6 Skip-vs-run's carried-over branch (`source = "carried_over"`), and that step's `cli_flags.fast` skip (`source = "fast"`). `applied == "skipped"` therefore implies `source ∈ {"carried_over", "fast"}` — row ③ splits on which | ③ |
 | `"failed"` | failure branch (iii) | ④ |
 | `"executed"` | success path, or a fresh "Run Critic anyway" / "Retry Critic" / Auto-revise re-dispatch | split below |
 
@@ -466,7 +351,7 @@ Rows are evaluated top-to-bottom — **first match wins**.
 | ①-c dirty, not stale, predicate fails on 1/2/3 | well-formed (§Well-formedness Determination) AND same counts condition, the Stale Determination says NOT stale (point 4 holds), but the Exposure Predicate fails on point 1 (no WORKFLOW-path Plan run on record), point 2 (proposals.json invalid or missing), and/or point 3 (`round` already at its bound) | `{"Run Critic anyway", "Proceed as-is", "Modify", "Stop"}` — same option set as row ①-b, but the banner names the actual non-exposure reason instead of staleness: "⚠ Auto-revise unavailable — <no WORKFLOW-path Plan run on record / proposals.json invalid or missing / revision round limit reached>" (never silently blank; required even though the option labels match row ①-b, because the underlying cause differs and a user comparing sessions should be able to tell which one applies). |
 | ② clean, not stale | `plan_critic.applied == "executed"` AND well-formed (§Well-formedness Determination) AND `counts.critical == 0` AND `counts.major == 0` AND the Stale Determination says NOT stale | **Pass A does NOT render** — the "clean AND not stale ⇒ exactly one interrupt" case (AC-7's clean case). Go straight to Pass B. Clean AND stale is a DIFFERENT case — see row ②-b, which AC-C22 requires to render even though the record itself is clean. |
 | ②-b clean, stale | `plan_critic.applied == "executed"` AND well-formed (§Well-formedness Determination) AND `counts.critical == 0` AND `counts.major == 0` AND the Stale Determination says stale | `{"Run Critic anyway", "Proceed as-is", "Modify", "Stop"}` — badge line reused VERBATIM from row ①-b ("⚠ critic 이후 spec.md가 변경됨 — 아래 카운트는 그 이전 spec 기준"; no separate `(C=0 M=0)` suffix — the status line immediately above this table already prints the current counts, and repeating them in the badge would be a second, driftable copy of the same string). This is AC-C22's clean+stale case: the 0/0 shown is the count as of the PRE-edit spec.md, not the current one — without this row that fact would be silently lost, exactly the gap AC-C22 clause 1 exists to close. |
-| ③ carried-over | `plan_critic.applied == "skipped"` AND `plan_critic.source == "carried_over"` | `{"Run Critic anyway", "Proceed as-is", "Modify", "Stop"}`. Counts for display are parsed from `{docs_path}critic_findings.md`'s `## Summary` line — if that parse fails (the file is `(none)`-only, absent from a prior `dispatch_failed`, hand-edited without a `## Summary` line, or a stale leftover from a different `--output-dir` reuse), render `C=? M=?` (never `0`); show the `carried over from /spec` literal either way. |
+| ③ carried-over or --fast | `plan_critic.applied == "skipped"` AND `plan_critic.source ∈ {"carried_over", "fast"}`. With `source == "fast"` there is no `{docs_path}critic_findings.md` to parse: render `C=? M=?` and the `skipped by --fast` literal in place of the `carried over from /spec` one, and keep the same option set — a `--fast` session that reaches this gate has left `skills/harness/SKILL.md` §Fast Gate unanswered, so "Proceed as-is" still prints `/harness-build`, which that skill's §Entry refuses until `gate.approved` is set. Everything below describes `source == "carried_over"` | `{"Run Critic anyway", "Proceed as-is", "Modify", "Stop"}`. Counts for display are parsed from `{docs_path}critic_findings.md`'s `## Summary` line — if that parse fails (the file is `(none)`-only, absent from a prior `dispatch_failed`, hand-edited without a `## Summary` line, or a stale leftover from a different `--output-dir` reuse), render `C=? M=?` (never `0`); show the `carried over from /spec` literal either way. |
 | ④ failed / unrecorded / unknown | `plan_critic.applied == "failed"` OR `state.plan_critic` has no recorded `applied` value (unrecorded — `skills/harness/SKILL.md` §Step 2.6 failure branch (ii) is the only source of this state; see §State-Space Derivation) OR (`plan_critic.applied == "executed"` AND the record is malformed — §Well-formedness Determination above); equivalently, every state that is neither row ③ (`applied == "skipped"`) nor rows ①-a/①-b/①-c/②/②-b (`applied == "executed"` AND well-formed) | `{"Retry Critic", "Proceed as-is", "Modify", "Stop"}` + a banner showing `plan_critic.failure_reason` if present, or — when `applied` is unrecorded (`failure_reason` is absent-or-null there, since branch (ii) never writes it; null-safe per the guard rule above) — the default banner "critic 미실행 — Workflow 권한 거부 등". A THIRD combination reaches this row and matches neither clause: `applied == "executed"` with a malformed record and no `failure_reason` (the record was written by a successful pass, so nothing set that field; `skills/harness/SKILL.md` §Step 2.6's pre-dispatch delete then removed the file a later interrupted pass was about to replace). Render "critic 기록이 현재 spec에 대해 무효 — 재실행 필요" for it. Never silently blank in any of the three. Counts render as `C=? M=?` (unknown, never `0`). **"Retry Critic" dispatches on the INLINE branch only** whenever `failure_reason` indicates a permission denial OR `applied` is unrecorded (both are footprints of branch (ii), which never leaves a distinguishing `failure_reason` behind) — the `/harness --critic` session it prints never re-issues the denied Workflow call, because a bare re-entry command does not state that anything changed (`templates/_shared/mode_gate.md` rule 3: retry only after the user states in a NEW message that something changed; `skills/harness/SKILL.md` §Gate re-entry flags carries the same two-way condition). When the banner shows `spec_stamp_invalid`, add one line: `spec.md` is a partial write — `/harness --modify "<request>"` completes it, or Restart via `/harness`; no option here re-runs Step 2. Choosing anything other than "Retry Critic" here while `applied` is unrecorded leaves `plan_critic` permanently unrecorded for this task (see failure branch (ii) above). |
 
 **Exhaustiveness**: rows ①-a/①-b/①-c/②/②-b/③/④ — seven rows covering all four `applied`
@@ -583,7 +468,7 @@ write, and `/harness` owns every re-entry (`--modify` / `--auto-revise` / `--cri
 The registry of invariants is `skills/harness/SKILL.md` §Architecture Principles; this skill
 exercises the subset below and nothing beyond it.
 
-1. **Orchestrator reads no intermediate files** — of the registry's 7 read exceptions this skill
+1. **Orchestrator reads no intermediate files** — of the registry's 6 live read exceptions (7 numbered slots) this skill
    performs **2**: (1) `spec.md` at the plan gate (the line count for the Stale Determination is
    re-read at every Pass A render), and (7) gate-display critic count parsing
    (`plan_critic_findings.md` / `critic_findings.md` `## Summary` line). It performs NO write —
@@ -595,46 +480,13 @@ exercises the subset below and nothing beyond it.
    the pipeline's 3); it dispatches no script. The gate renders as up to two sequential passes
    (Pass A, Pass B) inside ONE `<HARD-GATE>` tag — a pass is not a separate gate.
 
-<!-- BLOCK-START:hx-path-validator v1 — shared by /harness, /harness-gate, /harness-build; edit every copy in one commit and bump the version -->
+<!-- BLOCK-START:hx-path-validator v2 — shared by /harness, /harness-gate, /harness-build; edit every copy in one commit and bump the version -->
 ### Path Validator
 
-Orchestrator internal conceptual function. Call sites: `--output-dir` parsing (Step 1.2), `{failing_files_list}` injection (Step 5), Edit tool unified diff Apply (Step 5), Session Recovery re-validation (Session Recovery), cold-review input list collection (Step 5, `kind=file_reference`), cold `finding.file` validation — WORKFLOW path only (Step 5, `kind=file_reference`).
+`validate_path(path, kind)` with `kind ∈ {output_dir, file_reference, diff_target}` — the five normalization and rejection steps, the reserved first-segment set, the `docs/harness/` carve-out, every halt message and the attack-vector mapping are `templates/_shared/path_validator.md`. Read it before validating a path; never restate it.
 
-```
-validate_path(path, kind) where kind ∈ {output_dir, file_reference, diff_target}
-
-  0. (kind == output_dir only) Empty string → halt "output-dir cannot be empty."
-  1. Normalize: \ → / (OS-independent). UNC (\\server\share or //server/share) → halt.
-  2. Absolute path: ^/ or ^[A-Za-z]:/ → halt.
-  3. Segment-level ..: path.split("/") — any segment == ".." → halt (exact segment match, not substring).
-  4. kind-specific:
-     - output_dir:
-         First segment (path.split("/")[0]) ∉ {memory, spec, planner, generator,
-         evaluator, verify, harness, .harness}.
-         Special case: if first segment == "docs", second segment
-         MUST == "harness" (path startswith "docs/harness/"). Else halt:
-         "output-dir under docs/ must be docs/harness/..." (allows /spec handoff
-         path docs/harness/<slug>/ while still blocking other docs/* overrides.)
-     - file_reference (failing_files_list):
-         (a) relative path, (b) no .. segment, (c) inside repo_path,
-         (d) outside .harness/, docs/harness/*, memory/, .git/.
-     - diff_target (unified diff --- a/ / +++ b/ headers):
-         file_reference conditions + inside scope filter +
-         outside .harness/, docs/harness/*, memory/, .git/.
-  5. On failure: return specific halt message describing the violation.
-```
-
-**Attack vector → Path Validator step mapping:**
-
-| Attack vector | Blocked at step |
-|---|---|
-| `--output-dir .harness` | Step 4 (kind=output_dir, first segment reserved) |
-| `--output-dir docs/../../etc` | Step 3 (segment `..` rejection) |
-| `--output-dir \\server\share` | Step 1 (normalization + UNC rejection) |
-| `--output-dir /absolute/path` | Step 2 (absolute path rejection) |
-| `--output-dir memory/foo` | Step 4 (first segment reserved) |
-| `--output-dir ` (empty) | Step 0 (empty string, kind=output_dir) |
-<!-- BLOCK-END:hx-path-validator v1 -->
+Call sites: `--output-dir` parsing (`skills/harness/SKILL.md` §Step 1 item 2, `kind=output_dir`); the Session Recovery Safety Guard re-validation (`kind=output_dir`); `{failing_files_list}` injection, the Edit-tool unified-diff Apply, cold-review input collection and cold `finding.file` validation — WORKFLOW path only (`skills/harness-build/SKILL.md` §Step 5, `kind=file_reference` / `diff_target`).
+<!-- BLOCK-END:hx-path-validator v2 -->
 
 ## Key Rules
 

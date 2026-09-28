@@ -350,7 +350,7 @@ These rules are non-negotiable.
 2. **Run the Analyze segment** via the Workflow tool (pass `args` as a JSON object — the script defensively parses; the field set below is the 1:1 contract with the script's `// contract` comment — a field missing on either side silently renders as `''`):
    ```
    Workflow {
-     scriptPath: "${CLAUDE_PLUGIN_ROOT}/workflows/debug.analyze.workflow.js",
+     scriptPath: ".harness/wf/debug.analyze.workflow.js",   // FIRST apply templates/_shared/segment_launch.md: copy ${CLAUDE_PLUGIN_ROOT}/workflows/debug.analyze.workflow.js here; delete the copy once this call returns
      args: {
        errorDescription: <state.error_description>,
        stackTrace: <from the error or --attach file, or "">,

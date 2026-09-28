@@ -96,7 +96,7 @@ Write the verification report to `{verify_report_path}` in this exact format:
 
 ## Output Contract
 
-CRITICAL: Your response must be EXACTLY ONE LINE. Write all detailed results to the verify report file above.
+CRITICAL: Your response must be EXACTLY ONE LINE. Your entire reply must be exactly that one line — no preamble, no report text before it, no trailing notes after it. Write all detailed results to the verify report file above.
 
 If PASS:
 ```
