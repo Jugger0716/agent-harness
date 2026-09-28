@@ -224,7 +224,7 @@ When the user provides a task description (via $ARGUMENTS or in conversation), e
 
 0. **Sub-command dispatch:** if the argument immediately after `/spec` is `digest` → jump to `## Sub-command: digest` (read-only; skips state.json, git branch, Q&A, and every gate below).
 1. **Detect user language** from the task description. Store as `user_lang`.
-2. **Slugify the task:** lowercase, transliterate non-ASCII to ASCII, remove non-word chars except hyphens, replace spaces with hyphens, truncate to 50 chars. Store as `<slug>`.
+2. **Slugify the task** per `templates/_shared/slugify.md` (single source, shared with `/harness` — the two derive the same `docs/harness/<slug>/` from the same task, which is what makes Phase 3's persisted artifacts reachable by the `/harness` run that follows): non-ASCII dropped, never transliterated; `/`, `.`, `_` and whitespace → hyphens; 50 chars; all-non-ASCII → `task-<YYYYMMDD-HHMM>`. Store as `<slug>`.
 
    **(M15) Slug collision check** (NEW in 8.4 hardening): before creating directories in step 3, check whether `docs/harness/<slug>/` already contains any of the spec-persisted artifacts (`spec.md`, `qa_notes.md`, `critic_findings.md`, `conventions.md`). If yes, the slug collides with a prior /spec run — Phase 3 step 3 would silently overwrite those artifacts on cleanup. Resolve via AskUserQuestion (translate to `user_lang`):
    ```
@@ -489,7 +489,7 @@ Print status in the standard format, prefixed with `[harness] Spec draft ready.`
 3. **Run the Plan segment** via the Workflow tool (pass `args` as a JSON object — the script defensively parses; the field set below is the 1:1 contract with the script's `// contract` comment — a field missing on either side silently renders as `''`):
    ```
    Workflow {
-     scriptPath: "${CLAUDE_PLUGIN_ROOT}/workflows/spec.plan.workflow.js",
+     scriptPath: ".harness/wf/spec.plan.workflow.js",   // FIRST apply templates/_shared/segment_launch.md: copy ${CLAUDE_PLUGIN_ROOT}/workflows/spec.plan.workflow.js here; delete the copy once this call returns
      args: {
        task: <task>, userLang: <user_lang>,
        conventions: <resolved content from step 1, or "">,
@@ -534,7 +534,7 @@ Print status in the standard format, prefixed with `[harness] Spec draft ready.`
 1. **Run the Eval segment** via the Workflow tool (field set = 1:1 contract with the script's `// contract` comment):
    ```
    Workflow {
-     scriptPath: "${CLAUDE_PLUGIN_ROOT}/workflows/spec.eval.workflow.js",
+     scriptPath: ".harness/wf/spec.eval.workflow.js",   // FIRST apply templates/_shared/segment_launch.md: copy ${CLAUDE_PLUGIN_ROOT}/workflows/spec.eval.workflow.js here; delete the copy once this call returns
      args: {
        task: <task>, userLang: <user_lang>,
        specContent: <docs/harness/<slug>/spec.md content>,
@@ -585,7 +585,7 @@ This phase runs only when Critic Gate selected Auto-revise or Modify.
 1. Set `phase → "re_synthesis_active"`. **Re-run the Plan segment in re-synthesis re-entry form** — analysts are NOT re-run (mirrors the old "re-dispatch Synthesis only" behavior; the script skips its Propose phase):
    ```
    Workflow {
-     scriptPath: "${CLAUDE_PLUGIN_ROOT}/workflows/spec.plan.workflow.js",
+     scriptPath: ".harness/wf/spec.plan.workflow.js",   // FIRST apply templates/_shared/segment_launch.md: copy ${CLAUDE_PLUGIN_ROOT}/workflows/spec.plan.workflow.js here; delete the copy once this call returns
      args: {
        task, userLang, conventions: <resolved content, as Plan-segment step 1>,
        qaNotes: <qa_discovery_notes content, or "">,
@@ -719,7 +719,7 @@ Update state.json: `phase` → `"completed"`.
 
    Do NOT rename either side without updating both: renaming the file (e.g., `qa_notes.md` → `qa_discovery_notes.md`) without updating Phase 3 step 3 here AND `/harness` Step 1.5 / Step 2 read sites silently breaks the handoff (file-missing → empty-string fallback → planners receive empty Discovery Notes). Renaming the variable requires updating all template files that reference it — see grep `qa_discovery_notes` and `qa_notes` for the full surface.
 
-4. **Cleanup:** Delete `.harness/` directory (state.json, `spec/`, `conventions.md`, and the directory itself). The final `docs/harness/<slug>/spec.md` AND the artifacts persisted in step 3 are preserved. (Halted sessions do NOT reach this step — see Halt semantics in Phase 2d-D.)
+4. **Cleanup:** Delete `.harness/` directory (state.json, `spec/`, `conventions.md`, any `wf/` a segment launch left behind, and the directory itself). The final `docs/harness/<slug>/spec.md` AND the artifacts persisted in step 3 are preserved. (Halted sessions do NOT reach this step — see Halt semantics in Phase 2d-D.)
 
 5. **If has_git == false:** Do not attempt any git operations.
 

@@ -109,7 +109,7 @@ If a severity has no findings, write the heading and a single line `(none)` unde
 
 ## Output Contract
 
-CRITICAL: Your response must be EXACTLY ONE LINE. Write the full findings to `{critic_findings_path}` — do not repeat them in your response.
+CRITICAL: Your response must be EXACTLY ONE LINE. Your entire reply must be exactly that one line — no preamble, no report text before it, no trailing notes after it. Write the full findings to `{critic_findings_path}` — do not repeat them in your response.
 
 ```
 critic_findings written — Critical=<C_count>, Major=<M_count>, Minor=<m_count>

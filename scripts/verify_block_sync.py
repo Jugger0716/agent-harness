@@ -64,25 +64,25 @@ HX_HG = ["skills/harness/SKILL.md", "skills/harness-gate/SKILL.md"]
 GROUPS: list[tuple[str, str, list[str], str | None]] = [
     ("spec-context-block", "v1", PLANNERS, "templates/_shared/spec_context_block.md"),
     ("input-trust-model", "v2", PLANNERS, "templates/_shared/input_trust_model.md"),
-    # harness-ordering-enforcement C5 (SPEC §5.4.4, rev.10): the /harness split keeps the
-    # operative contracts byte-identical across the skill copies. shared_source is None --
-    # the /harness copy is the canonical one; no fourth copy exists under templates/.
-    ("hx-preamble-a", "v1", HX_HB, None),
-    ("hx-user-lang", "v1", HX_HGB, None),
-    ("hx-olc-core", "v1", HX_HGB, None),
-    ("hx-olc-inline-returns", "v1", HX_HB, None),
-    ("hx-preamble-b", "v1", HX_HB, None),
-    ("hx-session-entry", "v1", HX_HB, None),
-    ("hx-session-gate-a", "v1", HX_HB, None),
-    ("hx-session-gate-b", "v1", HX_HB, None),
-    ("hx-session-actions-tail", "v1", HX_HB, None),
-    ("hx-run-style", "v1", HX_HB, None),
-    ("hx-boundary-shell", "v1", HX_HB, None),
-    ("hx-handoff-fields", "v1", HX_HB, None),
-    ("hx-state-machine", "v1", HX_HB, None),
-    ("hx-path-validator", "v1", HX_HGB, None),
-    ("hx-scale-render", "v1", HX_HG, None),
-    ("hx-model-selection", "v1", HX_HB, None),
+    # harness-ordering-enforcement C5 (SPEC 5.4.4, rev.10) kept the /harness split's operative
+    # contracts byte-identical across the skill copies. The v8.14 prompt diet then PROMOTED most
+    # of those blocks to single sources under templates/_shared/, which is strictly stronger than
+    # byte-identity: there is one copy, so there is nothing to compare. What stays a BLOCK group
+    # is the text that must remain INLINE in the skill body -- a missed read of it would change
+    # behaviour silently -- and therefore still exists in more than one file.
+    # Dissolved at the diet (now single sources, not duplicated text): hx-preamble-a ->
+    # orchestrator_contract.md, hx-user-lang / hx-olc-core / hx-olc-inline-returns ->
+    # output_language.md, hx-session-entry / hx-session-gate-a / hx-session-gate-b /
+    # hx-session-actions-tail -> session_recovery.md, hx-run-style -> run_style.md,
+    # hx-boundary-shell / hx-handoff-fields -> session_boundary.md, hx-model-selection ->
+    # model_config.md. hx-preamble-b was split: its Mode Gate + Standard Status Format half is
+    # the new hx-mode-gate group below, the rest moved to status_format.md.
+    # shared_source is None for all four -- the /harness copy is canonical; no copy lives under
+    # templates/.
+    ("hx-mode-gate", "v2", HX_HB, None),
+    ("hx-state-machine", "v2", HX_HB, None),
+    ("hx-path-validator", "v2", HX_HGB, None),
+    ("hx-scale-render", "v2", HX_HG, None),
 ]
 
 

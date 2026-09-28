@@ -35,7 +35,14 @@ export const meta = {
 // contract: { buildCmd, testCmd, lintCmd, typeCheckCmd, changesMdPath, verifyReportPath,
 //             todoBlocking, specContent, changedFilesList, testAvailable, roundNum, scope,
 //             userLang, qaReportPath, models, skipL1: bool, onlyL1: bool,
-//             coldPass: bool, coldMaxFiles: int, coldFilesList: string }
+//             coldPass: bool, coldMaxFiles: int, coldFilesList: string,
+//             specPath: string }
+// specPath (additive, v8.14 Slice 3) is the repo-relative path of spec.md -- read by the COLD
+// REVIEWER only, which receives a 1-line pointer naming that path instead of the spec text,
+// byte-identical to the pointer the INLINE path renders (SKILL.md Step 6 item 7). The
+// Evaluator keeps consuming specContent: the two passes are deliberately anchored to
+// different inputs, but the cold reviewer must not be anchored differently on the two
+// paths. Absent or blank specPath falls back to specContent with a log line, never silently.
 // coldPass/coldMaxFiles/coldFilesList are cold-review-only additions (physically separate
 // from changedFilesList -- SKILL.md Step 5 collects a wider list via git union+filter and
 // must never let it leak into the Evaluator's own changedFilesList input). coldFilesList
@@ -237,8 +244,10 @@ Fix instructions in **{user_lang}**; enum values English raw. Do NOT emit a 1-li
 
 // SYNC-SOURCE: templates/evaluator/evaluator_prompt.md
 // AUTHOR-TIME TRANSFORMS: '## Output Contract' (1-line PASS/FAIL L2/FAIL L3) -> VerifyVerdict
-// schema note; 'Keep ### Verdict ... Parsed programmatically' constraint dropped (the object is
-// the machine-readable result); report destination made explicit ({qa_report_path}).
+// schema note; the source's '### Verdict ... must agree with the 1-line return' constraint is
+// dropped (here the object is the machine-readable result, and the orchestrator reads the
+// verdict from state.json verify.verdict on both paths -- never from the report); report
+// destination made explicit ({qa_report_path}).
 // The QA report file write is KEPT (user-facing artifact).
 const TPL_EVALUATOR = `# Evaluator Phase — Round {round_num}
 
@@ -563,12 +572,23 @@ if (
   if (A.coldMaxFiles !== undefined && String(coldMaxFiles) !== String(A.coldMaxFiles)) {
     log(`Cold review: coldMaxFiles '${A.coldMaxFiles}' invalid -- defaulting to ${coldMaxFiles}`)
   }
+  // Spec injection: a path pointer, not the text -- the same literal SKILL.md Step 6 item 7
+  // substitutes on the INLINE path. TPL_COLD_REVIEWER's Input Trust Model grants the read
+  // permission for exactly the one file the pointer names, in the template's own text.
+  const coldSpecPath = typeof A.specPath === 'string' ? A.specPath.trim() : ''
+  let coldSpecContent
+  if (coldSpecPath !== '') {
+    coldSpecContent = 'the spec is not inlined — read ' + coldSpecPath
+  } else {
+    coldSpecContent = A.specContent
+    log('Cold review: specPath missing — falling back to inlined specContent (spec injection not symmetric with the INLINE path this run)')
+  }
   try {
     const cold = await agent(
       render(TPL_COLD_REVIEWER, {
         user_lang: A.userLang,
         cold_files_list: A.coldFilesList,
-        spec_content: A.specContent,
+        spec_content: coldSpecContent,
       }),
       { schema: ColdFindingSetSchema, label: 'cold_review', phase: 'Cold review', ...mopt(MODELS.evaluator) },
     )

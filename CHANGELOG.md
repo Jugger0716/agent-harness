@@ -8,7 +8,159 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
 
 ## [Unreleased]
 
+### Added
+
+- **`lint-cmd` / `type-check-cmd` keys on the `agent-harness-defaults:` line.** A repository
+  whose lint lives only in its own docs matched no row of `templates/_shared/detection_table.md`,
+  so the first `--fast` live probe (`design/harness-prompt-diet/PROBE.md`, finding 2) ran Layer 1
+  with every command skipped. The `/harness` Setup step now resolves each command as flag >
+  project default > detection table > `null`, echoes `(project default)` in the Setup Summary,
+  and the defaults parser gains a backtick-value form (``lint-cmd=`a && b` ``) so `&&`, commas
+  and `=` inside a command survive the `key=value` split. This repository's `CLAUDE.md` now
+  declares its seven-lint chain that way.
+- **`templates/_shared/slugify.md` — one slug rule for `/harness` and `/spec`.** The old rule
+  said "transliterate non-ASCII to ASCII", which is not reproducible and turned the probe's Korean
+  task into the branch `harness/scriptsverify_sync_markerspy-modyul-docstringui-wh` (PROBE.md
+  finding 1). The single source drops non-ASCII instead, treats `/`, `.`, `_` and whitespace as
+  separators so path-like tokens stay readable, and falls back to `task-<YYYYMMDD-HHMM>` for a
+  task with no ASCII at all. Only the two skills that share `docs/harness/<slug>/` cite it; the
+  other six slug sites keep their inline rules, since those slugs never cross a skill boundary.
+- **`/harness --fast` — an in-session Fast Gate for small changes.** `--fast` (alias `--quick`)
+  forces the inline single path, skips the Plan Critic and the cold pass, takes `balanced`
+  silently instead of asking for a model, skips the Convention Scan question, and replaces the
+  `Next → /harness-gate` ending with an AskUserQuestion gate rendered in the same session:
+  `Build now` / `Modify spec` / `Stop`. "Build now" writes `gate.approved` /`gate.approved_at` /
+  `gate.mode` and invokes `/harness-build` through the Skill tool in that same turn, so a small
+  fix no longer needs three typed commands.
+  **The gate is moved, not removed.** `skills/harness-build/SKILL.md` §Entry now refuses the
+  `plan_done` route of any `cli_flags.fast` session whose `gate.approved != true`, evaluated
+  before the two routes that would advance `phase`, so a fast session can never reach Generate
+  without the question having been answered. A non-fast session is unchanged — the human typing
+  `/harness-build` after `/harness-gate` is still its only proof (SPEC decision A), and
+  `/harness-gate` still holds no write tool and never writes `gate.*`.
+  `skills/harness-gate/SKILL.md` §Step 3 Pass A row ③ gained the third `plan_critic.source`
+  value, `"fast"`, rendering a `skipped by --fast` literal with `C=? M=?` counts; the
+  §State-Space Derivation row that claimed `applied == "skipped"` structurally implies
+  `source == "carried_over"` is corrected, because that is now one of two writers.
+- **`cold-pass=on|off` on the `agent-harness-defaults:` line, and the display defect it would
+  otherwise make worse.** `cli_flags.cold_pass` already had two writers that set it `false` —
+  `--no-cold-pass` and `--fast` — but `/harness-build`'s three display sites unconditionally
+  printed the literal `--no-cold-pass`. Both live `--fast` probes recorded this: the first
+  printed `Cold review: disabled (--no-cold-pass)` and a `Remaining` line with the same reason;
+  the second printed `Remaining : none (cold pass skipped — --no-cold-pass)`
+  (`design/harness-prompt-diet/PROBE.md`) — a false line that adding a third writer would have
+  made the common case. The fix comes first: a new additive field, `cli_flags.cold_pass_source`
+  (`"flag"` / `"fast"` / `"default:<source>"` / `null`, no `version` bump), records *why* the
+  boolean is `false` once at Setup, and all three display sites now cite one rendering rule by
+  name instead of hardcoding the flag. Only then does the new key land: `cold-pass=off`
+  resolves, when neither `--no-cold-pass` nor `--fast` is given, exactly as `--no-cold-pass`
+  does, while `cold-pass=on` is an explicit no-op that only documents intent; either value
+  is echoed in the Setup Summary `Cold` row. The boolean gate itself, and AC-28's
+  three gating points, are unchanged — this is a fourth source of the same boolean, not a
+  fourth gating point.
+
+### Changed
+
+- **Every INLINE sub-agent template's Output Contract now says the whole reply is the one line.**
+  The third `--fast` live probe (`design/harness-prompt-diet/PROBE.md`, findings 1 and 2) saw a haiku
+  verifier and a sonnet generator return multi-line reports around the contract line; the fourth
+  and fifth probes ran every dispatch with the sentence "your entire reply must be exactly that one
+  line" added to the prompt and got 12 compliant returns in 12 (opus, sonnet and haiku alike). The
+  sentence is now in `templates/planner/planner_single.md`, `templates/generator/generator_single.md`,
+  `templates/verify/verify_layer1.md`, `templates/evaluator/evaluator_prompt.md`,
+  `templates/spec/critic_inline.md` and `templates/evaluator/cold_reviewer.md`. The two DUAL-USE
+  templates' author-time copies inside `workflows/harness.eval.workflow.js` carry a schema-return
+  Output Contract instead of the 1-line one, so they are unchanged. No "re-ask the verifier"
+  branch was added: wording, not a new state-machine path, was the measured variable.
+
+- **Prompt diet: `skills/harness/SKILL.md` is 135,693 → 49,982 bytes (1,638 → 392 lines).**
+  The three pipeline skills together drop from 310,657 to ~193,000 bytes. Nothing was deleted:
+  every rule either stayed inline or moved to a single source the skill cites by name, which is
+  the convention `templates/_shared/mode_gate.md` already established for the most safety-critical
+  logic in the repository.
+  New single sources under `templates/_shared/`: `orchestrator_contract.md` (sub-agent returns,
+  version compatibility, environment detection), `output_language.md` (the Preserved-English
+  Glossary table, user-language detection, 1-line return translation), `session_recovery.md`
+  (items 1–7, shared verbatim by `/harness` and `/harness-build`), `run_style.md`,
+  `session_boundary.md`, `scale_assessment.md` (the render fragment), `path_validator.md` and
+  `architecture_principles.md`. New on-demand procedures under `templates/harness/`:
+  `doctor.md`, `state_schema.md`, `setup_summary.md`, `setup_prompts.md`, `auto_revise.md`,
+  `spec_render.md`, `plan_segment_call.md`, `plan_critic_dispatch.md`,
+  `plan_critic_failures.md`. `workflows/_reference/state_fields.md` keeps the full
+  writer/reader map for every additive-optional state.json field.
+  Held inline deliberately, because a missed read would change behaviour silently rather than
+  merely cost a turn: the Mode Gate resolution table and its fallback branches, Session
+  Recovery's doctor carve-out and phase jump table, the whole of Steps 1 / 1.5 / 2 / 2.6 as a
+  flow, the Fast Gate, and Key Rules.
+  Reasoning that is not a rule — the `spec_stamp` ordering argument, the Plan Critic crash
+  windows, the branch-collision rationale — moved to `design/harness-prompt-diet/RATIONALE.md`,
+  which is committed rather than written under the gitignored `docs/`.
+  **Restated (this slice):** the file has grown since that figure was captured and now measures
+  50,660 bytes at `db13efd`. The `135,693 → 49,982` figure above stays as the historical
+  baseline rather than being silently overwritten; `50,660 bytes at db13efd` is the current one.
+  **Restated again (2026-09-21):** 51,280 bytes at `dc36a23` — Slice 5′ (`49eec8f`) added the
+  `cold_pass_source` write and its Setup echo, and the fourth probe's `--fast` disclosures came after
+  `db13efd`. `skills/harness-build/SKILL.md` measures 102,709 bytes at the same commit. Each figure
+  names the commit it was taken at; none of the earlier ones is overwritten.
+- **`scripts/verify_block_sync.py`: 16 `hx-*` BLOCK groups → 4.** A promotion to a single source
+  is strictly stronger than byte-identity, because there is then one copy and nothing to compare.
+  What remains a group is the text that must stay inline and therefore still exists in more than
+  one file: `hx-mode-gate` (new, carved out of the former `hx-preamble-b`), `hx-state-machine`,
+  `hx-path-validator` and `hx-scale-render`, all at `v2`. The dissolved tags and their
+  destinations are listed in that script's own comment.
+- **`scripts/verify_sync_markers.py`: two `min_sites` floors lowered, deliberately and in the
+  same change.** `handoff-state-record` 3 → 2 and `session-conflict` 8 → 7, because the
+  `/harness` and `/harness-build` copies of those marked blocks became one single source each.
+  Each comment records that a promotion to a single source is the one reason a zero-slack floor
+  may fall, since it removes duplication rather than dropping a check.
+- **Cold reviewer spec injection is now symmetric across paths.** The INLINE path
+  (`skills/harness-build/SKILL.md` §Step 6 item 7) already handed the cold reviewer a 1-line
+  pointer naming `{docs_path}spec.md`; the WORKFLOW path inlined the whole spec through
+  `specContent`. `workflows/harness.eval.workflow.js` takes a new additive `specPath` arg
+  (§Step 5's args block passes `{docs_path}spec.md`) and renders the identical pointer into
+  `TPL_COLD_REVIEWER`; a missing `specPath` falls back to `specContent` with a log line rather
+  than silently. The Evaluator still consumes `specContent`, and `ColdFindingSchema` is
+  untouched — the "intended deviation vs. pure defect" split stays a ROADMAP item.
+- **The Evaluator's verdict is state, not a file parse.** New additive state.json field
+  `verify.verdict` (`PASS` / `FAIL_L2` / `FAIL_L3`), written from the 1-line return's LEADING
+  token on the INLINE path (`skills/harness-build/SKILL.md` §Step 6 item 5 — anything else is a
+  conservative `FAIL_L3` routed to the human gate) and from the `VerifyVerdict` object on the
+  WORKFLOW path (§Step 5 item 4, in the same single write as `verify.layer2_result`). §Step 7
+  reads that field on both paths, in-session and on resume: the `### Verdict:` regex over
+  `qa_report.md` and the WORKFLOW-resume "verdict reconstruction" are gone, and the report is
+  written for the human only. Architecture Principle #1's exception (2) is retired — 7 numbered
+  slots, 6 live, numbering kept so citations of (3)–(7) stay valid — across the single source
+  and all three skill copies. `templates/evaluator/evaluator_prompt.md`'s Output Contract now
+  requires the leading token and no longer claims the report line is parsed. The WORKFLOW
+  `VerifyVerdictSchema` is untouched. Scope: `/harness-build` only — `/migrate` and `/refactor`
+  keep their own `qa_report.md` `### Verdict:` parse over their own evaluator templates.
+
 ### Fixed
+
+- **Workflow segments launch from a `.harness/wf/` copy, because the plugin-root path is
+  refused.** The `Workflow` tool accepts a `scriptPath` only when it returned that path itself or
+  the file sits under the working directory (or a directory the user added), and refuses
+  `${CLAUDE_PLUGIN_ROOT}/workflows/…` with `scriptPath
+  must be a script path this tool returned, or a file you can already read`. The fifth live probe
+  (`design/harness-prompt-diet/PROBE.md`, run B) hit it on the first recorded WORKFLOW-path
+  attempt from an installed copy — no earlier such run is recorded in `design/`, the first four
+  probes all ran `Path : inline`, and the successful segment runs this file and `ROADMAP.md`
+  record by `runId` do not record their launch path. Every dispatch site (15 in nine skills, 2 in
+  `templates/harness/`) now copies the shipped script to `.harness/wf/`, launches that path and
+  deletes the copy once the call returns (so the skills whose cleanup removes `.harness/` only
+  "if empty" keep working);
+  the procedure, the zero-agent measurement and the failure routing are the new single source
+  `templates/_shared/segment_launch.md`, and `mode_gate.md` rule 3 classifies a path refusal as a
+  launch failure (graceful INLINE fallback), never as a permission denial. `/harness doctor` item
+  ② still reports tool presence only and now says that the launch surface is not exercised.
+  The sixth live probe (2026-09-28, `PROBE.md`) then ran `harness.plan` and `spec.eval` from
+  `.harness/wf/` copies of the installed plugin to completion, both on the first attempt, and
+  it settled two readings of the procedure in `segment_launch.md` itself: a call "has returned"
+  when its run finishes — the `Workflow` tool answers a launch at once with a task id — so a
+  second launch waits for the first run's completion; and `${CLAUDE_PLUGIN_ROOT}` is a value to
+  substitute from the skill's reported base directory, not a shell variable (it was unset in
+  `Bash`, where taken literally step 0's non-empty check fails on every launch).
+  `/harness doctor` item ④ now resolves the root the same way.
 
 - **`/harness-build` no longer reads as asking "Resume?" one message after the gate printed it.**
   `skills/harness-build/SKILL.md` §Entry item 3 said "run §Session Recovery below", and that

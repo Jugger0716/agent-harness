@@ -316,7 +316,7 @@ Read `mode` and `path_resolved` from state.json and branch accordingly.
 2. **Run the Analyze segment** via the Workflow tool (pass `args` as a JSON object — the script defensively parses; the field set below is the 1:1 contract with the script's `// contract` comment — a field missing on either side silently renders as ''):
    ```
    Workflow {
-     scriptPath: "${CLAUDE_PLUGIN_ROOT}/workflows/migrate.analyze.workflow.js",
+     scriptPath: ".harness/wf/migrate.analyze.workflow.js",   // FIRST apply templates/_shared/segment_launch.md: copy ${CLAUDE_PLUGIN_ROOT}/workflows/migrate.analyze.workflow.js here; delete the copy once this call returns
      args: {
        target: <target>, fromVersion: <from_version>, toVersion: <to_version>,
        migrationType: <migration_type>, repoPath: <repo_path>, lang: <lang>,
@@ -459,7 +459,7 @@ If `mode == "multi"`:
 3. **Run the Eval segment** via the Workflow tool (field set = 1:1 contract with the script's `// contract` comment):
    ```
    Workflow {
-     scriptPath: "${CLAUDE_PLUGIN_ROOT}/workflows/migrate.eval.workflow.js",
+     scriptPath: ".harness/wf/migrate.eval.workflow.js",   // FIRST apply templates/_shared/segment_launch.md: copy ${CLAUDE_PLUGIN_ROOT}/workflows/migrate.eval.workflow.js here; delete the copy once this call returns
      args: {
        target: <target>, fromVersion: <from_version>, toVersion: <to_version>,
        migrationType: <migration_type>,

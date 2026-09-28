@@ -222,7 +222,7 @@ After completing the checklist, proceed to Step 5 (Report Generation).
 1. **Run the Review segment** via the Workflow tool (pass `args` as a JSON object — the script defensively parses; the field set below is the 1:1 contract with the script's `// contract` comment — a field missing on either side silently renders as ''):
    ```
    Workflow {
-     scriptPath: "${CLAUDE_PLUGIN_ROOT}/workflows/deep-review.review.workflow.js",
+     scriptPath: ".harness/wf/deep-review.review.workflow.js",   // FIRST apply templates/_shared/segment_launch.md: copy ${CLAUDE_PLUGIN_ROOT}/workflows/deep-review.review.workflow.js here; delete the copy once this call returns
      args: {
        mode: <"deep"|"thorough">,
        diffContent: <full unified diff, binary files already excluded>,
