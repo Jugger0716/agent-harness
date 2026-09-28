@@ -298,3 +298,68 @@ Total for run C: 1 user message and 2 AskUserQuestion answers (Fast Gate, Commit
 - Live probe B's Step 7 / `Remaining` lines (`project default (settings.local.json)` rendered past Setup) and live probe C without `--fast` (`Cold : on`, `cold_pass_source == null`).
 - The `null` `cold_pass_source` → `source not recorded` branch.
 - WORKFLOW-path anything from the installed plugin (finding 1); Fast Gate "Modify spec"; `gate.approved == true` while `phase == plan_done`; "Max rounds reached".
+
+---
+
+# Sixth probe — `segment_launch` end to end from an installed copy, and `cold-pass` live probe C (2026-09-28)
+
+> A fresh `claude` process started 2026-09-28, on `harness/token-performance-optimization` at
+> `335ed0e`. Both installed copies matched HEAD for all 155 tracked files (`git hash-object`
+> against each copy) and were last written 2026-09-21 04:07, before the process started, so the
+> skills this run loaded carry `20e4c69`'s `.harness/wf/` procedure. Two runs: A exercises that
+> procedure on the WORKFLOW path, B is live probe C. Nothing in this file is a rule.
+
+## Setup
+
+| Item | Value |
+|---|---|
+| Entry | `/handoff resume` → "Briefing only" → each run typed as its own message. Both times the first message carried a placeholder from the assistant's own instructions verbatim — `"<새 소형 문서 태스크, ASCII, 이전과 다른 문구>"`, then `"<새 ASCII 태스크 문구>"`; the orchestrator stopped before Setup, asked for a task, and created nothing (finding 6) |
+| Run A | `/harness --mode standard "Add a ROADMAP deferred row recording that /debug has no end-of-session cleanup step"` — slug `add-a-roadmap-deferred-row-recording-that-debug-ha` (the 50-char cut lands mid-word again, third probe finding 4) |
+| Run B | `.claude/settings.local.json` `env.AGENT_HARNESS_DEFAULTS = "cold-pass=maybe"`, then `/harness "Tick the SLICE5 acceptance boxes that the lint and grep checks already satisfy"` — no `--fast`, no `--mode` |
+| Model preset | `balanced`, chosen at the Model question in both runs (the resolved defaults line carries no `model-config`) |
+
+## Observed sequence — run A (`--mode standard`)
+
+1. **Setup**: `Path : workflow (--mode standard)`, no Ambiguity Prompt; `Lint : … (project default)`; `Cold : on`; conventions copied (CLAUDE.md rich).
+2. **Step 2, `segment_launch` step 0**: `${CLAUDE_PLUGIN_ROOT}` was **unset in the `Bash` tool** (`${CLAUDE_PLUGIN_ROOT:-<unset>}` printed `<unset>`). The root was taken from the skill base directory the session announced, minus `skills/harness`; the source script existed (finding 2).
+3. **Steps 1–3**: `mkdir -p .harness/wf`, `cp`, `cmp` byte-identical, 0 CR. `Workflow { scriptPath: ".harness/wf/harness.plan.workflow.js" }` was **accepted on the first attempt**. The tool answered at once with a task id and run id `wf_0378e68f-223` and ran the script in the background (finding 1); `runs.plan.runId` was written then.
+4. **Completion**: 3 agents (architect and senior_developer proposals, synthesis), 311,265 tokens, 491 s; `{ plan, proposals, stats }` with `stats` 2/2. **Step 4**: `.harness/wf/` deleted after the completion notification, and confirmed absent.
+5. `proposals.json` persisted; `spec.md` rendered from the PlanResult (153 lines, 11 checkboxes) under the `spec_stamp` protocol → `{generation: 1, lines: 153}`; Scale Assessment frozen from the object (11 / 3 / 3 / 13, all `ok`; `sliceHint` single-slice).
+6. **Step 2.6 WORKFLOW**: no `/spec` `critic_findings.md` → own critic; pre-dispatch delete; the same copy → launch → delete for `spec.eval.workflow.js`, **accepted on the first attempt** (run `wf_7f4443b2-b9b`, not persisted — the Step 2.6 limit RATIONALE.md records). 1 agent, 173,062 tokens, 669 s; `CriticReport` `Critical=1, Major=6, Minor=8`; the findings file existed, so the latch wrote `applied = "executed"` with `spec_stamp_at_critic {1, 153}`; the copy was deleted after the notification.
+7. **After Plan**: Scale Assessment, Type A block, `Next → /harness-gate`. The human then asked for Session Recovery's "Restart"; it was carried out directly rather than through the gate: `.harness/` deleted and, with no new task, nothing started. The empty branch was then deleted by hand and the `docs/` directory kept.
+
+## Observed sequence — run B (live probe C)
+
+1. **Setup**: one warning in `user_lang` — `cold-pass=maybe` is not `on|off`, the line then yields zero valid keys, so it counts as no declaration and the search continued to `CLAUDE.md`. That line has no `path` key, so the Ambiguity Prompt fired. No ultracode reminder was present in that turn, so it resolved as undetermined and `(Recommended)` sat on `multi`, as `templates/_shared/mode_gate.md` step 4 prescribes; the human chose `single` → `Path : inline (you chose single (ultracode undetermined))`.
+2. **Setup Summary**: `Cold : on`, `Lint : … (project default)`; state.json `cli_flags.cold_pass == true`, `cli_flags.cold_pass_source == null`. **Live probe C holds on every clause.**
+3. **Step 2 INLINE**: planner (opus) `spec.md generated — 10 acceptance criteria, 9 edge cases`, 90 lines, 106,790 tokens / 308 s. **Step 2.6 INLINE**: critic (opus) `critic_findings written — Critical=1, Major=5, Minor=7`, 82,708 tokens / 200 s; latched `executed`.
+4. Ended at `Next → /harness-gate`. `.harness/` was deleted by the human; the empty branch, the `docs/` directory and the `env` key were removed after.
+
+## Verdicts
+
+| # | Question | Result |
+|---|---|---|
+| 1 | copy → launch → delete (`templates/_shared/segment_launch.md`) runs a real segment to completion from an installed copy | **yes, twice** — `harness.plan` (3 agents) and `spec.eval` (1 agent), both accepted on the first attempt; the fifth probe's finding 1 now has an observed fix for `/harness`'s Plan and Plan Critic segments |
+| 2 | `runs.plan.runId` is recorded and the copy is gone afterwards | **yes** — and the copy was absent after each of the two calls |
+| 3 | Live probe C (`SLICE5.md` §Acceptance criteria) | **yes** — one warning, `Cold : on`, `cold_pass_source == null`; the all-invalid line does not shadow the team line (`Lint … (project default)`), as the fifth probe first saw |
+| 4 | Sub-agents honor the 1-line Output Contract | **yes, 2 of 2** (the INLINE planner and critic in run B) — fourteen consecutive compliant returns since the fourth probe; run A's returns are schema-validated objects and are not counted |
+
+Run A's critic caught a factual error in the synthesized spec: the spec treated `/debug`'s Complex-fix hand-off to `/harness` as an exit that never records `completed`, while `skills/debug/SKILL.md` §Phase 3: Prevention (Optional) is offered "After Phase 2 completes", its item 4 writes `completed`, and its final summary carries a `Deferred to /harness` value for exactly that path. That is the "spec plants a false fact" class the repository's QA history keeps finding, caught before any generator saw it.
+
+## Findings
+
+1. **The `Workflow` tool is asynchronous, so "as soon as the call has returned" had two readings.** A launch answers at once with a task id; the result arrives later as a completion notification. Deleting at the first answer was not tried — whether the engine re-reads the script after launch is unknown — so both copies were deleted after the notification. **Fixed in the commit that records this probe**: `segment_launch.md` step 4 now says "has returned" — there and in every dispatch site's "once this call returns" — means the run has finished, and, because step 4 removes the whole directory, a second launch waits for the first run's completion; its section on repositories that do not ignore `.harness/` now counts the window as the whole background run.
+2. **`${CLAUDE_PLUGIN_ROOT}` is not a shell variable here.** It was unset in `Bash`. The skill loader substituted `${CLAUDE_PLUGIN_ROOT}` inside the SKILL.md body (§Sub-command: doctor's line arrived with the literal cache path), while `{CLAUDE_PLUGIN_ROOT}` without `$` arrived unsubstituted, and every template read with the Read tool arrives unsubstituted too — including `segment_launch.md` step 2 and the `copy ${CLAUDE_PLUGIN_ROOT}/workflows/…` comments of the two dispatch sites under `templates/harness/`. (The fifteen dispatch sites inside SKILL.md bodies presumably arrive substituted like the doctor line; that was not observed.) Taken literally, step 0's non-empty check fails on every launch (and step 2's `cp` would read `/workflows/…`), so the run falls back to INLINE — with the banner, but for a reason the banner does not name. `templates/harness/doctor.md` item ④ consumes the same token and would report a healthy install as `plugin root unresolved`. **Fixed in the same commit**: step 0 now says where the literal root comes from (the invoking skill's own directory, which is not always the script's prefix), and doctor item ④ points at it; doctor was not re-run.
+3. **Content-carrying args are expensive to honor, and this run did not honor them in full.** `plan_segment_call.md` passes `conventions` as content (a 229-line CLAUDE.md here) and `plan_critic_dispatch.md` passes `specContent` (the whole spec); the orchestrator has to re-emit both in its own output. Run A passed a condensed CLAUDE.md and a spec whose Implementation Steps were condensed, both disclosed inside the args. Run B's INLINE planner received a pointer to `.harness/conventions.md` instead of the content `planner_single.md` asks for. A deviation from three templates, recorded rather than repeated; a path arg, like `harness.eval`'s `specPath` (b867925), is the obvious candidate. Not fixed here.
+4. **`templates/harness/spec_render.md` has no rule for multi-line field text.** Nested `- ` lines inside an acceptance criterion, a testing-strategy item or a step description rendered as sibling top-level bullets. The checkbox count was unaffected. Not fixed here.
+5. **The INLINE Fallback count has two readings.** `templates/_shared/scale_assessment.md` counts "lines matching the literal `- [ ]`"; read as a substring, a prose line in run B's spec (whose task is about checkboxes) counted, giving 11 for 10 criteria. Recounted with the match anchored at the line start → 10. "GFM checkbox lines" implies the anchored reading, but the text does not say it. Not fixed here.
+6. **A placeholder in the assistant's own next-step text was pasted as the task, twice** (the two strings are quoted in §Setup). `slugify.md` would have produced `ascii` both times — the only ASCII word in either. Nothing in `/harness` recognizes a placeholder; the orchestrator's halt before Setup was judgment, not contract. Friction in how next steps are written for the human rather than a skill defect.
+
+Total sub-agent cost: run A 484k tokens (plan 311k, critic 173k); run B 189k (planner 107k, critic 83k).
+
+## Still not observed
+
+- WORKFLOW-path `harness.build` and `harness.eval` from an installed copy — and so a WORKFLOW-path `verify.verdict` write — and every other skill's segments through `.harness/wf/`.
+- Whether the engine re-reads a script after launch (finding 1's untested earlier moment).
+- `/harness doctor` item ④ after its root-resolution sentence (finding 2) — not re-run.
+- Live probe B's Step 7 and `Remaining` lines; the `null` `cold_pass_source` → `source not recorded` branch; Fast Gate "Modify spec"; `gate.approved == true` while `phase == plan_done`; "Max rounds reached".

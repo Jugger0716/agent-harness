@@ -85,7 +85,9 @@ exactly as ⑤ (iii) does with the same fact.
    **backup suffix** — a suffix beginning `.backup-` after the version string — is excluded from
    this axis and listed separately. Print the resolved value of
    `${CLAUDE_PLUGIN_ROOT}` as the running copy; if it is empty or cannot be resolved, print
-   `— (plugin root unresolved)` and `⚠`.
+   `— (plugin root unresolved)` and `⚠`. Resolve it as `templates/_shared/segment_launch.md`
+   step 0 does — from the base directory Claude Code reports for the invoking skill, never from
+   the shell, where it can be unset and a healthy install would then read as unresolved.
    (b) Each install copy's `plugin.json` against the repository's `plugin.json`.
    (c) Content identity. The left-hand side is `git ls-files`, run from the tree root resolved by
    `git rev-parse --show-toplevel` — run from a subdirectory it lists only that subtree and every

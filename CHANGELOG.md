@@ -153,6 +153,14 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
   `templates/_shared/segment_launch.md`, and `mode_gate.md` rule 3 classifies a path refusal as a
   launch failure (graceful INLINE fallback), never as a permission denial. `/harness doctor` item
   ② still reports tool presence only and now says that the launch surface is not exercised.
+  The sixth live probe (2026-09-28, `PROBE.md`) then ran `harness.plan` and `spec.eval` from
+  `.harness/wf/` copies of the installed plugin to completion, both on the first attempt, and
+  it settled two readings of the procedure in `segment_launch.md` itself: a call "has returned"
+  when its run finishes — the `Workflow` tool answers a launch at once with a task id — so a
+  second launch waits for the first run's completion; and `${CLAUDE_PLUGIN_ROOT}` is a value to
+  substitute from the skill's reported base directory, not a shell variable (it was unset in
+  `Bash`, where taken literally step 0's non-empty check fails on every launch).
+  `/harness doctor` item ④ now resolves the root the same way.
 
 - **`/harness-build` no longer reads as asking "Resume?" one message after the gate printed it.**
   `skills/harness-build/SKILL.md` §Entry item 3 said "run §Session Recovery below", and that

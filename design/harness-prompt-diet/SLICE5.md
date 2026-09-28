@@ -1,7 +1,7 @@
 # Slice 5′ — `cold-pass=on|off` as a project default (design, 2026-09-18)
 
 > Replacement for HANDOFF_IMPROVEMENT_PLAN Slice 5 (`.harness/config.json` governance
-> presets). Companion to `RATIONALE.md` and `PROBE.md`. Status: **implemented** (49eec8f, merged 71c5c02); live probes A/B/C pending.
+> presets). Companion to `RATIONALE.md` and `PROBE.md`. Status: **implemented** (49eec8f, merged 71c5c02); live probes A and C passed (`PROBE.md` fourth and sixth probes), B observed at Setup only (fifth probe).
 > Nothing in this file is a rule until the sections it names are edited.
 
 ## Why the original Slice 5 is not built
@@ -158,19 +158,19 @@ markers, `scripts/`.
 
 ## Acceptance criteria
 
-- [ ] All six lints + wiring exit 0; `project-defaults` still reports 9 sites; description budget
+- [x] All six lints + wiring exit 0; `project-defaults` still reports 9 sites; description budget
       total unchanged (no frontmatter edit).
-- [ ] `grep -n 'Cold review: disabled (--no-cold-pass)' skills/harness-build/SKILL.md` → 0 hits;
+- [x] `grep -n 'Cold review: disabled (--no-cold-pass)' skills/harness-build/SKILL.md` → 0 hits;
       the literal `--no-cold-pass` survives in that file only inside the rendering table's
       `"flag"` row and in prose naming the flag as a CLI flag, never as a rendered reason value.
-- [ ] `grep -nF 'reason `"--no-cold-pass"`' skills/harness-build/SKILL.md` → 0 hits — §Step 6
+- [x] `grep -nF 'reason `"--no-cold-pass"`' skills/harness-build/SKILL.md` → 0 hits — §Step 6
       item 7's parenthetical reason now cites the §Step 7 rendering rule's `<why>`. This prose is
       never rendered, so it is the one site no live probe can catch; the `Remaining` site needs no
       grep of its own because live probes A and B pin it end to end.
-- [ ] `grep -c cold_pass_source` ≥ 1 in each of: `skills/harness/SKILL.md`,
+- [x] `grep -c cold_pass_source` ≥ 1 in each of: `skills/harness/SKILL.md`,
       `skills/harness-build/SKILL.md`, `templates/harness/state_schema.md`,
       `workflows/_reference/state_fields.md`, `templates/harness/setup_summary.md`.
-- [ ] Root-document path-anchored `§` tallies unchanged before/after (`verify_sync_markers.py`
+- [x] Root-document path-anchored `§` tallies unchanged before/after (`verify_sync_markers.py`
       docstring item 3 figures: harness 42 / harness-gate 2 / harness-build 7; sub-path 7).
 - [x] Live probe A — `/harness --fast "<task>"` on this repository: Setup Summary shows
       `Cold : off (--fast)`; Step 7 prints `Cold review: disabled (--fast)`; Type B block prints
@@ -180,10 +180,27 @@ markers, `scripts/`.
       consumed; expect `Lint : none` unless `--lint-cmd` is passed, and say so in the probe
       record) and plain `/harness "<task>"`: `Cold : off (project default (settings.local.json))`
       at Setup; the same `<why>` at Step 7 and in `Remaining`.
-- [ ] Live probe C — `cold-pass=maybe` on the line: one warning in `user_lang`, cold pass on,
+- [x] Live probe C — `cold-pass=maybe` on the line: one warning in `user_lang`, cold pass on,
       `cold_pass_source == null`.
 - [ ] Resume of a state file lacking `cold_pass_source` with `cold_pass == false`: Step 7 prints
       `Cold review: disabled (source not recorded)`; nothing else changes.
+
+> Ticked 2026-09-28. The first five were measured on `git archive` extracts of d6e5a30 (before),
+> 49eec8f (the implementation) and 335ed0e (HEAD), outside the working tree: all seven lint
+> commands exit 0 at all three (an extract is not a git work tree, so `check_workflow_syntax.mjs`
+> reports its index-blob CR guard as SKIP there); `project-defaults` has 9 sites at each and total
+> description budget is 7706 at each; both greps return 0 at 49eec8f and 335ed0e, where
+> `--no-cold-pass` occurs exactly twice — the `"flag"` row and §Step 6 item 7's "2nd of 3
+> `--no-cold-pass` gating points" prose; `cold_pass_source` counts are 4 / 2 / 1 / 2 / 1 in the
+> order listed; and layer 6's and layer 5's compiled regexes over `CHANGELOG.md`, `ROADMAP.md`,
+> `README.md` and `CLAUDE.md` give 42 / 2 / 7 and 7 at all three revisions. The docstring's fifth
+> root document, `HANDOFF_IMPROVEMENT_PLAN.md`, is gitignored under
+> `docs/harness/token-performance-optimization/` (gitignored — not a public link), so no extract
+> carries it; the same regexes score the working-tree copy 0.
+> Live probe C is `PROBE.md`'s sixth probe, run B. Live probe B stays open: the fifth probe saw
+> its Setup line only, and Step 7 / `Remaining` need a full build — so until B closes, the third
+> item's premise that "live probes A and B pin" the `Remaining` site is half met: only the
+> `--fast` `<why>` is pinned there.
 
 ## Edge cases
 
