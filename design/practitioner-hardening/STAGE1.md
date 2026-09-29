@@ -26,6 +26,11 @@ Mode Gate, INLINE 기본값, Evaluator)는 동결한다 — 이 단계는 국소
 
 ### S1 — 롤백·스냅샷을 바이트 사본으로 통일 (C1, M1, M2, M3)
 
+> **정정 (2026-09-29):** 아래 "바이트 사본으로 통일" 설계는 Plan Critic 4라운드에서 수렴하지 않아 폐기했다.
+> 확정 설계는 **clean-target 게이트**다(대상이 조작 직전에 HEAD와 같을 때만 git 복원, dirty면 Commit WIP
+> first / Abort, untracked·no-git만 `.harness-backup/<skill>/` 사본). 확정 spec은 `SPEC.md`(rev 5),
+> 결정과 수렴 과정은 `CONVERGE.md`에 있다. 이 절의 나머지 문장은 이력으로 남긴다.
+
 - 새 단일 소스 `templates/_shared/rollback.md`: "수정 전 대상 파일의 바이트 사본을 `.harness/<skill>_backup/`에
   만들고, 복원은 그 사본으로만 한다. `git checkout -- <path>`, 인자 없는 `git stash`, `git checkout -- .`,
   `git reset --hard`, `git clean -f`는 롤백·스냅샷·복구 안내에 쓰지 않는다." 선례는
