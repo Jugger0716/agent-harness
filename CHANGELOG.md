@@ -8,9 +8,8 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
 
 ## [Unreleased]
 
-The `harness-converge` epic (`design/harness-converge/SPEC.md`), slices S1–S2. S3 (epic slice
-chaining) and S4 (the live probe) are not in yet, so none of the paths below has been observed
-in a live session.
+The `harness-converge` epic (`design/harness-converge/SPEC.md`), slices S1–S3. S4 (the live
+probe) is not in yet, so none of the paths below has been observed in a live session.
 
 ### Added
 
@@ -34,6 +33,26 @@ in a live session.
   former flow. `--fast` is always inline; `--fast --separate-gate` halts. The mode is recorded in
   `cli_flags.separate_gate` and echoed in the Setup Summary's new `Gate` row; a session written
   before the field is read as inline when it was `--fast`, separate otherwise.
+- **Epic slice chaining — `skills/harness-build/SKILL.md` §Epic Slice Chain (S3).** After a
+  "Plan as epic" approval in a session where §Chain Condition holds, §Step 3.6 starts the first
+  row's `Command` in the same turn — the condition judged before `.harness/` is deleted, the
+  chain run only after the delete succeeded. A slice session is recognised without a state
+  field: its task equals exactly one `Slice` of the `slice_plan.md` in its `docs_path`'s parent.
+  It asks its own approval with three options (no "Plan as epic", so epics never nest), and on a
+  clean end — `QA PASS`, Layer 1 `PASS`, cold review `clean` or turned off — its §Step 8 applies
+  "Commit code only" without asking and starts the next row. A row whose `Command` is not exactly
+  `/harness --output-dir <dir> "<Slice>"` (now spelled out in §Step 3.5's format), or whose
+  `Slice` breaks the slice id rule, is never chained; the table's last row ends with an
+  `Epic : complete` row. §Chain Condition's `run_style` is the one §Step 1 recorded, so a
+  `/harness-build` typed later never commits or chains on an approval whose description promised
+  neither; a slice session takes `user_lang` from the user's most recent message, its task being
+  an English slice id.
+- **`dirty_at_start` (S3).** In a slice session only, `/harness` §Step 1 item 7 records each
+  changed or untracked path with its `git hash-object` before it creates anything, so the
+  automatic commit can name, and commit by pathspec (`git commit --only -- <paths>`), only what
+  changed in the working tree since; with no path to name it commits nothing and stops at the
+  slice boundary. Absent or `null`, the commit question renders instead. Other sessions do not
+  record it. Additive; `version` stays `"3.0"`.
 
 ### Changed
 
@@ -73,6 +92,27 @@ in a live session.
   approval (or a critic record) bound to an earlier generation cannot match a spec.md changed
   since.
   Description ceilings rose by 87 characters (harness 580, harness-build 404, harness-gate 438).
+- **The Type B block of an epic and its slices (S3).** The epic variant and every slice
+  session's Type B end with `Check` / `Next` / `Epic` / `Chain` / `Handoff` rows. A boundary stop
+  — the chain condition failing, an end that is not clean, a `Command` failing its shape check, a
+  failed delete, an automatic commit that failed or could not apply, a refused Skill call, or
+  context — prints the next row's
+  `Command` and offers `/handoff generate`; the epic variant's "`/handoff generate` is not
+  offered here" is corrected in place. A stop inside a slice prints only its own resume command.
+- **`/harness` Resume of a `completed` session deletes `.harness/` before Step 1 (S3).** A
+  session whose commit failed keeps `.harness/`, and the next `/harness` — the next slice's
+  `Command` included — used to start on top of it, inheriting the previous session's converge
+  ledger (and so skipping a decision question that ledger had already answered).
+- **§Step 3.6 now reads the first row's `Command` (S3)**, so its "never content" sentence is
+  corrected to cite Architecture Principles #1 slot (8), whose sites are now named; the
+  `/harness-build` subset of that registry counts four reads. Slot count unchanged (8, 7 live).
+- **Wording (S3).** `/harness` §Approval Gate's "Plan as epic" description announces the chain
+  under §Chain Condition, and a slice skips the Scale Assessment render; the run_style CLI
+  surface; `skills/handoff/SKILL.md` (one line on a slice `Command` continuing the chain — no
+  rule change — and "`/harness` §Step 3.5" corrected to `/harness-build`); `README.md` (a new
+  Epic Slices section — `gate=separate` keeps every slice on the tool-less gate — plus the skills
+  table, first-task walkthrough, Quick Start, Interactive UX, pipeline diagram, File Structure and
+  handoff notes); state docs; `CLAUDE.md`. Descriptions unchanged.
 
 ### Removed — regressions, disclosed
 
@@ -95,6 +135,16 @@ in a live session.
   `.harness/state.json` inside the tree check's blind spot could forge the record too: the
   loop's mapping writes `gate.*` back to its run-start values, so only a run that never reaches
   its mapping (a Workflow denial, a session cut off mid-run) carries such a write forward (ROADMAP).
+- **A clean slice end in an in-session epic is committed without a question (S3).** The consent
+  is that slice's "Build now" click, whose description says so; outside §Chain Condition, or on
+  an end that is not clean, the commit question is unchanged. Every path that changed in the
+  working tree since the slice's session started is committed, listed as it commits — build or
+  test output that `.gitignore` does not cover, and a file edited by hand during the chain,
+  included. A file the slice edited is committed whole — an uncommitted edit you had made to it
+  before the slice started included, marked in the list — while files that did not change
+  meanwhile stay as they were, staged or not. Each slice branches from the previous slice's
+  commit and nothing is merged; the epic directory's own `spec.md` and `slice_plan.md` are
+  never part of an automatic commit (ROADMAP).
 
 ## [8.14.0] — 2026-09-28
 

@@ -120,7 +120,7 @@ matches what you are measuring; they are not interchangeable.
 |-------|---------|-------------|
 | **Harness** | `/harness <task>` | Entry point of the 3-Phase (Planner -> Generator -> Evaluator) pipeline: Setup, Convention Scan, Plan, then a Plan Critic converge loop over `spec.md`; every session ends at `plan_done`, where by default HARD GATE #1 is one in-session approval question whose approval chains into `/harness-build` in the same turn (`--separate-gate`: `Next → /harness-gate` instead). Inline single path by default; opt-in workflow path (ultracode or `--mode standard/multi`) runs plugin-shipped native Workflow segment scripts with schema-validated returns. Works with or without git. _(formerly `/workflow` — old name kept as a deprecation alias)_ `/harness doctor` gives a read-only environment diagnostic. |
 | **Harness gate** | `/harness-gate` | HARD GATE #1 (spec confirmation) for a `--separate-gate` / `gate=separate` session, as its own skill with `Bash`, `Write`, `Edit`, `Glob` and every sub-agent tool removed — the turn that renders the gate cannot modify a file or run a command. It reads `state.json` and `spec.md`, asks once, and prints the next command for you to type (`/harness-build`, `/harness-build --epic`, or a `/harness --modify` / `--auto-revise` / `--critic` re-entry). Writes nothing. An inline session (the default) gets one line sending it back to `/harness`. |
-| **Harness build** | `/harness-build [--epic \| generate \| verify \| evaluate]` | The implementation half: Slice Plan / Epic Exit, Generate, Verify (Layer 1), Evaluate (Layer 2+3), Verdict loop, Cleanup. Performs the `generate_ready` write on entry; consumes only a `spec.md` HARD GATE #1 approved — an inline session's recorded approval must still match `spec.md`, or it refuses. Not an entry point. |
+| **Harness build** | `/harness-build [--epic \| generate \| verify \| evaluate]` | The implementation half: Slice Plan / Epic Exit, Generate, Verify (Layer 1), Evaluate (Layer 2+3), Verdict loop, Cleanup. Performs the `generate_ready` write on entry; consumes only a `spec.md` HARD GATE #1 approved — an inline session's recorded approval must still match `spec.md`, or it refuses. In an in-session epic it also starts the slices one after another — each still asks for its own approval, and a slice that ends clean is committed without asking ([Epic Slices](#epic-slices)). Not an entry point. |
 | **Refactor** | `/refactor <target>` | Safe, behavior-preserving code structure improvement. Single (inline) or multi/comprehensive (2-3 analysts + cross-critique, native Workflow path). Execution stays gated and step-tested in the orchestrator. |
 | **Migrate** | `/migrate <target> [--from v4 --to v5]` | Staged migration of frameworks, libraries, and dependencies. Single (inline) or multi (parallel external-research + codebase-impact analysts + synthesis, native Workflow path) with WebSearch research. Staged execution stays gated and step-tested in the orchestrator. |
 | **Debug** | `/debug <error>` | Hypothesis-driven debugging with mandatory executable verification. Quick (inline) or deep (2 analysts + adversarial cross-verify, native Workflow path). |
@@ -210,7 +210,8 @@ inline-vs-workflow first.)
    and wiring corrections on its own, and re-reviews (if it finds a genuine design choice, it asks
    you that first, in a question of its own). The same session then prints a summary — what the
    loop applied, rejected and left open — and asks one question: **`Build now`** to implement the
-   spec as one slice, `Plan as epic` to split the work into slices, `Modify` to describe a change
+   spec as one slice, `Plan as epic` to split the work into slices that then run one after
+   another, each asking once ([Epic Slices](#epic-slices)), `Modify` to describe a change
    (the spec is edited, re-reviewed and the question comes back), or `Stop`. Choose
    **`Build now`**. Only choosing one of the first two labels approves; typed text never does.
    **This is the one gate a successful run always shows you.**
@@ -258,7 +259,8 @@ not its own. `/harness doctor` gives a read-only environment diagnostic and neve
 /harness fix bug --separate-gate                  # end at plan_done with Next → /harness-gate (the tool-less gate) instead of approving in-session
 /harness-gate                                     # separate-gate sessions only — HARD GATE #1: shows spec.md, prints the next command, writes nothing
 /harness-build                                    # implementation half: Generate -> Verify -> Evaluate -> Cleanup (an in-session approval chains into it)
-/harness-build --epic                             # Slice Plan + Epic Exit instead of implementing (what "Plan as epic" runs)
+/harness-build --epic                             # Slice Plan + Epic Exit instead of implementing (what "Plan as epic" runs); in-session, the first slice then starts
+/harness --output-dir docs/harness/<epic> "slice-b-…"  # a slice's Command from slice_plan.md — run it by hand after a stop (see Epic Slices)
 /harness-build generate                           # phase mode: resume from plan, generate only
 /harness-build verify                             # step mode: mechanical verification only
 /harness-build evaluate                           # step mode: evaluation only
@@ -360,9 +362,9 @@ All user-facing prompts use **AskUserQuestion** — a numbered selection UI wher
 Key interaction points:
 - **Mode selection** (refactor/migrate/debug/spec — `/harness` derives mode via its Mode Gate, no roundtrip): numbered options with token cost hints and auto-recommendation
 - **Execution-path ambiguity prompt** (no `--mode` + ultracode OFF + interactive session with the Workflow engine available): explicit inline-vs-workflow choice instead of silent auto-resolution — and every run prints `Path : <inline|workflow> (<reason>)` so the chosen path and its cause are always visible
-- **Confirmation gates**: HARD GATE #1 renders in `/harness` itself by default — one `Approval` question, `Build now` / `Plan as epic` / `Modify` / `Stop` (`--fast`: no `Plan as epic`); only the first two labels approve, and an approval chains into `/harness-build`. With `--separate-gate` it is its own skill, `/harness-gate` — `Proceed as single` (plain `Proceed` when there is no scale recommendation) / `Plan as epic` / `Modify` / `Stop`, plus critic-status options on its first pass when they apply; it prints the next command instead of proceeding. Neither accepts freeform text as approval
+- **Confirmation gates**: HARD GATE #1 renders in `/harness` itself by default — one `Approval` question, `Build now` / `Plan as epic` / `Modify` / `Stop` (`--fast` and an epic's slices: no `Plan as epic`); only the first two labels approve, and an approval chains into `/harness-build`. With `--separate-gate` it is its own skill, `/harness-gate` — `Proceed as single` (plain `Proceed` when there is no scale recommendation) / `Plan as epic` / `Modify` / `Stop`, plus critic-status options on its first pass when they apply; it prints the next command instead of proceeding. Neither accepts freeform text as approval
 - **QA retry**: Fix / Accept as-is
-- **Commit**: 3 options — "Commit code only" (recommended) / "Commit all with artifacts" / "No commit" (git environments only; non-git environments skip commit)
+- **Commit**: 3 options — "Commit code only" (recommended) / "Commit all with artifacts" / "No commit" (git environments only; non-git environments skip commit). A slice that ends clean in an in-session epic is the one exception: it applies "Commit code only" without asking, on the strength of that slice's `Build now` ([Epic Slices](#epic-slices))
 - **Session recovery**: Resume / Restart / Stop — `/harness` and `/harness-build` add a 4th, non-destructive **View state only** (prints the recorded session state and halts; `.harness/` is NOT deleted); `/harness-gate` offers none of these (it cannot delete anything — it redirects to the owner skill instead). The other skills sharing this gate shape keep the 3 options
 
 Falls back to text-based input when AskUserQuestion is unavailable — except `/harness`'s spec approval and its converge decision question, which have no text fallback: without AskUserQuestion (or with `--no-prompt`) `/harness` records no approval and stops at `plan_done`, printing an escape line (a new session with `--separate-gate`, whose `/harness-gate` you answer instead).
@@ -400,6 +402,11 @@ Falls back to text-based input when AskUserQuestion is unavailable — except `/
                            L2 FAIL -> auto-retry (max 2x)
                            L3 FAIL -> user Fix/Accept (max N rounds)
                         -> PASS -> Cleanup & Commit
+── "Plan as epic" instead (in-session, auto style: the chain below runs in the same turn) ──
+/harness-build --epic -> Slice Plan (one boundary question) -> slice_plan.md -> Epic Exit
+                        -> each row's Command: /harness --output-dir <epic dir> "<slice>"
+                           -> approval (Build now / Modify / Stop) -> /harness-build
+                           -> clean end: commit without asking -> next row; otherwise stop
 ```
 
 Claude handles everything directly -- no external CLI, no wrapper scripts.
@@ -514,7 +521,7 @@ feedback retry on a Critical/Major finding before falling through to PASS with d
 Opt out with `--no-cold-pass`. See `skills/harness/SKILL.md` §Step 5/6/7 for the full state
 contract (`verify.cold_result`, 6 values + `null`).
 
-8. On completion, the user is asked whether to commit the artifacts
+8. On completion, the user is asked whether to commit the artifacts — except a slice that ends clean in an in-session epic, which commits without asking and starts the next slice ([Epic Slices](#epic-slices))
 
 ### Token Cost vs. Quality Trade-off
 
@@ -579,9 +586,57 @@ The Generator phase consumes significant tokens and is hard to undo. The harness
 - **Spec approval**: by default rendered in `/harness` itself as one approval question. Only choosing `Build now` or `Plan as epic` counts — free text, a text-fallback reply or a non-interactive run never approves. The approval is a model-written record bound to the spec's stamp, and `/harness-build` refuses an inline session whose record no longer matches `spec.md` (an editor change that keeps the line count is not detected). That is a checked rule, not a structural one: implementation starts in the same turn as the approval. With `--separate-gate` it is rendered by `/harness-gate`, a separate skill with no `Bash`, `Write`, `Edit` or `Glob` — the turn that shows you the spec cannot touch a file; the gate prints the next command and you type it, so implementation cannot start in the same turn as the approval.
 - **QA retry**: When the Evaluator reports FAIL, the harness asks the user before starting another round.
 
+### Epic Slices
+
+`Plan as epic` (or `/harness-build --epic`) splits an approved spec into slices instead of
+implementing it: one boundary question decides the split, `slice_plan.md` is written to the
+epic's `docs/harness/<epic>/`, and its `Command` column holds one ready-to-run command per
+slice — `/harness --output-dir docs/harness/<epic> "slice-a-…"`. In the default setup — an
+in-session approval, the `auto` style, a session that can ask questions — the slices then run in
+the same turn, one after another:
+
+- **Each slice still asks once.** A slice is a full `/harness` session, recognised because its
+  task is a `Slice` of the `slice_plan.md` one directory up. Its approval question has three
+  options — `Build now` / `Modify` / `Stop`, no `Plan as epic`, so epics never nest — and
+  `Build now`'s description says that a clean end is committed without asking and the next slice
+  starts. That click is the consent; the table approves nothing on its own.
+- **A clean end commits without asking.** Clean means `QA PASS`, Layer 1 `PASS`, and a cold
+  review that came back clean or was turned off (`--no-cold-pass`, `cold-pass=off`). The commit
+  is "Commit code only", limited by path to what changed in the working tree since that slice's
+  session started, plus its usual spec/QA artifacts — and that means every such path, not only
+  the files the generator reported: output of its own build or test commands that `.gitignore`
+  does not cover, or a file you edited meanwhile, is included. The paths are listed as it
+  commits. An uncommitted change you already had — staged or not — stays uncommitted, unless the
+  slice edited that same file, in which case the whole file is committed and marked in the list.
+  Each slice's branch starts from the previous slice's commit; nothing is merged for you, and the
+  epic directory's own `spec.md` and `slice_plan.md` are never part of an automatic commit.
+  Without git there is no commit, and the cold review cannot run, so a slice ends clean — and
+  the next one starts — only with the cold review turned off.
+- **Anything else stops at the slice boundary.** A slice that does not end clean (`Accept
+  as-is`, `Max rounds reached`, cold-review findings, …) gets the usual commit question and then
+  stops; so does a `Command` edited by hand (any extra flag, another path), a failed automatic
+  commit (a clean slice with nothing to commit included) or `.harness/` delete, a turn running
+  short of context, or a session outside the default setup. The stop prints the session summary
+  with `Next` — the next slice's `Command` — and `/handoff generate`, led by a line telling you
+  to check `Reason` / `Remaining` first when the slice did not end clean. A commit you chose at
+  the commit question that then fails shows only git's error, as outside an epic — no summary,
+  so take the next slice's `Command` from `slice_plan.md`. Answering `Stop` inside a slice prints
+  only that slice's resume command, so an unfinished slice is never skipped. After the last row
+  the summary says the epic is complete.
+- **Continuing later.** Run the `Next` command yourself, or `/handoff generate` now and, in a new
+  session, `/handoff resume` → `Start next step`: the chain picks up after that slice's approval
+  click (in that turn `WebSearch` / `WebFetch` stay blocked, inherited from `/handoff`).
+- **Keeping slices separate.** A slice `Command` never carries `--separate-gate`, so each slice
+  follows the project default: put `gate=separate` on the `agent-harness-defaults:` line
+  ([Project Defaults](#project-defaults-persistent-opt-in)) and every slice ends at
+  `Next → /harness-gate` with no chain — after `/harness-build`, each prints the next slice's
+  `Command` for you to run. A `phase` / `step` style covers the epic session only: a slice's
+  `Command` carries no style prefix, so the slices started from it run `auto` and chain (add a
+  prefix by hand and that row is never chained into).
+
 ### Language Support
 
-The harness communicates in the **user's language** -- automatically detected from the task description. All templates are written in English for token efficiency and global compatibility, but all user-facing output (messages, spec, QA reports) is generated in the detected language.
+The harness communicates in the **user's language** -- automatically detected from the task description (a slice `Command`'s task is an English slice id, so a slice takes it from your most recent message instead). All templates are written in English for token efficiency and global compatibility, but all user-facing output (messages, spec, QA reports) is generated in the detected language.
 
 ### File Structure
 
@@ -611,6 +666,8 @@ docs/harness/<task-slug>/
   changes.md                        # Generator output (preserved)
   verify_report.md                  # Layer 1 verification results (overwritten each run)
   qa_report.md                      # Evaluator output — Layer 2 + Layer 3 (preserved)
+  slice_plan.md                     # "Plan as epic" only: Slice / Goal / In scope / AC ids / Depends on / Command
+                                    # (each slice writes its own docs under docs/harness/<epic>/<slice>/)
 ```
 
 `docs/harness/<task-slug>/` is never deleted by any Step 8 finishing branch — only `.harness/`
@@ -1131,7 +1188,7 @@ Session handoff for cross-session, epic-level continuity — the durable complem
 /handoff list     -> enumerate handoff documents, newest first
 ```
 
-Key properties: stateless (no state.json of its own), inline-only for its own work (prose rule — the `Task`/`Agent`/`Workflow` entries were removed from `disallowed-tools`; `NotebookEdit`/`WebSearch`/`WebFetch` remain), `resume` may chain into the next command from its gate, resume is **context priming + fact verification** — never state restoration, never auto-checkout.
+Key properties: stateless (no state.json of its own), inline-only for its own work (prose rule — the `Task`/`Agent`/`Workflow` entries were removed from `disallowed-tools`; `NotebookEdit`/`WebSearch`/`WebFetch` remain), `resume` may chain into the next command from its gate, resume is **context priming + fact verification** — never state restoration, never auto-checkout. When that command is an epic slice's `Command`, the started `/harness` session carries the epic's chain on by itself after its approval click ([Epic Slices](#epic-slices)).
 
 ---
 

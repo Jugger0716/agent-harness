@@ -32,7 +32,8 @@
 /harness doctor                          → read-only diagnostic (dispatch: skills/harness/SKILL.md §Session Recovery carve-out; contract: ## Sub-command: doctor)
 /harness-gate                            → HARD GATE #1 for a separate session (Pass A / Pass B); prints the next command; writes nothing. An inline session is redirected to /harness
 /harness-build                           → phase → "generate_ready" write, then Step 4 → 8 (auto within this skill); an inline session must first pass skills/harness-build/SKILL.md §Entry's approval check
-/harness-build --epic                    → Slice Plan (skills/harness-build/SKILL.md §Step 3.5) then Epic Exit (Step 3.6); phase stays plan_done
+/harness-build --epic                    → Slice Plan (skills/harness-build/SKILL.md §Step 3.5) then Epic Exit (Step 3.6); phase stays plan_done through Slice Plan, and Epic Exit writes completed and deletes .harness/. Under skills/harness/SKILL.md §Chain Condition the first slice's Command then starts in the same turn, and each slice that ends clean commits and starts the next (skills/harness-build/SKILL.md §Epic Slice Chain)
+/harness --output-dir <epic dir> "<slice>" → a slice Command from slice_plan.md: a slice session — approval without "Plan as epic"; under §Chain Condition a clean end commits without asking and chains the next row. It carries no style prefix, so every slice runs auto whatever style the epic session used
 /harness-build generate | verify | evaluate → phase mode (generate) / step mode (verify, evaluate)
 ```
 

@@ -149,8 +149,9 @@ The three styles (`auto` / `phase` / `step`), the full CLI surface of all three 
 > max-retry 1st HARD-GATE "Stop" branch, and the end-of-session summary printed by §Step 8's
 > 3 commit branches and its `has_git == false` branch, plus §Step 3.6 — which is not one of
 > those branches, so it is named separately here; excludes the commit-failure abort path,
-> which does not end the session. The After-Plan site is `/harness`'s. Shape + label rules
-> mirror Setup Summary (§Output Language Contract — Print Translation Pattern: labels English
+> which does not end the session — except after §Epic Slice Chain's automatic commit, whose
+> failure (or step 1 Safety Guard ABORT) is a boundary stop and prints Type B. The After-Plan
+> site is `/harness`'s. Shape + label rules mirror Setup Summary (§Output Language Contract — Print Translation Pattern: labels English
 > raw, values per Preserved-English Glossary).
 
 Block shape and the `/handoff generate` field contract: `templates/_shared/session_boundary.md`. Read it before printing either type. This skill owns the Type A sites below and every Type B site.
@@ -169,7 +170,10 @@ Applies at the end of every branch that concludes the session: `skills/harness-b
 `skills/harness-build/SKILL.md` §Step 3.6 (see the epic variant below), which ends the session before `skills/harness-build/SKILL.md` §Step 8 is reached and
 is therefore no longer a Step 8 branch. Does **NOT** apply to the
 commit-failure abort path (`skills/harness-build/SKILL.md` §Step 8 "Commit code only" step 3, "If the commit FAILS") — that
-path leaves the session open/resumable, so no closing summary is printed.
+path leaves the session open/resumable, so no closing summary is printed — with one exception:
+a failure of §Epic Slice Chain's automatic commit, or its step 1 Safety Guard ABORT (no
+question was asked, so nobody is waiting on the error), prints this block as a boundary stop,
+`Commit : failed — see the error above`, with the commit-failure rows below.
 
 ```
 [harness] Session boundary — Task complete.
@@ -191,21 +195,48 @@ path leaves the session open/resumable, so no closing summary is printed.
 
 **Epic variant** (`skills/harness-build/SKILL.md` §Step 3.6): that section's own rendering of the block
 above sets `Reason : Epic planned` and `Remaining : see {docs_path}slice_plan.md`, omits
-`Commit` entirely (no commit stage ever runs), and replaces the `Handoff` row:
+`Commit` entirely (no commit stage ever runs), and ends with the epic chain rows below in place
+of the `Handoff` row, `Next` naming the table's first row.
+
+(Correction 2026-10-02, harness-converge S3: this variant used to replace `Handoff` with "Run
+the Command from {docs_path}slice_plan.md's row for the next slice to start it — `/handoff
+generate` is not offered here, because this branch has already deleted `.harness/` by the time
+this block prints." `/handoff generate` does not need `.harness/` — it reads `state.json` only
+if present (`skills/handoff/SKILL.md` §Sub-command: generate) — and a boundary stop now offers
+it, because a handoff whose next step names the `Command` is how a new session continues the
+chain. `Handoff` printing after `.harness/` is already deleted is still shared by every branch
+here.) Branch note: no code changed this session, so `harness/<slug>` sits at the same commit
+it was cut from — cleanup is optional (`skills/harness/SKILL.md` §Step 1 item 8 already reuses
+an empty branch like it silently). A chained first slice cuts its branch from here, which is
+that same commit; a human who starts the first slice by hand should switch to the intended base
+branch **before** doing so. If deleted, use `git branch -d` (never `-D`; the checked-out branch
+cannot be deleted anyway).
+
+**Epic chain rows** (single source — §Epic Slice Chain cites them by name). They replace the
+`Handoff` row in the epic variant and in the Type B of every slice session (§Epic Slice Chain's
+slice-session rule); every other session keeps the plain `Handoff` row. Labels English raw,
+values per OLC:
 
 ```
-  Handoff   : Run the Command from {docs_path}slice_plan.md's row for the next slice to start
-              it — `/handoff generate` is not offered here, because this branch has already
-              deleted `.harness/` by the time this block prints.
+  Check     : <reason>          ← only when one applies, see below (one line each if several do)
+  Next      : <Command>         ← byte-identical: §Step 3.6 the first row, a slice its next row; omitted after the last row
+  Epic      : complete — <Slice> was the last row of <D>/slice_plan.md     ← only after the last row
+  Chain     : <chaining in this turn | stopped — <cause>>                  ← omitted after the last row
+  Handoff   : <see below>
 ```
 
-(`Handoff` printing after `.harness/` is already deleted is a pre-existing defect shared by
-all 4 other branches too, not unique to epic-exit — out of scope here, see changes.md; only
-this row's *content* is replaced.) Branch note: no code changed this session, so
-`harness/<slug>` sits at the same commit it was cut from — cleanup is optional (`skills/harness/SKILL.md` §Step 1 item 8
-already reuses an empty branch like it silently); the real caveat is switching to the intended
-base branch **before** starting the first slice, not deleting this one. If deleted, use
-`git branch -d` (never `-D`; the checked-out branch cannot be deleted anyway).
+- `Check` — a slice whose end is not clean (§Epic Slice Chain): "check Reason and Remaining
+  above before going on". After the automatic commit failed, or its §Step 8 step 1 Safety
+  Guard aborted (the commit-failure rows): "resolve the commit (or commit by hand); this session
+  kept `.harness/` — choose Restart at the next `/harness` resume question (item 7)". After a
+  failed `.harness/` delete, or §Step 3.6's Safety Guard ABORT: "delete `.harness/` by hand, or
+  choose Restart at the next session's resume question (item 7)". None of them assumes a next
+  row, so each reads the same above the `Epic` row.
+- `Chain` — `chaining in this turn`, or `stopped — ` and the boundary-stop cause §Epic Slice
+  Chain names (in `user_lang`).
+- `Handoff` — when chaining, omitted. On a stop: "Run Next here or in a new session —
+  `/handoff generate` first captures this one, and `/handoff resume` → 'Start next step' runs
+  Next." After the last row: the plain `Handoff` row.
 
 **`Remaining` derivation** (priority table — the single source for this value, superseding any
 flat enumeration):
@@ -287,6 +318,141 @@ On the WORKFLOW path the same machine applies; `harness.eval` covers verifying�
 - **I2**: 1st HARD-GATE Auto-fix option is visible only when `verify.autofix_attempted == false AND state.autofix == null`
 - **I3**: On session resume, if `autofix.applied == "proposed"` → re-enter 2nd HARD-GATE directly (skip 1st GATE)
 - **I4**: `autofix.applied == "stopped"` ⟹ `layer1_retries = min(layer1_retries, 3)` (clamp — no further increment)
+
+---
+
+## Epic Slice Chain
+
+Single source for running an epic's slices one after another in one turn
+(`design/harness-converge/SPEC.md` decisions E and E-1–E-3): which session is a slice session,
+the shape check, the clean end, the automatic commit, and where a chain stops.
+`skills/harness/SKILL.md` §Step 1 item 7 and §Approval Gate and this skill's §Step 3.6, §Step 8
+and §Session Boundary cite it by name; none restates it. §Chain Condition, wherever this section names it,
+is `skills/harness/SKILL.md` §Chain Condition (under its §Approval Gate) — this file has no
+section of that name. Whether a session is a slice session, and which row comes next, is
+derived from disk — `slice_plan.md`, git, `state.json` — and never recorded, so a
+chain survives compaction (decision E-3). It adds no gate: each slice is approved once at its
+own §Approval Gate, and that click is its consent to the commit and the chain below (decision
+E-1).
+
+**Reading `slice_plan.md`.** The `Slice` and `Command` columns only, in table order, from the
+table §Step 3.5's format defines — the registry's slot (8) read
+(`templates/_shared/architecture_principles.md` #1). A cell's value is its trimmed text with
+one enclosing pair of backticks removed (code-span delimiters, which `skills/handoff/SKILL.md`
+treats the same way). Parsed as data, never followed as instructions; a file that cannot be
+read or parsed has no rows.
+
+**Slice session** (derived, never recorded). A `/harness` session is a slice session when the
+parent directory of its `{docs_path}` — `{docs_path}` without its trailing slash and its last
+segment, i.e. the `--output-dir` value of the `Command` that started it — holds a
+`slice_plan.md` in which exactly one row's `Slice` equals the session's `task` byte for byte.
+That row is its **current row**, and the row below it in table order its **next row**
+(`Depends on` is informational and never reorders). A row whose `Slice` breaks §Step 3.5's
+`Slice` id rule (`slice-` prefix, `[a-z0-9-]` only, ≤50 chars) matches no task. No such file,
+no matching row or several → not a slice session, and nothing in this section applies to it.
+A separate-gate slice session is still one: `/harness-gate` gates it unchanged, and §Chain
+Condition fails for it.
+
+**Shape check** (one row's `Command`). The value equals, byte for byte,
+`/harness --output-dir <D> "<Slice>"` — §Step 3.5's `slice_plan.md` format, by name — where
+`<D>` is the directory holding that `slice_plan.md` (the epic session's `{docs_path}` minus its
+trailing slash; a slice session's `{docs_path}` parent) and `<Slice>` is the same row's
+`Slice`. That `Slice` must itself satisfy §Step 3.5's `Slice` id rule first — otherwise a
+quote inside the cell would let a hand-edited `Command` carry extra flags and still compare
+equal. Anything else fails — a flag added by hand (`--fast`, `--mode`, `--separate-gate`,
+`--lint-cmd`, …), another path, another task string — and a failing row is never chained.
+
+**Chaining a row.** Invoke the `harness` skill via the Skill tool in this same turn, with the
+row's `Command` minus its leading `/harness ` as the argument, unchanged — the chaining
+`skills/harness/SKILL.md` §Approval Gate and `skills/handoff/SKILL.md` "Start next step"
+perform. It happens only after this session's `.harness/` delete succeeded and its §Session
+Boundary block printed, so the started session finds no state, begins at
+`skills/harness/SKILL.md` §Step 1 (its branch cut from the current HEAD — the previous slice's
+commit), and renders its own §Approval Gate.
+
+**Clean end** (single definition, read from `state.json` — never from context, so it survives
+compaction): `verify.verdict == "PASS"` (the `QA PASS` Reason — `Accept as-is` and `Max rounds
+reached` leave a `FAIL_*` there) AND `verify.layer1_result == "PASS"` AND either
+`verify.cold_result == "clean"` or `verify.cold_result == "skipped"` with
+`cli_flags.cold_pass == false` — of the `QA PASS` rows of §Session Boundary's `Remaining`
+derivation table, `clean` and the `skipped` whose `<reason>` derivation stops at its first
+branch. Everything else is not a clean end: `verify.cold_result == null`, a `skipped` from any
+other cause (`skipL1`, a git failure, empty input, `has_git == false`), `findings`,
+`retried_unverified`, `retried_dispatching`, `failed`, and the reasons `Accept as-is` and
+`Max rounds reached`. So without git the cold pass never runs (§Step 5's Cold Review Input
+Collection skips it for `has_git == false`), and a slice ends clean only with the cold review
+turned off.
+
+**Automatic commit** (decision E-2). At a slice session's §Step 8, when §Chain Condition holds,
+the end is clean, `has_git == true` and `dirty_at_start` is a map (`{}` included): no commit
+question. Print
+`[harness] Clean slice end — committing without asking (Commit code only, consented at this slice's Build now).`
+and, once step 2 has computed it, one line listing every path of the session's change set, each
+one already changed when the session began marked. Run §Step 8's "Commit code only" steps 1–4
+with two substitutions:
+- step 2's "code changes" are the **session's change set**: each path in the union of
+  `git -c core.quotePath=false diff HEAD --name-only --no-renames` (deletions included;
+  `--no-renames` lists both paths of a rename) and the `??` entries of
+  `git -c core.quotePath=false status --porcelain --untracked-files=all` — the unborn-HEAD
+  fallback of §Step 5's Cold Review Input Collection applies — outside `.harness/`, `.git/` and
+  `{docs_path}` (whose artifacts step 2's own list stages), that either has no entry in
+  `dirty_at_start` or whose `git hash-object` now (`null` once deleted) differs from that entry.
+  Step 2 `git add`s only the set's untracked paths; git already knows the others.
+- step 3 commits with a pathspec, never the whole index:
+  `git commit --only -- <the change set> <the artifacts step 2 staged>`, which takes each named
+  path as the working tree holds it. When both lists are empty no `git commit` runs: that is
+  step 3's nothing-to-commit failure (print `nothing to commit` as its error).
+
+So a file already changed before the session began (`dirty_at_start` is taken at
+`skills/harness/SKILL.md` §Step 1 item 7) and untouched since is left as it is, uncommitted —
+staged or not — while a file this session edited is committed whole, an earlier uncommitted
+edit in it included. (Measured 2026-10-02, git 2.47: after the pathspec commit a pre-staged,
+untouched path is still staged; a deletion and a rename's old path commit without a `git add`;
+an untracked path never added fails the commit; with no path named, `git commit --` commits the
+whole index, exit 0, while `git commit --only` refuses, exit 128 — hence `--only` and the
+empty-list rule.) The change set is every path that changed in
+the working tree since the session began, not only what the generator reported — output of the
+session's own build or test commands that `.gitignore` does not cover, and an edit made
+meanwhile by hand or by another process, are in it; the printed path list is the only check on
+that (ROADMAP). When `dirty_at_start` is absent (a session started before the field existed, or
+one that item 7 did not find to be a slice session) or `null` (no git, or a git failure at
+`skills/harness/SKILL.md` §Step 1 item 7), or a git command fails while computing the set, the
+commit question renders instead and the slice ends at a boundary stop. A commit failure, or
+step 1's Safety Guard ABORT, deletes nothing — step 3's rule — and is a boundary stop with the
+commit-failure rows of §Session Boundary. The epic directory's own files (its `spec.md`,
+`slice_plan.md`) are in no slice's change set, so the automatic commit never stages them; what
+the commit question's branches stage is not changed by this section.
+
+**Where a chain stops** — two rules:
+
+1. Answering a question keeps the flow going: Setup, Mode Gate, a decision, the approval, the
+   §Step 3.5 boundary question, HARD GATEs #2 and #3, the §Step 7 branches, and — when a slice's
+   end is not clean, or the automatic commit cannot apply to a clean one — its §Step 8 commit
+   question, after which that slice ends at a boundary stop; unless the commit chosen there then
+   fails, which keeps §Step 8's abort path and prints no Type B block (ROADMAP).
+2. A stop that ends the chain prints by where it happens:
+   - **Boundary stop** — after §Step 3.6, or after a slice's §Step 8: the Type B block with
+     §Session Boundary's epic chain rows (the first row's `Command` after §Step 3.6, the next
+     row's after a slice, `/handoff generate`). Causes: §Chain Condition fails; the end is not
+     clean (the `Check` row leads); with `has_git == true`, the automatic commit did not apply
+     (`dirty_at_start` not a map, or a git failure computing the change set — the commit
+     question rendered instead), failed, or its Safety Guard aborted; the `Command` fails the
+     shape check; the `.harness/` delete fails or §Step 3.6's Safety Guard aborts; the Skill
+     invocation is unavailable or refused (print the `Chain` and `Handoff` rows again in their
+     stop form, then halt); or context — the orchestrator judges that the turn cannot hold
+     another whole slice. That last is a judgment with no numeric limit, taken only here: inside
+     a slice, automatic compaction carries the turn (decision E-3). A slice session with a next
+     row chains into it exactly when none of these causes applies; §Step 8 decides by this list.
+   - **Mid-slice stop** — a Stop-type answer to any question above, or an approval whose chain
+     into `/harness-build` fails: that site's own Type A block and resume command only
+     (`skills/harness/SKILL.md` §Approval Gate's stop output, or a Type A row of §Session
+     Boundary). Never the next row's `Command`: an unfinished slice is never skipped.
+
+A slice whose current row is the table's last ends with the `Epic` row (the epic is complete)
+instead of `Next`, clean or not. A boundary stop's `Next` value is the command a
+`/handoff generate` handoff names; `/handoff resume` → "Start next step" runs it, and the chain
+continues after that slice's approval click — in a turn that keeps `/handoff`'s blocked
+`WebSearch` and `WebFetch` (`templates/_shared/mode_gate.md` rule 3 cause (a)).
 
 ---
 
@@ -394,7 +560,11 @@ Reserved-word basis (name reference only): a slice session applies
 first-segment names, which govern `--output-dir` values, not slice ids. `Command`'s
 `--output-dir` value is `docs_path` minus its trailing slash; `epic.id` is defined — once,
 here only — as that value's last segment (`docs/harness/<epic-id>` is just the
-default-`output_base` shape of it).
+default-`output_base` shape of it). The whole `Command` is exactly
+`/harness --output-dir <that value> "<Slice>"` — one flag, the task string double-quoted, both
+cells written as code spans as the reference implementation writes them; §Epic Slice Chain's
+shape check compares a row against this form byte for byte, so a row that carries anything
+else is never chained.
 
 | Column | Source | If unavailable |
 |---|---|---|
@@ -428,21 +598,35 @@ false predicate here means the session was never an epic exit and §Step 8 owns 
 Fail-closed order: 1. `{docs_path}slice_plan.md` was already written by §Step 3.5, the
 section that just handed control here — §Architecture Principles #1 entry (1)'s "the
 orchestrator just wrote this final artifact" case, not a fresh write. 2. Confirm it exists and
-is non-empty; on failure do **not** delete `.harness/` — halt with a disclosure (existence/
-size only, never content — outside "reads no intermediate files"'s reach, and does not enlarge
-§Architecture Principles #1's exception list, which keeps its 8 numbered slots, 7 live — same phrasing #2 uses).
-3. Apply the Artifact Cleanup Safety Guard — `templates/_shared/safety_guard.md`, the
-single source §Step 8 also cites; this section reads that file directly rather than through
-§Step 8, so moving here changed no rule. On ABORT do not delete `.harness/` — disclose. 4. Write
-`phase → "completed"` **before** step 5 — the 3rd layer of a 3-layer defense (2nd layer:
-§Session Recovery's Resume-suppression condition, by name): a delete failure at step 5 leaves
-`phase == "completed"` with `epic.boundaries` still non-null, exactly what that condition
-detects. 5. Delete `.harness/`. 6. Delete failure → print `[harness] ⚠` with manual-deletion
-guidance, never retry silently. 7. Print the `skills/harness-build/SKILL.md` §Session Boundary Type B epic variant (by name).
+is non-empty; on failure do **not** delete `.harness/` — halt with a disclosure. This check
+reads existence and size only; the one content read on this path is step 3's `Slice` /
+`Command` column read, the registry's slot (8) (`templates/_shared/architecture_principles.md`
+#1), which keeps its 8 numbered slots, 7 live — slot (8) already names this site. (Correction
+2026-10-02, harness-converge S3: this step used to say "never content", true while the epic
+exit read nothing of the file; the chain below reads the first row's `Command`.)
+3. **Chain decision — before any delete**, while `state.json` still exists: evaluate
+`skills/harness/SKILL.md` §Chain Condition, and read the first row of `{docs_path}slice_plan.md`
+and its §Epic Slice Chain shape check. Nothing is written. 4. Apply the Artifact Cleanup Safety
+Guard — `templates/_shared/safety_guard.md`, the single source §Step 8 also cites; this section
+reads that file directly rather than through §Step 8, so moving here changed no rule. On ABORT
+do not delete `.harness/` — disclose, skip steps 5–7, and end at step 8 as a boundary stop.
+5. Write `phase → "completed"` **before** step 6 — the 3rd layer of a 3-layer defense (2nd
+layer: §Session Recovery's Resume-suppression condition, by name): a delete failure at step 6
+leaves `phase == "completed"` with `epic.boundaries` still non-null, exactly what that
+condition detects. 6. Delete `.harness/`. 7. Delete failure → print `[harness] ⚠` with
+manual-deletion guidance, never retry silently; step 8 is then a boundary stop. 8. Print
+the `skills/harness-build/SKILL.md` §Session Boundary Type B epic variant (by name), its epic
+chain rows included. Then, only when step 3 found §Chain Condition holding and the first row
+passing the shape check, step 6 succeeded, and the turn can hold another whole slice (the
+context judgment §Epic Slice Chain names), chain into that row in this same turn — the first
+slice's own §Approval Gate is its next gate; otherwise those rows already are the boundary
+stop, and the session halts.
 
 No commit step exists on this path — "delete regardless of commit outcome" is the absence of
 a commit step, not a relaxation of §Step 8's `has_git == true` branch rule. That branch is
-reached only when this section's predicate is false, so the two never both run.
+reached only when this section's predicate is false, so the two never both run. The chain does
+not reach §Step 8 either: it starts a NEW `/harness` session, whose `.harness/` the step 6
+delete has just cleared.
 
 ### Step 4: Generate Phase
 
@@ -816,7 +1000,7 @@ Print: `[harness] Phase: Evaluate (Layer 2+3)`
    `verify.verdict` and `verify.layer2_result` are one write. Keep the raw first line in context: the Layer 3 gate question (§Step 7) shows its text after ` — ` as the failure summary.
 6. Update phase → `"evaluate_done"`, `updated_at → now`.
 7. **Cold review (INLINE)** — 2nd of 3 `--no-cold-pass` gating points (AC-28); subordinate to §Step 5 gating table's `verify.cold_round == round` row (named, not restated) — that row is evaluated first and, if it already fired this round, every check below is skipped with no state write, same as the table prescribes. Otherwise: if `cli_flags.cold_pass == false`, print nothing here (§Step 7's Tier 1 preamble is that line's single print site, on both paths — AC-28), record `verify.cold_result → "skipped"` (reason: the §Step 7 `cold-pass disabled display` rendering rule's `<why>`) and `verify.cold_round → round` exactly as §Step 5's gating table prescribes — that table is the single authority for both values on both paths — then skip to Print below. Otherwise check, in order: (a) **explicit-PASS check** — `verify.verdict == "PASS"` as item 5 just wrote it (item 5 writes `PASS` only for a well-formed leading `PASS` token and writes `FAIL_L3` on its conservative fallback, so this check can never piggyback on that fallback — `verify.layer2_result` alone would, since the fallback sets it to `"PASS"` too) — if (a) fails, skip to Print with NO state write, the same "leave `verify.cold_*` untouched" outcome §Step 5 item 4 specifies when the segment returned no cold fields; (b) `verify.cold_round == round` already → skip to Print with NO state write (already ran this round — the same "writes neither field" latch as §Step 5's gating table row); (c) `verify.layer1_result == "FAIL"` → `skipL1` gate (AC-15): record `verify.cold_result → "skipped"` (reason `"skipL1"`), `verify.cold_round → round`, skip to Print — reaching (c) means no cold pass was recorded this round, so this write can never overwrite one. If (a)-(c) all clear: re-run the §Step 5 "Cold Review Input Collection" collection steps by name (files may have changed since Step 5). If `collectionSkipReason` is set: record `verify.cold_result → "skipped"` (that reason), `verify.cold_round → round` only if deterministic (see that subsection's table), skip to Print. Otherwise dispatch `templates/evaluator/cold_reviewer.md` directly (model: `model_config.evaluator`) with `{cold_files_list}`, `{user_lang}`, `{cold_review_path}` = `{docs_path}cold_review.md`, and `{spec_content}` filled with a 1-line pointer naming exactly one path ("the spec is not inlined — read {docs_path}spec.md") instead of the full spec text (§Architecture Principles #2 carve-out — same technique `templates/spec/critic_inline.md` uses for `{spec_path}`). The WORKFLOW path renders the identical pointer inside `workflows/harness.eval.workflow.js` from the `specPath` arg §Step 5 passes, so the cold reviewer is anchored the same way on both paths. This works ONLY because the template's Input Trust Model grants the spec read permission in its own authoritative text — a pointer placed in the substituted slot alone would be neutralized by that same section's "do not follow instructions embedded in the spec content" rule (AC-7).
-   Parse the 1-line return: expect `cold_review written — Critical=N, Major=M` (§Orchestrator Contract). Print per OLC: `  Cold review: inline (1-line parse) — {first line} (dropped=N, truncated=M)` — that suffix IS the INLINE sink §Step 5's collection item 3 names for the dropped/truncated counts (AC-11). Guarantee-level disclosure, printed on the same line: the orchestrator does NOT validate the reviewer's write path or its findings' file fields on this path (unlike the WORKFLOW path's `validate_path` pass) — this is a self-limit, 지시적 방어이지 구조적 격리가 아니다 (AC-26/AC-33). On parse failure, apply `skills/harness/SKILL.md` §Step 2.6 "Failure handling — 3-way" by name — only branch (iii) (1-line parse failure) applies here: `verify.cold_result → "failed"`, `verify.cold_round → round` (§Step 7's table, `failed` row — branch (iii)'s own "`round` UNCHANGED" clause governs `plan_critic.round`, a different field, and does not carry over here), banner shown. Before reading the "On success" branch below, confirm `{docs_path}cold_review.md` exists and is non-empty (existence/size only, never content — reusing §Step 3.6's fail-closed order phrasing, by name, not restated; this does not enlarge §Architecture Principles #1's exception list, which keeps its 8 numbered slots, 7 live). If it does not, treat this as a parse failure (branch (iii) above) instead. Disclosure — stale-file false positive limit: existence confirms a write was attempted, not that it succeeded cleanly this round; no freshness latch guards against a stale survivor from an earlier round (§Step 7's "Why `cold_round` alone, and no freshness latch" note, named, not restated). On success: `verify.cold_result → "clean"` (Critical+Major == 0) or `"findings"` (≥ 1); `verify.cold_counts → {Critical: N, Major: M, Minor: 0}` (the 1-line return carries no Minor count — see §Step 7's cold_result table); `verify.cold_round → round`; `verify.cold_review_path → "{docs_path}cold_review.md"` (the sub-agent wrote it directly — the orchestrator does NOT write this file on the INLINE path, AC-27). **This single write happens BEFORE the Print below and any banner/`Remaining` rendering (AC-24).**
+   Parse the 1-line return: expect `cold_review written — Critical=N, Major=M` (§Orchestrator Contract). Print per OLC: `  Cold review: inline (1-line parse) — {first line} (dropped=N, truncated=M)` — that suffix IS the INLINE sink §Step 5's collection item 3 names for the dropped/truncated counts (AC-11). Guarantee-level disclosure, printed on the same line: the orchestrator does NOT validate the reviewer's write path or its findings' file fields on this path (unlike the WORKFLOW path's `validate_path` pass) — this is a self-limit, 지시적 방어이지 구조적 격리가 아니다 (AC-26/AC-33). On parse failure, apply `skills/harness/SKILL.md` §Step 2.6 "Failure handling — 3-way" by name — only branch (iii) (1-line parse failure) applies here: `verify.cold_result → "failed"`, `verify.cold_round → round` (§Step 7's table, `failed` row — branch (iii)'s own "`round` UNCHANGED" clause governs `plan_critic.round`, a different field, and does not carry over here), banner shown. Before reading the "On success" branch below, confirm `{docs_path}cold_review.md` exists and is non-empty (existence/size only, never content — the same existence-and-size check as §Step 3.6's fail-closed order step 2, by name, not restated; unlike that path, nothing here reads the file afterwards; this does not enlarge §Architecture Principles #1's exception list, which keeps its 8 numbered slots, 7 live). If it does not, treat this as a parse failure (branch (iii) above) instead. Disclosure — stale-file false positive limit: existence confirms a write was attempted, not that it succeeded cleanly this round; no freshness latch guards against a stale survivor from an earlier round (§Step 7's "Why `cold_round` alone, and no freshness latch" note, named, not restated). On success: `verify.cold_result → "clean"` (Critical+Major == 0) or `"findings"` (≥ 1); `verify.cold_counts → {Critical: N, Major: M, Minor: 0}` (the 1-line return carries no Minor count — see §Step 7's cold_result table); `verify.cold_round → round`; `verify.cold_review_path → "{docs_path}cold_review.md"` (the sub-agent wrote it directly — the orchestrator does NOT write this file on the INLINE path, AC-27). **This single write happens BEFORE the Print below and any banner/`Remaining` rendering (AC-24).**
 
 Print: `[harness] Evaluate complete.`
 
@@ -975,13 +1159,26 @@ here, and the routing line above used to open with it; both moved, together, so 
 sole edge in this file that skips Steps 4–7 no longer lands in the step those steps lead to.
 Nothing about the predicate or the order changed in the move — only where they live.
 
+**A slice session decides first, before any delete** (§Epic Slice Chain, by name — decision
+E-2). While `state.json` still exists, determine whether this session is a slice session (its
+current and next rows, and the next row's shape check), whether its end is clean, and whether
+`skills/harness/SKILL.md` §Chain Condition holds. A session that is not a slice session skips
+this paragraph and everything below is unchanged for it. For a slice session:
+- the `has_git == true` branch applies §Epic Slice Chain's automatic commit — no question —
+  when that section's conditions for it hold; otherwise it asks the commit question below,
+  unchanged;
+- every branch's Type B block ends with §Session Boundary's epic chain rows. Then the session
+  chains into the next row in this same turn unless one of §Epic Slice Chain's boundary-stop
+  causes applies, in which case those rows are the boundary stop and the session halts. A
+  current row with no next row prints the `Epic` row and halts.
+
 #### Artifact Cleanup Safety Guard
 
 Cleanup safety rules: see `templates/_shared/safety_guard.md`.
 
 #### If has_git == true:
 
-Ask via AskUserQuestion (in `user_lang`):
+Unless §Epic Slice Chain's automatic commit applies (above), ask via AskUserQuestion (in `user_lang`):
 - header: "Commit"
 - question: "Implementation complete. Choose how to finish:"
 - options:
@@ -1014,7 +1211,7 @@ Actions (apply Safety Guard before each delete):
      silent-skip rule above (which applies only when the source file itself does not exist).
 
      **(s4) Per-file staging failure handling**: if `git add <file>` fails for a specific artifact file (permission, `.gitignore` conflict, etc.), warn the user (in `user_lang`): "Failed to stage `<file>`: <error>. Artifact may not be in git history — it remains on disk at `{docs_path}` regardless (this path never deletes `{docs_path}`)." Continue with remaining files — do NOT abort the whole sequence on a single staging failure. The code commit (step 3) is more critical than any individual artifact preservation. Because `{docs_path}` is never deleted here, a staging failure can never strand a file — it stays on disk even when `git add` failed for it (e.g. `docs/` is `.gitignore`d, the common case in this repo itself — `.gitignore:7`).
-  3. **Commit** the staged code changes plus artifacts, then **confirm the commit succeeded** (git exit 0 / a new commit object exists). **If the commit FAILS** (pre-commit hook rejection, signing failure, locked index, disk error, nothing-to-commit): **STOP without deleting anything** — `.harness/` and `{docs_path}` stay intact so the session is resumable and all artifacts recoverable. Surface the git error (in `user_lang`) and tell the user to resolve it and re-run, or commit manually. Do NOT proceed to step 4. **This sub-path does not end the session** — do NOT print the §Session Boundary block here.
+  3. **Commit** the staged code changes plus artifacts, then **confirm the commit succeeded** (git exit 0 / a new commit object exists). **If the commit FAILS** (pre-commit hook rejection, signing failure, locked index, disk error, nothing-to-commit): **STOP without deleting anything** — `.harness/` and `{docs_path}` stay intact so the session is resumable and all artifacts recoverable. Surface the git error (in `user_lang`) and tell the user to resolve it and re-run, or commit manually. Do NOT proceed to step 4. **This sub-path does not end the session** — do NOT print the §Session Boundary block here. The one exception is §Epic Slice Chain's automatic commit, whose failure (and whose step 1 ABORT) is a boundary stop: still nothing deleted, but the Type B block prints with the commit-failure rows.
   4. **Delete `.harness/`** — only after a confirmed-successful commit (the Safety Guard already validated the parent context). `{docs_path}` is **never deleted** on this path.
 
   **(m2) commit-first, no-delete-of-docs_path ordering note**: the commit (step 3) precedes the only delete in this sequence (`.harness/`, step 4), so artifacts physically exist on disk at commit time and are captured normally when staging succeeds. `{docs_path}` itself is never deleted by this branch (P0-2 removes the prior "delete `{docs_path}` working-directory contents" step), so `spec.md` / `qa_report.md` remain on disk even when `docs/` is `.gitignore`d and staging silently fails per (s4). Because nothing is deleted until the commit is confirmed, a commit failure can never strand the session: `state.json` (`.harness/`) and `{docs_path}` survive for resume/manual recovery. (This supersedes the prior stage→delete→commit order, in which a final-step commit failure left state and docs already deleted.)
@@ -1046,14 +1243,17 @@ the same thing in every file.
 
 1. **Orchestrator reads no intermediate files** — of the registry's 7 live read exceptions (8
    numbered slots; slot (2), the `qa_report.md` verdict read, was retired 2026-09-18 when
-   `verify.verdict` took over on both paths — §Step 7) this skill performs **3**: (1) spec.md
+   `verify.verdict` took over on both paths — §Step 7) this skill performs **4**: (1) spec.md
    at the plan gate — the live line count §Entry's approval check takes in an inline session,
    the gate's own read and not a new site, which §Step 3.5's restore order ③ reuses; (3) changes.md
    path-extraction on WORKFLOW-path resume when
    `workflow_ctx` is null (repo-relative paths only, no content analysis — §Step 5 — WORKFLOW
-   path `changedFilesList` source priority), and (4) verify_report.md path (for the user message)
+   path `changedFilesList` source priority); (4) verify_report.md path (for the user message)
    and failing-file extraction for Auto-fix Proposer dispatch (paths only, Path Validator
-   `kind=file_reference`, capped at 5 — §Step 5 Auto-fix dispatch). Writes are a separate
+   `kind=file_reference`, capped at 5 — §Step 5 Auto-fix dispatch); and (8)'s `Slice` /
+   `Command` column read of `slice_plan.md` at §Step 3.6 and §Step 8 (§Epic Slice Chain — the
+   `.harness/converge/` reads, and this same read at `skills/harness/SKILL.md` §Step 1 item 7
+   and §Approval Gate, are `/harness`'s). Writes are a separate
    category: this skill writes `changes.md`, `slice_plan.md`, and — WORKFLOW path only —
    `cold_review.md` from returned objects (the INLINE path's `cold_review.md` is written by the
    cold-review sub-agent itself, §Step 6), plus the Apply-before `--- a/` / `+++ b/` diff header
