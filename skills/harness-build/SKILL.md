@@ -1,23 +1,26 @@
 ---
 name: harness-build
 disallowed-tools: NotebookEdit
-description: Implementation half of the /harness pipeline — Slice Plan / Epic Exit, Generate, Verify (Layer 1), Evaluate (Layer 2+3), Verdict loop, Cleanup. Consumes only a spec.md confirmed at /harness-gate; `/harness-build --epic` writes slice_plan.md and exits instead of implementing. Same opt-in Workflow segments and inline fallback as /harness. Not an entry point — run /harness first.
+description: Implementation half of the /harness pipeline — Slice Plan / Epic Exit, Generate, Verify (Layer 1), Evaluate (Layer 2+3), Verdict loop, Cleanup. Consumes only a spec.md approved in-session at /harness or at /harness-gate; `/harness-build --epic` writes slice_plan.md and exits instead of implementing. Same opt-in Workflow segments and inline fallback as /harness. Not an entry point — run /harness first.
 ---
 
 # Agent Harness — /harness-build (v3, implementation half)
 
 You are a **state-machine orchestrator** for the second half of the `/harness` pipeline:
-Step 3.5 → 3.6 → 4 → 5 → 6 → 7 → 8. You are reached by the command `/harness-gate` printed
-after the human confirmed `spec.md`; `/harness` (Steps 1–2.6) and `/harness-gate` (Step 3)
-own everything before you. Invoking this skill directly, without a confirmed `spec.md`, is
-not prevented — §Entry below detects it and redirects.
+Step 3.5 → 3.6 → 4 → 5 → 6 → 7 → 8. You are reached after HARD GATE #1 approved `spec.md`:
+in an inline session (the default) `skills/harness/SKILL.md` §Approval Gate invokes you in the
+same turn, or prints `/harness-build` when it stops; in a separate session (`--separate-gate`)
+the human types the command `/harness-gate` printed. `/harness` (Steps 1–2.6, §Approval Gate)
+and `/harness-gate` (Step 3) own everything before you. Invoking this skill directly is not
+prevented — §Entry below refuses an inline session without a matching approval, and detects
+and redirects a missing session.
 
 Your role is:
 1. Manage phase transitions via `state.json` from `plan_done` (§Entry) to `completed`
 2. Resolve the execution path per §Mode Gate — **INLINE** (dispatch sub-agents directly) or **WORKFLOW** (run plugin-shipped native Workflow segment scripts)
 3. On the WORKFLOW path: invoke `Workflow {scriptPath}` and receive **schema-validated objects** — no text parsing
 4. On the INLINE path: dispatch sub-agents with minimal context and parse 1-line returns (legacy contract, inline only)
-5. Present HARD-GATEs #2 and #3 (verify-fail / auto-fix-apply) to the user — gates are NEVER inside a segment script. HARD GATE #1 belongs to `/harness-gate`.
+5. Present HARD-GATEs #2 and #3 (verify-fail / auto-fix-apply) to the user — gates are NEVER inside a segment script. HARD GATE #1 belongs to `skills/harness/SKILL.md` §Approval Gate (inline) and `/harness-gate` (separate).
 
 **You do NOT**: read intermediate artifacts (proposals, critiques, plans, reviews), accumulate sub-agent output in context, or make quality judgments about code — the exceptions are enumerated exhaustively in `skills/harness/SKILL.md` §Architecture Principles #1 (the registry); §Architecture Principles below lists the subset this skill exercises. Sub-agents and segment scripts handle all domain work; you handle transitions, gates, and writing final artifacts (changes.md / slice_plan.md) from returned objects.
 
@@ -81,9 +84,9 @@ Evaluate before §Session Recovery below, in order; first match wins.
 
 1. `.harness/state.json` absent → print `[harness-build] No /harness session here — run /harness "<task>" first.` and halt.
 2. Positional args or flags other than the ones this skill owns (`--epic`, `generate`, `verify`, `evaluate`, `--mode`, `--model-config`, `--verifier-model`, `--lint-cmd`, `--type-check-cmd`) → print `[harness-build] Unknown argument — this skill takes no task string; the task lives in state.json.` and halt.
-3. Otherwise run §Session Recovery below. Its `plan_done` handling is THIS skill's gate-crossing write and is defined here, once — the jump table cites it by name. **On the `plan_done` route, §Session Recovery's item 3 status print and item 7 question are NOT rendered**: the human typing `/harness-build` one message after `/harness-gate` printed it IS the resume decision (decision A), and a second "Previous session detected — Resume?" would turn the advertised three-message run into four (the CLI surface in `templates/_shared/run_style.md`: `/harness-build → phase → "generate_ready" write, then Step 4 → 8`). Items 1, 2 and 4–6 still run — routing on `skill`/`version`, the pre-harness check, restoring `model_config`/`conventions`, re-detecting `has_git` and re-resolving §Mode Gate. Item 7 renders only for a phase past `plan_done`, a genuine mid-task resume — the shape §Session Boundary Type A's resume column names. Measured 2026-09-10 (post-release live probe): the literal reading rendered both, and only that CLI row settled it; stated here so the next reader does not re-derive it.
-   - **`phase == "plan_done"` and `cli_flags.fast == true` and `gate.approved != true`** → print `[harness-build] This is a --fast session whose Fast Gate has not been answered — run /harness to answer it.` and halt. Nothing is written. A fast session records its approval in `gate.approved` (`skills/harness/SKILL.md` §Fast Gate, "Build now"), and that flag is the only thing that admits one to Generate; a non-fast session is unaffected, because the human typing this command remains its proof (decision A). Evaluate this row BEFORE the two below, so an unapproved fast session can never take them.
-   - **`phase == "plan_done"` and `--epic` NOT given** → single write: `phase → "generate_ready"`, `epic.boundaries → null` (clears any boundary answer a prior §Step 3.5 visit recorded — the same reset `/harness-gate`'s "Proceed as single" used to perform), `updated_at → now`. Then Step 4. This is the write `/harness-gate` cannot perform (SPEC §2.3); it proves nothing about the gate having run — the human typing this command is that proof (decision A).
+3. Otherwise run §Session Recovery below. Its `plan_done` handling is THIS skill's gate-crossing write and is defined here, once — the jump table cites it by name. **On the `plan_done` route, §Session Recovery's item 3 status print and item 7 question are NOT rendered**: the invocation itself IS the resume decision — in a separate session the human typing `/harness-build` one message after `/harness-gate` printed it (decision A), in an inline session the approval click that chained here or the human typing the Resume command `skills/harness/SKILL.md` §Approval Gate's stop output printed — and a second "Previous session detected — Resume?" would add a message to either flow (the CLI surface in `templates/_shared/run_style.md`: `/harness-build → phase → "generate_ready" write, then Step 4 → 8`). Items 1, 2 and 4–6 still run — routing on `skill`/`version`, the pre-harness check, restoring `model_config`/`conventions`, re-detecting `has_git` and re-resolving §Mode Gate. Item 7 renders only for a phase past `plan_done`, a genuine mid-task resume — the shape §Session Boundary Type A's resume column names. Measured 2026-09-10 (post-release live probe): the literal reading rendered both, and only that CLI row settled it; stated here so the next reader does not re-derive it.
+   - **`phase == "plan_done"` in an inline session** (`skills/harness/SKILL.md` §Approval Gate's gate-mode rule — every `cli_flags.fast` session included) → the **approval check** (single source — `skills/harness/SKILL.md` §Approval Gate's stop output and its §Session Recovery cite it by name). Refuse, writing nothing of its own — the only writes a refused invocation carries are §Session Recovery items 5–6's restores, which ran before this row (`conventions`, `has_git`, `path_resolved`); no `phase`, `gate.*`, `spec_stamp` or `epic.*` write — when ANY of these holds: (a) `gate.approved != true`, or `gate.spec_stamp` is absent — an approval written before the record was bound to a stamp is no approval — or `gate.route` is neither `"single"` nor `"epic"` (a partial record is no approval either); (b) `gate.spec_stamp` or the current `spec_stamp` is `null` or malformed (not an object carrying integer `generation` and `lines`); (c) the two differ in `generation` or in `lines`; (d) `{docs_path}spec.md` cannot be read; (e) its live line count differs from `spec_stamp.lines`; (f) whether `--epic` was given disagrees with `gate.route == "epic"`, in either direction. Print `[harness-build] No in-session approval matches this spec ({reason}) — run /harness, which re-renders its approval gate.` — `{reason}` names the first check that failed; for (f) it names the command the recorded route needs instead (`/harness-build` or `/harness-build --epic`) — and halt. Sites outside this skill that cite this check (`skills/harness/SKILL.md` §Session Recovery item 2, its §Approval Gate — the "Stop" description and the stop output — and its §Session Boundary row) evaluate (a)–(e) only: the command they chain or print carries `--epic` exactly when `gate.route == "epic"`, which satisfies (f) by construction. This check compares the approval record's stamp, and spec.md's live line count, with spec.md as it now stands and deliberately does not apply `skills/harness-gate/SKILL.md` §Stale Determination, which compares a critic record with it — a different question; that section's disclosed limits 1–2 apply to this check unchanged, so an edit outside the orchestrator that keeps the line count passes it. The line count is the registry's slot (1) read (§Architecture Principles below). Evaluate this row BEFORE the rows below; a session that passes it continues to them. A separate session never takes this row.
+   - **`phase == "plan_done"` and `--epic` NOT given** → single write: `phase → "generate_ready"`, `epic.boundaries → null` (clears any boundary answer a prior §Step 3.5 visit recorded — the same reset `/harness-gate`'s "Proceed as single" used to perform), `updated_at → now`. Then Step 4. This is the write `/harness-gate` cannot perform (SPEC §2.3). In a separate session it proves nothing about the gate having run — the human typing this command is that proof (decision A, which holds for the separate gate mode only); in an inline session the approval check above is.
    - **`phase == "plan_done"` and `--epic` given** → hand control to §Step 3.5 (Slice Plan) by name. `phase` stays `plan_done` throughout, exactly as that section's entry contract requires; a non-null `epic.boundaries` is its re-entry path.
    - **`phase == "plan_done"` and `generate|verify|evaluate` given** → the step-mode prerequisite table in `templates/_shared/run_style.md` decides (spec.md exists → same as the no-flag case; otherwise the error row).
 
@@ -228,7 +231,7 @@ written by `skills/harness-build/SKILL.md` §Step 5 (WORKFLOW) / `skills/harness
 
 ---
 
-<!-- BLOCK-START:hx-state-machine v2 — shared by /harness, /harness-build; edit every copy in one commit and bump the version -->
+<!-- BLOCK-START:hx-state-machine v3 — shared by /harness, /harness-build; edit every copy in one commit and bump the version -->
 ## State Machine
 
 ### State Transition Diagram
@@ -255,8 +258,8 @@ On the WORKFLOW path the same machine applies; `harness.eval` covers verifying�
 - `*_done` → next `*_ready`: auto mode = automatic / phase mode = next session
 - Phase mode can end a session at `plan_done`, `generate_done`, `verify_done`, `evaluate_done`
 - `plan_done` → `completed` directly is the one epic-exit exception, taken only via `skills/harness-build/SKILL.md` §Step 3.6 (by name); no other transition skips a state.
-- `[User Gate]` is `/harness-gate` — or, for a `cli_flags.fast` session, `skills/harness/SKILL.md` §Fast Gate, which records `gate.approved` before `/harness-build` performs the `generate_ready` write.
-<!-- BLOCK-END:hx-state-machine v2 -->
+- `[User Gate]` is HARD GATE #1, rendered where the session's gate mode puts it: `skills/harness/SKILL.md` §Approval Gate in an inline session (the default, `--fast` included), which records an approval bound to `spec_stamp` that `skills/harness-build/SKILL.md` §Entry checks before it performs the `generate_ready` write; `/harness-gate` in a separate session, where the human typing `/harness-build` is the proof.
+<!-- BLOCK-END:hx-state-machine v3 -->
 
 ### Auto-fix State Transition Table
 
@@ -295,13 +298,13 @@ On the WORKFLOW path the same machine applies; `harness.eval` covers verifying�
 
 <!-- SYNC-WITH: skills/harness-build/SKILL.md §Step 3.5: Slice Plan -->
 
-*Reached two ways: `skills/harness-gate/SKILL.md` §Step 3 Pass B's "Plan as epic" option (first entry), and §Session Recovery item 7's plan_done
+*Reached two ways: a "Plan as epic" approval (first entry) — `skills/harness/SKILL.md` §Approval Gate's in an inline session, chained here or typed as `/harness-build --epic`, or `skills/harness-gate/SKILL.md` §Step 3 Pass B's in a separate one — and §Session Recovery item 7's plan_done
 jump-table row when epic.boundaries is non-null (re-entry after an interruption). Its own AskUserQuestion is (a) data
 collection about a deliverable's shape, not approval before an irreversible action; (b) not one of §Architecture
 Principles #6's 3 counted HARD-GATEs; (c) this path ends the session — it does not resume into Step 4.*
 
 **Entry & routing** (single source — `skills/harness-gate/SKILL.md` §Step 3 Pass B, §Step 3.6, and §Session Recovery cite this by name, never restated):
-entered from Pass B's "Plan as epic" option, or — on a resume with epic.boundaries already recorded — directly from
+entered from a "Plan as epic" approval (§Approval Gate's or Pass B's, through §Entry — whose approval check binds an inline session's `--epic` to the recorded route), or — on a resume with epic.boundaries already recorded — directly from
 §Session Recovery item 7's plan_done row (by name); never from `cli_flags.epic` directly, on either path.
 `phase == "plan_done"` on entry and stays that way throughout — this section never advances `phase`. The boundary Q&A
 below (skipped on a re-entry that already recorded an answer) determines the rows written to `{docs_path}slice_plan.md`,
@@ -327,9 +330,10 @@ resume) falls to the restore order below.
 **Degraded restore order** (`In scope`/`AC ids`, first that succeeds): ①
 `state.scale.slice_hint` — frozen before `plan_done`, survives resume, always available
 for `Goal`/candidates/recommendation. ② the in-context `PlanResult`, when this turn is
-live. ③ a language-independent `- [ ] AC-` scan of the spec.md content `skills/harness-gate/SKILL.md` §Step 3's
-`<HARD-GATE>` already read this turn — **not a new read site**, reuses §Architecture
-Principles #1 entry (1)'s `spec.md at plan gate` read verbatim (its body unedited, no 8th
+live. ③ a language-independent `- [ ] AC-` scan of the spec.md content HARD GATE #1 read —
+`skills/harness/SKILL.md` §Approval Gate (then this skill's own §Entry approval check) in an inline session,
+`skills/harness-gate/SKILL.md` §Step 3's `<HARD-GATE>` in a separate one — **not a new read
+site**, reuses §Architecture Principles #1 entry (1)'s `spec.md at plan gate` read (no 8th
 exception added); never parse heading TEXT — headings render in `user_lang`, same basis as
 `skills/harness/SKILL.md` §Scale Assessment's INLINE Fallback. ④ whatever is still unfilled renders `—` with one
 degradation-disclosure line — never invent a value.
@@ -340,7 +344,7 @@ synthesis template's own degenerate-case rule ("if splitting is unnecessary, sti
 exactly one candidate describing the whole task as a single slice"); the disclosure states the
 row came from spec.md alone, no value invented. Both no-Q&A paths — this one, and `Other`'s zero-piece case below — still write `state.epic.boundaries` in the same single, immediate write (the degenerate whole-task boundary, not a user choice), so §Step 3.6's epic-exit predicate — what actually routes this session — holds on every path that reaches it.
 
-**Boundary Q&A:** one AskUserQuestion call, one question — it asks only how to split work already agreed at the `skills/harness-gate/SKILL.md` §Step 3 gate, never re-opening requirements (that's `skills/harness-gate/SKILL.md` §Step 3 Pass B's "Modify" option, not this call). Labels start from
+**Boundary Q&A:** one AskUserQuestion call, one question — it asks only how to split work already agreed at HARD GATE #1 (`skills/harness/SKILL.md` §Approval Gate or `skills/harness-gate/SKILL.md` §Step 3), never re-opening requirements (that is the gate's "Modify" option, not this call). Labels start from
 `candidates[].label`, rendered per `templates/_shared/askuserquestion.md`'s
 translate-everything rule — NOT fixed English raw (that needs a new §Output Language
 Contract — Preserved-English Glossary row plus a `name_manifest.md` entry; neither added).
@@ -416,7 +420,7 @@ disclosed", not "zero duplicates".
 Re-confirms, fail-closed: `state.epic.boundaries != null AND state.phase == "plan_done"` —
 sole definition of this predicate in this file (§Step 3.5 and §Session Recovery cite it by
 name, never restate it). `cli_flags.epic` is not read here: a session that started with
-`--epic` can still choose "Proceed as single" at `skills/harness-gate/SKILL.md` §Step 3 Pass B, and that choice already
+`--epic` can still choose "Build now" at `skills/harness/SKILL.md` §Approval Gate or "Proceed as single" at `skills/harness-gate/SKILL.md` §Step 3 Pass B, and §Entry's single route then
 resets `epic.boundaries` to `null`, which alone makes this predicate false — falling through
 to §Step 8's `has_git` routing, by name (this section is reached from §Step 3.5, so a
 false predicate here means the session was never an epic exit and §Step 8 owns it).
@@ -1042,7 +1046,9 @@ the same thing in every file.
 
 1. **Orchestrator reads no intermediate files** — of the registry's 7 live read exceptions (8
    numbered slots; slot (2), the `qa_report.md` verdict read, was retired 2026-09-18 when
-   `verify.verdict` took over on both paths — §Step 7) this skill performs **2**: (3) changes.md
+   `verify.verdict` took over on both paths — §Step 7) this skill performs **3**: (1) spec.md
+   at the plan gate — the live line count §Entry's approval check takes in an inline session,
+   the gate's own read and not a new site, which §Step 3.5's restore order ③ reuses; (3) changes.md
    path-extraction on WORKFLOW-path resume when
    `workflow_ctx` is null (repo-relative paths only, no content analysis — §Step 5 — WORKFLOW
    path `changedFilesList` source priority), and (4) verify_report.md path (for the user message)
@@ -1059,7 +1065,7 @@ the same thing in every file.
    - Auto-fix: at most 1 attempt per session (`verify.autofix_attempted` once-only — not reset on round increment).
    - Layer 1 retries: max 3. Do NOT reset after Auto-fix Apply.
 5. **All external paths pass through Path Validator before use** (see §Path Validator below).
-6. **Gates never enter segment scripts.** HARD-GATEs #2 (verify-fail) and #3 (auto-fix-apply) are rendered by this orchestrator between segment runs; #1 (spec-confirm) is `/harness-gate`. `scripts/verify_meta_literal.py` guards this at lint time by rejecting gate-marker tokens — the `<HARD-GATE>` tag form, `AskUserQuestion`, and the `Apply patch` option label — inside any segment script. This is a marker-based tripwire, not a proof of gate-freedom: it deliberately does NOT flag the spaced prose form `HARD GATE #N`, which segment scripts legitimately use in comments to note that gates live in the orchestrators.
+6. **Gates never enter segment scripts.** HARD-GATEs #2 (verify-fail) and #3 (auto-fix-apply) are rendered by this orchestrator between segment runs; HARD GATE #1 (spec-confirm) renders at `skills/harness/SKILL.md` §Approval Gate (every variant) in an inline session and at `/harness-gate` in a separate one — one gate, two render sites; the count stays 3. `scripts/verify_meta_literal.py` guards this at lint time by rejecting gate-marker tokens — the `<HARD-GATE>` tag form, `AskUserQuestion`, and the `Apply patch` option label — inside any segment script. This is a marker-based tripwire, not a proof of gate-freedom: it deliberately does NOT flag the spaced prose form `HARD GATE #N`, which segment scripts legitimately use in comments to note that gates live in the orchestrators.
 
 <!-- BLOCK-START:hx-path-validator v2 — shared by /harness, /harness-gate, /harness-build; edit every copy in one commit and bump the version -->
 ### Path Validator

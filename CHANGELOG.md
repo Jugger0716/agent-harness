@@ -6,6 +6,96 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/).
 
+## [Unreleased]
+
+The `harness-converge` epic (`design/harness-converge/SPEC.md`), slices S1–S2. S3 (epic slice
+chaining) and S4 (the live probe) are not in yet, so none of the paths below has been observed
+in a live session.
+
+### Added
+
+- **`/harness` §Step 2.6 converge loop (S1).** The own-critic pass is now one run of a loop —
+  `templates/harness/converge.md`, with the sub-agent templates `converge_review.md` and
+  `converge_verify.md`: review → verify and classify against a ledger under
+  `.harness/converge/` → apply every open `auto` correction in one write event → delta
+  re-review, at most five rounds, ending `converged` (no open `auto` Critical/Major on the
+  ledger), `capped` or `failed`. Decisions are asked once per session in their own question;
+  the run's end is mapped once into `plan_critic`, whose `counts` become the ledger residual.
+- **In-session approval — `skills/harness/SKILL.md` §Approval Gate (S2).** HARD GATE #1 now
+  renders inside `/harness` for every new session by default (gate mode **inline**): a summary
+  (converge result, auto-applied list, residual, Scale Assessment), then ONE approval question —
+  "Build now", "Plan as epic", "Modify", "Stop" (`--fast`: three, no "Plan as epic"). Only the
+  first two labels approve. The approval is recorded once — `gate.approved`, `gate.approved_at`,
+  `gate.mode`, `gate.spec_stamp`, `gate.route` — and, under the new §Chain Condition (inline,
+  `run_style == auto`, interactive), `/harness` invokes `/harness-build` (with `--epic` on the
+  epic route) in the same turn. A normal task is now one typed message, `/harness "task"`.
+- **`--separate-gate` and the project default `gate=separate|inline` (S2).** Keep the tool-less
+  `/harness-gate` turn: the session ends at `plan_done` with `Next → /harness-gate`, exactly the
+  former flow. `--fast` is always inline; `--fast --separate-gate` halts. The mode is recorded in
+  `cli_flags.separate_gate` and echoed in the Setup Summary's new `Gate` row; a session written
+  before the field is read as inline when it was `--fast`, separate otherwise.
+
+### Changed
+
+- **`/harness-build` §Entry refuses an unapproved inline session (S2).** Its new approval check
+  writes no gate-crossing field and halts when the approval is missing, is not bound to a `spec_stamp`, when
+  either stamp is null or malformed, when they differ, when spec.md cannot be read or its live
+  line count differs from `spec_stamp.lines`, or when `--epic` disagrees with the recorded route.
+  `/harness --modify` after an approval therefore leaves `/harness-build` refused until
+  `/harness` re-renders the approval question — the old "Fast Gate already approved" refusal in
+  the re-entry flags is gone. A separate session is unchanged (decision A).
+- **`/harness-gate` serves separate sessions only (S2).** An inline session gets one redirect
+  line and no question (§Entry Check, now eight points). Row ①-c's third non-exposure reason
+  reads "automatic revision already spent (Auto-revise or the converge loop)"; row ④'s default
+  banner names an interrupted converge run; its INLINE-retry rule now cites one statement of
+  §Step 2.6 branch (ii)'s footprint instead of a `failure_reason` no string records — with its
+  one blind spot disclosed: a denial that follows a branch (iii) record is not seen, so the
+  denied Workflow call can be issued once more (ROADMAP).
+  `disallowed-tools` is unchanged.
+- **`/harness` resume routing at `plan_done` (S2).** A valid approval chains (or stops) without
+  re-running anything; a null/malformed stamp or a line count that moved is re-stamped and then
+  reviewed in full (a session with no critic record yet goes through §Step 2.6, so `--fast` and
+  carried-over sessions still skip the loop); an interrupted run or (inline) a stale record starts
+  a new run; an unanswered decision is asked before the gate. The "Boundary Q&A already
+  answered" halt now applies to a separate session only — an inline one is routed by its
+  approval record, so a boundary answer recorded before spec.md changed no longer bounces
+  between `/harness` and `/harness-build --epic`.
+- **Wording that described the old guarantee (S2).** The `hx-state-machine` BLOCK (v2 → v3),
+  Architecture Principles #6 and slots (1) and (8), the run_style table and CLI surface,
+  `CLAUDE.md`, `README.md` (the default flow, the skills table, the first-task walkthrough, Quick
+  Start, the pipeline diagram, Execution Styles, the options table — now with `--separate-gate`
+  and `--no-prompt` rows — Session Recovery and Confirmation Gates), and in-row corrections to
+  `design/harness-ordering-enforcement/SPEC.md` (decisions ①·A·⑧, §1, §2.2, §2.3, §3.3a, §4.2,
+  §8, rev.9 (b)/(e)) and four `ROADMAP.md` rows.
+- **`spec_stamp.generation` never repeats a recorded value (S2).** A write that starts from a
+  `null` stamp — one an interrupted write left — now continues above the largest generation
+  `gate.spec_stamp` or `plan_critic.spec_stamp_at_critic` holds instead of restarting at 1, so an
+  approval (or a critic record) bound to an earlier generation cannot match a spec.md changed
+  since.
+  Description ceilings rose by 87 characters (harness 580, harness-build 404, harness-gate 438).
+
+### Removed — regressions, disclosed
+
+- **The text-fallback approval is gone, `--fast` included.** The former §Fast Gate accepted a
+  numbered or keyword reply when AskUserQuestion was unavailable. An approval is now a label
+  selection only: with AskUserQuestion unavailable or failing, or in a non-interactive run
+  (`--no-prompt`, headless, cron, sub-agent), `/harness` records no approval, chains nothing and
+  stops at `plan_done`, printing an escape line — start a new session with `--separate-gate`
+  (where not even the resume question can be answered — headless, cron — delete `.harness/` first).
+- **`--fast` no longer chains under `run_style` `phase`/`step` or without an interactive
+  session.** The chain now needs §Chain Condition; a `--fast` approval outside it stops with
+  Resume `/harness-build`, one more typed message than before.
+- **The default gate turn is no longer tool-less.** An inline session's approval is a
+  model-written record checked by the next skill — the assurance grade the former Fast Gate
+  had, now the default (`design/harness-converge/SPEC.md` risk 1). Use `--separate-gate` or
+  `gate=separate` to keep the structural guarantee. The record is checked against the spec's
+  stamp and live line count only, so an editor change that keeps the line count, made after an
+  approval and before `/harness-build`, passes the check (`skills/harness-gate/SKILL.md`
+  §Stale Determination's disclosed limits 1–2). A converge-loop sub-agent writing
+  `.harness/state.json` inside the tree check's blind spot could forge the record too: the
+  loop's mapping writes `gate.*` back to its run-start values, so only a run that never reaches
+  its mapping (a Workflow denial, a session cut off mid-run) carries such a write forward (ROADMAP).
+
 ## [8.14.0] — 2026-09-28
 
 ### Added

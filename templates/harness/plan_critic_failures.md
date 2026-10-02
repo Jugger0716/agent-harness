@@ -2,7 +2,8 @@
 
 > Taken by `skills/harness/SKILL.md` §Step 2.6 failure branch (iii) — for the round-1 critic and
 > for every other failure of a converge run (`templates/harness/converge.md` §Ending a run maps
-> each cause to its string). Read it when writing that branch's record. `skills/harness-gate/SKILL.md` §Step 3 Pass A row ④ renders the string it
+> each cause to its string). Read it when writing that branch's record. `skills/harness-gate/SKILL.md` §Step 3 Pass A row ④ (a separate session) and
+> `skills/harness/SKILL.md` §Approval Gate's summary banner (an inline one) render the string it
 > wrote, so a wrong value here is the difference between a user who can act and one who cannot.
 
 **The write is the same single read-modify-write as every other Step 2.6 branch**, with all 7
@@ -14,7 +15,7 @@ table below.
 |---|---|---|
 | `"parse_failed"` | the INLINE 1-line return did not carry the expected keyword and counts | re-run the critic (`/harness --critic`) |
 | `"findings_file_missing"` | latch point (a): no findings file after a dispatch that returned | re-run the critic |
-| `"spec_stamp_invalid"` | the pre-dispatch stamp check, or latch point (b) — `spec_stamp` was `null` or malformed; or a converge write event (a round, decision or `--modify` apply) that failed after protocol step 1 (`templates/harness/converge.md` §Write Events) | `spec.md` is a partial write: finish it with `/harness --modify "<request>"`, or Restart via `/harness`. No gate option re-runs Step 2 |
+| `"spec_stamp_invalid"` | the pre-dispatch stamp check, or latch point (b) — `spec_stamp` was `null` or malformed; or a converge write event (a round, decision or `--modify` apply) that failed after protocol step 1 (`templates/harness/converge.md` §Write Events) | `spec.md` is a partial write. Inline session: run `/harness` and Resume — it re-stamps the file and reviews it in full (`skills/harness/SKILL.md` §Session Recovery, item 3 of the `planning` / `plan_done` row); approval is refused until then. Separate session: finish it with `/harness --modify "<request>"`, or Restart via `/harness`. No gate option re-runs Step 2 |
 | `"findings_file_stale"` | the pre-dispatch delete itself failed, so nothing was dispatched | resolve the permission or lock on `{docs_path}plan_critic_findings.md`, then re-run the critic |
 | `"loop_dispatch_failed"` | a converge review or verify dispatch, or the round-1 INLINE critic dispatch, was refused or errored; or the delete of a per-round output file failed so it was never dispatched; or a write event's snapshot copy failed, so nothing was edited; or a tree-check `git status` was refused or errored; or a `.harness/converge/ledger.json` write failed | check the permission prompt or the error, then re-run the critic (a new run, full review); a `/harness --modify` that failed this way was not applied — re-issue it |
 | `"loop_parse_failed"` | a converge review or verify 1-line return lacked its leading keyword and counts, or `.harness/converge/verdict.json` did not parse to its documented shape or failed the coverage check (`templates/harness/converge.md` §Round step 2 — a finding ID of the round missing from, or repeated in, its `sources`, or a `merged` entry naming no ledger item), or `.harness/converge/ledger.json` did not parse | re-run the critic |

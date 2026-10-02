@@ -80,7 +80,7 @@ GROUPS: list[tuple[str, str, list[str], str | None]] = [
     # shared_source is None for all four -- the /harness copy is canonical; no copy lives under
     # templates/.
     ("hx-mode-gate", "v2", HX_HB, None),
-    ("hx-state-machine", "v2", HX_HB, None),
+    ("hx-state-machine", "v3", HX_HB, None),
     ("hx-path-validator", "v2", HX_HGB, None),
     ("hx-scale-render", "v2", HX_HG, None),
 ]

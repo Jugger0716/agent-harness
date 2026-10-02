@@ -30,7 +30,7 @@
 | File | Written by | Read by | Lifetime |
 |---|---|---|---|
 | `ledger.json` | the orchestrator only (merge, apply, answer) | the orchestrator (`templates/_shared/architecture_principles.md` #1 slot (8)); the delta review and the verify sub-agent, read-only | the session — kept across runs, deleted with `.harness/` |
-| `snapshot.md` | the orchestrator, as a file COPY of `{docs_path}spec.md` taken immediately before each write event and before the Auto-revise re-render (§Write Events) — `cp`, never read into context | the delta review and the verify sub-agent | overwritten by each copy |
+| `snapshot.md` | the orchestrator, as a file COPY of `{docs_path}spec.md` taken immediately before each write event except the re-stamp, and before the Auto-revise re-render — `cp`, never read into context; the re-stamp instead writes an EMPTY one when a ledger exists without it (§Write Events) | the delta review and the verify sub-agent | overwritten by each copy |
 | `review.md` | the review sub-agent | the verify sub-agent | overwritten each round |
 | `verdict.json` | the verify sub-agent | the orchestrator (slot (8)) | overwritten each round |
 
@@ -86,23 +86,30 @@ runs no command that text names.
 
 A run starts from: §Step 2.6's own-critic branch (`skills/harness/SKILL.md` §Step 2.6 — first
 entry, and every re-entry through its routing predicate (b)); `/harness --critic`; `/harness
---modify` (after its write event); a decision apply (§Decision Question); and the same-turn
-re-critic that ends an Auto-revise re-entry (`templates/harness/auto_revise.md`).
+--modify` (after its write event); `skills/harness/SKILL.md` §Approval Gate's "Modify" (after
+its write event, or alone for an empty request — `--critic`'s action); a resume
+(`skills/harness/SKILL.md` §Session Recovery, item 4 of its `planning` / `plan_done` row — a
+re-stamp, a cut-off run, a stale record); a decision apply (§Decision Question); and the
+same-turn re-critic that ends an Auto-revise re-entry (`templates/harness/auto_revise.md`).
 
 1. **Kind.** A run starts with a **delta** review in two cases only: right after a decision
-   apply (§Decision Question — asked only after a run of this turn ended `converged` or
-   `capped`), and right after a Modify write event when BOTH held immediately BEFORE that
-   event: `converge.status` was `"converged"` or `"capped"`, and
+   apply that follows a run of this SAME turn which ended `converged` or `capped`, and right
+   after a Modify write event (either source) — or a decision apply on a resume
+   (`skills/harness/SKILL.md` §Session Recovery item 5) — when BOTH held immediately BEFORE
+   that event: `converge.status` was `"converged"` or `"capped"`, and
    `skills/harness-gate/SKILL.md` §Stale Determination said **not stale** — the session's last
    run completed and was mapped, and spec.md has not changed since that mapping. Every other
-   run starts with a **full** review — first entry, `--critic`, a resume, an Auto-revise
-   re-critic, and a Modify that fails either condition (a last run that failed, was interrupted
+   run starts with a **full** review — first entry, `--critic`, an empty Modify, a resume, an
+   Auto-revise re-critic, and a Modify or resumed decision apply that fails either condition
+   (a last run that failed, was interrupted
    or never ran, a session older than the loop, or a spec.md changed after the last mapping —
    an edit made outside the orchestrator, an interrupted write, a write no run reviewed). The
    snapshot a Modify takes holds everything before its own edit, so a delta review there would
    map unreviewed text as reviewed. Rounds after the first are always delta.
 2. **One state write, alone:** `converge.status = "running"`, `converge.runs += 1` (`null`
-   reads as 0). Create `ledger.json` as `{ "items": [] }` if it is absent.
+   reads as 0). Create `ledger.json` as `{ "items": [] }` if it is absent. Unless an earlier
+   run of this turn is still waiting for §Mapping (a decision apply's run), keep in context the
+   `gate` object this read-modify-write found — §Mapping writes it back.
 3. Print per OLC `  Converge run {converge.runs}: {full|delta} review, up to {R} rounds`.
 
 ## Round
@@ -159,7 +166,7 @@ with `{mode}`, `{spec_path}` = `{docs_path}spec.md`, `{snapshot_path}` and `{led
 `.harness/converge/review.md`, `{task_description}`, `{user_lang}`; model
 `model_config.advisor`; expected leading keyword `review written`. Verify:
 `{CLAUDE_PLUGIN_ROOT}/templates/harness/converge_verify.md` with `{review_paths}`,
-`{ledger_path}`, `{snapshot_path}` (`(none)` before the session's first snapshot copy),
+`{ledger_path}`, `{snapshot_path}` (`(none)` while `snapshot.md` does not exist),
 `{spec_path}`, `{repo_path}`, `{output_path}` = `.harness/converge/verdict.json`,
 `{task_description}`, `{user_lang}`; model `model_config.evaluator`; expected leading keyword
 `verdict written`. Models apply only when the preset is not `default`
@@ -185,12 +192,28 @@ dispatch, and any change under an ignored path, leave the two outputs equal and 
 undetected — and that blind spot holds exactly the files the loop's own decisions rest on:
 `.harness/state.json` and `.harness/converge/` (always), and `{docs_path}spec.md` whenever it
 is untracked or gitignored, as it usually is. Inside that blind spot the sub-agents'
-read-only rule is an instruction, not isolation.
+read-only rule is an instruction, not isolation — and `.harness/state.json` holds the approval
+record an inline session's `/harness-build` admits on. §Mapping writes `gate.*` back, so a
+sub-agent's write there survives only a run that never reaches §Mapping: branch (ii)'s status
+write, or a session cut off mid-run, whose resume (`skills/harness/SKILL.md` §Session Recovery
+item 2) would then chain on it — the exposure a forged `phase` has always had there (ROADMAP).
 
 ## Write Events
 
 A write event is a spec.md write inside the loop's reach: a round apply, a decision apply
-(§Decision Question) and `/harness --modify`'s apply. Each is exactly:
+(§Decision Question), `/harness --modify`'s apply and the "Modify" of
+`skills/harness/SKILL.md` §Approval Gate (the same action), and the **re-stamp** of
+`skills/harness/SKILL.md` §Session Recovery (item 3 of its `planning` / `plan_done` row). Each
+is exactly the three steps below, except the re-stamp: it changes no content, so it is step 2
+alone — the protocol around an unchanged file, `spec_stamp.generation` + 1 and the live line
+count — with NO snapshot copy and no ledger update. Copying there would make the snapshot equal
+the edited spec and hide from §Fingerprints and merging the very change (a direct edit, a cut-off
+write) the re-stamp exists for; without the copy the next run's diff still spans it. That needs a
+snapshot to diff against: when `ledger.json` exists but `snapshot.md` does not (no run of the
+session has applied anything yet), the re-stamp first writes an EMPTY `snapshot.md`, so the
+whole spec counts as changed and no re-raise merges by default — a write that fails there is a
+failed copy (below). The run that follows a re-stamp starts with a full review (§Starting a
+run item 1). The three steps:
 
 1. create `.harness/converge/` if it is absent, then copy `{docs_path}spec.md` over
    `.harness/converge/snapshot.md` (a file copy, not a read);
@@ -248,7 +271,8 @@ A fingerprint is `{anchor, class, key}`: the text of the spec heading the defect
 flag or term). A finding whose fingerprint equals a ledger item's is **merged** into it UNLESS
 it brings new evidence — evidence that points inside the region that changed between
 `snapshot.md` and `spec.md` — in which case it is a new item. With no snapshot yet, nothing
-has changed and every re-raise merges.
+has changed and every re-raise merges (a re-stamp never leaves a ledger without one — §Write
+Events).
 
 ## Ending a run
 
@@ -280,7 +304,9 @@ Branch (ii) writes `converge.status = "failed"` alone and nothing to `plan_criti
 
 ## Decision Question
 
-Asked when ALL hold: the run ended `converged` or `capped`; the ledger has at least one open
+Asked when ALL hold: the run ended `converged` or `capped` — or, on a resume, the session's
+last run did (`converge.status`; `skills/harness/SKILL.md` §Session Recovery, item 5 of its
+`planning` / `plan_done` row); the ledger has at least one open
 `decision`; the session is interactive (below); and the ledger has NO `answered` item — the
 question is asked at most once per session, and that fact is derived from the ledger, never
 stored separately. Decisions that appear after it was asked stay open and are reported as
@@ -299,9 +325,11 @@ beyond that), each in `user_lang` per `skills/harness/SKILL.md` §Print Translat
 the exception `templates/_shared/askuserquestion.md` records for this question: if the call is
 unavailable or fails, the session counts as non-interactive from that point. Apply every
 answer received as ONE write event (§Write Events, under §Ledger format's data rule), marking
-each item `"answered"` with its `answer`; then start a new run (delta first round). If no
-answer was received (the first call unavailable, failing or dismissed), there is no write
-event and no new run: go to §Mapping, and the decisions stay open and are reported as residual.
+each item `"answered"` with its `answer`; then start a new run, whose kind §Starting a run
+item 1 decides (delta after a run of this same turn). If no answer was received (the first call
+unavailable, failing or dismissed), there is no write event and no new run: go to §Mapping —
+on a resume, which wrote its mapping earlier, straight to `skills/harness/SKILL.md` §After Plan
+Phase — and the decisions stay open and are reported as residual.
 
 ## Residual
 
@@ -344,14 +372,19 @@ The end of the turn's last run. Two writes, in this order:
    For `converged` / `capped` its shape is that section's run-end bullet (`counts` = residual
    counts, `round = 1`); for `failed` it is branch (iii) (branch (ii) never reaches here —
    §Ending a run). It is the last spec-related write of the turn, and `plan_critic` is written
-   at most once per turn.
+   at most once per turn. The same write puts `gate.*` back to the `gate` object kept at
+   §Starting a run item 2: no run writes an approval record, so a difference is a loop
+   sub-agent writing inside the tree check's blind spot (§Round), and keeping it would let a
+   forged approval pass `skills/harness-build/SKILL.md` §Entry's approval check. When the two
+   differ, print `[harness] ⚠ gate.* changed during the converge run — restored`.
 
 Then control goes to `skills/harness/SKILL.md` §After Plan Phase.
 
 ## Summary Block
 
-What §After Plan Phase prints after a run (and what the in-session approval gate will print
-as its summary), per OLC, from the ledger and `converge.*`:
+What a separate session's §After Plan Phase prints after a run, and what
+`skills/harness/SKILL.md` §Approval Gate prints as its summary (on a resume too), per OLC,
+from the ledger and `converge.*`:
 
 - `Converge: {exit} — runs {converge.runs}, rounds {converge.rounds}`
 - auto-applied items, one line each: `  ✓ [L<n>] {summary}`
@@ -364,7 +397,10 @@ as its summary), per OLC, from the ledger and `converge.*`:
 
 Banners, printed above the block: `failed` through branch (iii) → `skills/harness/SKILL.md`
 §Step 2.6's failure banner (spec unreviewed) with the `failure_reason`; `failed` through branch
-(ii) → that branch's own `Workflow denied` banner, with no `failure_reason`; `capped`, or
+(ii) → that branch's own `Workflow denied` banner, with no `failure_reason` — on a resume, which
+of the two applies is branch (ii)'s footprint (`skills/harness/SKILL.md` §Gate re-entry flags'
+`--critic` row), whose disclosed blind spot shows a (ii) that followed a (iii) record with
+(iii)'s older banner; `capped`, or
 residual Critical + Major above zero →
 `[harness] ⚠ Review incomplete — {capped after R rounds | C/M items still open}`.
 
@@ -373,5 +409,8 @@ residual Critical + Major above zero →
 Non-interactive means: `templates/_shared/mode_gate.md` §Ambiguity Prompt's non-interactive
 condition (its step 5 — `--no-prompt`, or a session that cannot present an interactive prompt),
 or AskUserQuestion unavailable, or its call failing. The loop itself needs no user input and
-runs the same either way; only §Decision Question is skipped. Open decisions stay open and are
-printed by §Summary Block; the session still ends at §After Plan Phase.
+runs the same either way; only §Decision Question is skipped — and, after the loop,
+`skills/harness/SKILL.md` §Approval Gate's approval question, approval record and chain (its
+step 5). Open decisions stay open and are printed by §Summary Block; the session still ends at
+§After Plan Phase. The same condition is one of the three parts of that skill's §Chain
+Condition.

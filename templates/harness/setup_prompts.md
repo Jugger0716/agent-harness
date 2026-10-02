@@ -4,7 +4,7 @@
 > Each is cited there by its header; read this file when you reach one. All text renders in
 > `user_lang` per `templates/_shared/askuserquestion.md`; "Other" is appended by the framework.
 >
-> §Fast Gate's own question is NOT here — it is a gate, and its payload stays inline in the skill.
+> §Approval Gate's question (every variant, the former §Fast Gate's included) is NOT here — it is a gate, and its payload stays inline in the skill.
 
 ## §Branch (§Step 1 item 8, non-empty existing branch)
 

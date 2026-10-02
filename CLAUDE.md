@@ -60,9 +60,9 @@ There is no build, test, dev, or deploy command.
 | Path | Role |
 |---|---|
 | `skills/<name>/SKILL.md` | one skill = one directory = one contract file |
-| `skills/harness{,-gate,-build}/SKILL.md` | one contract split three ways (C5, 2026-09-07): `/harness` owns Steps 1–2.6 plus the `--fast` Fast Gate, `/harness-gate` owns Step 3 with no `Bash`/`Write`/`Edit`/`Glob`, `/harness-build` owns Steps 3.5–8. Since the v8.14 prompt diet most of what they shared lives in `templates/_shared/` single sources they cite by name; only four `hx-*` BLOCK groups remain byte-identical (`verify_block_sync.py`), for text that must stay inline. §Architecture Principles #3·#5·#6 and §User Interaction Rules are duplicated WITHOUT a sync group — disclosed here, to be blocked the day they drift |
+| `skills/harness{,-gate,-build}/SKILL.md` | one contract split three ways (C5, 2026-09-07): `/harness` owns Steps 1–2.6 (the Step 2.6 converge loop included) plus §Approval Gate — HARD GATE #1 rendered in-session, the default for every new session since harness-converge S2, which chains into `/harness-build` (`--fast` is its three-option variant; §Fast Gate is now a pointer) — `/harness-gate` owns Step 3 with no `Bash`/`Write`/`Edit`/`Glob` and gates only a `--separate-gate` session, `/harness-build` owns Steps 3.5–8. Since the v8.14 prompt diet most of what they shared lives in `templates/_shared/` single sources they cite by name; only four `hx-*` BLOCK groups remain byte-identical (`verify_block_sync.py`), for text that must stay inline. §Architecture Principles #3·#5·#6 and §User Interaction Rules are duplicated WITHOUT a sync group — disclosed here, to be blocked the day they drift |
 | `templates/_shared/` | cross-skill single sources (`mode_gate.md`, `status_format.md`, `project_defaults.md`, `session_conflict.md`, `orchestrator_contract.md`, `output_language.md`, `session_recovery.md`, `session_boundary.md`, `run_style.md`, `scale_assessment.md`, `path_validator.md`, `architecture_principles.md`, `slugify.md`, `segment_launch.md`, ...) |
-| `templates/harness/` | `/harness`-only procedures and static payloads read on demand (`doctor.md`, `state_schema.md`, `setup_summary.md`, `setup_prompts.md`, `auto_revise.md`, `spec_render.md`, `plan_segment_call.md`, `plan_critic_dispatch.md`, `plan_critic_failures.md`) — the v8.14 prompt diet's destination for everything that is not an execution rule |
+| `templates/harness/` | `/harness`-only procedures and static payloads read on demand (`doctor.md`, `state_schema.md`, `setup_summary.md`, `setup_prompts.md`, `auto_revise.md`, `spec_render.md`, `plan_segment_call.md`, `plan_critic_dispatch.md`, `plan_critic_failures.md`, and — since harness-converge S1 — `converge.md`, the Step 2.6 converge loop's single source, with its two sub-agent templates `converge_review.md` and `converge_verify.md`) — the v8.14 prompt diet's destination for everything that is not an execution rule |
 | `templates/<skill>/` | skill-specific prompt templates |
 | `templates/planner/` | shared by `/harness` and `/spec` — hence the `verify_block_sync.py` BLOCK groups |
 | `templates/{generator,verify,evaluator}/` | `/harness` only, despite the role-based naming |
@@ -217,11 +217,16 @@ in `.github/workflows/lint.yml`, are the entire verification layer:
   `$.metadata.version`, and `marketplace.json` `$.plugins[*].version`. A bump that edits only the
   first two is incomplete.
 - The pipeline's 3 HARD-GATEs stay in the orchestrator SKILL.md files, never in a segment script:
-  #1 (spec-confirm) is the whole of `skills/harness-gate/SKILL.md`, #2 (verify-fail) and #3
-  (auto-fix-apply) are in `skills/harness-build/SKILL.md`; `verify_meta_literal.py` rejects gate
-  tokens inside segment scripts. The gate skill's `disallowed-tools` line IS the guarantee that the
-  gate turn cannot write — do not add `Bash`, `Write`, `Edit` or `Glob` back, and do not give it a
-  scope pattern (patterns are a no-op; only bare tool names are enforced).
+  #1 (spec-confirm) renders at `skills/harness/SKILL.md` §Approval Gate (every variant) in an
+  inline session — the default — and as the whole of `skills/harness-gate/SKILL.md` in a separate
+  one (`--separate-gate` or `gate=separate`); #2 (verify-fail) and #3 (auto-fix-apply) are in
+  `skills/harness-build/SKILL.md`; `verify_meta_literal.py` rejects gate tokens inside segment
+  scripts. The gate skill's `disallowed-tools` line IS the guarantee that a separate session's gate
+  turn cannot write — do not add `Bash`, `Write`, `Edit` or `Glob` back, and do not give it a
+  scope pattern (patterns are a no-op; only bare tool names are enforced). The inline default has
+  no such guarantee: it rests on a model-written approval record bound to `spec_stamp` and on
+  `/harness-build` §Entry refusing a mismatch (the Fast Gate grade —
+  `design/harness-ordering-enforcement/SPEC.md` §3.3a and its decision ① row's correction).
 - `.gitattributes` covers `*.workflow.js`, `*.sh`, `*.yml`, and `*.md`. Other file types —
   `*.py` included — are not EOL-normalized by the repository, so what they commit still
   depends on the machine's `core.autocrlf`. The `*.md` line renormalized nothing when it

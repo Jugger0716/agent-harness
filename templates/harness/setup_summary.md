@@ -13,6 +13,7 @@
   Model     : <preset>
   Verifier  : <model_config.verifier>
   Style     : <auto | phase | step>   ← append "(fast)" when cli_flags.fast
+  Gate      : <inline | separate>     ← cli_flags.separate_gate; append "(--separate-gate)" or "(project default)" when separate
   Language  : <lang>
   Test      : <test_cmd or "none">
   Build     : <build_cmd or "none">

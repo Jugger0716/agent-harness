@@ -38,6 +38,7 @@ injection. Malformed JSON in source 1 → skip that source silently and continue
 | `verifier-model` | `haiku` \| `sonnet` \| `opus` | Used when no `--verifier-model` flag is given. |
 | `lint-cmd` | a shell command, **wrapped in backticks** (see the parse rule below) | Used by `/harness` when no `--lint-cmd` flag is given, BEFORE `templates/_shared/detection_table.md` auto-detection — a declared command is never second-guessed by detection. The value lands in state.json `lint_cmd`, so `/harness-build`'s Layer 1 reads it from there. |
 | `type-check-cmd` | same form as `lint-cmd` | Same rule for `--type-check-cmd` / state.json `type_check_cmd`. |
+| `gate` | `inline` \| `separate` | Standing default for where `/harness` renders HARD GATE #1. `separate` is consumed by `/harness` §Step 1 exactly as `--separate-gate` is, when that flag is absent and `--fast` is not given (`--fast` is always inline — the default yields to it silently): the session ends at `plan_done` with `Next → /harness-gate`, the tool-less gate. `inline` is an explicit no-op — the in-session approval (`skills/harness/SKILL.md` §Approval Gate) is already the default. Any other value → the parse rule's warn-and-ignore. A slice `Command` carries no `--separate-gate`, so this key is how an epic's slices stay separate. |
 | `cold-pass` | `on` \| `off` | Standing default for the cold-review pass. `off` is consumed by `/harness` §Step 1 exactly as `--no-cold-pass` is, when neither `--no-cold-pass` nor `--fast` is given. `on` is an explicit no-op a team can pin to document intent; it never re-enables the pass under `--fast`, whose semantics are fixed. Any other value → the parse rule's warn-and-ignore. |
 
 **Resolution orders (session input always wins):**
@@ -51,6 +52,8 @@ injection. Malformed JSON in source 1 → skip that source silently and continue
   default** > detection table > `null` (Layer 1 skips that command).
 - Cold pass (`/harness` only): `--no-cold-pass` > `--fast` >
   **project default `cold-pass=off`** > `true`.
+- Gate mode (`/harness` only): `--fast` (always inline; `--fast` with `--separate-gate` halts) >
+  `--separate-gate` > **project default `gate=`** > inline.
 
 **Parse rule:** in sources 2–3, take the FIRST line matching `^agent-harness-defaults:` at
 column 0 — indented lines and lines inside fenced code blocks (```) are EXAMPLES, excluded
@@ -73,7 +76,8 @@ behavior change.
 **Transparency:** every value consumed from this line is echoed in the Setup Summary with the
 suffix `(project default)`, and a path resolved via step 4.5 shows the §Path Transparency
 reason `project default (<source>)` — `<source>` ∈ `settings.local.json` / `CLAUDE.md` /
-`~/.claude/CLAUDE.md`, so it is always visible WHICH file drove the decision. When `cold-pass` is
+`~/.claude/CLAUDE.md`, so it is always visible WHICH file drove the decision. When `gate` is consumed it is echoed in the Setup Summary
+`Gate` row the same way. When `cold-pass` is
 consumed it is echoed the same way, in the Setup Summary `Cold` row: the value recorded in
 `cli_flags.cold_pass_source` is `"default:<source>"`, which the §Step 7 rendering rule in
 `skills/harness-build/SKILL.md` renders as `project default (<source>)`; `<source>` is one of the

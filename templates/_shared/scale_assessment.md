@@ -3,6 +3,8 @@
 > Cited by name from `skills/harness/SKILL.md` §Scale Assessment and
 > `skills/harness-gate/SKILL.md` §Scale Assessment. Those files own the compute-once / freeze rule
 > and the render SITES; this file owns what a render site prints. Read it at a render site.
+> "The approval question" below is HARD GATE #1's: `skills/harness/SKILL.md` §Approval Gate in
+> an inline session, `skills/harness-gate/SKILL.md` §Step 3 Pass B in a separate one.
 >
 > **Comparison-operator prohibition.** No rendered line below may be phrased as a numeric
 > threshold comparison — no `>=`, `이상`, `초과`, `미만`. There is no code path here that computes
@@ -20,14 +22,14 @@ Render `sliceHint.recommendation` and `sliceHint.rationale` **verbatim** — nev
 
 If `cli_flags.epic` is non-null, render the override: `true` → "epic 강제 적용 (사용자 지정 `--epic`)"; `false` → "single-slice 강제 적용 (사용자 지정 `--no-epic`)" (natural-language values rendered in `user_lang`, not Glossary tokens). If `cli_flags.epic == null`, render "override 없음 — 위 권고안이 그대로 유효".
 
-When an override is active, §1's counts and §2's verbatim recommendation still render unchanged — an override only changes which choice wins at Step 3 Pass B. Append one more aligned line (the one place here where `templates/_shared/status_format.md`'s `Label     : value` convention applies literally):
+When an override is active, §1's counts and §2's verbatim recommendation still render unchanged — an override only changes which choice leads at the approval question. Append one more aligned line (the one place here where `templates/_shared/status_format.md`'s `Label     : value` convention applies literally):
 ```
 Decision : forced by --epic     ← or "forced by --no-epic", matching the flag given
 ```
 
 ### 4. Confirmation ownership
 
-Always render a closing line: the recommendation/override above is informational only — the actual epic-vs-single decision is confirmed by the user at Step 3 Pass B. §Scale Assessment never itself advances the state machine or makes the choice.
+Always render a closing line: the recommendation/override above is informational only — the actual epic-vs-single decision is confirmed by the user at the approval question. §Scale Assessment never itself advances the state machine or makes the choice.
 
 ### Signal Domain (`ok` / `absent` / `malformed`)
 
