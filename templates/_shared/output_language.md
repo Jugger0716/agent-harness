@@ -13,7 +13,7 @@ exception: they stay English raw in all output, and translating one is a defect.
 |---|---|
 | Status keywords | `PASS`, `FAIL`, `FAIL_L2`, `FAIL_L3`, `Verdict`, `Verdict: PASS`, `Verdict: FAIL` |
 | Confidence | `confidence: High`, `confidence: Medium`, `confidence: Low`, `confidence: Unknown` |
-| 1-line return verbs (INLINE path only) | `generated`, `changed`, `written`, `conventions written`, `auto_fix_patch written` — as leading keyword tokens in an inline sub-agent's 1-line return only; natural-language usage in prose is exempt |
+| 1-line return verbs (INLINE path only) | `generated`, `changed`, `written`, `conventions written`, `auto_fix_patch written`, `review written`, `verdict written` (the converge loop's two sub-agents — `templates/harness/converge.md` §Round) — as leading keyword tokens in an inline sub-agent's 1-line return only; natural-language usage in prose is exempt |
 | Prefix | `[harness]` (and `[harness doctor]`, `[harness-build]` for those surfaces) |
 | Status format labels | `Task`, `Mode`, `Path`, `Model`, `Style`, `Phase`, `Round`, `Branch`, `Scope`, `Directory`, `Verifier`, `Language`, `Test`, `Build`, `Lint`, `TypeCheck`, `Output`, `Decision`, `Critic`, `Next cmd` — monospace alignment preservation. `Next cmd` is rendered by `/handoff` resume; no skill of the harness pipeline has a `Next cmd` output site of its own |
 | Session Boundary Type B `Reason` value | `Epic planned` — a *value*, not a label (`skills/harness-build/SKILL.md` §Session Boundary Type B) |

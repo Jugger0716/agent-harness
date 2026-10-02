@@ -75,9 +75,9 @@ passes; a label absent here does not exist in this skill.
 |---|---|---|
 | "Proceed as single" / "Proceed" (Pass B) | `/harness-build` | writes `phase → "generate_ready"`, resets `epic.boundaries → null`, runs Step 4 → 8 |
 | "Plan as epic" (Pass B) | `/harness-build --epic` | runs `skills/harness-build/SKILL.md` §Step 3.5 (Slice Plan) and then its Epic Exit (Step 3.6) |
-| "Modify" (either pass) | `/harness --modify "<the user's change request, quoted>"` | the /harness orchestrator edits `spec.md` under its `spec_stamp` write protocol, then prints `Next → /harness-gate` |
+| "Modify" (either pass) | `/harness --modify "<the user's change request, quoted>"` | the /harness orchestrator edits `spec.md` under its `spec_stamp` write protocol, runs a new converge run on the edit (not in a loop-skipping session — `templates/harness/converge.md` §Terms), then prints `Next → /harness-gate` |
 | "Auto-revise" (Pass A row ①-a) | `/harness --auto-revise` | Auto-revise re-entry + a fresh Plan Critic pass, then `Next → /harness-gate` |
-| "Run Critic anyway" / "Retry Critic" (Pass A rows ①-b/①-c/②-b/③/④) | `/harness --critic` | a fresh own-critic dispatch (`skills/harness/SKILL.md` §Step 2.6), then `Next → /harness-gate` |
+| "Run Critic anyway" / "Retry Critic" (Pass A rows ①-b/①-c/②-b/③/④) | `/harness --critic` | a new converge run, full review (`skills/harness/SKILL.md` §Step 2.6) — its non-ending rounds may apply `auto` corrections to spec.md (`templates/harness/converge.md`) — then `Next → /harness-gate` |
 | "Proceed as-is" (Pass A) | (none — Pass B renders in this same turn) | — |
 | "Stop" (either pass) | (none — halt; `.harness/` is left exactly as found) | — |
 
@@ -143,7 +143,7 @@ second — both by name, neither restated here), plus the line count of `{docs_p
 read **fresh at every Pass A render**, never carried over from an earlier render in the same
 turn. That is not a new read site: §Architecture Principles #1's exception list entry (1) is
 "spec.md at plan gate", and re-executing a declared read is not declaring another one — the
-list keeps its 7 numbered slots (6 live). **The word "fresh" is load-bearing and is why this is spelled out
+list keeps its 8 numbered slots (7 live). **The word "fresh" is load-bearing and is why this is spelled out
 rather than phrased as reusing what the gate already read.** Every Modify now crosses a
 session boundary (`/harness --modify` edits in its own turn; this gate re-renders in the
 next), so the count is taken from the file as it stands when THIS session's Pass A renders;
@@ -340,7 +340,14 @@ unaligned — do NOT apply `skills/harness/SKILL.md` §Standard Status Format's 
 `grep -F` check breaks. This re-render exists because a `run_style == "phase"` session halts
 right after `skills/harness/SKILL.md` §Step 2.6's own print, and the session that reaches Step 3 is a DIFFERENT one,
 routed here by routing predicate (c) — without this line the assurance-level literal would
-never reach the user in that later session.
+never reach the user in that later session. In a session that has started a converge run
+(`converge.runs` ≥ 1) the line is instead `Critic: converge (ledger residual) —
+C=<counts.critical> M=<counts.major>`, same spacing rule: the record is then a converge
+mapping's, whose `counts` are the loop's residual (`templates/harness/converge.md`
+§Residual — what that session's §Summary Block printed as `Residual`), not a critic's report,
+so neither critic literal may vouch for them. A session older than the loop whose runs so far
+were all interrupted or denied (branch (ii)) still holds its older critic counts under this
+literal — display only.
 
 Rows are evaluated top-to-bottom — **first match wins**.
 
@@ -361,10 +368,12 @@ for the full axis-by-axis derivation and the 9-cell → 7-row coverage table pro
 and 0 gap — it is not re-derived here.
 
 "Run Critic anyway" / "Retry Critic" (rows ①-b / ①-c / ②-b / ③ / ④): end this turn with the
-`/harness --critic` line (§Next command). The fresh own-critic dispatch (a single write to
-`plan_critic`, `source = "own"`) runs in `/harness` (`skills/harness/SKILL.md` §Step 2.6); the
+`/harness --critic` line (§Next command). The new converge run (full review; its non-ending
+rounds may apply `auto` corrections to spec.md; one write to `plan_critic` at its mapping,
+`source = "own"`) runs in `/harness` (`skills/harness/SKILL.md` §Step 2.6); the
 NEXT `/harness-gate` session re-presents from Pass A and observes the FRESH `plan_critic` state,
-landing on whichever row now matches (typically ①-a or ②). For rows ①-b/②-b/③ it does not
+landing on whichever row now matches (typically ② or ①-c — a completed converge run writes
+`plan_critic.round = 1`, which fails the Auto-revise Exposure Predicate's point 3). For rows ①-b/②-b/③ it does not
 re-land on the same row for the same spec.md, since a completed own dispatch writes a
 non-null `last_findings_path` and records `spec_stamp_at_critic` equal to that spec.md's
 current `spec_stamp` — row ④ CAN recur if the fresh dispatch itself fails again, e.g. a second permission denial or a second parse failure.
@@ -394,8 +403,12 @@ Pass A** — its condition table is re-evaluated fresh, including the Stale Dete
 will now find `spec_stamp.generation` ahead of `spec_stamp_at_critic.generation` and render the
 row-①-b / row-②-b / row-③ shape as appropriate, depending on which side of the record's
 clean/dirty split applies — row ④ is not on this list, since malformed/unrecorded/`"failed"`
-records never consult the Stale Determination at all). See Modify Interaction below for the
-contract shared with Pass B's own "Modify".
+records never consult the Stale Determination at all). That stale shape is what a loop-skipping
+session (`templates/harness/converge.md` §Terms — carried-over or `--fast`) sees. Outside one,
+`/harness --modify` ends with a new converge run — a full review whenever spec.md had changed
+since the last record (`templates/harness/converge.md` §Starting a run item 1) — whose
+mapping records the post-edit stamp in `spec_stamp_at_critic`, so the re-evaluated table
+lands on a not-stale row for the edited spec.md. See Modify Interaction below for the contract shared with Pass B's own "Modify".
 
 "Proceed as-is" (every row) / "Stop" (every row): same semantics as Pass B's identical
 options — "Proceed as-is" writes nothing; control falls through to Pass B in this same turn,
@@ -444,16 +457,23 @@ is expected, not a duplicate) immediately before this question, using the values
    (Pass A rows ①-a/①-b/①-c/②-b/③/④) computed against the spec.md version that was current
    BEFORE this Modify's edit, until a fresh Step 2.6 / "Run Critic anyway" dispatch updates
    them — the Stale Determination above is exactly what surfaces this ("critic 이후 spec.md가
-   변경됨").
+   변경됨"). Outside a loop-skipping session that fresh dispatch is the converge run
+   `/harness --modify` itself ends with, so this item describes the loop-skipping case and an
+   interrupted run.
 2. Once a Modify has changed spec.md, Auto-revise is NEVER offered on the immediate
    re-presentation — the Stale Determination's stamp comparison (point 4 of the Auto-revise
-   Exposure Predicate) already enforces this structurally; no separate flag is needed. This
+   Exposure Predicate) already enforces this structurally; no separate flag is needed. Outside
+   a loop-skipping session point 3 closes it instead — the converge run `/harness --modify`
+   ends with writes `plan_critic.round = 1` (`skills/harness/SKILL.md` §Step 2.6). This
    holds across the session boundary every Modify now crosses (`/harness --modify` runs in
    its own turn, and this gate re-renders in the next) exactly as it held for the former
    same-turn loop — the stamps live in state.json and the comparison is recomputed fresh at
    every render (see the Stale Determination header note), so the rule cannot silently expire at
    a session boundary. Item 1's "computed against the spec.md version that was current BEFORE
-   this Modify's edit" is what `spec_stamp_at_critic` now records literally.
+   this Modify's edit" is what `spec_stamp_at_critic` still holds when the converge run
+   `/harness --modify` ends with was interrupted before its mapping (a `failed` record holds
+   `null` instead); a completed run records the post-edit stamp, and a loop-skipping session
+   records none (`null`).
 3. Re-presentation after Modify ALWAYS restarts at Pass A (never Pass B directly) — even
    when the edit was made from Pass B's own "Modify" — so the fresh staleness state gets a
    chance to render its row before Pass B is reached again.
@@ -468,7 +488,7 @@ write, and `/harness` owns every re-entry (`--modify` / `--auto-revise` / `--cri
 The registry of invariants is `skills/harness/SKILL.md` §Architecture Principles; this skill
 exercises the subset below and nothing beyond it.
 
-1. **Orchestrator reads no intermediate files** — of the registry's 6 live read exceptions (7 numbered slots) this skill
+1. **Orchestrator reads no intermediate files** — of the registry's 7 live read exceptions (8 numbered slots) this skill
    performs **2**: (1) `spec.md` at the plan gate (the line count for the Stale Determination is
    re-read at every Pass A render), and (7) gate-display critic count parsing
    (`plan_critic_findings.md` / `critic_findings.md` `## Summary` line). It performs NO write —

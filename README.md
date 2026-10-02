@@ -155,7 +155,7 @@ Seven top-level directories, each with a fixed role:
 |-----------|------|
 | `skills/<name>/SKILL.md` | The skill definition — orchestrator prompt, Mode Gate resolution, HARD-GATEs, and (for stateful skills) the phase state machine. Claude Code auto-discovers a skill from this file's presence alone. |
 | `workflows/<skill>.<segment>.workflow.js` | Native Workflow engine segment scripts — the code that actually runs when a skill's deep/thorough/multi mode is opt-in. Filename pattern is fixed: `<skill>.<segment>.workflow.js`, 1:1 with the basename at the SKILL.md `Workflow { scriptPath: ... }` call site (which names the `.harness/wf/` copy — `templates/_shared/segment_launch.md`). |
-| `templates/<skill>/<role>.md` | Sub-agent persona templates a segment script copies in at author-time (`SYNC-SOURCE: templates/<skill>/<role>.md` comments mark the embedded copy). Some are DUAL-USE (the same file also dispatches as-is on a skill's inline path). `templates/_shared/` holds the cross-skill single sources instead — `mode_gate.md`, `segment_launch.md`, `status_format.md`, `project_defaults.md`, `session_conflict.md`, `orchestrator_contract.md`, `output_language.md`, `session_recovery.md`, `session_boundary.md`, `run_style.md`, `scale_assessment.md`, `path_validator.md`, `architecture_principles.md` and the rest; a skill cites one by name and never restates its body. `templates/harness/` is the same idea for one skill: procedures and static payloads `/harness` reads on demand (`doctor.md`, `state_schema.md`, `setup_summary.md`, `setup_prompts.md`, `auto_revise.md`, `spec_render.md`, `plan_segment_call.md`, `plan_critic_dispatch.md`, `plan_critic_failures.md`). |
+| `templates/<skill>/<role>.md` | Sub-agent persona templates a segment script copies in at author-time (`SYNC-SOURCE: templates/<skill>/<role>.md` comments mark the embedded copy). Some are DUAL-USE (the same file also dispatches as-is on a skill's inline path). `templates/_shared/` holds the cross-skill single sources instead — `mode_gate.md`, `segment_launch.md`, `status_format.md`, `project_defaults.md`, `session_conflict.md`, `orchestrator_contract.md`, `output_language.md`, `session_recovery.md`, `session_boundary.md`, `run_style.md`, `scale_assessment.md`, `path_validator.md`, `architecture_principles.md` and the rest; a skill cites one by name and never restates its body. `templates/harness/` is the same idea for one skill: procedures and static payloads `/harness` reads on demand (`doctor.md`, `state_schema.md`, `setup_summary.md`, `setup_prompts.md`, `auto_revise.md`, `spec_render.md`, `plan_segment_call.md`, `plan_critic_dispatch.md`, `plan_critic_failures.md`, `converge.md`), plus the converge loop's two sub-agent templates (`converge_review.md`, `converge_verify.md`). |
 | `scripts/*.{mjs,py}` | Repository self-verification lints (`check_workflow_syntax.mjs`, `verify_block_sync.py`, `verify_description_budget.py`, `verify_manifest_sync.py`, `verify_meta_literal.py`, `verify_sync_markers.py`) — they check this repo's own `workflows/`/`skills/`/`templates/`/`.claude-plugin/` source, and are never executed at skill runtime. |
 | `.claude-plugin/*.json` | Plugin and marketplace manifests. The version string lives at three key paths across these two files. |
 | `.github/` | CI: `workflows/lint.yml` runs the lint layer on push and PR; `scripts/check_lint_wiring.sh` checks that every lint is actually wired into it. Also holds the issue and PR templates. |
@@ -255,7 +255,7 @@ not its own. `/harness doctor` gives a read-only environment diagnostic and neve
 /harness-build generate                           # phase mode: resume from plan, generate only
 /harness-build verify                             # step mode: mechanical verification only
 /harness-build evaluate                           # step mode: evaluation only
-/harness --modify "<request>"                     # gate re-entry: /harness edits spec.md, then Next → /harness-gate again
+/harness --modify "<request>"                     # gate re-entry: /harness edits spec.md, re-runs the converge loop (not when the critic was carried over from /spec or skipped by --fast), then Next → /harness-gate again
 
 /harness draft product requirements spec           # works without git too (non-dev tasks)
 
@@ -371,7 +371,9 @@ Falls back to text-based input when AskUserQuestion is unavailable.
                            single (inline):     1 agent explores + writes spec.md
                            standard (workflow): harness.plan script — 2 specialists propose -> Synthesis
                            multi (workflow):    harness.plan script — 3 specialists propose -> Synthesis
-                        -> Plan Critic -> session ends at plan_done: "Next → /harness-gate"
+                        -> Plan Critic converge loop (review -> verify/classify -> apply, up to 5 rounds;
+                           one decision question if the loop finds a real choice)
+                        -> session ends at plan_done: "Next → /harness-gate"
 ── you type the next command ──────────────────────────────────────────────────────
 /harness-gate -> Confirmation Gate (HARD GATE #1): no Bash/Write/Edit in this skill —
                         shows spec.md, asks once, prints ONE command (/harness-build,
@@ -539,7 +541,7 @@ Higher modes use more tokens per run but have higher first-pass success rates, o
 | `--verifier-model <model>` | `haiku` | Override Layer 1 Verifier model. Allowed: `haiku`, `sonnet`, `opus`. Cost warning shown for sonnet/opus. |
 | `--output-dir <path>` | `docs/harness` | Override output directory base for spec, changes, verify, and QA reports. Relative path from repo root. Disallows: absolute paths, `..`, reserved names (`memory`, `spec`, `planner`, `generator`). |
 | `--epic` / `--no-epic` | Scale Assessment recommendation | `/harness` only — force the gate's Pass B to lead with "Plan as epic" / "Proceed as single". The gate then prints `/harness-build --epic` or `/harness-build`. |
-| `--modify "<request>"` / `--auto-revise` / `--critic` | — | `/harness` only, `plan_done` only — the gate re-entries `/harness-gate` prints for "Modify" / "Auto-revise" / "Run Critic anyway". Each ends with `Next → /harness-gate` again. |
+| `--modify "<request>"` / `--auto-revise` / `--critic` | — | `/harness` only, `plan_done` only, and refused once a `--fast` session's "Build now" approval is recorded — the gate re-entries `/harness-gate` prints for "Modify" / "Auto-revise" / "Run Critic anyway". `--critic` and `--modify` each run the Plan Critic converge loop again (after `--modify`'s edit, its first round reviews only what changed when the session's last run completed and spec.md had not changed since — no editor edit, no interrupted write — and the whole spec otherwise) — except that in a session whose critic was carried over from `/spec` or skipped by `--fast`, `--modify` only edits spec.md. Each ends with `Next → /harness-gate` again. |
 | `--no-cold-pass` | cold pass on | `/harness` only — recorded as `cli_flags.cold_pass=false`; `/harness-build` Step 5 skips the cold-review dispatch. Standing form: `cold-pass=off` on the `agent-harness-defaults:` line — a documented rule, not a defect of this key: a personal `cold-pass=off` in source 1 (`.claude/settings.local.json`) shadows a team `CLAUDE.md` defaults line WHOLESALE, so that line's `lint-cmd` is then not consumed either (see Project Defaults below). |
 | `--fast` / `--quick` | off | `/harness` only — the one-session shortcut for a small change. Forces the inline single path, skips the Plan Critic, the cold pass and the Model / Convention Scan questions, and replaces `Next → /harness-gate` with an in-session **Fast Gate** (`Build now` / `Modify spec` / `Stop`). "Build now" records `gate.approved` and chains into `/harness-build` in the same turn; `/harness-build` refuses a `--fast` session that has no such flag, so the gate is moved, not removed. Cannot be combined with `--epic` or a workflow-tier `--mode`. |
 
@@ -585,9 +587,15 @@ The harness communicates in the **user's language** -- automatically detected fr
     plan.md                         # Lead Developer's implementation plan
     review_code_quality.md          # Code Quality Advisor's review
     review_test_stability.md        # Test & Stability Advisor's review
+  converge/                         # Plan Critic converge loop (templates/harness/converge.md)
+    ledger.json                     # Every finding of the session: auto / decision / reject, status
+    snapshot.md                     # spec.md as it stood before the latest loop write (delta input)
+    review.md                       # This round's review output (overwritten each round)
+    verdict.json                    # This round's verify/classify output (overwritten each round)
 
 docs/harness/<task-slug>/
   spec.md                           # Planner output (preserved)
+  plan_critic_findings.md           # Plan Critic output; after the converge loop, the residual report
   changes.md                        # Generator output (preserved)
   verify_report.md                  # Layer 1 verification results (overwritten each run)
   qa_report.md                      # Evaluator output — Layer 2 + Layer 3 (preserved)
