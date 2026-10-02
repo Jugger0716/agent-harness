@@ -106,10 +106,15 @@ same-turn re-critic that ends an Auto-revise re-entry (`templates/harness/auto_r
    an edit made outside the orchestrator, an interrupted write, a write no run reviewed). The
    snapshot a Modify takes holds everything before its own edit, so a delta review there would
    map unreviewed text as reviewed. Rounds after the first are always delta.
-2. **One state write, alone:** `converge.status = "running"`, `converge.runs += 1` (`null`
-   reads as 0). Create `ledger.json` as `{ "items": [] }` if it is absent. Unless an earlier
-   run of this turn is still waiting for §Mapping (a decision apply's run), keep in context the
-   `gate` object this read-modify-write found — §Mapping writes it back.
+2. Before this write, when round 1 will be a full review, evaluate branch (ii)'s footprint
+   (`skills/harness/SKILL.md` §Gate re-entry flags' `--critic` row) on `plan_critic.applied`
+   and `converge.status` as found, and keep the result in context — this write replaces the
+   `converge.status` the footprint reads, and §Round step 1 chooses the round-1 critic's branch
+   from the kept result. **One state write, alone:** `converge.status = "running"`,
+   `converge.runs += 1` (`null` reads as 0). Create `ledger.json` as `{ "items": [] }` if it is
+   absent. Unless an earlier run of this turn is still waiting for §Mapping (a decision apply's
+   run), keep in context the `gate` object this read-modify-write found — §Mapping writes it
+   back.
 3. Print per OLC `  Converge run {converge.runs}: {full|delta} review, up to {R} rounds`.
 
 ## Round
@@ -339,7 +344,9 @@ The residual is every open ledger item — open `decision`s plus open `auto`s, a
 
 ## Mapping
 
-The end of the turn's last run. Two writes, in this order:
+The end of the last run since the previous mapping (a turn that loops through
+`skills/harness/SKILL.md` §Approval Gate's "Modify" maps once per loop). Two writes, in this
+order:
 
 1. **Findings render** (`converged` / `capped` only) — write `{docs_path}plan_critic_findings.md`:
 
@@ -368,11 +375,13 @@ The end of the turn's last run. Two writes, in this order:
    `status` is `"rejected"`, so a human can overrule a rejection the loop made alone.
 2. **The single read-modify-write** of `skills/harness/SKILL.md` §Step 2.6 — `plan_critic`
    (all 7 fields), `phase`, `converge.status` and `converge.rounds` (increased by the rounds
-   every run of this turn completed — an interrupted turn's rounds are not counted) together.
+   every run completed since the previous mapping — the rounds of runs cut off before a mapping
+   are not counted) together.
    For `converged` / `capped` its shape is that section's run-end bullet (`counts` = residual
    counts, `round = 1`); for `failed` it is branch (iii) (branch (ii) never reaches here —
-   §Ending a run). It is the last spec-related write of the turn, and `plan_critic` is written
-   at most once per turn. The same write puts `gate.*` back to the `gate` object kept at
+   §Ending a run). It is the last spec-related write before control goes to
+   `skills/harness/SKILL.md` §After Plan Phase, and `plan_critic` is written at most once per
+   mapping. The same write puts `gate.*` back to the `gate` object kept at
    §Starting a run item 2: no run writes an approval record, so a difference is a loop
    sub-agent writing inside the tree check's blind spot (§Round), and keeping it would let a
    forged approval pass `skills/harness-build/SKILL.md` §Entry's approval check. When the two

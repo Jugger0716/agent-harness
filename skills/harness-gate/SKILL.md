@@ -191,7 +191,8 @@ Evaluated in this fixed order, first match wins:
 - `spec_stamp.lines != spec_stamp_at_critic.lines` → **stale**. Redundant with the generation
   check whenever the write protocol ran in full; it is here for the case where it did not — a
   spec.md rewritten by a site that forgot to advance the generation.
-- the live line count of spec.md `!=` `spec_stamp.lines` → **stale**. This is the only check
+- the live line count of spec.md (counted as `skills/harness/SKILL.md` §Step 2's `spec_stamp`
+  write protocol step 3 defines) `!=` `spec_stamp.lines` → **stale**. This is the only check
   that sees an edit made OUTSIDE the orchestrator — a user opening spec.md in an editor.
 - otherwise → **not stale**.
 
@@ -390,7 +391,11 @@ landing on whichever row now matches (typically ② or ①-c — a completed con
 `plan_critic.round = 1`, which fails the Auto-revise Exposure Predicate's point 3). For rows ①-b/②-b/③ it does not
 re-land on the same row for the same spec.md, since a completed own dispatch writes a
 non-null `last_findings_path` and records `spec_stamp_at_critic` equal to that spec.md's
-current `spec_stamp` — row ④ CAN recur if the fresh dispatch itself fails again, e.g. a second permission denial or a second parse failure.
+current `spec_stamp` — except when the stale verdict came from the live-line-count check alone
+(an edit made outside the orchestrator) and the new run applied nothing: a separate session is
+never re-stamped (`skills/harness/SKILL.md` §Session Recovery item 3 is inline-only), so the
+mapping copies the unchanged `spec_stamp` and ①-b/②-b re-lands; a non-empty "Modify"
+re-stamps spec.md through its write event, and "Proceed as-is" proceeds on it — row ④ CAN recur if the fresh dispatch itself fails again, e.g. a second permission denial or a second parse failure.
 
 **Exception — row ①-c.** That row's non-exposure cause may be §Auto-revise Exposure Predicate
 point 3 (`plan_critic.round` already at its bound), and a critic re-run does not reset it — so

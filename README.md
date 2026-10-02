@@ -211,7 +211,10 @@ inline-vs-workflow first.)
    you that first, in a question of its own). The same session then prints a summary — what the
    loop applied, rejected and left open — and asks one question: **`Build now`** to implement the
    spec as one slice, `Plan as epic` to split the work into slices that then run one after
-   another, each asking once ([Epic Slices](#epic-slices)), `Modify` to describe a change
+   another, each asking for its own approval once (a slice is a new session, so the Setup
+   questions an `agent-harness-defaults` line and a rich `CLAUDE.md` do not answer come back —
+   in this fresh repo, Model, the Mode Gate question and Convention Scan)
+   ([Epic Slices](#epic-slices)), `Modify` to describe a change
    (the spec is edited, re-reviewed and the question comes back), or `Stop`. Choose
    **`Build now`**. Only choosing one of the first two labels approves; typed text never does.
    **This is the one gate a successful run always shows you.**
@@ -595,11 +598,13 @@ slice — `/harness --output-dir docs/harness/<epic> "slice-a-…"`. In the defa
 in-session approval, the `auto` style, a session that can ask questions — the slices then run in
 the same turn, one after another:
 
-- **Each slice still asks once.** A slice is a full `/harness` session, recognised because its
-  task is a `Slice` of the `slice_plan.md` one directory up. Its approval question has three
+- **Each slice still asks for its approval once.** A slice is a full `/harness` session,
+  recognised because its task is a `Slice` of the `slice_plan.md` one directory up. Its approval question has three
   options — `Build now` / `Modify` / `Stop`, no `Plan as epic`, so epics never nest — and
   `Build now`'s description says that a clean end is committed without asking and the next slice
-  starts. That click is the consent; the table approves nothing on its own.
+  starts. That click is the consent; the table approves nothing on its own. A slice is a new
+  `/harness` session, so it also re-asks any Setup question that an `agent-harness-defaults` line
+  and a rich `CLAUDE.md` do not answer — Model, the Mode Gate question, Convention Scan.
 - **A clean end commits without asking.** Clean means `QA PASS`, Layer 1 `PASS`, and a cold
   review that came back clean or was turned off (`--no-cold-pass`, `cold-pass=off`). The commit
   is "Commit code only", limited by path to what changed in the working tree since that slice's

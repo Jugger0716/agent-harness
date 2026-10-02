@@ -29,7 +29,7 @@
 - additive state 필드(`version` "3.0" 불변), AC-24 grep에 걸리는 문면 정정, ordering SPEC 행 안 정정, 라이브 프로브 기록 `design/harness-converge/PROBE.md`.
 
 **제외** (ROADMAP 이월로 기록)
-- 새 Workflow 세그먼트 `harness.converge`(D4). Setup 조건부 질문 묶음(지금도 `agent-harness-defaults` 한 줄이면 0회다).
+- 새 Workflow 세그먼트 `harness.converge`(D4). Setup 조건부 질문 묶음(지금도 `agent-harness-defaults` 한 줄이면 0회다) (정정 2026-10-02, S1–S3 리뷰: 한 줄이 없애는 것은 Model·Mode Gate 질문뿐이다. Convention Scan은 키가 없어 루트 CLAUDE.md가 sparse·missing이면 남고, S3 체인에서는 슬라이스마다 다시 묻는다.).
 - 체인 밖 build 질문 변경(Layer 2/3 Fix/Accept, HARD GATE #2/#3, 체인 밖이거나 깨끗한 종료가 아닌 Step 8 커밋 질문).
 - `spec.eval.workflow.js`, `templates/spec/critic_inline.md`, `harness.plan.workflow.js`의 args·본문 변경. SYNC 그룹 `spec-eval-dual-caller`와 `critic-revision-block`은 건드리지 않는다.
 - Auto-revise 재합성 개선, separate 경로의 잔여 재시도 비용(라운드당 명령 3개), 보존 중인 Stage 1 세션(`.harness/state.json`) 수정, separate 게이트 Pass B "Plan as epic" 설명 변경(슬라이스 체인 동의는 슬라이스 승인 클릭에서 받으므로(E-1) 필요 없다).
@@ -62,7 +62,7 @@
    - **반영.** 종료하지 않은 라운드는 원장의 미반영 auto를 전부(Minor 포함) 한 번에 반영한다. 종료 라운드는 쓰지 않는다. 남은 미반영 auto는 잔여로 보고되고, 다음 실행의 첫 라운드가 판정에서 다시 잡는다. 반영된 변경은 모두 뒤 라운드의 리뷰를 거친다.
 3. **spec.md 쓰기 사건:** 사건은 라운드 반영, 결정 반영, Modify 반영, 재개 시 재스탬프(§재개 3)다. 사건마다 직전에 `.harness/converge/snapshot.md`를 덮어쓰고, `spec_stamp` 쓰기 프로토콜을 한 번 감싼다(generation +1). 결정·Modify 반영 뒤에는 새 실행이 시작된다. 루프를 건너뛰는 세션은 스냅샷·새 실행 없이 stamp +1만 한다. (정정 2026-10-02, S2 구현: 재개 시 재스탬프는 스냅샷을 덮어쓰지 않는다. 내용 변경이 없으므로 덮어쓰면 스냅샷이 편집된 spec과 같아져, 재스탬프가 존재하는 이유인 직접 편집·중단된 쓰기 구간이 다음 실행의 diff에서 사라지고 그 구간의 재제기가 원장 항목에 합쳐지기 때문이다. 재스탬프 뒤 실행은 전체 리뷰다 — `templates/harness/converge.md` §Write Events.) (정정 2026-10-02, S2 리뷰: 위 근거는 스냅샷이 있을 때만 성립한다. 실행이 아직 아무것도 반영하지 않아 원장만 있고 스냅샷이 없는 세션에서는 diff의 기준이 없어 모든 재제기가 합쳐지므로, 재스탬프가 빈 `snapshot.md`를 먼저 써서 spec 전체를 바뀐 구간으로 잡는다.)
 4. **결정 질문(D3=B):** 실행이 끝났을 때 미결 decision이 있고, 대화형이고, 원장에 답한 결정이 아직 없으면 묻는다. 승인과는 다른 AskUserQuestion 호출이다. 권장안을 표시하고, 호출당 질문 상한을 넘으면 나눈다. Other 자유서술은 그 결정의 답으로 반영한다. 반영은 쓰기 사건 1회이고 새 실행이 뒤따른다. 이미 답한 세션에서 새로 나온 decision은 승인 요약의 잔여로 둔다(세션당 1회, 원장에서 도출).
-5. **사상:** 실행이 끝나면 `plan_critic`에 많아야 한 번 쓴다. 이것이 그 턴의 마지막 spec 관련 쓰기다. 재사용하는 1라운드 critic 디스패치의 자체 latch 쓰기는 하지 않는다.
+5. **사상:** 실행이 끝나면 `plan_critic`에 많아야 한 번 쓴다. 이것이 그 턴의 마지막 spec 관련 쓰기다. 재사용하는 1라운드 critic 디스패치의 자체 latch 쓰기는 하지 않는다. (정정 2026-10-02, S1–S3 리뷰: '그 턴'은 '직전 사상 이후'로 읽는다 — §Approval Gate의 Modify는 같은 턴 안에서 실행과 사상을 반복하므로, 사상은 루프마다 한 번이고 rounds는 직전 사상 이후 완료된 실행의 라운드만 더한다.)
    - `converged`·`capped`: `applied="executed"`, `source="own"`, counts = 잔여(원장 미결 항목 전부, 즉 미결 decision + 미반영 auto), `last_findings_path` = `{docs_path}plan_critic_findings.md`, `failure_reason` = null, `spec_stamp_at_critic` = 현재 stamp(7필드 한 번 쓰기는 §Step 2.6 Success 형태). Auto-revise 기회는 소진으로 기록해 재합성이 수렴 결과를 덮어쓰지 않게 한다.
    - `failed`: 기존 §Step 2.6 "Failure handling — 3-way"의 형태와 배너를 쓴다. (ii)(기록 없음)는 1라운드 WORKFLOW `spec.eval`의 권한 거부에만 적용한다. 루프 내부 인라인 디스패치의 거부·실패와 트리 오염은 (iii) `applied="failed"`에 새 `failure_reason`으로 기록한다. 둘 다 gate 행 ④에 착지한다. (i) 엔진 오류는 실패가 아니라 INLINE 재시도다(AC-15).
    - 잔여 보고서와 원장 요약은 `{docs_path}plan_critic_findings.md`에 렌더한다. 원장과 스냅샷은 `.harness/converge/`에 두고 `.harness/`와 함께 지운다.
