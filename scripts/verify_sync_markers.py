@@ -83,6 +83,13 @@ this repository already fixed twice for absolute line-number citations.
      unchecked share is now 199/231 (86%), 97/97 (100%) and 153/272 (56%) -- "just
      under half" holds for none of the three. (The review measured a283d08, before its
      fixes added citations: 226 / 54 (30 + 24), 95 / 27 (0 + 27), 271 / 134 (119 + 15).)
+     RE-MEASURED 2026-10-06, after harness-converge S3.5 (same counting rule, one figure
+     per file): skills/harness/SKILL.md 233 §citations, 57 of them §Step tokens (33
+     checked in-file + 24 carrying another file's path anchor); harness-gate 97 / 28
+     (0 + 28) and harness-build 272 / 135 (119 + 16), both unchanged. The §Step grep
+     total still equals the OK line's in-file + foreign exactly in all three files, and
+     `§Step Mode Prerequisites` is still 0. The unchecked share is now 200/233 (86%),
+     97/97 (100%) and 153/272 (56%).
   2. NUMBERS, NOT TITLES. Renaming `Step 5: Verify Phase` to `Step 5: Mechanical Check`
      passes. A rename sweep over all 80 headings is caught for 21 of them.
   3. SCAN SCOPE. Every layer here iterates SCAN_DIRS (skills/, templates/, workflows/),

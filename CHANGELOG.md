@@ -8,8 +8,9 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
 
 ## [Unreleased]
 
-The `harness-converge` epic (`design/harness-converge/SPEC.md`), slices S1–S3. S4 (the live
-probe) is not in yet, so none of the paths below has been observed in a live session.
+The `harness-converge` epic (`design/harness-converge/SPEC.md`), slices S1–S3 and S3.5 (the
+follow-up decisions of the S1–S3 cold review and the AC-26 measurement). S4 (the live probe) is
+not in yet, so none of the paths below has been observed in a live session.
 
 ### Added
 
@@ -20,6 +21,7 @@ probe) is not in yet, so none of the paths below has been observed in a live ses
   re-review, at most five rounds, ending `converged` (no open `auto` Critical/Major on the
   ledger), `capped` or `failed`. Decisions are asked once per session in their own question;
   the run's end is mapped once into `plan_critic`, whose `counts` become the ledger residual.
+  (S3.5: the decision question is now a triage — see Changed.)
 - **In-session approval — `skills/harness/SKILL.md` §Approval Gate (S2).** HARD GATE #1 now
   renders inside `/harness` for every new session by default (gate mode **inline**): a summary
   (converge result, auto-applied list, residual, Scale Assessment), then ONE approval question —
@@ -114,7 +116,50 @@ probe) is not in yet, so none of the paths below has been observed in a live ses
   table, first-task walkthrough, Quick Start, Interactive UX, pipeline diagram, File Structure and
   handoff notes); state docs; `CLAUDE.md`. Descriptions unchanged.
 
+- **The converge decision question is a triage (S3.5).** AC-26 (`design/harness-converge/AC26.md`)
+  sent 32 decisions to one session — 8 question calls. Now, settled once per session as before: a Minor
+  decision with a recommended option takes it without a question (ledger `answered`, `by:
+  "default"`), listed under `Defaulted` in the summary and in `plan_critic_findings.md`, where a
+  Modify takes it back; Critical/Major decisions come first as ONE `Decisions` question —
+  `Accept all recommended (N)` / `Review individually` (then up to four per call, as before);
+  "Other" on that first question is read as `Review individually`. Decisions first, then the
+  apply, a new run and the approval (decision D3) — unchanged. A first question left unanswered
+  (or dismissed — no individual question follows) applies nothing, the defaults included, so the
+  next run end or a later interactive resume asks again. A defaults-only triage makes no call, so
+  a session whose AskUserQuestion call would fail keeps the defaults it applied — the failure is
+  first seen at the approval question.
+- **A merged re-raise can raise a ledger item's severity (S3.5).** `converge_verify.md`'s
+  `merged` entries now carry a `severity`, and the merge sets the item's severity to the higher
+  of the two — never lower, nothing else changed — so a Minor `auto` re-raised as Major enters
+  the exit check and a Minor decision re-raised as Major before the triage ran is no longer
+  defaulted (one already defaulted stays answered, its current severity shown beside it and a banner above the summary).
+  Unconfirmed evidence merges without raising anything. A `merged` entry without a valid
+  `severity` fails the verdict's shape (`loop_parse_failed`).
+- **An `auto` fix that cannot be applied becomes a decision (S3.5).** It used to be marked
+  `rejected` (`fix no longer applicable` / `fix not a spec edit`) on the claim that a persisting
+  defect would be re-raised with new evidence — but a re-raise with the same fingerprint merges
+  into the rejected item unless its evidence lies in a changed region, so the defect could
+  vanish. It now stays open as a decision with its severity, its reason, and the options
+  `Specify the fix` (answer with Other) / `Ignore and proceed`, with no recommended option — it
+  is always asked individually and never defaulted. A round whose open `auto` items all turned
+  into decisions writes nothing to spec.md and ends the run `converged` instead of reviewing an
+  unchanged spec again; a fix already standing in its own section of spec.md (a write cut off
+  before its ledger update) is marked applied, not converted.
+- **A retried slice is never committed automatically (S3.5).** `/harness` §Step 1 item 7 records
+  no `dirty_at_start` when the slice's `{docs_path}` already exists (an earlier attempt of the
+  same slice): that attempt's uncommitted edits would otherwise count as pre-existing and be
+  left out of the commit. The slice's `Build now` then promises neither commit nor next slice,
+  and it ends with the commit question and a boundary stop. The automatic commit also prints a
+  second line listing the paths left out — changed before the session began and untouched since.
+
 ### Removed — regressions, disclosed
+
+- **Minor converge decisions are taken without asking (S3.5).** The recommended option of every
+  Minor decision is applied to spec.md by the loop itself; the human sees each in an inline
+  session's approval summary — in a separate session, in the summary of the `/harness` turn that
+  ran the loop and in `plan_critic_findings.md` `## Defaulted`, but not at `/harness-gate`
+  (ROADMAP) — and can only take it back by a Modify. A decision without a recommended option is never
+  taken this way.
 
 - **The text-fallback approval is gone, `--fast` included.** The former §Fast Gate accepted a
   numbered or keyword reply when AskUserQuestion was unavailable. An approval is now a label

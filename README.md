@@ -22,7 +22,7 @@ Inspired by Anthropic's [Harness Design for Long-Running Application Development
 ```
 → Two specialists (Architect + Senior Dev) propose plans independently (native Workflow fan-out)  
 → Synthesis produces `spec.md`; a converge loop reviews it, applies consistency fixes and re-reviews  
-→ One approval question in the same session (a decision question first, only if the loop found a genuine choice) — you choose `Build now`  
+→ One approval question in the same session (a decision question first, only if the loop found a Critical/Major choice or a fix it could no longer apply — accept every recommended option at once or review them one by one; Minor choices with a recommended option take it and are listed for you to change) — you choose `Build now`  
 → `/harness-build` takes over in the same turn: Lead Dev + Advisor implement code, write `changes.md`  
 → Layer 1: build ✓ test 42/42 ✓ lint 0e/2w ✓ (auto-retry on fail, up to 3x)  
 → Layer 2 + 3: isolated LLM evaluator reviews against spec, produces `qa_report.md`  
@@ -208,8 +208,9 @@ inline-vs-workflow first.)
 3. **`Approval` — HARD GATE #1, spec approval.** The planner writes
    `docs/harness/<slug>/spec.md`; the Plan Critic converge loop reviews it, applies consistency
    and wiring corrections on its own, and re-reviews (if it finds a genuine design choice, it asks
-   you that first, in a question of its own). The same session then prints a summary — what the
-   loop applied, rejected and left open — and asks one question: **`Build now`** to implement the
+   you that first, in a question of its own — Critical/Major ones together in one question, Minor
+   ones with a recommended option taking it unasked). The same session then prints a summary —
+   what the loop applied, rejected, took by default and left open — and asks one question: **`Build now`** to implement the
    spec as one slice, `Plan as epic` to split the work into slices that then run one after
    another, each asking for its own approval once (a slice is a new session, so the Setup
    questions an `agent-harness-defaults` line and a rich `CLAUDE.md` do not answer come back —
@@ -366,6 +367,7 @@ Key interaction points:
 - **Mode selection** (refactor/migrate/debug/spec — `/harness` derives mode via its Mode Gate, no roundtrip): numbered options with token cost hints and auto-recommendation
 - **Execution-path ambiguity prompt** (no `--mode` + ultracode OFF + interactive session with the Workflow engine available): explicit inline-vs-workflow choice instead of silent auto-resolution — and every run prints `Path : <inline|workflow> (<reason>)` so the chosen path and its cause are always visible
 - **Confirmation gates**: HARD GATE #1 renders in `/harness` itself by default — one `Approval` question, `Build now` / `Plan as epic` / `Modify` / `Stop` (`--fast` and an epic's slices: no `Plan as epic`); only the first two labels approve, and an approval chains into `/harness-build`. With `--separate-gate` it is its own skill, `/harness-gate` — `Proceed as single` (plain `Proceed` when there is no scale recommendation) / `Plan as epic` / `Modify` / `Stop`, plus critic-status options on its first pass when they apply; it prints the next command instead of proceeding. Neither accepts freeform text as approval
+- **Converge decisions** (`/harness`, settled once per session, before the approval): Minor decisions take their recommended option without a question and are listed in the summary (`Modify` changes one); Critical/Major ones come as one `Decisions` question — `Accept all recommended (N)` / `Review individually` (then one question per decision, up to 4 per call). A finding whose automatic fix could not be applied is asked with no recommendation — `Specify the fix` (answer with Other) / `Ignore and proceed`
 - **QA retry**: Fix / Accept as-is
 - **Commit**: 3 options — "Commit code only" (recommended) / "Commit all with artifacts" / "No commit" (git environments only; non-git environments skip commit). A slice that ends clean in an in-session epic is the one exception: it applies "Commit code only" without asking, on the strength of that slice's `Build now` ([Epic Slices](#epic-slices))
 - **Session recovery**: Resume / Restart / Stop — `/harness` and `/harness-build` add a 4th, non-destructive **View state only** (prints the recorded session state and halts; `.harness/` is NOT deleted); `/harness-gate` offers none of these (it cannot delete anything — it redirects to the owner skill instead). The other skills sharing this gate shape keep the 3 options
@@ -385,7 +387,9 @@ Falls back to text-based input when AskUserQuestion is unavailable — except `/
                            standard (workflow): harness.plan script — 2 specialists propose -> Synthesis
                            multi (workflow):    harness.plan script — 3 specialists propose -> Synthesis
                         -> Plan Critic converge loop (review -> verify/classify -> apply, up to 5 rounds;
-                           one decision question if the loop finds a real choice)
+                           one decision question if it finds a Critical/Major choice or an
+                           unapplicable fix; Minor choices with a recommendation take it,
+                           listed for Modify)
                         -> session ends at plan_done with the Confirmation Gate (HARD GATE #1):
                            default (inline) — summary + one approval question in this session
                              (Build now / Plan as epic / Modify / Stop); an approval is recorded
@@ -602,7 +606,8 @@ the same turn, one after another:
   recognised because its task is a `Slice` of the `slice_plan.md` one directory up. Its approval question has three
   options — `Build now` / `Modify` / `Stop`, no `Plan as epic`, so epics never nest — and
   `Build now`'s description says that a clean end is committed without asking and the next slice
-  starts. That click is the consent; the table approves nothing on its own. A slice is a new
+  starts (not on a slice run again — see below — whose `Build now` promises neither). That click
+  is the consent; the table approves nothing on its own. A slice is a new
   `/harness` session, so it also re-asks any Setup question that an `agent-harness-defaults` line
   and a rich `CLAUDE.md` do not answer — Model, the Mode Gate question, Convention Scan.
 - **A clean end commits without asking.** Clean means `QA PASS`, Layer 1 `PASS`, and a cold
@@ -615,7 +620,11 @@ the same turn, one after another:
   slice edited that same file, in which case the whole file is committed and marked in the list.
   Each slice's branch starts from the previous slice's commit; nothing is merged for you, and the
   epic directory's own `spec.md` and `slice_plan.md` are never part of an automatic commit.
-  Without git there is no commit, and the cold review cannot run, so a slice ends clean — and
+  A second line lists what was left out: paths that had uncommitted changes before the slice
+  began and that the slice did not touch. A slice run again — its `docs/harness/<epic>/<slice>/`
+  directory already there from an earlier attempt — never commits automatically: that attempt's
+  uncommitted edits would otherwise count as already there and be left out, so it gets the
+  commit question and stops at the slice boundary. Without git there is no commit, and the cold review cannot run, so a slice ends clean — and
   the next one starts — only with the cold review turned off.
 - **Anything else stops at the slice boundary.** A slice that does not end clean (`Accept
   as-is`, `Max rounds reached`, cold-review findings, …) gets the usual commit question and then

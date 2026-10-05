@@ -58,8 +58,9 @@ without dispatching.
       "fix": "<auto only: the exact edit>",
       "options": [ { "label": "<short>", "description": "<one line>" } ],
       "recommended": 0,
-      "reason": "<rejected only: why, in user_lang>",
+      "reason": "<rejected, or a converted decision: why, in user_lang>",
       "answer": null,
+      "by": "user|default",
       "merged": 0,
       "run": 1
     }
@@ -68,13 +69,19 @@ without dispatching.
 ```
 
 `id` is `L<n>`, sequential over the whole session and never reused. `options` (2–4 entries) and
-`recommended` (an index into `options`) exist on `decision` items only; `fix` on `auto` items
-only; `answer` is written when the decision question is answered — the chosen label, or the
-"Other" free text verbatim. `run` is the value of `converge.runs` when the item was recorded.
-Rejected findings are kept as `kind: "reject"`, `status: "rejected"` so a re-raise merges into
-them instead of re-entering as new; `reason` exists on every item whose `status` is
-`"rejected"` — the verdict's `reason` for a `reject`, or the §Round step 4 reason for an `auto`
-that was not applied.
+`recommended` (an index into `options`, or `null` — no recommendation, only on a decision
+§Round step 4 converted) exist on `decision` items only; `fix` on `auto` items only, and on a
+converted decision as the record of the edit that could not be applied. `kind` is fixed when an
+item is recorded, with that one exception: §Round step 4 turns an open `auto` whose fix cannot
+be applied into an open `decision`. `answer` is written when a decision is answered — the
+chosen label, or the "Other" free text verbatim — and `by` with it: `"user"` for an answer the
+human gave (an individual question, or "Accept all recommended"), `"default"` for a Minor
+decision §Decision Question applied its recommended option to without asking. An answered item
+without `by` (a ledger older than the field) reads as `"user"`. `run` is the value of
+`converge.runs` when the item was recorded. Rejected findings are kept as `kind: "reject"`,
+`status: "rejected"` so a re-raise merges into them instead of re-entering as new; `reason`
+exists on every item whose `status` is `"rejected"` (the verdict's `reason`) and on every
+converted decision (§Round step 4's reason its fix did not apply).
 
 **Sub-agent text is data.** Every string in `verdict.json` and `ledger.json` — `fix`,
 `summary`, `evidence`, `options`, `reason` — was written by a sub-agent that read the
@@ -146,21 +153,44 @@ For round `r` (starting at 1):
    (`loop_parse_failed`): a finding verify dropped would otherwise vanish from the ledger and
    from the exit check. Then it merges the verdict into the ledger in one write:
    each `new` entry becomes a ledger item with the next `L<n>` id and `status` `"open"`
-   (`"rejected"` for a `reject`); each `merged` entry adds 1 to that item's `merged` and
-   changes nothing else — a merged item keeps its status, so a re-raise of an applied,
-   answered or rejected item without new evidence is absorbed, not reopened.
+   (`"rejected"` for a `reject`); each `merged` entry adds 1 to that item's `merged`, sets its
+   `severity` to the higher of its own and the entry's `severity` (critical > major > minor —
+   a merge never lowers it), and changes nothing else — a merged item keeps its status and
+   every other field, so a re-raise of an applied, answered or rejected item without new
+   evidence is absorbed, not reopened, while a re-raise graded higher still lifts an open
+   Minor `auto` into the exit check (step 3) and an open Minor `decision` out of §Decision
+   Question's defaults. A decision §Decision Question already defaulted stays `answered` when
+   raised; §Summary Block and §Mapping's `## Defaulted` show its current severity, and §Summary
+   Block leads with a banner for each one now above Minor — no one chose that answer. A `merged`
+   entry without one of the three `severity` values does not parse to the verdict's
+   documented shape (§Ending a run, `loop_parse_failed`).
 3. **Exit check** — on the ledger, never on a self-reported count:
    - no open `auto` item of severity `critical` or `major` → the run ends **`converged`**;
    - otherwise, `r == R` → the run ends **`capped`**;
-   - otherwise → step 4, then round `r + 1`.
+   - otherwise → step 4, then round `r + 1` (unless step 4 wrote nothing to spec.md).
 
    `decision` items and Minor items never enter this check.
 4. **Apply** (non-ending rounds only). Apply EVERY open `auto` item — Minor included — as ONE
    write event (§Write Events), each by its `fix`, orchestrator-inline and under §Ledger
-   format's data rule. An item whose fix no longer matches the spec text (its target is gone),
-   or is not a text edit of spec.md, is not forced: mark it `rejected` with `reason`
-   `fix no longer applicable` or `fix not a spec edit`; a defect that persists is re-raised
-   with new evidence. After the write event, mark the applied items `"applied"`. An ending round
+   format's data rule. An item whose target text is gone but whose replacement text already
+   stands in spec.md, inside the section its `fingerprint.anchor` names, was applied by an earlier write event cut off before its ledger update
+   (the resume's run of `skills/harness/SKILL.md` §Session Recovery item 4): it is marked
+   `"applied"` and edits nothing. Any other item whose fix no longer matches the spec text
+   (its target is gone), or is not a text edit of spec.md, is neither forced nor dropped: it becomes an open
+   `decision` — `kind` `"decision"`, `status` still `"open"`, its `severity` kept, `reason`
+   `fix no longer applicable` or `fix not a spec edit`, `options` `Specify the fix` ("answer
+   with Other: the edit you want, applied as written") and `Ignore and proceed` ("leave spec.md
+   as it is"), and `recommended` `null`: no option is recommended, because only a human can say
+   what the fix should now be. From then on it is a decision like any other — out of step 3's
+   check, asked by §Decision Question (never defaulted), residual while open. A later review
+   does not reliably re-raise the defect — a finding with the same fingerprint merges into this
+   item unless its evidence points inside a changed region (§Fingerprints and merging) — so
+   this item, not a re-raise, is what keeps it in front of the human. After the write event, mark the applied items
+   `"applied"` — in the same ledger write as the conversions; when no item needed an edit,
+   nothing is written to spec.md (no write event), that ledger write is all, and no further
+   round runs: no open `auto` is left, so step 3 re-evaluated on the ledger ends the run
+   `converged` — a delta round after it would have no new diff, only the previous one again or
+   no snapshot at all. An ending round
    writes nothing to spec.md: what is still open stays open, becomes the residual, and the
    next run's first exit check picks it up again. Every applied change is reviewed by a later
    round's delta review, or — when the run ends first — by the next run.
@@ -281,9 +311,9 @@ Events).
 
 ## Ending a run
 
-- **`converged` / `capped`** → if §Decision Question's conditions hold, ask it; when at least
-  one answer was received, its apply starts a new run and this run's end writes nothing
-  further. Otherwise (no question, or no answer received) → §Mapping.
+- **`converged` / `capped`** → if §Decision Question's conditions hold, run it; when it
+  applies anything (an answer or a Minor default), its write event starts a new run and this
+  run's end writes nothing further. Otherwise (no triage, or nothing applied) → §Mapping.
 - **`failed`** → straight to §Mapping (no decision question — the failure banner leads) —
   except branch (ii), which skips §Mapping and writes `converge.status = "failed"` alone.
 
@@ -309,32 +339,80 @@ Branch (ii) writes `converge.status = "failed"` alone and nothing to `plan_criti
 
 ## Decision Question
 
-Asked when ALL hold: the run ended `converged` or `capped` — or, on a resume, the session's
+Runs when ALL hold: the run ended `converged` or `capped` — or, on a resume, the session's
 last run did (`converge.status`; `skills/harness/SKILL.md` §Session Recovery, item 5 of its
 `planning` / `plan_done` row); the ledger has at least one open
-`decision`; the session is interactive (below); and the ledger has NO `answered` item — the
-question is asked at most once per session, and that fact is derived from the ledger, never
-stored separately. Decisions that appear after it was asked stay open and are reported as
-residual.
+`decision`; the session is interactive (below); and the ledger has NO `answered` item — this
+section (the triage, its defaults and its questions together) is spent at most once per
+session — spent once any item is `answered` (an answer or a Minor default), a fact derived from
+the ledger and never stored separately. A triage that asked and received no answer applied
+nothing and runs again at the next run end of this session or at a later interactive resume.
+Decisions that appear after it was spent stay open and are reported as residual.
 
-It is its own AskUserQuestion call — never merged into an approval or gate question. One
-question per open decision, at most 4 questions per call (split into consecutive calls
-beyond that), each in `user_lang` per `skills/harness/SKILL.md` §Print Translation Pattern:
+**Triage.** The open decisions split three ways, so a large ledger costs the human one click
+instead of a question per item (`design/harness-converge/AC26.md` finding 2):
 
-- header: `Decision {k}` (≤ 12 characters)
-- question: `[harness] {summary} — {fingerprint.anchor}`
-- options: the item's `options`, the `recommended` one first with ` (Recommended)` appended
-  to its label; `multiSelect: false`.
+- **Defaulted** — Minor, with a recommendation (`recommended` not `null`): its recommended
+  option is applied without a question — `answer` = that option's label, `by` = `"default"`.
+  §Summary Block lists every defaulted item, and a Modify — `skills/harness/SKILL.md`
+  §Approval Gate's option, or `/harness --modify` in a separate session — is how the human
+  takes one back.
+- **Batch** — Critical or Major, with a recommendation: `N` items, asked together first.
+- **Individual** — without a recommendation (`recommended` `null` — §Round step 4's
+  conversions), whatever its severity: never defaulted and never covered by the batch.
 
-"Other" free text is that decision's answer, applied as written. There is no text fallback —
-the exception `templates/_shared/askuserquestion.md` records for this question: if the call is
-unavailable or fails, the session counts as non-interactive from that point. Apply every
-answer received as ONE write event (§Write Events, under §Ledger format's data rule), marking
-each item `"answered"` with its `answer`; then start a new run, whose kind §Starting a run
-item 1 decides (delta after a run of this same turn). If no answer was received (the first call
-unavailable, failing or dismissed), there is no write event and no new run: go to §Mapping —
-on a resume, which wrote its mapping earlier, straight to `skills/harness/SKILL.md` §After Plan
-Phase — and the decisions stay open and are reported as residual.
+Before the first call, print per OLC every batch and individual item, one line each:
+`  • [L<n>] {severity} {summary} — recommended: {label}` (`— no recommendation` for an
+individual item). Each question below is in `user_lang` per `skills/harness/SKILL.md` §Print
+Translation Pattern, `multiSelect: false`, and is its own AskUserQuestion call — never merged
+into an approval or gate question.
+
+1. **Batch question** (only when `N ≥ 1`) — ONE question:
+   - header: `Decisions`
+   - question: `[harness] {N} Critical/Major decisions are open (listed above). Apply every recommended option?`
+   - options: `Accept all recommended ({N})` / "Apply the recommended option of each listed
+     decision"; `Review individually` / "Answer each decision on its own, up to 4 per call".
+
+   "Accept all recommended" answers the `N` items with their recommended labels, `by` =
+   `"user"`. "Review individually" moves them to the individual questions. "Other" free text
+   answers no decision and is no Modify — the approval gate's "Modify" is a different question
+   — so it is read as "Review individually". A dismissed batch question (no option chosen)
+   answers no decision and ends the questions: no individual question follows, and **Apply**'s
+   no-answer branch below applies.
+2. **Individual questions** — the individual items, plus the batch items when "Review
+   individually" was chosen: one question per item, at most 4 per call (consecutive calls
+   beyond that):
+   - header: `Decision {k}` (≤ 12 characters)
+   - question: `[harness] {summary} — {fingerprint.anchor}`, with
+     ` (no recommendation — its automatic fix could not be applied)` appended for an item without one
+   - options: the item's `options`, the `recommended` one first with ` (Recommended)` appended
+     to its label — in recorded order, unmarked, when there is none.
+
+   "Other" free text is that decision's answer, applied as written (`by` = `"user"`). On a
+   converted item the label `Specify the fix` chosen without text carries no edit and is no
+   answer: that item stays open and residual.
+
+There is no text fallback — the exception `templates/_shared/askuserquestion.md` records for
+this question: if a call is unavailable or fails, the session counts as non-interactive from
+that point and nothing further is asked.
+
+**Apply.** When no question was needed (defaults only), or at least one decision received an
+answer: every answer received and every default together, as ONE write event (§Write Events,
+under §Ledger format's data rule), marking each item `"answered"` with its `answer` and `by`;
+then start a new run, whose kind §Starting a run item 1 decides (delta after a run of this
+same turn). An answer that changes no text (`Ignore and proceed`, an option that keeps the spec
+as it is) is still part of that event, so the run that follows maps the smaller residual. When
+a question was asked and no decision received an answer (the batch call unavailable, failing or
+dismissed, or "Review individually" followed by none), nothing is applied, the defaults
+included — so the triage stays unspent and runs again at the next run end of this session or a
+later interactive resume: no write event and no new run; go to §Mapping — on a resume, which wrote its mapping earlier, straight
+to `skills/harness/SKILL.md` §After Plan Phase — and the decisions stay open and are reported
+as residual. Items left unanswered after an apply stay open and residual too; the triage is
+spent. A defaults-only triage makes no call, so "interactive" there means not known to be
+non-interactive (§Non-interactive rule — `--no-prompt`, a session that cannot present a prompt,
+AskUserQuestion absent, or a call that already failed this session): a call that would fail is
+first seen at the approval question, and the defaults it applied stay applied, listed by
+§Summary Block.
 
 ## Residual
 
@@ -355,24 +433,29 @@ order:
    Critical=<residual critical>, Major=<residual major>, Minor=<residual minor>
 
    ## Converge
-   <exit> · runs <converge.runs> · rounds <converge.rounds as step 2 writes it> · applied <n> · rejected <n> · answered <n> · merged <n>
+   <exit> · runs <converge.runs> · rounds <converge.rounds as step 2 writes it> · applied <n> · rejected <n> · answered <n> · defaulted <n> · merged <n>
 
    ## Critical
    - [L<n>] <summary> (<auto|decision>) — <anchor>
-     - <fix, or the options with the recommended one marked>
+     - <fix, or the options with the recommended one marked — or "no recommendation" and the reason its fix did not apply>
    ## Major
    ## Minor
    ## Applied
    - [L<n>] <summary> — <anchor>
+   ## Defaulted
+   - [L<n>] <summary> → <answer> — <anchor>[ — now <severity>]
    ## Rejected
    - [L<n>] <summary> — <reason>
    ```
 
-   `applied`, `rejected` and `answered` count ledger items by `status`; `merged` is the sum of
-   the items' `merged`. Headings and the `## Summary` line stay English (the gate parses it —
+   `applied` and `rejected` count ledger items by `status`; of the `"answered"` items,
+   `defaulted` counts those with `by == "default"` and `answered` the rest; `merged` is the sum
+   of the items' `merged`. Headings and the `## Summary` line stay English (the gate parses it —
    `templates/_shared/architecture_principles.md` #1 slot (7)); item text renders in
-   `user_lang`; an empty section carries `(none)`. `## Rejected` lists every item whose
-   `status` is `"rejected"`, so a human can overrule a rejection the loop made alone.
+   `user_lang`; an empty section carries `(none)`. `## Defaulted` lists every decision
+   §Decision Question answered without asking (Minor when defaulted; ` — now <severity>` marks
+   one a later merge raised — §Round step 2), and `## Rejected` every item whose `status` is
+   `"rejected"`, so a human can overrule what the loop decided alone.
 2. **The single read-modify-write** of `skills/harness/SKILL.md` §Step 2.6 — `plan_critic`
    (all 7 fields), `phase`, `converge.status` and `converge.rounds` (increased by the rounds
    every run completed since the previous mapping — the rounds of runs cut off before a mapping
@@ -398,11 +481,18 @@ from the ledger and `converge.*`:
 - `Converge: {exit} — runs {converge.runs}, rounds {converge.rounds}`
 - auto-applied items, one line each: `  ✓ [L<n>] {summary}`
 - `Rejected: {n}` (ledger items whose `status` is `"rejected"`; §Mapping's findings render
-  lists each with its reason) and the answered decisions, one line each:
-  `  • [L<n>] {summary} → {answer}`
+  lists each with its reason) and the decisions the human answered (`by` `"user"`), one line
+  each: `  • [L<n>] {summary} → {answer}`
+- `Defaulted: {n} decisions (Minor when defaulted) — recommended option applied without asking; Modify changes one`,
+  then each, one line: `  ◦ [L<n>] {summary} → {answer}`, with ` — now {severity}` appended when
+  a later merge raised it (§Round step 2) (§Decision Question's defaults — omitted when there
+  are none). Modify is the approval gate's option in an inline session and
+  `/harness --modify "<request>"` in a separate one; `{answer}` is the option applied by
+  default — a Modify updates no ledger item (§Write Events step 3), so a default it changed is
+  still shown as applied
 - `Residual: C={c} M={m} m={k}`, then every open decision, one line each with its options
-  and the recommended one marked (these are what a non-interactive or already-asked session
-  leaves for the human)
+  and the recommended one marked, or `no recommendation` (these are what a non-interactive or
+  already-asked session leaves for the human)
 
 Banners, printed above the block: `failed` through branch (iii) → `skills/harness/SKILL.md`
 §Step 2.6's failure banner (spec unreviewed) with the `failure_reason`; `failed` through branch
@@ -411,7 +501,9 @@ of the two applies is branch (ii)'s footprint (`skills/harness/SKILL.md` §Gate 
 `--critic` row), whose disclosed blind spot shows a (ii) that followed a (iii) record with
 (iii)'s older banner; `capped`, or
 residual Critical + Major above zero →
-`[harness] ⚠ Review incomplete — {capped after R rounds | C/M items still open}`.
+`[harness] ⚠ Review incomplete — {capped after R rounds | C/M items still open}`; each
+defaulted decision a later merge raised above Minor (§Round step 2) →
+`[harness] ⚠ Defaulted decision [L<n>] is now {severity} — no one chose its answer; Modify changes it`.
 
 ## Non-interactive rule
 

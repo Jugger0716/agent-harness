@@ -88,9 +88,13 @@ stay in English. Your 1-line return is parser tokens only — the leading Output
    (field, path, AC id, flag, term).
 4. **Merge against the ledger.** If a cluster's fingerprint equals a ledger item's (any
    status) and its evidence does NOT point inside the region that changed between
-   `{snapshot_path}` and `{spec_path}`, it is a `merged` entry naming that ledger `id` —
-   not new. With no snapshot, nothing changed: every match merges. A match whose evidence
-   points inside the changed region is new.
+   `{snapshot_path}` and `{spec_path}`, it is a `merged` entry naming that ledger `id`, with
+   the `severity` this round's evidence supports (step 6) — not new. The orchestrator raises
+   the ledger item to that severity when it is higher and never lowers it, so grade the
+   re-raise on its own evidence, not by copying the ledger's. A cluster whose evidence step 2
+   could not confirm still merges, but with the ledger item's current `severity` — unconfirmed
+   evidence never raises it. With no snapshot, nothing changed: every match merges. A match
+   whose evidence points inside the changed region is new.
 5. **Classify** each new cluster:
    - `auto` — a correction of consistency (the spec's own text shows which of two
      statements is meant), of fact (measured evidence contradicts a statement about the
@@ -103,7 +107,7 @@ stay in English. Your 1-line return is parser tokens only — the leading Output
      option you recommend).
    - `reject` — no measured evidence, evidence that contradicts the claim, or no defect.
    Doubt between `auto` and `decision` → `decision`. Doubt about the evidence → `reject`.
-6. **Severity** of each new entry: Critical (cannot be implemented as written, or wrong
+6. **Severity** of each new and each merged entry: Critical (cannot be implemented as written, or wrong
    behaviour), Major (implementation cannot be confident), Minor (phrasing, clarity).
 
 ## Output File
@@ -127,14 +131,15 @@ Write `{output_path}` as JSON with EXACTLY these keys:
       "sources": ["C1", "R-M2"]
     }
   ],
-  "merged": [ { "ledger_id": "L3", "sources": ["R-M1"] } ]
+  "merged": [ { "ledger_id": "L3", "severity": "critical|major|minor", "sources": ["R-M1"] } ]
 }
 ```
 
 Omit `fix` unless `kind` is `auto`, `options`/`recommended` unless it is `decision`, `reason`
 unless it is `reject`. Every source finding ID of this round appears in exactly one entry's
-`sources`, and every `ledger_id` names an item in `{ledger_path}` — the orchestrator checks
-both and stops the run on a verdict that fails either.
+`sources`, every `ledger_id` names an item in `{ledger_path}`, and every `merged` entry
+carries one of the three `severity` values — the orchestrator checks all three and stops the run
+on a verdict that fails any.
 
 ## Output Contract
 

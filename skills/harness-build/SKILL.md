@@ -389,7 +389,9 @@ the end is clean, `has_git == true` and `dirty_at_start` is a map (`{}` included
 question. Print
 `[harness] Clean slice end — committing without asking (Commit code only, consented at this slice's Build now).`
 and, once step 2 has computed it, one line listing every path of the session's change set, each
-one already changed when the session began marked. Run §Step 8's "Commit code only" steps 1–4
+one already changed when the session began marked, then one line listing the paths **left out**:
+every path of the same union whose `dirty_at_start` entry still matches — changed before the
+session began and untouched since, so not committed (`(none)` when there is none). Run §Step 8's "Commit code only" steps 1–4
 with two substitutions:
 - step 2's "code changes" are the **session's change set**: each path in the union of
   `git -c core.quotePath=false diff HEAD --name-only --no-renames` (deletions included;
@@ -415,8 +417,9 @@ empty-list rule.) The change set is every path that changed in
 the working tree since the session began, not only what the generator reported — output of the
 session's own build or test commands that `.gitignore` does not cover, and an edit made
 meanwhile by hand or by another process, are in it; the printed path list is the only check on
-that (ROADMAP). When `dirty_at_start` is absent (a session started before the field existed, or
-one that item 7 did not find to be a slice session) or `null` (no git, or a git failure at
+that (ROADMAP). When `dirty_at_start` is absent (a session started before the field existed,
+one that item 7 did not find to be a slice session, or a retried slice whose `{docs_path}`
+already existed there) or `null` (no git, or a git failure at
 `skills/harness/SKILL.md` §Step 1 item 7), or a git command fails while computing the set, the
 commit question renders instead and the slice ends at a boundary stop. A commit failure, or
 step 1's Safety Guard ABORT, deletes nothing — step 3's rule — and is a boundary stop with the
