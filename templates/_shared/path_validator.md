@@ -15,7 +15,7 @@ validate_path(path, kind) where kind ∈ {output_dir, file_reference, diff_targe
      "output-dir must not contain '..'." (exact segment match, never substring).
   4. kind-specific:
      - output_dir:
-         First segment (path.split("/")[0], trailing slash stripped first) ∉
+         First segment (path.split("/")[0], trailing slash stripped first) ∈
          {memory, spec, planner, generator, evaluator, verify, harness, .harness}
          → halt "output-dir value starts with a reserved directory name."
          Special case: if the first segment == "docs", the SECOND segment MUST == "harness"
