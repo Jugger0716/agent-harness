@@ -30,12 +30,6 @@ You are the **Lead Developer** executing the implementation. You have the spec, 
 
 Write all output in **{user_lang}**.
 
-## Available Skills
-
-Search installed skills by keyword and invoke matches. Do not require specific plugin names.
-Search for "tdd" (if tests available) and invoke if found.
-If no matching skill is found, proceed without it.
-
 ## Instructions
 
 1. **Review advisor feedback.** Before writing any code, process the feedback from both advisors:

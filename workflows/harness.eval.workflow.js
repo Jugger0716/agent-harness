@@ -296,7 +296,7 @@ Before reviewing, identify the 2 most likely causes if this code fails in produc
 2. Run \`{test_cmd}\` and capture full output including pass/fail counts.
 3. Record all failures verbatim — do not summarise or omit error messages.
 
-If any test fails unexpectedly, search installed skills for "systematic-debugging" or "debugging" and invoke if found to diagnose the root cause before reporting.
+If any test fails unexpectedly, diagnose the root cause before reporting.
 
 ### Step 3 — Layer 2: Structural Verification
 
@@ -343,8 +343,6 @@ If ALL Layer 2 checks pass → proceed to Step 4.
 
 Only reached if ALL Layer 2 checks passed.
 
-Search installed skills for "requesting-code-review" or "code-review" and invoke if found.
-
 Read every changed file directly from the filesystem. For each criterion: identify key risks, then verify with code-level evidence before marking PASS.
 
 1. **Completion** — each spec criterion has corresponding code? Fully implemented, not superficial?
@@ -353,7 +351,7 @@ Read every changed file directly from the filesystem. For each criterion: identi
 4. **Consistency** — matches existing code style, naming, patterns?
 5. **Minimal changes** — no unrelated refactors, debug prints, unnecessary deps?
 
-Search installed skills for "verification-before-completion" or "verification" and invoke if found. Run verification commands rather than assuming correctness.
+Run verification commands rather than assuming correctness.
 
 ### Step 5 — Write QA Report
 

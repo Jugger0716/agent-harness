@@ -60,9 +60,9 @@ Write all output in **{user_lang}**.
 
 1. **Explore the codebase** — read `CLAUDE.md` (if present), then browse the files and directories relevant to the scope above. Understand the existing architecture, patterns, and conventions before writing anything.
 
-2. **Think broadly first** — search installed skills for "brainstorming" or "ideation" and invoke if found. Explore the problem space: consider multiple approaches, surface edge cases, and identify risks before committing to a direction. If no skill is available, do this reasoning inline.
+2. **Think broadly first** — explore the problem space: consider multiple approaches, surface edge cases, and identify risks before committing to a direction.
 
-3. **Write a plan** — search installed skills for "writing-plans" or "plan" and invoke if found. Organise your findings into a coherent, actionable spec. If no skill is available, structure the spec directly.
+3. **Write a plan** — organise your findings into a coherent, actionable spec.
 
 4. **Write `spec.md`** to `{spec_path}` with the following sections (in order). Translate section headings to `{user_lang}`:
 
