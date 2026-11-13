@@ -219,7 +219,10 @@ SYNC_GROUPS = [
         # seeing that failure with no sync site actually broken may be tempted
         # to lower min_sites back to 2; don't -- re-quote the marker literally
         # in the SSOT prose instead.
-        "min_sites": 3,
+        "min_sites": 1,  # v9 stage 1: 13 skill directories removed -- 3 -> 1. The only marker left is the SSOT's own
+        # (skills/harness/SKILL.md §Step 1.5); the two spec sites went with that skill. With one
+        # site this group no longer compares anything across files: it is a token tripwire that
+        # keeps the three allowed values present in the contract. Claim only that.
     },
     {
         "id": "ambiguity-prompt",
@@ -237,7 +240,7 @@ SYNC_GROUPS = [
         # BELOW the already-measured 9 raw sites (slack 2) — a /study marker omission would
         # have silently passed; 10 = 9 (measured before /study) + 1 (this skill), so removing
         # /study's marker now actually fails this check (AC-22 verification method).
-        "min_sites": 10,
+        "min_sites": 2,  # v9 stage 1: 13 skill directories removed -- 10 -> 2 (harness, deep-review).
     },
     {
         "id": "project-defaults",
@@ -250,7 +253,7 @@ SYNC_GROUPS = [
         # site count equals file count here (no duplicate-marker skill, unlike
         # ambiguity-prompt above). Prior value (8) was measured with zero slack before
         # /study; 9 = 8 + 1 (this skill).
-        "min_sites": 9,
+        "min_sites": 2,  # v9 stage 1: 13 skill directories removed -- 9 -> 2 (harness, deep-review).
     },
     {
         "id": "adhoc-dispatch",
@@ -263,7 +266,8 @@ SYNC_GROUPS = [
         # with zero slack before /study; 12 = 11 + 1 (this skill). C5: 13 = 12 + 1 --
         # skills/harness-build/SKILL.md §Key Rules carries its own marker (harness-gate does
         # not dispatch anything and has none).
-        "min_sites": 13,
+        "min_sites": 4,  # v9 stage 1: 13 skill directories removed -- 13 -> 4 (harness, harness-build,
+        # deep-review, md-optimize).
     },
     {
         "id": "handoff-state-record",
@@ -301,7 +305,7 @@ SYNC_GROUPS = [
         "section": "contract",
         "target_anchor": "contracted for ONE caller",
         "tokens": ["criticFindingsPath", "specContent", "qaNotes"],
-        "min_sites": 3,                        # harness §Step 2.6 + spec Phase 2c-D + the workflow's own `// contract` block
+        "min_sites": 2,                        # v9 stage 1: 3 -> 2 -- templates/harness/plan_critic_dispatch.md + the workflow's own `// contract` block (the spec-side site went with that skill)
     },
     {
         # harness-handoff-coldreview-epic-slice slice-f, group (a): /handoff's slice-command
@@ -451,7 +455,11 @@ SYNC_GROUPS = [
         # operation.
         # C5: 8 = 7 + the hx-session-entry BLOCK copy in skills/harness-build/SKILL.md, which
         # carries the marker byte-identically. harness-gate has no session gate and no marker.
-        "min_sites": 7,  # LOWERED 8 -> 7 by the v8.14 prompt diet, same reason and same
+        "min_sites": 1,  # v9 stage 1: 13 skill directories removed -- 7 -> 1. The one site left is
+        # templates/_shared/session_recovery.md (the /harness and /harness-build session-entry
+        # block); the other six were skills v9 deleted. One site means a token tripwire on that
+        # file, not a cross-file comparison -- the site inventories above describe the tree before v9.
+        # Earlier history of this floor: LOWERED 8 -> 7 by the v8.14 prompt diet, same reason and same
         # rule as handoff-state-record above: the /harness and /harness-build copies of the
         # session-entry block became the single source templates/_shared/session_recovery.md,
         # collapsing two marker sites into one.
@@ -552,8 +560,9 @@ BUILD_FILES = {"skills/harness-build/SKILL.md"}
 BUILD_MIN_CROSS_FILES = 4  # measured at C5: skills/harness, skills/harness-gate, skills/handoff, workflows/_reference/schemas.md
 # Anchors that are genuinely not headings. The value is the literal that MUST exist in the
 # target -- an allowlist that is never compared against the file is a pass, not a check.
+# v9 stage 1: the one entry here, "Conventions injection rule", was cited only from the spec
+# skill v9 removed; an unused allowlist entry is itself a failure, so it is gone.
 HARNESS_NON_HEADING_ANCHORS = {
-    "Conventions injection rule": "**Conventions injection rule (used by Step 2):**",
 }
 
 
@@ -604,7 +613,6 @@ HARNESS_NON_HEADING_ANCHORS = {
 # THAT target, so for a newly created file nothing points at yet it is 1, not the 7
 # pinned for `skills/harness/SKILL.md`.
 SECTION_REF_TARGETS = [
-    {"path": "workflows/_reference/study_measurements.md", "mode": "anchor-heading"},
     {
         "path": "skills/harness/SKILL.md",
         "mode": "harness-steps",

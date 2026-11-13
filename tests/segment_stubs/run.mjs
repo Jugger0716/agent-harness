@@ -82,6 +82,8 @@ for (const [id, defect] of Object.entries(known)) {
 
 const covered = new Set(cases.filter((c) => c.defect === null).map((c) => c.script))
 const uncovered = engine.listScripts().filter((s) => !covered.has(s))
+// Name them: a bare count does not say which script a new case is owed for.
+for (const s of uncovered) console.log(`${'UNCOVERED'.padEnd(10)} ${s}`)
 console.log(
   `segment stubs: ${tally.pass} pass, ${tally.known} known-fail, ${tally.fail} fail, ` +
     `${tally.fixed} fixed, ${tally.stale} stale, ${tally.error} error; ` +
