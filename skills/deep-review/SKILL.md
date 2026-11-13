@@ -85,6 +85,7 @@ When the user provides a review target (via $ARGUMENTS or in conversation), exec
    | (no argument) | Unstaged changes | `git diff` |
 
 4. **Collect the diff.** Run the appropriate git/gh command. Capture the full unified diff output.
+   **Record `reviewed_sha`** — the revision this diff describes, which Step 7 compares against the checkout before it edits anything: PR → `gh pr view <N> --json headRefOid --jq .headRefOid`; branch → `git rev-parse <branch>`; commit range `a..b` → `git rev-parse <b>`; single commit → `git rev-parse <commit>`; file path, `--staged` and no argument → `git rev-parse HEAD`. Outside a git repository, or when the command fails, `reviewed_sha = null`.
 
 5. **Error handling:**
    - **Empty diff** -> Inform user (in `user_lang`): "No changes found for the given target. Nothing to review." Halt.
@@ -433,6 +434,8 @@ Runs only when the `--comment` flag was passed.
 ### Step 7: Fix Parity (`--fix`)
 
 Runs only when the `--fix` flag was passed. This is the ONLY path on which deep-review modifies the working tree.
+
+**Revision guard (before item 1).** When `reviewed_sha` (Step 1 item 4) is not `null`, run `git rev-parse HEAD`. If the two differ, the findings' `file:line` positions describe a revision that is not checked out, so do not enter this step: print (in `user_lang`) `[deep-review] --fix skipped: the reviewed revision <reviewed_sha, 7 chars> is not the checked-out HEAD <HEAD, 7 chars>. Check out the reviewed revision and re-run.`, record the same line in the report's `## Notes`, and go to Step 8. Item 4's "code no longer matches" skip stays as the second line of defence, not the first.
 
 1. **Candidate set:** critical + major findings that carry a `suggestion`.
 2. <HARD-GATE>
