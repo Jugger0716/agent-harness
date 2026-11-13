@@ -8,6 +8,103 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
 
 ## [Unreleased]
 
+## [9.0.0] — 2026-11-13
+
+**Breaking.** v9 "subtraction", stage 1 (`design/v9-subtraction/SPEC.md` §5, plan
+`design/v9-subtraction/STAGE1.md`): the plugin goes from 19 skill directories to 6, and the
+data-loss paths found in the kept skills are closed. This section has two parts — the stage 1
+changes directly below, then the `harness-converge` epic exactly as it stood under
+`[Unreleased]` (the installed copies had carried that content under the `8.14.0` label since
+October; this release is where the label catches up with the content).
+
+### Removed
+
+Thirteen skill directories, ten Workflow segments and eight template directories. Everything
+removed is preserved at the `v8.14.0` tag.
+
+| Removed | Use instead |
+|---|---|
+| `/spec` | The plan phase of `/harness`. For the old behaviour, check out `v8.14.0`. |
+| `/md-generate` | The built-in `/init`. |
+| `/code-review` (forwarding alias) | `/deep-review`, or the built-in `/code-review`. |
+| `/workflow` (forwarding alias) | `/harness`. |
+| `/memory` (forwarding alias) | Claude Code's built-in auto-memory. |
+| `/refactor`, `/migrate`, `/test-gen`, `/debug`, `/study`, `/codebase-audit`, `/team-memory`, `/ship` | No successor in this plugin. Preserved at `v8.14.0`. |
+
+Kept: `/handoff`, `/harness`, `/harness-gate`, `/harness-build`, `/deep-review`, `/md-optimize`.
+
+- **`md-optimize` no longer deletes duplicate files.** Step 3d reports them instead. A copy that
+  looks redundant may be read by a tool or referenced from a file the skill never scans.
+- **`/harness` no longer skips its plan critic for a `critic_findings.md` left in the output
+  directory.** That was the hand-over from the removed spec skill (`plan_critic.source ==
+  "carried_over"`). A state written before v9 that still carries the value lands on gate row ③,
+  where "Run Critic anyway" is offered.
+- **`/harness doctor`** has five items, not six: the knowledge-base store check went with the
+  skill it inspected.
+
+### Fixed
+
+Each item is a path that could lose or misdirect work. Letters and numbers are the defect ids
+of `design/v9-subtraction/SPEC.md` appendix A.
+
+- **Auto-fix snapshot (K1).** `/harness-build` took its pre-apply snapshot with a bare
+  `git stash`, which moved the uncommitted implementation out of the working tree before the
+  patch was applied to it, never restored it on success, and did not cover new files. The
+  snapshot is now a byte copy of each validated path with a manifest, with or without git.
+- **Implementation agent returning nothing (W1).** `harness.build` threw a bare `TypeError`
+  and the skill re-ran the whole generate step inline on a tree the dead agent may already have
+  edited. The segment now throws an error that names the agent; the skill shows the changed
+  paths and asks before continuing. The return carries `stats { planOk, advisorsSucceeded }`.
+- **`md-optimize` recovery (W3, W4).** Recovery advice was `git checkout -- .`, which cannot
+  restore an untracked file and discards unrelated work. Phase 3 now starts with a byte backup
+  and a manifest and restores from it on failure; the evaluator is given the pre-run bytes; a
+  backup left by an interrupted run is detected at the next start and never overwritten.
+- **`deep-review --fix` on the wrong revision (W5).** A review of a PR, another branch or an
+  older commit produced findings for that revision, and `--fix` edited whatever was checked
+  out. `--fix` now refuses unless `HEAD` is the reviewed revision.
+- **Keyword skill lookup (W14).** Generator, evaluator and inline-planner prompts — and the
+  two orchestrator contracts' Key Rules — said to search installed skills by keyword and invoke
+  what matched, so behaviour and cost depended on what else was installed. Removed.
+- **`harness-gate` description cut short (K14).** Its unquoted description was truncated at
+  ` #` by YAML, so the skill listing read `HARD GATE`. The value is quoted.
+
+### Changed
+
+- The plan-critic Workflow segment is `workflows/harness.critic.workflow.js` (was
+  `spec.eval`), and its templates are `templates/harness/plan_critic.md` and
+  `plan_critic_inline.md`. Args and return are unchanged. A leftover
+  `.harness/wf/spec.eval.workflow.js` copy in a working directory is ignored.
+- `skills/harness/SKILL.md` §Step 1.5 is the single source of the `conventions` field contract.
+- `md-optimize` routing: with no `.md` files it stops without asking; where a fuller CLAUDE.md
+  is needed first it offers "Stop" (pointing at the built-in `/init`) or "Continue".
+- `/handoff resume` rule 5 declines to chain into any skill that needs `WebSearch`/`WebFetch`,
+  without naming one.
+- Plugin description and keywords describe the six kept skills.
+- `README.md` drops the removed skills' sections (1,511 → about 780 lines). The rewrite to a
+  short README is a later stage.
+
+### Added
+
+- `scripts/verify_git_safety.py` — fails on `git checkout -- ` / `git checkout .`, a worktree
+  `git restore`, `git stash` (bare, `push`, `drop`), `reset … --hard` and `clean -f` / `--force`
+  in `skills/`, `templates/` and `workflows/`.
+- `scripts/verify_cited_paths.py` — every skill, template, workflow and script file path cited
+  from the contracts, `CLAUDE.md` or `README.md` must exist.
+- `scripts/verify_description_budget.py` fails on an unquoted description containing ` #`.
+- `RELEASING.md` — the release checklist that replaces the removed release skill.
+- The stub test runner names every segment script that has no representative case.
+
+### Lint pins
+
+`verify_sync_markers.py` floors, previous → new: `ambiguity-prompt` 10 → 2, `project-defaults`
+9 → 2, `adhoc-dispatch` 13 → 4, `session-conflict` 7 → 1, `conventions-field-contract` 3 → 1,
+`plan-critic-contract` (was `spec-eval-dual-caller`) 3 → 2. Description budget total 7,793 →
+2,880. Segment stub tests: 7 pass, 23 known failures (was 5 and 25).
+
+### Also in this release — the `harness-converge` epic
+
+What follows is the text that sat under `[Unreleased]`, unchanged.
+
 The `harness-converge` epic (`design/harness-converge/SPEC.md`), slices S1–S3 and S3.5 (the
 follow-up decisions of the S1–S3 cold review and the AC-26 measurement). S4 (the live probe) is
 not in yet, so none of the paths below has been observed in a live session.

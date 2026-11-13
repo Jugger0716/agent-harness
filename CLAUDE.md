@@ -132,7 +132,7 @@ frontmatter is the plugin's exposure contract, so treat it as part of the skill'
 
 ### Git
 
-- Branch as `harness/<slug>` (or `feature/<name>`); base is `develop`, releases merge to `main`.
+- Branch as `harness/<slug>` (or `feature/<name>`); base is `develop`, releases merge to `main` (checklist: `RELEASING.md`).
 - Write Conventional Commits with a skill scope: `feat(harness): ...`, `fix(handoff,docs): ...`,
   `chore(release): ...`.
 - Every recent merge is a merge commit. No `merge.ff` config enforces this — it is convention, so

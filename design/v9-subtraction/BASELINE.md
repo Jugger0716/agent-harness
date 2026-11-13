@@ -127,3 +127,78 @@
 ## 저장소 계정
 
 매니페스트(`plugin.json`, `marketplace.json`)와 git 원격은 같은 계정명을 쓴다. 저자 PC의 마켓플레이스 등록은 다른 계정명으로 돼 있다. 2026-11-13 푸시에서 저장소 이동 안내가 나오지 않았으므로 매니페스트와 원격의 계정이 현재 저장소를 가진 계정이다. 고칠 쪽은 저자 PC의 마켓플레이스 등록이다(SPEC 6.3).
+
+## 1단계 후 (v9.0.0)
+
+- 커밋: `b187a3b` (`harness/v9-subtraction`, 버전 커밋 직전)
+- 측정일: 2026-11-13. 방법은 위와 같다(`git ls-tree -r -l b187a3b`의 blob 바이트).
+
+### 스킬별 크기
+
+| 스킬 | 바이트 | KB | 기준선 대비 |
+|---|---|---|---|
+| harness-build | 125,377 | 122.4 | +2,352 |
+| harness | 78,415 | 76.6 | −1,104 |
+| handoff | 48,045 | 46.9 | −213 |
+| harness-gate | 47,162 | 46.1 | −400 |
+| deep-review | 39,997 | 39.1 | +1,438 |
+| md-optimize | 17,797 | 17.4 | +2,837 |
+| **합계 (6개)** | **356,793** | **348.4** | 유지 6개의 기준선 351,883에서 +4,910 |
+
+19개 합계는 877,596바이트에서 356,793바이트로 59% 줄었다. 줄어든 것은 전부 삭제한 13개다. 유지한 6개의 본문은 줄지 않았고 손실 경로 차단 절차만큼 늘었다. harness 3종은 250,106 → 250,954바이트다. 본문 감량은 3단계(handoff)와 5단계(harness)의 일이다.
+
+### 그 밖의 크기
+
+| 구분 | 기준선 | 1단계 후 |
+|---|---|---|
+| `workflows/*.workflow.js` | 15개, 361.8KB | 5개, 130.4KB |
+| `templates/` | 93개 파일, 448.8KB | 58개 파일, 289.0KB |
+| `README.md` | 114.7KB, 1,511줄 | 66.2KB, 767줄 |
+| 스킬 설명 합계 (목록에 실리는 글자 수) | 7,793 | 2,880 |
+
+### 린트 SYNC 그룹
+
+9개 그룹, 마커 19곳(기준선 52곳).
+
+| 그룹 | 기준선 | 1단계 후 |
+|---|---|---|
+| `adhoc-dispatch` | 13 | 4 |
+| `ambiguity-prompt` | 10 | 2 |
+| `project-defaults` | 9 | 2 |
+| `session-conflict` | 7 | 1 |
+| `conventions-field-contract` | 3 | 1 |
+| `plan-critic-contract` (전 `spec-eval-dual-caller`) | 3 | 2 |
+| `critic-revision-block` | 3 | 3 |
+| `handoff-state-record` | 2 | 2 |
+| `slice-command-format` | 2 | 2 |
+
+SPEC 1.3의 시뮬레이션 값과 다른 것은 `session-conflict`(2로 예상, 실제 1)와 `adhoc-dispatch`(5로 예상, 실제 4)다. 마커가 1곳만 남은 두 그룹은 파일 간 비교가 아니라 토큰 존재 검사다.
+
+`verify_sync_markers.py`의 `min_cross_files` 세 값(9 / 3 / 4)은 다시 고정하지 않았다. 실측은 26 / 11 / 15이고 삭제 전에는 28 / 11 / 15였다. 여유는 v9 이전부터 있었고 그 값의 주석이 "서술을 고쳐도 걸리지 않게"를 의도로 적고 있다. 이 문서의 "여유 0" 원칙에서 벗어난 유일한 고정값이다.
+
+### 린트와 테스트
+
+- 린트 8종(6종에서 `verify_git_safety.py`, `verify_cited_paths.py` 추가)과 배선 검사 통과.
+- `verify_cited_paths.py`: 73개 파일의 경로 인용 854건이 모두 실재.
+- 스텁 테스트: `7 pass, 23 known-fail, 0 fail, 0 fixed, 0 stale, 0 error; 0 script(s) without a representative case` (기준선 5 / 25, 대표 케이스 없는 스크립트 10개). W1의 두 케이스가 통과로 옮겨 갔다.
+- 삭제된 스킬의 슬래시 토큰과 경로: CHANGELOG·ROADMAP·design과 `scripts/verify_sync_markers.py`의 이력 주석 밖에서 0건.
+
+### 부록 A 결함
+
+1단계에 배정된 9건(K1, K7, K12, K14, W1, W3, W4, W5, W14) 가운데 K7을 뺀 8건을 계약과 스크립트에서 고쳤다. K7(설치본 버전 표기와 내용의 불일치)은 설치본을 교체해야 닫힌다. W4는 중복 파일 삭제를 없애 닫았고, 감사 보고서가 같은 번호로 적은 나머지(Step 3c의 원본 삭제가 비-md 참조를 깨는 경로, `.github/`·`.claude/` 제외)는 남아 있다.
+
+### 브랜치 리뷰 (2026-11-13)
+
+독립 리뷰 1회, 범위 `5e6209e..00a8fd9`. 판정 "수정 후 병합", Critical 0, Important 3, Minor 10. Important 3건과 Minor 3건(완료 기준 1.4를 놓친 2건, 새 린트의 구멍 1건)을 `b187a3b`에서 고쳤다. 고치지 않고 남긴 Minor 7건:
+
+| # | 내용 | 갈 곳 |
+|---|---|---|
+| m1 | harness-gate §Entry Check 항목 8과 §Architecture Principles #1이 행 ③이 더는 하지 않는 `critic_findings.md` 읽기를 나열한다 | 5단계 (K18) |
+| m4 | `schemas.md`와 `harness.plan.workflow.js`의 주석이 삭제된 스크립트를 파일 이름으로 든다. `verify_cited_paths.py`는 접두 없는 파일 이름을 보지 않는다 | 2단계 |
+| m6 | `verify_description_budget.py` 독스트링과 CLAUDE.md의 해당 항목이 삭제 뒤 낡았다 | 2단계 |
+| m7 | 자동 수정 적용이 도중에 끊긴 뒤 다시 적용하면 스냅샷이 덮어써진다 | 5단계 (Auto-fix 존폐와 함께) |
+| m8 | deep-review `reviewed_sha`: annotated tag는 `^{commit}`이 필요하고, 조회 실패 시 `null`이 되어 가드가 꺼진다 | 4단계 |
+| m9 | md-optimize: 자기 작업 폴더와 Exclusion List 문구의 충돌, Step 3c의 비-md 참조 미확인, Phase 4d "Skip" 뒤 백업 삭제 | 2단계 |
+| m10 | `harness.build`가 계획이 없어도 "implementation plan ready"를 로그한다 | 2단계 |
+
+실사용 검증(SPEC 1.4)의 결과는 이 절 아래에 덧붙인다.
