@@ -10,8 +10,13 @@
 //   KNOWN-FAIL  not ok, listed                                   (exit 0)
 //   FAIL        not ok, not listed            -> a regression    (exit 1)
 //   FIXED       ok, but still listed          -> remove the entry in the same change (exit 1)
-//   STALE       listed id has no case, or its defect differs from the case's      (exit 1)
-//   ERROR       the case itself threw         -> never blessable, listed or not   (exit 1)
+//   STALE       listed id has no case, its defect differs from the case's, or it names
+//               a representative-arguments case                                    (exit 1)
+//   ERROR       the case threw, or returned no boolean `ok`
+//                                             -> never blessable, listed or not   (exit 1)
+//
+// Exit 2 means the run could not start: duplicate case ids, or a known_failures.json that is not
+// a JSON object.
 //
 // Usage: node tests/segment_stubs/run.mjs
 import fs from 'node:fs'
@@ -20,7 +25,17 @@ import * as engine from './engine.mjs'
 import { cases } from './cases.mjs'
 
 const KNOWN_PATH = fileURLToPath(new URL('./known_failures.json', import.meta.url))
-const known = JSON.parse(fs.readFileSync(KNOWN_PATH, 'utf8'))
+let known
+try {
+  known = JSON.parse(fs.readFileSync(KNOWN_PATH, 'utf8'))
+} catch (e) {
+  console.log(`[segment stubs] known_failures.json is not valid JSON: ${e && e.message}`)
+  process.exit(2)
+}
+if (known === null || typeof known !== 'object' || Array.isArray(known)) {
+  console.log('[segment stubs] known_failures.json must be an object of { "<case id>": "<defect>" }')
+  process.exit(2)
+}
 
 const ids = cases.map((c) => c.id)
 const dup = ids.filter((id, i) => ids.indexOf(id) !== i)
@@ -36,6 +51,7 @@ for (const c of cases) {
   let detail
   try {
     const r = await c.check(engine)
+    if (!r || typeof r.ok !== 'boolean') throw new Error('check() must resolve to { ok: boolean, detail }')
     detail = r.detail
     if (r.ok) status = listed ? 'FIXED' : 'PASS'
     else status = listed ? 'KNOWN-FAIL' : 'FAIL'
@@ -53,9 +69,14 @@ for (const [id, defect] of Object.entries(known)) {
   if (!c) {
     tally.stale++
     console.log(`${'STALE'.padEnd(10)} ${id} [${defect}] listed in known_failures.json but no such case`)
-  } else if (c.defect !== defect) {
+  } else if (c.defect === null) {
+    // A representative-arguments case can never be a known failure: listing one would hide a
+    // script that no longer runs at all.
     tally.stale++
-    console.log(`${'STALE'.padEnd(10)} ${id} [${defect}] known_failures.json says ${defect}, the case says ${c.defect}`)
+    console.log(`${'STALE'.padEnd(10)} ${id} [${defect}] a representative-arguments case cannot be listed as a known failure`)
+  } else if (typeof defect !== 'string' || c.defect !== defect) {
+    tally.stale++
+    console.log(`${'STALE'.padEnd(10)} ${id} [${defect}] known_failures.json says ${JSON.stringify(defect)}, the case says ${c.defect}`)
   }
 }
 

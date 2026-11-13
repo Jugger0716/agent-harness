@@ -51,6 +51,9 @@ const resultOf = (r) => {
   return r.result
 }
 const EMPTY_COUNTS = { critical: 0, major: 0, minor: 0, suggestion: 0 }
+// True when the script failed with an error that names the agent whose result was missing.
+const namesAgent = (error, label) =>
+  Boolean(error) && error.toLowerCase().includes(label) && !error.includes('Cannot read properties of null')
 
 // --- representative arguments: the script runs and leaves no {placeholder} behind -----------
 const repCases = Object.keys(REP).map((script) => ({
@@ -68,19 +71,46 @@ const repCases = Object.keys(REP).map((script) => ({
   },
 }))
 
-// --- W6: a script launched with no arguments must refuse before dispatching any agent -------
-const emptyArgsCases = Object.keys(REP).map((script) => ({
-  id: `empty-args-${script}`,
-  defect: 'W6',
-  script,
-  async check(e) {
-    const r = await e.run(script, undefined, (p, o) => e.minimal(o.schema))
-    return {
-      ok: Boolean(r.error) && r.calls.length === 0,
-      detail: r.error ? `error after ${r.calls.length} agent call(s): ${r.error}` : `ran ${r.calls.length} agent call(s) with no arguments`,
-    }
+// --- W6: a script must refuse missing arguments before dispatching any agent ----------------
+// Three shapes, because a guard that only rejects `undefined` would still run on `{}` or on
+// arguments that lack the one payload the script exists to process.
+const REQUIRED = {
+  'harness.plan': 'task',
+  'harness.build': 'specContent',
+  'harness.eval': 'specContent',
+  'spec.eval': 'specContent',
+  'deep-review.review': 'diffContent',
+}
+const without = (obj, key) => Object.fromEntries(Object.entries(obj).filter(([k]) => k !== key))
+const refusal = (r, mustName) => {
+  const refused = Boolean(r.error) && r.calls.length === 0 && (!mustName || r.error.includes(mustName))
+  return {
+    ok: refused,
+    detail: r.error ? `error after ${r.calls.length} agent call(s): ${r.error}` : `ran ${r.calls.length} agent call(s)`,
+  }
+}
+const emptyArgsCases = Object.keys(REP).flatMap((script) => [
+  {
+    id: `empty-args-${script}`,
+    defect: 'W6',
+    script,
+    check: async (e) => refusal(await e.run(script, undefined, (p, o) => e.minimal(o.schema))),
   },
-}))
+  {
+    id: `empty-object-${script}`,
+    defect: 'W6',
+    script,
+    check: async (e) => refusal(await e.run(script, {}, (p, o) => e.minimal(o.schema))),
+  },
+  {
+    // The error has to name the missing argument, so the caller can tell which one it was.
+    id: `missing-${REQUIRED[script]}-${script}`,
+    defect: 'W6',
+    script,
+    check: async (e) =>
+      refusal(await e.run(script, without(REP[script], REQUIRED[script]), (p, o) => e.minimal(o.schema)), REQUIRED[script]),
+  },
+])
 
 const defectCases = [
   {
@@ -90,8 +120,7 @@ const defectCases = [
     async check(e) {
       const r = await e.run('harness.build', REP['harness.build'], (p, o) =>
         o.label === 'implementation' ? null : e.minimal(o.schema))
-      const named = Boolean(r.error) && r.error.includes('implementation') && !r.error.includes('Cannot read properties of null')
-      return { ok: named, detail: r.error ? r.error : 'returned a result although the implementation agent returned null' }
+      return { ok: namesAgent(r.error, 'implementation'), detail: r.error ? r.error : 'returned a result although the implementation agent returned null' }
     },
   },
   {
@@ -99,9 +128,12 @@ const defectCases = [
     defect: 'W1',
     script: 'harness.build',
     async check(e) {
-      const r = await e.run('harness.build', { specContent: 'S', mode: 'standard' }, (p, o) =>
+      const r = await e.run('harness.build', REP['harness.build'], (p, o) =>
         o.label === 'lead_developer' ? null : e.minimal(o.schema))
-      const digest = String(resultOf(r).planDigest)
+      // Either fix is acceptable: fail with an error that names the planner, or carry on with a
+      // digest that does not blame the advisor for a plan that never arrived.
+      if (r.error) return { ok: namesAgent(r.error, 'lead_developer'), detail: r.error }
+      const digest = String(r.result.planDigest)
       return { ok: !digest.includes('advisor unavailable'), detail: `planDigest = ${JSON.stringify(digest.slice(0, 60))}` }
     },
   },
@@ -111,12 +143,12 @@ const defectCases = [
     script: 'harness.plan',
     async check(e) {
       const task = "TASK<<rename the {task_description} placeholder; keep $& and $' literal>>"
-      const r = await e.run('harness.plan', { task, userLang: 'ko', mode: 'standard', models: MODELS }, (p, o) =>
+      const r = await e.run('harness.plan', { ...REP['harness.plan'], task }, (p, o) =>
         o.label === 'synthesis'
           ? e.minimal(o.schema)
           : { persona: o.label, summary: 'templates/x.md uses {task_description} and {critic_findings}', keyPoints: ['replace {task_description}'] })
-      const n = count(promptOf(r, 'synthesis'), 'TASK<<')
-      return { ok: n === 1, detail: `task body appears ${n} time(s) in the synthesis prompt (expected 1)` }
+      const n = count(promptOf(r, 'synthesis'), task)
+      return { ok: n === 1, detail: `the task text appears verbatim ${n} time(s) in the synthesis prompt (expected 1)` }
     },
   },
   {
@@ -125,10 +157,7 @@ const defectCases = [
     script: 'harness.build',
     async check(e) {
       const spec = 'SPEC<<' + 'x'.repeat(50) + '>>'
-      const args = {
-        specContent: spec, qaFeedback: 'QA mentions {spec_content} too', userLang: 'ko', mode: 'multi',
-        models: MODELS, scope: 'templates/**', maxFiles: 5, testCmd: 'npm test', repoPath: '.', lang: 'md',
-      }
+      const args = { ...REP['harness.build'], specContent: spec, qaFeedback: 'QA mentions {spec_content} too', mode: 'multi' }
       const r = await e.run('harness.build', args, (p, o) => {
         if (o.label === 'lead_developer') {
           return { persona: 'lead_developer', summary: 'edit template', keyPoints: ['templates/a.md — modify — replace {spec_content} with {spec_path}'] }
@@ -171,7 +200,7 @@ const defectCases = [
         if (o.label === 'synthesis') return { findings: [], counts: EMPTY_COUNTS, filesReviewed: ['a.ts'], summary: 's' }
         if (String(o.label).startsWith('xv_')) return { reviewer: o.label, verdicts: [], newFindings: [], summary: 's' }
         return {
-          findings: [{ file: 'a.ts', line: 1, severity: 'major', category: 'Correctness', title: `found by ${o.label}`, detail: 'd' }],
+          findings: [{ file: `src/${o.label}.ts`, line: 1, severity: 'major', category: 'Correctness', title: `found by ${o.label}`, detail: 'd' }],
           counts: { ...EMPTY_COUNTS, major: 1 }, filesReviewed: ['a.ts'], summary: 's',
         }
       })
@@ -188,10 +217,9 @@ const defectCases = [
     defect: 'W9',
     script: 'harness.plan',
     async check(e) {
-      const r = await e.run('harness.plan', { task: 't', mode: 'standard' }, (p, o) =>
+      const r = await e.run('harness.plan', REP['harness.plan'], (p, o) =>
         o.label === 'synthesis' ? null : { persona: o.label, summary: 's', keyPoints: [] })
-      const named = Boolean(r.error) && r.error.includes('synthesis')
-      return { ok: named, detail: r.error ? r.error : `returned ${JSON.stringify(r.result).slice(0, 80)} although synthesis returned null` }
+      return { ok: namesAgent(r.error, 'synthesis'), detail: r.error ? r.error : `returned ${JSON.stringify(r.result).slice(0, 80)} although synthesis returned null` }
     },
   },
   {
@@ -210,7 +238,7 @@ const defectCases = [
     defect: 'W16',
     script: 'harness.eval',
     async check(e) {
-      const args = { coldPass: true, coldFilesList: 'a.ts', specPath: 'docs/s.md', specContent: 'S' }
+      const args = { ...REP['harness.eval'], coldFilesList: 'a.ts' }
       const r = await e.run('harness.eval', args, (p, o) => {
         if (o.label === 'verify_l1') return { verdict: 'PASS', layer: 'L1', failures: [] }
         if (o.label === 'evaluator') return { verdict: 'PASS', layer: 'L1', failures: [{ file: 'a.ts', severity: 'critical', fix: 'f' }] }
