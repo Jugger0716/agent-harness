@@ -238,7 +238,7 @@ On the WORKFLOW path the same machine applies; `harness.eval` covers verifying�
 
 **`conventions` field contract** — always one of `null` (Step 1.5 not yet executed), `"skipped"` (the user chose to skip), or `"file:<path>"` (e.g. `"file:.harness/conventions.md"`).
 
-**Conventions injection rule (used by Step 2):** When `conventions` starts with `"file:"`, read the file at the path after the prefix. If the file does not exist, treat as `null` and re-run Step 1.5. When `conventions` is `null` or `"skipped"`, pass `{conventions}` / `args.conventions` as empty string. <!-- SYNC-WITH: skills/spec/SKILL.md §Step 1.5 conventions field contract -->
+**Conventions injection rule (used by Step 2):** When `conventions` starts with `"file:"`, read the file at the path after the prefix. If the file does not exist, treat as `null` and re-run Step 1.5. When `conventions` is `null` or `"skipped"`, pass `{conventions}` / `args.conventions` as empty string. <!-- SYNC-WITH: skills/harness/SKILL.md §Step 1.5 conventions field contract -->
 
 **If rich:** copy CLAUDE.md to `.harness/conventions.md`, store `conventions → "file:.harness/conventions.md"`, print `  [harness] Conventions: CLAUDE.md detected (rich). Copied to .harness/conventions.md`, go to Step 2.
 

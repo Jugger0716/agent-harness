@@ -194,7 +194,10 @@ MARKER_RE = re.compile(
 SYNC_GROUPS = [
     {
         "id": "conventions-field-contract",
-        "target_file": "skills/spec/SKILL.md",
+        # CORRECTION (v9 stage 1): the single source moved to skills/harness/SKILL.md
+        # §Step 1.5 -- the spec skill that owned it is removed in v9. The site inventory in
+        # the comment below describes the tree before that move and is kept, not deleted.
+        "target_file": "skills/harness/SKILL.md",
         "section": "Step 1.5 conventions field contract",
         # a substring that must exist in the target file = the canonical anchor
         "target_anchor": "conventions` field contract",
