@@ -1,7 +1,7 @@
 # Spec Critic — Cold Review
 
 <!-- WORKFLOW-PATH TEMPLATE: dispatched ONLY via the author-time embedded copy in
-     workflows/spec.eval.workflow.js — keep bodies in sync on every edit.
+     workflows/harness.critic.workflow.js — keep bodies in sync on every edit.
      Schema reference: workflows/_reference/schemas.md (CriticReport). The old 1-line
      Output Contract (counts line + regex/anchoring notes + parse-failure fallback note)
      is replaced by the schema return. The critic_findings.md FILE WRITE IS KEPT

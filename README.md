@@ -1023,7 +1023,7 @@ Transforms vague or incomplete requirements into structured, actionable specific
                      quick (inline): orchestrator writes spec directly
                      deep (workflow): spec.plan script — 4 analysts (requirements /
                             user-scenario / risk / tech-constraint, parallel) -> Synthesis
-                            -> spec.eval script — Critic cold review -> Critic Gate
+                            -> harness.critic script — Critic cold review -> Critic Gate
                             (Auto-revise / Modify / Approve; max 1 re-synthesis round)
                   -> HARD-GATE: Approve / Modify (re-generate) / Stop
                   -> [Phase 3] Handoff: suggest /harness with spec path

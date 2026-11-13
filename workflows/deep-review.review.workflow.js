@@ -636,7 +636,7 @@ const merged = await agent(
 )
 
 // Normalize counts from findings[] — findings are the ground truth the report displays
-// (spec.eval tally precedent).
+// (harness.critic tally precedent).
 const tally = { critical: 0, major: 0, minor: 0, suggestion: 0 }
 for (const f of merged.findings || []) {
   if (f && tally[f.severity] !== undefined) tally[f.severity] += 1

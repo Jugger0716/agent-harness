@@ -296,7 +296,7 @@ when verify reads the spec and confirms the absence — such a claim is a `decis
 changes scope), unless what is missing is a citation or cross-reference (`auto`, wiring).
 Doubt between `auto` and `decision` resolves to `decision`; doubt about the evidence resolves
 to `reject`. Severity follows the Critical / Major / Minor definitions of
-`templates/spec/critic_inline.md`.
+`templates/harness/plan_critic_inline.md`.
 
 ## Fingerprints and merging
 
@@ -321,8 +321,8 @@ Failure causes and where each lands:
 
 | Cause | Branch (`skills/harness/SKILL.md` §Step 2.6) | `failure_reason` |
 |---|---|---|
-| round-1 WORKFLOW `spec.eval` engine error | (i) — INLINE retry of the round-1 critic; not a failure | — |
-| round-1 WORKFLOW `spec.eval` permission denial | (ii) — no `plan_critic` record | — |
+| round-1 WORKFLOW `harness.critic` engine error | (i) — INLINE retry of the round-1 critic; not a failure | — |
+| round-1 WORKFLOW `harness.critic` permission denial | (ii) — no `plan_critic` record | — |
 | round-1 critic stamp check, delete, parse or latch failure | (iii) | that section's own four strings |
 | the round-1 INLINE critic dispatch refused or erroring (nothing came back to parse) | (iii) | `loop_dispatch_failed` |
 | a loop review/verify dispatch refused, erroring, or its output-file delete failing | (iii) | `loop_dispatch_failed` |

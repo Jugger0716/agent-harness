@@ -278,7 +278,7 @@ const VerifyVerdictSchema = {
 
 ## CriticReport
 
-Returned by the spec eval-segment Critic step (`spec.eval.workflow.js`). Replaces the
+Returned by the plan-critic segment (`harness.critic.workflow.js`). Replaces the
 `^critic_findings written — Critical=(\d+)...$` 1-line regex parse and its parse-fail
 gate — a schema return cannot be unparseable, so the `parse_failed_*` failure modes are
 structurally unreachable. The Critic agent still WRITES `critic_findings.md` (user-facing
@@ -286,7 +286,7 @@ artifact + re-synthesis injection source + Phase 3 handoff persistence), mirrori
 pilot evaluator/verify_layer1 kept-file pattern. The orchestrator branches the Critic
 Gate on `counts`.
 
-> Count consistency note: `spec.eval.workflow.js` normalizes `counts` from `items[]`
+> Count consistency note: `harness.critic.workflow.js` normalizes `counts` from `items[]`
 > before returning (items are the ground truth the gate displays) — consumers can branch
 > on `counts` directly without re-tallying.
 
@@ -409,7 +409,7 @@ prose contract and the orchestrator's `.harness/code-review/review_*.md` re-read
 ORCHESTRATOR writes the round report (`review_report.md` round 1 / `review_round<N>.md` after) from the final (synthesis) FindingSet.
 
 > Count consistency note: the synthesis step in `deep-review.review.workflow.js`
-> normalizes `counts` from `findings[]` before returning (spec.eval precedent) and fills
+> normalizes `counts` from `findings[]` before returning (harness.critic precedent) and fills
 > a missing/short `filesReviewed` from the union of the reviewers' `filesReviewed`
 > arrays — consumers can branch/render directly.
 >

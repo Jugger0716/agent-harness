@@ -8,9 +8,9 @@
   "empty-args-harness.eval": "W6",
   "empty-object-harness.eval": "W6",
   "missing-specContent-harness.eval": "W6",
-  "empty-args-spec.eval": "W6",
-  "empty-object-spec.eval": "W6",
-  "missing-specContent-spec.eval": "W6",
+  "empty-args-harness.critic": "W6",
+  "empty-object-harness.critic": "W6",
+  "missing-specContent-harness.critic": "W6",
   "empty-args-deep-review.review": "W6",
   "empty-object-deep-review.review": "W6",
   "missing-diffContent-deep-review.review": "W6",
@@ -23,5 +23,5 @@
   "plan-null-synthesis": "W9",
   "eval-scope-placeholder": "W15",
   "eval-pass-with-critical": "W16",
-  "speceval-summary": "W17"
+  "critic-summary": "W17"
 }

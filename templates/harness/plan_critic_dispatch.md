@@ -1,12 +1,12 @@
-# Plan Critic WORKFLOW dispatch — `spec.eval.workflow.js` (single source)
+# Plan Critic WORKFLOW dispatch — `harness.critic.workflow.js` (single source)
 
 > Issued by `skills/harness/SKILL.md` §Step 2.6, WORKFLOW branch. The segment is shared with
 > `/spec`, and this call changes none of its args contract. Read this file before dispatching.
 
-<!-- SYNC-WITH: workflows/spec.eval.workflow.js §contract -->
+<!-- SYNC-WITH: workflows/harness.critic.workflow.js §contract -->
 ```
 Workflow {
-  scriptPath: ".harness/wf/spec.eval.workflow.js",   // FIRST apply templates/_shared/segment_launch.md: copy ${CLAUDE_PLUGIN_ROOT}/workflows/spec.eval.workflow.js here; delete the copy once this call returns
+  scriptPath: ".harness/wf/harness.critic.workflow.js",   // FIRST apply templates/_shared/segment_launch.md: copy ${CLAUDE_PLUGIN_ROOT}/workflows/harness.critic.workflow.js here; delete the copy once this call returns
   args: { task: <task>, userLang: <user_lang>, specContent: <{docs_path}spec.md content>,
           qaNotes: <qa_discovery_notes>,
           criticFindingsPath: "{docs_path}plan_critic_findings.md",

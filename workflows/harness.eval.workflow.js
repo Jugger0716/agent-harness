@@ -106,7 +106,7 @@ const VerifyVerdictSchema = {
 // UPPERCASE severity enum (matches CriticReport.items[].severity, NOT FindingSchema's own
 // lowercase+suggestion vocabulary -- see that file's cold-review severity-vocabulary note).
 // counts keys are uppercase too, for the same reason -- do NOT copy the lowercase tally
-// pattern from spec.eval.workflow.js verbatim; only its NORMALIZE-FROM-ITEMS technique is
+// pattern from harness.critic.workflow.js verbatim; only its NORMALIZE-FROM-ITEMS technique is
 // reused below, with uppercase keys.
 const ColdFindingSchema = {
   type: 'object',
@@ -593,7 +593,7 @@ if (
       { schema: ColdFindingSetSchema, label: 'cold_review', phase: 'Cold review', ...mopt(MODELS.evaluator) },
     )
     // Normalize counts from findings[] -- same NORMALIZE-FROM-ITEMS technique as
-    // spec.eval.workflow.js's tally precedent, uppercase keys (ColdFindingSetSchema above).
+    // harness.critic.workflow.js's tally precedent, uppercase keys (ColdFindingSetSchema above).
     const tally = { Critical: 0, Major: 0, Minor: 0 }
     for (const f of cold.findings || []) {
       if (f && tally[f.severity] !== undefined) tally[f.severity] += 1

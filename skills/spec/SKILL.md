@@ -525,16 +525,16 @@ Print status in the standard format, prefixed with `[harness] Spec draft ready.`
    - `"approved"` (set eagerly by step 5b) → Critic phase is bypassed by the single-source-of-truth signal. Skip Phase 2c-D / 2d-D and proceed directly to the Final HARD GATE.
    - Otherwise → proceed to Phase 2c-D (Eval segment).
 
-##### Phase 2c-D: Eval segment + Critic Gate (`spec.eval.workflow.js`)
+##### Phase 2c-D: Eval segment + Critic Gate (`harness.critic.workflow.js`)
 
-<!-- SYNC-WITH: workflows/spec.eval.workflow.js §contract -->
+<!-- SYNC-WITH: workflows/harness.critic.workflow.js §contract -->
 
 `phase → "critic_active"`.
 
 1. **Run the Eval segment** via the Workflow tool (field set = 1:1 contract with the script's `// contract` comment):
    ```
    Workflow {
-     scriptPath: ".harness/wf/spec.eval.workflow.js",   // FIRST apply templates/_shared/segment_launch.md: copy ${CLAUDE_PLUGIN_ROOT}/workflows/spec.eval.workflow.js here; delete the copy once this call returns
+     scriptPath: ".harness/wf/harness.critic.workflow.js",   // FIRST apply templates/_shared/segment_launch.md: copy ${CLAUDE_PLUGIN_ROOT}/workflows/harness.critic.workflow.js here; delete the copy once this call returns
      args: {
        task: <task>, userLang: <user_lang>,
        specContent: <docs/harness/<slug>/spec.md content>,

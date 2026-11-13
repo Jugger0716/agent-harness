@@ -28,7 +28,7 @@ const REP = {
     models: MODELS, skipL1: false, onlyL1: false, coldPass: true, coldMaxFiles: 20,
     coldFilesList: 'src/a.ts\nsrc/b.ts', specPath: 'docs/harness/x/spec.md',
   },
-  'spec.eval': {
+  'harness.critic': {
     task: 'T', userLang: 'ko', specContent: 'SPEC', qaNotes: '',
     criticFindingsPath: 'docs/harness/x/plan_critic_findings.md',
     models: { advisor: 'opus', evaluator: 'opus' },
@@ -78,7 +78,7 @@ const REQUIRED = {
   'harness.plan': 'task',
   'harness.build': 'specContent',
   'harness.eval': 'specContent',
-  'spec.eval': 'specContent',
+  'harness.critic': 'specContent',
   'deep-review.review': 'diffContent',
 }
 const without = (obj, key) => Object.fromEntries(Object.entries(obj).filter(([k]) => k !== key))
@@ -250,11 +250,11 @@ const defectCases = [
     },
   },
   {
-    id: 'speceval-summary',
+    id: 'critic-summary',
     defect: 'W17',
-    script: 'spec.eval',
+    script: 'harness.critic',
     async check(e) {
-      const r = await e.run('spec.eval', REP['spec.eval'], () => ({
+      const r = await e.run('harness.critic', REP['harness.critic'], () => ({
         counts: { critical: 5, major: 0, minor: 0 },
         items: [{ id: '[C1]', severity: 'Critical', title: 't', issue: 'i', suggestedFix: 'f' }],
         summary: 'Critical=5, Major=0, Minor=0',

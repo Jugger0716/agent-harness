@@ -279,7 +279,7 @@ SYNC_GROUPS = [
         # duplication rather than dropping a check. Sites now: session_boundary.md + skills/handoff.
     },
     {
-        # harness-handoff-coldreview-epic-slice slice-f, group (b): the workflows/spec.eval.workflow.js
+        # harness-handoff-coldreview-epic-slice slice-f, group (b): the workflows/harness.critic.workflow.js
         # `// contract` comment declares it is dispatched by TWO callers -- this group makes sure
         # neither caller's args wiring can silently drift from that declared contract without a
         # min_sites/token failure. Pre-slice-f baseline occurrence counts (measured with the
@@ -287,10 +287,16 @@ SYNC_GROUPS = [
         #   criticFindingsPath 1/1/3, specContent 5/1/2, qaNotes 3/3/2
         # (each file already carried all 3 tokens -- this group adds no new literal, only the
         # marker + min_sites floor; see spec §접근 방식 ④).
-        "id": "spec-eval-dual-caller",
-        "target_file": "workflows/spec.eval.workflow.js",
+        # CORRECTION (v9 stage 1): the script was `spec.` + `eval` until this change and the
+        # group id was `spec-eval-dual-caller`. It is now workflows/harness.critic.workflow.js,
+        # contracted for ONE caller (/harness Step 2.6 through
+        # templates/harness/plan_critic_dispatch.md); the "TWO callers" sentences above
+        # describe the tree before v9 and are kept, not deleted. The spec-side site stays a
+        # marker site until the commit that removes that skill, which lowers the floor to 2.
+        "id": "plan-critic-contract",
+        "target_file": "workflows/harness.critic.workflow.js",
         "section": "contract",
-        "target_anchor": "contracted for TWO callers",
+        "target_anchor": "contracted for ONE caller",
         "tokens": ["criticFindingsPath", "specContent", "qaNotes"],
         "min_sites": 3,                        # harness §Step 2.6 + spec Phase 2c-D + the workflow's own `// contract` block
     },
@@ -328,7 +334,7 @@ SYNC_GROUPS = [
         # enforced it: verify_block_sync.py's GROUPS cover templates/planner/{architect,
         # planner_single,qa_specialist,senior_developer}.md only, and the `// SYNC-SOURCE:`
         # comments in the script are human notes MARKER_RE never matches. The JS marker sits
-        # in a line comment (spec.eval.workflow.js precedent) so it is not dispatched.
+        # in a line comment (harness.critic.workflow.js precedent) so it is not dispatched.
         "id": "critic-revision-block",
         "target_file": "templates/planner/synthesis.md",
         "section": "Critic Findings (re-entry only)",  # NO leading § -- MARKER_RE captures after §

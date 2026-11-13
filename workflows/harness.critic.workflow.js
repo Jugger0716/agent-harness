@@ -1,40 +1,30 @@
-// spec.eval.workflow.js — Eval segment of /spec deep mode (WORKFLOW path).
-// Autonomous span: one cold Critic review of the synthesized spec. Returns a CriticReport.
-// Replaces the `^critic_findings written — Critical=(\d+)...$` 1-line regex parse and its
-// parse-fail gate — a schema return cannot be unparseable. The Critic agent still WRITES
-// critic_findings.md (user-facing artifact + re-synthesis injection + Phase 3 handoff
-// persistence), mirroring the pilot verify_layer1/evaluator kept-file pattern.
-// NO human gates here — the 3-way Critic Gate is rendered by the orchestrator
-// (skills/spec/SKILL.md) AFTER this segment returns.
+// harness.critic.workflow.js — Plan-critic segment of /harness (WORKFLOW path).
+// Autonomous span: one cold Critic review of spec.md. Returns a CriticReport.
+// A schema return cannot be unparseable, which is why this path has no 1-line regex parse
+// and no parse-fail gate. The Critic agent still WRITES its findings file (user-facing
+// artifact + re-synthesis injection), mirroring the verify_layer1/evaluator kept-file pattern.
+// NO human gates here — the approval gate is rendered by the orchestrator
+// (skills/harness/SKILL.md) AFTER this segment returns.
 //
-// Engine shape per docs/superpowers/specs/2026-06-05-ultracode-phase1-engine-spike.md
-// (top-level body, args JSON-string guard, inlined schema/template, no agentType).
+// Engine shape: top-level body, args JSON-string guard, inlined schema/template, no agentType.
 export const meta = {
-  name: 'spec.eval',
-  description: '/spec deep-mode Eval segment: cold Critic review of the synthesized spec. Writes critic_findings.md and returns structured counts plus items. Spawns 1 sub-agent; does not modify the spec or source files.',
+  name: 'harness.critic',
+  description: 'INTERNAL — launched by /harness only. Plan-critic segment: one cold Critic review of spec.md; writes the findings file, modifies nothing else.',
   phases: [
     { title: 'Critique', detail: 'cold review of the synthesized spec' },
   ],
 }
 
 // ---- args (SPIKE-F1: defensive parse) -------------------------------------
-// contract — this segment is contracted for TWO callers: /spec Phase 2c-D WORKFLOW
-// <!-- SYNC-WITH: workflows/spec.eval.workflow.js §contract -->
-// dispatch (skills/spec/SKILL.md), wired since this file's original landing; and /harness
-// Step 2.6 (skills/harness/SKILL.md), wired by this epic's slice C (the Plan Critic /
-// two-pass spec gate landing) — BOTH callers dispatch this file today.
-// Keep args 1:1 with BOTH callers — a field missing on either caller's side is not
-// an exception, it silently renders as '' via render()'s v==null fallback below:
+// contract — this segment is contracted for ONE caller: /harness Step 2.6
+// <!-- SYNC-WITH: workflows/harness.critic.workflow.js §contract -->
+// (skills/harness/SKILL.md), dispatched through templates/harness/plan_critic_dispatch.md.
+// Until v9 it carried another name and a second caller, a spec-writing skill v9 removed.
+// Keep args 1:1 with the caller — a missing field is not an exception, it silently
+// renders as '' via render()'s v==null fallback below:
 //   { task, userLang, specContent, qaNotes, criticFindingsPath, models: {advisor, evaluator} }
-// criticFindingsPath is a caller-specified value, not a literal owned by this file —
-// the two callers deliberately pass DIFFERENT paths: /spec passes
-// `.harness/spec/critic_findings.md`, /harness passes `{docs_path}plan_critic_findings.md`.
-// Reusing one caller's path for the other would overwrite /spec's critic_findings.md
-// artifact.
-// KNOWN GAP (deliberately deferred, not an oversight): the file header comment above and
-// meta.description still describe only the /spec caller. Realigning them is deferred
-// because doing so would add hunks outside this contract block, which is the one span
-// this file's diff is held to.
+// criticFindingsPath is a caller-specified value, not a literal owned by this file:
+// /harness passes `{docs_path}plan_critic_findings.md`.
 const A = typeof args === 'string' ? JSON.parse(args) : (args || {})
 const LANG = A.userLang || 'the language of the task description'
 const MODELS = A.models || {}
@@ -83,7 +73,7 @@ const CriticReportSchema = {
 }
 
 // ---- template (author-time copy) ---------------------------------------------
-// SYNC-SOURCE: templates/spec/critic.md
+// SYNC-SOURCE: templates/harness/plan_critic.md
 // AUTHOR-TIME TRANSFORMS: '## Output Contract' (EXACTLY ONE LINE `critic_findings
 // written — Critical=...` + regex/anchoring notes + parse-failure fallback note) ->
 // CriticReport schema note. The critic_findings.md file write is KEPT (user-facing

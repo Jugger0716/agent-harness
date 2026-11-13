@@ -1,17 +1,17 @@
 # Plan Critic — Inline Cold Review
 
 <!-- INLINE-PATH TEMPLATE: dispatched ONLY via skills/harness/SKILL.md §Step 2.6, INLINE
-     branch — the sole consumer. This is a SIBLING of templates/spec/critic.md, not a copy
+     branch — the sole consumer. This is a SIBLING of templates/harness/plan_critic.md, not a copy
      of it, and carries NO body-sync contract to that file.
 
      Why the bodies cannot converge:
      (a) Input shape — this template receives {spec_path} (a PATH) and reads the file
          itself, under the §Architecture Principles #2 docs_path-artifact-path qualifier.
-         critic.md's WORKFLOW-path caller (workflows/spec.eval.workflow.js) instead passes
+         plan_critic.md's WORKFLOW-path caller (workflows/harness.critic.workflow.js) instead passes
          {spec_content} (the CONTENT) as a segment `args` field — size, not path-vs-content,
          is that script's actual constraint (§Architecture Principles #3).
      (b) Output shape — this template MUST end in a 1-line Output Contract
-         (`critic_findings written — Critical=N, Major=M, Minor=K`); critic.md explicitly
+         (`critic_findings written — Critical=N, Major=M, Minor=K`); plan_critic.md explicitly
          forbids a 1-line summary ("Do NOT emit a 1-line text summary") because its return
          is a schema-validated CriticReport object instead.
      Because of (a)+(b), this template carries no paired begin/end sync-marker comments of
@@ -20,14 +20,14 @@
      silent, unchecked dead weight, not a real sync guard.
 
      Shared surface, deliberately minimized: the Critical/Major/Minor severity DEFINITIONS
-     below are copied verbatim from critic.md — a plain scripts/verify_block_sync.py
+     below are copied verbatim from plan_critic.md — a plain scripts/verify_block_sync.py
      marker pair could not express this duplication anyway (see above), so no sync
      mechanism at all covers this pair; it is a known text-drift risk (recorded as a
      slice F ROADMAP-deferral candidate in this epic's changes.md, not solved by this
      file).
 
      Known input asymmetry vs. the WORKFLOW path (declared, not an oversight): this
-     template does NOT accept `{qa_discovery_notes}` — spec.eval.workflow.js's TPL_CRITIC
+     template does NOT accept `{qa_discovery_notes}` — harness.critic.workflow.js's TPL_CRITIC
      does. The INLINE dispatch is kept minimal on purpose; a Plan Critic pass already runs
      after Q&A-informed synthesis, so Q&A notes are one hop removed rather than absent. -->
 

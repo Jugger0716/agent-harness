@@ -25,7 +25,7 @@ fallback and is not a launch surface: a dispatch site never carries a repository
 
 **Correction, appended 2026-09-28:** the "no WORKFLOW-path run from an installed copy" sentence
 above was true when written and is not any more. The sixth probe in that same `PROBE.md` ran
-`harness.plan` (three agents) and `spec.eval` (one agent) from `.harness/wf/` copies of the
+`harness.plan` (three agents) and `harness.critic` (one agent) from `.harness/wf/` copies of the
 installed plugin in one `/harness --mode standard` session: both launched on the first attempt,
 ran to completion and returned schema-valid results, and the copy was gone after each. No other
 segment has been measured launching this way.
@@ -42,8 +42,7 @@ segment has been measured launching this way.
    every launch (and step 2's `cp` would read from `/workflows/…`). Substitute the literal root
    before running steps 0–2: the directory Claude Code reports as the invoking skill's base
    directory, minus its last two components — `skills/` and the invoking skill's own directory,
-   which is not always the script's `<skill>` prefix (`/harness` launches `spec.eval`,
-   `/harness-build` launches `harness.build`).
+   which is not always the script's `<skill>` prefix (`/harness-build` launches `harness.build`).
 1. `mkdir -p .harness/wf` — `.harness/` is the directory every launching skill already creates
    or touches (a stateless skill declares it session-scoped audit space; that declaration is not
    weakened, because step 4 removes what this procedure adds).
