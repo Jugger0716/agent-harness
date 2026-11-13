@@ -43,4 +43,7 @@ jobs:
           grep -Eq 'OK: [0-9]+ index blobs are LF' "$RUNNER_TEMP/cws.log" \
             || { echo "::error::index-blob CR guard OK line missing"; exit 1; }
           ! grep -q 'SKIP index-blob CR guard' "$RUNNER_TEMP/cws.log"
+      # Behavioural tests, not a lint: the Workflow segment scripts run against a stub engine.
+      # Lives outside scripts/ on purpose, so check_lint_wiring.sh does not count it as a lint.
+      - run: node tests/segment_stubs/run.mjs
       - run: bash .github/scripts/check_lint_wiring.sh

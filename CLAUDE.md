@@ -6,8 +6,8 @@
 agent-harness is a **Claude Code plugin repository**, not an application. It ships 19 skills whose
 primary artifact is a contract document (`skills/<name>/SKILL.md`), plus the prompt templates,
 native Workflow segment scripts, and self-consistency lints those contracts depend on. There is no
-application source and no test suite — the contracts *are* the code, and a wrong sentence is a
-defect.
+application source, and the only behavioural tests are the segment stub tests under
+`tests/segment_stubs/` — the contracts *are* the code, and a wrong sentence is a defect.
 
 ## Tech Stack
 
@@ -31,6 +31,7 @@ defect.
 | Workflow syntax + CR guard | `node scripts/check_workflow_syntax.mjs` |
 | Description budget ratchet | `python scripts/verify_description_budget.py` |
 | Lint wiring equality | `bash .github/scripts/check_lint_wiring.sh` |
+| Segment stub tests | `node tests/segment_stubs/run.mjs` |
 
 The same chain is declared once, below, as this repository's project default so a `/harness`
 session runs it as Layer 1 without a `--lint-cmd` flag (`templates/_shared/project_defaults.md`;
@@ -53,7 +54,9 @@ Exit codes: `0` pass, `1` violation found, `2` structural problem. One exception
 in `verify_sync_markers.py` a **missing target file is `1`**, and `2` means a declared SYNC group's
 marker was found **nowhere** (the single source lost all its sync sites).
 
-There is no build, test, dev, or deploy command.
+There is no build, dev, or deploy command. The one test command is the segment stub runner in the
+table above. It is not part of the `lint-cmd` chain; run it as well after changing anything under
+`workflows/`, and it runs in the same CI workflow.
 
 ## Architecture
 
@@ -69,6 +72,7 @@ There is no build, test, dev, or deploy command.
 | `workflows/<skill>.<segment>.workflow.js` | native Workflow segment; the naming pattern is fixed |
 | `workflows/_reference/` | reference documents (`schemas.md`, `study_measurements.md`), not scripts |
 | `scripts/` | the 6 self-consistency lints |
+| `tests/segment_stubs/` | behavioural tests for the Workflow segments — `engine.mjs` (stand-ins for the engine globals, with the assumptions it encodes in its header), `cases.mjs`, `run.mjs`, and `known_failures.json`, a two-way ratchet: an unlisted failure fails the run, and so does a listed case that starts passing |
 | `docs/` | gitignored runtime output of 13 skills |
 | `design/<epic>/` | committed design records for follow-up epics — spec plus the measurement evidence it rests on. Outside `SCAN_DIRS`, so no lint reads them; that is why a forward-looking `§Step` citation here does not turn a lint red |
 | `README.md` | 1,100+ lines including `### Repository Layout`; keep it in sync when a skill's surface changes |
@@ -137,7 +141,8 @@ frontmatter is the plugin's exposure contract, so treat it as part of the skill'
 ## Verification
 
 The six lints under `scripts/`, plus `.github/scripts/check_lint_wiring.sh` and the CI wiring
-in `.github/workflows/lint.yml`, are the entire verification layer:
+in `.github/workflows/lint.yml`, are the entire **static** verification layer (the segment stub tests under `tests/segment_stubs/`
+are the only behavioural one, and they cover the Workflow segments only):
 
 - `verify_sync_markers.py` — SYNC group referential integrity, `min_sites` occurrence floor, and
   token consistency; **plus** a section-reference check over `SECTION_REF_TARGETS`, which now
