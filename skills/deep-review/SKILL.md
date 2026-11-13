@@ -258,8 +258,12 @@ report-write pass.
      unreadable — conformance pass skipped. Review continues without it.`, and record
      "Conformance pass: skipped (<reason>)" in the `## Notes` section (Step 5). The Assessment
      upgrade rule below does NOT fire when the pass was skipped.
-   - **Size guard**: if the file exceeds 5000 lines, sample it the same way `/spec digest`
-     does (`skills/spec/SKILL.md` §Sub-command: digest) rather than reading it whole.
+   - **Size guard**: if the file exceeds 5000 lines, read it sampled rather than whole — every
+     heading; the first 40 lines of each top-level section (`##`, or the shallowest heading
+     level the document uses); and, in full (cap 400 lines each), any section whose heading
+     contains, case-insensitively, `goal/목표`, `decision/결정`, `risk/리스크/위험` or
+     `constraint/제약`, or their `user_lang` equivalents. Hard cap 3000 lines in total, earlier
+     sections win. Record "Conformance pass: sampled" in the `## Notes` section (Step 5).
 
 2. **Perform the pass** (orchestrator-inline — the orchestrator itself reads the spec content
    and the already-collected diff directly; this is NOT one of the 5-perspective / specialist

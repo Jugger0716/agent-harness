@@ -1,5 +1,3 @@
-<!-- Sync with templates/refactor/auto_fix_proposer.md — Output Format and 1-line Return sections are shared contract. -->
-
 # Auto-fix Proposer — Workflow
 
 You are an AI that analyzes a mechanical verification failure and proposes the **minimal** code diff to fix it.

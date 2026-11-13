@@ -374,7 +374,7 @@ A pointer kept for existing citations: a `--fast` session renders §Approval Gat
 
 `/harness doctor` — read-only environment diagnostic, reached only through the carve-out at the top of §Session Recovery. No arguments; it neither reads nor writes `.harness/state.json`, creates no branch, resolves no Mode Gate, dispatches nothing, prints no §Session Boundary block, and writes nothing anywhere — not `.harness/`, not `docs/`, not `.gitignore`, not either installed plugin copy. Every path it probes is a fixed constant or resolved at run time from `${CLAUDE_PLUGIN_ROOT}` and `git rev-parse --show-toplevel`.
 
-**Procedure:** read `{CLAUDE_PLUGIN_ROOT}/templates/harness/doctor.md` and follow it verbatim — the two known install locations, the six items (① installed-copy CR contamination, ② Workflow tool availability, ③ git work tree, ④ version and content drift, ⑤ team-memory store ignore state, ⑥ project defaults), each item's `✓` / `⚠` / `—` contract and remediation, and the output block. Render per `templates/_shared/status_format.md` with the prefix `[harness doctor]`. A green ① or ④ says the copies on disk are current, not that this process loaded its skill body from them.
+**Procedure:** read `{CLAUDE_PLUGIN_ROOT}/templates/harness/doctor.md` and follow it verbatim — the two known install locations, the five items (① installed-copy CR contamination, ② Workflow tool availability, ③ git work tree, ④ version and content drift, ⑤ project defaults), each item's `✓` / `⚠` / `—` contract and remediation, and the output block. Render per `templates/_shared/status_format.md` with the prefix `[harness doctor]`. A green ① or ④ says the copies on disk are current, not that this process loaded its skill body from them.
 
 ## Model Selection
 

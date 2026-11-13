@@ -54,20 +54,20 @@ Never modify: `.git/`, `node_modules/`, `vendor/`, `dist/`, `build/`, `__pycache
 
 | State | Recommendation | Action |
 |-------|---------------|--------|
-| No .md files found | **Generate instead** | Use AskUserQuestion with situation context |
-| Only CLAUDE.md exists and < 500 bytes | **Generate instead** | Use AskUserQuestion with situation context |
+| No .md files found | **Nothing to optimize** | Stop without asking: print (in `user_lang`) that there is nothing to optimize and that the built-in `/init` creates a CLAUDE.md |
+| Only CLAUDE.md exists and < 500 bytes | **Create CLAUDE.md first** | Use AskUserQuestion with situation context |
 | CLAUDE.md exists and is comprehensive, .md files have redundancy | **Optimize** | Proceed with md-optimize (this skill) |
-| CLAUDE.md is thin but other .md files are substantial | **Generate then optimize** | Use AskUserQuestion with situation context |
-| No CLAUDE.md but other .md files exist | **Generate then optimize** | Use AskUserQuestion with situation context |
+| CLAUDE.md is thin but other .md files are substantial | **Create CLAUDE.md first** | Use AskUserQuestion with situation context |
+| No CLAUDE.md but other .md files exist | **Create CLAUDE.md first** | Use AskUserQuestion with situation context |
 
-When the recommendation is not "Optimize" (i.e., generation may be needed), ask the user using AskUserQuestion (in `user_lang`):
+When the recommendation is "Create CLAUDE.md first", ask the user using AskUserQuestion (in `user_lang`):
   header: "Routing"
-  question: "[situation description]. CLAUDE.md generation may be needed first."
+  question: "[situation description]. A fuller CLAUDE.md may be needed first."
   options:
-    - label: "Switch: /md-generate" / description: "Run /md-generate first, then re-run /md-optimize"
+    - label: "Stop" / description: "Create CLAUDE.md first (the built-in /init does this), then re-run /md-optimize"
     - label: "Continue" / description: "Proceed with optimization as-is"
 
-If user selects "Switch: /md-generate": halt this skill. The user should then invoke `/md-generate` manually.
+If user selects "Stop": halt this skill. The user creates or extends CLAUDE.md (the built-in `/init` does this) and re-runs `/md-optimize`.
 If user selects "Continue": proceed with optimization.
 
 4. Estimate token count per file: `bytes / 4` for ASCII, `bytes / 3` for CJK-heavy content. Note: these are rough estimates; actual tokenization varies.
