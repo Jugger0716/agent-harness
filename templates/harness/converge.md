@@ -15,10 +15,9 @@
   starts the next run starts it afresh, and the round number is never persisted.
 - **Round** — review → verify and classify → exit check → apply (the last step only when the
   round does not end the run).
-- **Loop-skipping session** — a session whose `plan_critic` record is a skip:
-  `source == "fast"` or `source == "carried_over"`, the two `skills/harness/SKILL.md` §Step 2.6
-  branches that write `applied = "skipped"` instead of running (`--fast`, and the /spec critique
-  `{docs_path}critic_findings.md` existing). It has no run, and a spec.md write in it is only
+- **Loop-skipping session** — a session whose `plan_critic` record is a skip
+  (`applied == "skipped"`): the `--fast` branch of `skills/harness/SKILL.md` §Step 2.6 writes one
+  instead of running. It has no run, and a spec.md write in it is only
   the `spec_stamp` write protocol (`skills/harness/SKILL.md` §Step 2) — no snapshot. An
   explicit `/harness --critic` ("Run Critic anyway" at the gate's row ③) is still a run; its
   mapping writes `source = "own"`, and the session stops being loop-skipping from then on.

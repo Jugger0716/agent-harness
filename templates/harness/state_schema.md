@@ -30,7 +30,7 @@
 
 | Field | Default | Written by |
 |---|---|---|
-| `plan_critic.applied` (`"executed"` / `"skipped"` / `"failed"`), `.round`, `.last_findings_path`, `.failure_reason`, `.source` (`"own"` / `"carried_over"` / `"fast"`), `.counts` (`{critical, major, minor}`, lowercase — `CriticReport.counts`; after a converge run, the residual counts), `.spec_stamp_at_critic` (`{generation, lines}`) | `null` each | §Step 2.6 (all 7 fields in one write — after a converge run, its mapping) |
+| `plan_critic.applied` (`"executed"` / `"skipped"` / `"failed"`), `.round`, `.last_findings_path`, `.failure_reason`, `.source` (`"own"` / `"fast"`), `.counts` (`{critical, major, minor}`, lowercase — `CriticReport.counts`; after a converge run, the residual counts), `.spec_stamp_at_critic` (`{generation, lines}`) | `null` each | §Step 2.6 (all 7 fields in one write — after a converge run, its mapping) |
 | `converge.status` (`"running"` / `"converged"` / `"capped"` / `"failed"`), `converge.runs` (integer, cumulative per session), `converge.rounds` (integer, cumulative completed rounds) | `null` each (`runs` / `rounds` read as 0) | `templates/harness/converge.md` — `status` = `"running"` and `runs += 1` at a run's start (one write, alone); the terminal `status` and `rounds` in §Step 2.6's mapping write (branch (ii): `status = "failed"` alone) |
 | `spec_stamp` (`{generation, lines}`) | `null` | every `spec.md` write site, via §Step 2's `spec_stamp` write protocol (and §Session Recovery's re-stamp, the same protocol around an unchanged file) |
 | `scale.signals` / `scale.slice_hint` / `scale.override` | `null` | §Scale Assessment compute site |
