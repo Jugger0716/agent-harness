@@ -7,14 +7,17 @@ tells it to run one of the commands below is a data-loss path, because each of t
 discards or moves work the user has not committed:
 
   git checkout -- <path>   discards uncommitted edits; cannot restore an untracked file
-  git stash  (bare)        moves the uncommitted implementation OUT of the working tree
-  reset --hard             discards uncommitted and, with a ref, committed work
-  clean -f                 deletes untracked files
+  git checkout .           the same, without the `--`
+  git restore <path>       the same (only `git restore --staged`, which unstages, is let through)
+  git stash                bare or `push`: moves the uncommitted implementation OUT of the
+                           working tree. `drop`: destroys a stash entry
+  reset ... --hard         discards uncommitted and, with a ref, committed work
+  clean -f / --force       deletes untracked files (any flag cluster containing `f`)
 
-`git stash` followed by an explicit sub-command (push / pop / apply / list / show / drop)
-is not matched: the hazard this lint exists for is the bare form used as a "snapshot",
-which is what the auto-fix step did until v9 (appendix A defect K1 of
-design/v9-subtraction/SPEC.md) and what md-optimize's recovery advice relied on (W3).
+`git stash` followed by pop / apply / list / show is not matched: those bring work back or
+only look. The hazard this lint exists for is the stash used as a "snapshot", which is what
+the auto-fix step did until v9 (appendix A defect K1 of design/v9-subtraction/SPEC.md) and
+what md-optimize's recovery advice relied on (W3).
 
 What this does not check:
   * It reads text, not intent. A sentence that describes the hazard in order to warn
@@ -24,8 +27,11 @@ What this does not check:
   * It scans skills/, templates/ and workflows/ only. README.md, CLAUDE.md, design/
     and .gitattributes are documentation about this repository, not text a skill
     executes, and are not scanned.
-  * It cannot see a command assembled at run time or spelled another way
-    (`git restore --source`, `git checkout HEAD -- .` with different spacing).
+  * It matches one line at a time: a command broken across two lines is not seen.
+  * It cannot see a command assembled at run time, an alias, or another tool that does
+    the same thing (`rm -rf`, a script that calls git). `git checkout <ref> -- <path>`
+    is matched through its `-- `; `git checkout <ref>` (a branch switch) is not, and
+    should not be.
 
 Exit codes:
   0  no forbidden command found
@@ -51,10 +57,14 @@ SCAN_DIRS = ["skills", "templates", "workflows"]
 SCAN_SUFFIXES = {".md", ".js"}
 
 FORBIDDEN = [
-    ("git checkout -- ", re.compile(r"git checkout -- ")),
-    ("bare git stash", re.compile(r"git stash(?!\s+(?:push|pop|apply|list|show|drop)\b)")),
-    ("reset --hard", re.compile(r"reset --hard")),
-    ("clean -f", re.compile(r"clean -f")),
+    # `git checkout -- <path>`, and `git checkout .` which is the same thing without the `--`
+    ("git checkout -- ", re.compile(r"git\s+checkout\s+(?:--\s|\.(?![\w/]))")),
+    # a worktree restore discards uncommitted edits; `--staged` alone only unstages
+    ("git restore (worktree)", re.compile(r"git\s+restore\s+(?!--staged\b)")),
+    # bare, `push` (the same command spelled out) and `drop` (destroys a stash entry)
+    ("git stash (bare / push / drop)", re.compile(r"git\s+stash(?!\s+(?:pop|apply|list|show)\b)")),
+    ("reset --hard", re.compile(r"\breset\b[^\n`]*--hard\b")),
+    ("clean -f", re.compile(r"\bclean\b(?:\s+-{1,2}[A-Za-z-]+)*?\s+(?:-[A-Za-z]*f[A-Za-z]*|--force)\b")),
 ]
 
 # (repo-relative path, literal the line must contain) -> why the line is not an instruction.

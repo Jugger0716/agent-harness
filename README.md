@@ -289,7 +289,7 @@ Inspired by Anthropic's [Advisor Strategy](https://claude.com/blog/the-advisor-s
 - **Advisor**: high-level judgment — plan review, safety checks (quality model needed)
 - **Evaluator**: independent verification — always protected (never haiku)
 
-Works with: harness, refactor, migrate, debug, spec, test-gen, deep-review, codebase-audit. Presets are selected via numbered UI (AskUserQuestion) with `Other` for custom role mapping. The interactive picker holds 4 presets (default / frontier / balanced / economy — AskUserQuestion limit); `all-opus` stays available via `--model-config all-opus` or `Other`. Judgment-type sub-agents (cross-verification, critic, evaluator) map to the evaluator role — pre-8.7 presets keep identical advisor/evaluator cells, so only `frontier` differentiates them.
+Works with: harness, deep-review. Presets are selected via numbered UI (AskUserQuestion) with `Other` for custom role mapping. The interactive picker holds 4 presets (default / frontier / balanced / economy — AskUserQuestion limit); `all-opus` stays available via `--model-config all-opus` or `Other`. Judgment-type sub-agents (cross-verification, critic, evaluator) map to the evaluator role — pre-8.7 presets keep identical advisor/evaluator cells, so only `frontier` differentiates them.
 
 ### Project Defaults (persistent opt-in)
 
@@ -306,8 +306,8 @@ can live in three places — the first source that declares it wins wholesale:
 3. **`~/.claude/CLAUDE.md`** — personal machine-wide fallback for all projects.
 
 - `path=workflow` is a standing opt-in — the Mode Gate resolves the workflow path at the skill's ultracode-target tier without ultracode or `--mode` (§Path Transparency reason: `project default (<source>)`); `path=inline` pins the inline path.
-- `model-config=<preset>` replaces the interactive model picker when no `--model-config` flag is given (echoed as `(project default)` in the Setup Summary). Without a flag AND without a defaults line, behavior is unchanged: skills that dispatch sub-agents ask via AskUserQuestion (exception: test-gen has no picker — it silently uses the `default` preset).
-- **`lint-cmd`** / **`type-check-cmd`** — a shell command, wrapped in backticks on the defaults line (e.g. ``lint-cmd=`npm run lint && npm run typecheck` ``) — consumed by `/harness` when the flag is absent, and BEFORE auto-detection, so a repository whose lint lives only in its own docs (this one: seven commands in `CLAUDE.md`, matching no detection row) still gets a real Layer 1. The backticks are what let `&&`, commas and `=` inside the command survive the `key=value` parse; the value is echoed `(project default)` in the Setup Summary. Skills that do not consume a key ignore it silently.
+- `model-config=<preset>` replaces the interactive model picker when no `--model-config` flag is given (echoed as `(project default)` in the Setup Summary). Without a flag AND without a defaults line, behavior is unchanged: skills that dispatch sub-agents ask via AskUserQuestion.
+- **`lint-cmd`** / **`type-check-cmd`** — a shell command, wrapped in backticks on the defaults line (e.g. ``lint-cmd=`npm run lint && npm run typecheck` ``) — consumed by `/harness` when the flag is absent, and BEFORE auto-detection, so a repository whose lint lives only in its own docs (this one: a lint chain declared in `CLAUDE.md`, matching no detection row) still gets a real Layer 1. The backticks are what let `&&`, commas and `=` inside the command survive the `key=value` parse; the value is echoed `(project default)` in the Setup Summary. Skills that do not consume a key ignore it silently.
 - **`gate=inline|separate`** (`/harness` only) — standing default for where HARD GATE #1 renders. The default is `inline`: `/harness` asks for approval in the same session (one label click) and chains into `/harness-build`. `gate=separate` behaves like `--separate-gate`: the session ends at `plan_done` with `Next → /harness-gate`, the tool-less gate whose turn can write nothing. Resolution order: `--fast` (always inline; `--fast` with `--separate-gate` halts) > `--separate-gate` > project default `gate=` > inline. Echoed in the Setup Summary `Gate` row. A slice `Command` never carries `--separate-gate`, so this key is how an epic's slices stay separate.
 - **`cold-pass=on|off`** (`/harness` only) — standing default for the cold-review pass. Resolution order: `--no-cold-pass` > `--fast` > project default `cold-pass=off` > `on`. Echoed in the Setup Summary `Cold` row; when off via this key, that row's `(<why>)` reads `project default (<source>)`.
 - Session input always wins: explicit flags override the line, `--mode single/quick` still forces inline, and invalid values warn once and are ignored (never a halt).
@@ -645,19 +645,7 @@ the case in this repository itself) — the file still remains on disk.
 
 ### Plugin Compatibility
 
-The harness discovers skills by **capability keyword** (e.g. "brainstorming", "tdd", "code-review"), not by plugin name. It works with any installed plugin that provides matching skills:
-
-| Phase | Searches for | Example matches |
-|-------|-------------|-----------------|
-| Planner | "brainstorming", "ideation" | superpowers:brainstorming, any brainstorming skill |
-| Planner | "writing-plans", "plan" | superpowers:writing-plans, any planning skill |
-| Generator | "test-driven-development", "tdd" | superpowers:test-driven-development |
-| Generator | "subagent-driven-development", "parallel-tasks" | superpowers:subagent-driven-development |
-| Evaluator | "systematic-debugging", "debugging" | superpowers:systematic-debugging |
-| Evaluator | "requesting-code-review", "code-review" | superpowers:requesting-code-review |
-| Evaluator | "verification-before-completion", "verification" | superpowers:verification-before-completion |
-
-If no matching skill is found, the harness proceeds without it. No specific plugin is required.
+The harness needs no other plugin and does not look for one. Until v9 its prompts told the orchestrator and its sub-agents to search installed skills by keyword ("tdd", "code-review", "brainstorming", …) and invoke whatever matched, so behaviour and cost depended on what else happened to be installed. That lookup is removed. Other plugins' skills keep working alongside the harness, and you can invoke them yourself at any point.
 
 ---
 
@@ -691,7 +679,7 @@ Key properties: stateless (no state.json of its own), inline-only for its own wo
 
 ## deep-review
 
-A standalone review skill that performs systematic, bias-free code reviews on PRs, branches, commits, or file diffs. *(formerly `/code-review` — renamed to end the literal collision with Claude Code's built-in `/code-review`; the old name remains as a deprecation alias that forwards here.)*
+A standalone review skill that performs systematic, bias-free code reviews on PRs, branches, commits, or file diffs. *(formerly `/code-review` — renamed to end the literal collision with Claude Code's built-in `/code-review`; v9 removed the forwarding alias.)*
 
 ```
 /deep-review #123                    # review a PR (quick inline; ultracode -> thorough)

@@ -367,11 +367,11 @@ Expected: 린트 exit 0. 스텁 테스트 마지막 줄 `7 pass, 23 known-fail, 
 
 ```bash
 export MSYS_NO_PATHCONV=1
-git grep -n -E '(^|[^A-Za-z0-9_./-])/(spec|refactor|migrate|test-gen|study|team-memory|codebase-audit|md-generate|debug|ship|memory|workflow)([^A-Za-z0-9_/.-]|$)' -- . ':!CHANGELOG.md' ':!ROADMAP.md' ':!design'
-git grep -n -E '(skills|templates)/(spec|refactor|migrate|test-gen|study|team-memory|codebase-audit|md-generate|debug|ship|code-review|memory|workflow)/|workflows/(spec|refactor|migrate|test-gen|study|codebase-audit|debug)\.' -- . ':!CHANGELOG.md' ':!ROADMAP.md' ':!design'
+git grep -n -E '(^|[^A-Za-z0-9_./-])/(spec|refactor|migrate|test-gen|study|team-memory|codebase-audit|md-generate|debug|ship|memory|workflow)([^A-Za-z0-9_/.-]|\.([^A-Za-z0-9]|$)|$)' -- . ':!CHANGELOG.md' ':!ROADMAP.md' ':!design' ':!scripts/verify_sync_markers.py'
+git grep -n -E '(skills|templates)/(spec|refactor|migrate|test-gen|study|team-memory|codebase-audit|md-generate|debug|ship|code-review|memory|workflow)/|workflows/(spec|refactor|migrate|test-gen|study|codebase-audit|debug)\.' -- . ':!CHANGELOG.md' ':!ROADMAP.md' ':!design' ':!scripts/verify_sync_markers.py'
 ```
 
-`/code-review`는 검사에 넣지 않는다. 내장 명령의 이름이고 deep-review가 그것을 가리킨다.
+`/code-review`는 검사에 넣지 않는다. 내장 명령의 이름이고 deep-review가 그것을 가리킨다. `scripts/verify_sync_markers.py`는 뺀다 — 고정값을 어떻게 쟀는지 적은 날짜 붙은 이력 주석이 삭제된 스킬을 이름으로 든다. 토큰 뒤에 마침표가 오는 경우(`/spec.`)도 잡도록 끝 조건을 넓혔다: 처음 식은 그 경우를 놓쳤고 브랜치 리뷰에서 1건이 나왔다.
 
 - [ ] **Step 2: 템플릿·레퍼런스·스킬 본문을 고친다**
 

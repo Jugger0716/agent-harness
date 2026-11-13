@@ -195,8 +195,9 @@ are the only behavioural one, and they cover the Workflow segments only):
   characters. It exists because Claude Code caps the skill listing at a share of the context
   window and, when that overflows, drops the descriptions of least-used skills while keeping
   every name — a failure with no message to the user.
-- `verify_git_safety.py` — forbids `git checkout -- `, a bare `git stash`, `reset --hard` and
-  `clean -f` in `skills/`, `templates/` and `workflows/`: text a model follows must not tell it to
+- `verify_git_safety.py` — forbids `git checkout -- ` / `git checkout .`, a worktree `git restore`,
+  `git stash` (bare, `push`, `drop`), `reset … --hard` and `clean -f` / `--force` in `skills/`,
+  `templates/` and `workflows/`: text a model follows must not tell it to
   discard or move uncommitted work. It reads text, not intent, so a sentence that only warns about
   one of them goes in its zero-slack `ALLOW` table with the reason.
 - `verify_cited_paths.py` — every `skills/…`, `templates/…`, `workflows/…` or `scripts/…` file path

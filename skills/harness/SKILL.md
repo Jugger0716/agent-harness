@@ -224,7 +224,7 @@ On the WORKFLOW path the same machine applies; `harness.eval` covers verifying�
 
 *Runs after Setup and before Plan, in all modes and on both paths.*
 
-**Persisted Spec Artifacts Check** — before the richness check, look for `{docs_path}conventions.md` (left there by an earlier run or placed by hand; `{docs_path}` comes from state.json — §Step 1 item 7):
+**Persisted Spec Artifacts Check** — before the richness check, look for `{docs_path}conventions.md` (placed there by hand, or written by a run before v9; `{docs_path}` comes from state.json — §Step 1 item 7):
 
 | `state.conventions` | `.harness/conventions.md` | `{docs_path}conventions.md` | Action |
 |---|---|---|---|
@@ -254,7 +254,7 @@ On the WORKFLOW path the same machine applies; `harness.eval` covers verifying�
 
 Update state.json: `phase → "plan_ready"`, `updated_at → now`. Print `[harness] Phase: Plan`
 
-**Discovery Notes Injection — both paths:** before the plan dispatch/segment, read `qa_discovery_notes` (the content of `{docs_path}qa_notes.md`) and `critic_findings` (the content of `{docs_path}critic_findings.md`). Missing → `""` silently — a fresh run with no preceding /spec. **(s2)** Present but unreadable → warn (in `user_lang`) "Failed to read `{path}`: <error>. Discovery Notes will be empty for planner injection.", fall back to `""`, never abort. **(m4)** This applies ONLY to initial proposal inputs — the inline `planner_single.md` dispatch and the `harness.plan` segment `args`. Synthesis already receives proposals that incorporate it; never double-inject downstream.
+**Discovery Notes Injection — both paths:** before the plan dispatch/segment, read `qa_discovery_notes` (the content of `{docs_path}qa_notes.md`) and `critic_findings` (the content of `{docs_path}critic_findings.md`). Missing → `""` silently — the usual case; nothing in this plugin writes either file. **(s2)** Present but unreadable → warn (in `user_lang`) "Failed to read `{path}`: <error>. Discovery Notes will be empty for planner injection.", fall back to `""`, never abort. **(m4)** This applies ONLY to initial proposal inputs — the inline `planner_single.md` dispatch and the `harness.plan` segment `args`. Synthesis already receives proposals that incorporate it; never double-inject downstream.
 
 **`spec_stamp` write protocol (single source — every site that writes `{docs_path}spec.md` cites it by name and none restates it: §Step 2 — INLINE path, §Step 2 — WORKFLOW path and its Auto-revise re-entry, §Gate re-entry flags' `--modify`, §Approval Gate's "Modify" (every variant), `skills/harness-gate/SKILL.md` §Step 3's "Modify" option, and the converge loop's write events — a round apply, a decision apply and §Session Recovery's re-stamp, `templates/harness/converge.md` §Write Events):** three ordered steps, **invalidate first**.
 
@@ -411,7 +411,6 @@ Call sites: `--output-dir` parsing (`skills/harness/SKILL.md` §Step 1 item 2, `
 - **Evaluator must be isolated.** Anchor-free input, never Generator reasoning.
 - **Planner proposals must be independent.** Never share one persona's work with another during proposal; the plan segment's `parallel()` enforces this.
 - **Generator advisors review the plan, not code.** Advisory before implementation.
-- **Use available skills.** Search by keyword, not plugin name; proceed without if none is found.
 - **User language.** All user-facing output in `user_lang` per §Output Language Contract; Glossary tokens and parser keywords stay English raw.
 - **Ad-hoc dispatch.** Any sub-agent or Workflow script created during this skill WITHOUT a shipped template follows `templates/_shared/adhoc_dispatch.md` §Ad-hoc Dispatch Contract — an explicit output-language directive (schema free-text field descriptions carry `(in {user_lang})`) and role-based model routing (mechanical → executor tier, judgment → evaluator tier, never above).
 <!-- SYNC-WITH: templates/_shared/adhoc_dispatch.md §Ad-hoc Dispatch Contract -->

@@ -38,6 +38,14 @@ Never modify: `.git/`, `.harness/`, `node_modules/`, `vendor/`, `dist/`, `build/
        - label: "Abort" / description: "Stop and commit/stash first"
    On "Abort": halt. On "Continue": proceed.
 3. Search all `.md` files for the idempotency marker `<!-- managed by md-optimize -->`. If CLAUDE.md contains this marker, inform user: "This project was previously optimized. Re-running will refresh the optimization." Proceed normally (marker ensures idempotency).
+4. **Leftover backup.** If `.harness/md-optimize/manifest.txt` exists, an earlier run was interrupted before it could finish or restore, and that backup holds the only pre-run copy of the files it edited. Ask the user using AskUserQuestion (in `user_lang`):
+     header: "Backup"
+     question: "An interrupted md-optimize run left a backup. Restore the files to their pre-run state first?"
+     options:
+       - label: "Restore" / description: "Put every backed-up file back, remove files that run created, then continue"
+       - label: "Discard" / description: "Keep the files as they are now and delete the old backup"
+       - label: "Abort" / description: "Stop; change nothing"
+   On "Restore": restore by the manifest exactly as §Phase 3 describes for a failed step, delete `.harness/md-optimize/`, continue. On "Discard": delete `.harness/md-optimize/`, continue. On "Abort": halt. Never start Phase 3 while that manifest exists.
 
 ### 1b. Smart Routing & Markdown Inventory
 
@@ -120,6 +128,7 @@ Before any write, and with or without git — no `git` command is involved, so u
 - For each file Phase 3 will edit or delete, copy its current bytes to `.harness/md-optimize/backup/<path>` and append `modified <path>` to `.harness/md-optimize/manifest.txt`.
 - Each time a later step creates a file that did not exist, append `created <path>` to the manifest.
 - Phase 4d fixes follow the same two rules: back up a file before its first edit, record a file when it is created.
+- Never overwrite a backup copy. A path that already has a copy under `.harness/md-optimize/backup/` keeps that first copy, and a path already in the manifest is not appended again — the first copy is the pre-run state; a later one would be a half-edited file.
 
 ### Step 3a: Create/Update Split Files
 
