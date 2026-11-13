@@ -17,7 +17,7 @@ Detect the user's language from their **most recent message**. Store as `user_la
 
 ## Exclusion List
 
-Never modify: `.git/`, `node_modules/`, `vendor/`, `dist/`, `build/`, `__pycache__/`, `.venv/`, `*.lock`, `.next/`, `.nuxt/`, `coverage/`, `.turbo/`, `.cache/`, `CHANGELOG.md`, `LICENSE.md`, `LICENSE`.
+Never modify: `.git/`, `.harness/`, `node_modules/`, `vendor/`, `dist/`, `build/`, `__pycache__/`, `.venv/`, `*.lock`, `.next/`, `.nuxt/`, `coverage/`, `.turbo/`, `.cache/`, `CHANGELOG.md`, `LICENSE.md`, `LICENSE`.
 
 ## Phase 1: Analysis
 
@@ -25,9 +25,9 @@ Never modify: `.git/`, `node_modules/`, `vendor/`, `dist/`, `build/`, `__pycache
 
 1. Run `git status` in CWD. If not a git repo, ask the user using AskUserQuestion (in `user_lang`):
      header: "Git Warning"
-     question: "This project is not managed by git. Automatic rollback not possible."
+     question: "This project is not managed by git. md-optimize backs up every file it edits for the length of this run, but nothing protects the result afterwards."
      options:
-       - label: "Proceed" / description: "Continue without git safety net"
+       - label: "Proceed" / description: "Continue with the run-length backup only"
        - label: "Abort" / description: "Stop and set up git first"
    On "Abort": halt. On "Proceed": continue.
 2. Check for uncommitted changes. If found, ask the user using AskUserQuestion (in `user_lang`):
@@ -94,7 +94,7 @@ Present to the user (in `user_lang`):
 
 1. **Inline Zone preview**: Bulleted list of rules/conventions that will remain in CLAUDE.md body
 2. **Index Zone preview**: Table of `| File | Path | Summary |` entries that will become index references
-3. **Duplicate list**: Files identified as exact/near duplicates and proposed action (merge/remove)
+3. **Duplicate list**: Files identified as exact/near duplicates — reported only; md-optimize does not delete duplicate files
 4. **Estimated savings**: `(current_total_tokens - projected_total_tokens) / current_total_tokens * 100`%
 
 Ask for explicit confirmation using AskUserQuestion (in `user_lang`):
@@ -112,7 +112,14 @@ Only "Proceed" advances to Phase 3.
 
 ## Phase 3: Execution (Sequential with Completion Check)
 
-Execute in strict order. After each step, verify the output file exists and is non-empty. If any step fails, stop and advise: "Step N failed. Run `git checkout -- .` to restore all files, then retry."
+Execute in strict order. After each step, verify the output file exists and is non-empty. If any step fails, stop and restore from the Step 3.0 backup by its manifest — copy every `modified` path back from `.harness/md-optimize/backup/`, delete every `created` path — then print the restored paths and "Step N failed — files restored to their pre-run state." Delete `.harness/md-optimize/` once the restore has succeeded; if the restore itself fails, keep it and print its path.
+
+### Step 3.0: Backup
+
+Before any write, and with or without git — no `git` command is involved, so untracked and uncommitted files are covered:
+- For each file Phase 3 will edit or delete, copy its current bytes to `.harness/md-optimize/backup/<path>` and append `modified <path>` to `.harness/md-optimize/manifest.txt`.
+- Each time a later step creates a file that did not exist, append `created <path>` to the manifest.
+- Phase 4d fixes follow the same two rules: back up a file before its first edit, record a file when it is created.
 
 ### Step 3a: Create/Update Split Files
 
@@ -146,9 +153,9 @@ For files whose content was fully migrated to CLAUDE.md Inline Zone or merged in
 - Delete only if 100% of content is preserved elsewhere
 - Never delete files that contain non-migrated content
 
-### Step 3d: Remove Duplicates
+### Step 3d: Report Duplicates
 
-Delete exact-duplicate files (keep the one with the shortest path or most canonical name). Update any references to deleted files in remaining `.md` files.
+Do NOT delete duplicate files. A copy that looks redundant may be read by a tool or referenced from a non-markdown file this skill never scans. List each group of exact duplicates (and each near-duplicate pair from 1c) for the Phase 5 report and leave every file in place.
 
 ## Phase 4: Evaluator (Isolated Sub-Agent)
 
@@ -162,7 +169,7 @@ Launch an isolated sub-agent with the following brief:
 
 The sub-agent receives:
 - The optimized CLAUDE.md and all modified/created .md files
-- The git diff of all changes (before vs after)
+- The git diff of all changes (before vs after), and the pre-run bytes of every edited or deleted file under `.harness/md-optimize/backup/` — the diff does not show untracked files
 - Full read access to the project files
 - No Phase 1 analysis results, no optimizer reasoning
 
@@ -172,7 +179,7 @@ The sub-agent checks each criterion and scores PASS / ISSUE:
 
 | Criterion | Check | Method |
 |-----------|-------|--------|
-| **Content preservation** | No semantic information was lost during optimization | Compare git diff — every deleted line's meaning must exist in the new structure |
+| **Content preservation** | No semantic information was lost during optimization | Compare each file under `.harness/md-optimize/backup/` with its current state (the git diff alone misses untracked files) — every removed line's meaning must exist in the new structure |
 | **Zone correctness** | Inline items are truly must-know rules; Index items are truly reference material | Review each Inline item for constraint keywords; review each Index item for reference nature |
 | **Path integrity** | Every path in Reference Index exists and is readable | Verify each path |
 | **Gitignore safety** | No path in Reference Index or relative `.md`/directory reference inside the Inline Zone is gitignored | Sub-agent runs `git rev-parse --is-inside-work-tree` itself (preserving the isolation contract — no Phase 1 results passed in), then for each path runs `git check-ignore --quiet <path>`, interpreting the result per the gitignore exit-code semantics in the Phase 1b section (0=ignored, 1=not-ignored, 128=fatal): ignored → ISSUE; not-ignored → OK; fatal → surface error. See Phase 1b sub-step for command alternatives. Non-git repo → N/A → PASS |
@@ -221,14 +228,15 @@ Print final report (in `user_lang`):
 [md-optimize] Optimization Complete
   Files scanned    : N
   Files modified   : N
-  Files deleted    : N (duplicates/merged)
+  Files deleted    : N (fully migrated originals)
+  Duplicates       : N group(s) reported, none deleted
   Inline rules     : N items
   Index references : N entries
   Evaluator        : PASS | REVISED (N issues fixed)
   Token estimate   : before → after (−X%)
 ```
 
-If any evaluation criterion has unresolved issues, append warnings.
+If any evaluation criterion has unresolved issues, append warnings. List the duplicate groups Step 3d collected. Then delete `.harness/md-optimize/` — the backup lasts for the run only.
 
 ## Safety Rules
 
@@ -236,7 +244,7 @@ If any evaluation criterion has unresolved issues, append warnings.
 - **Gitignore-aware**: Files matched by `.gitignore` are excluded from scanning, indexing, and migration (see the Phase 1b section for exit-code handling and detection mechanics). Including a gitignored path in the committed CLAUDE.md Reference Index produces broken references for collaborators and CI environments where the file does not exist. When this rule conflicts with the Sub-CLAUDE.md rule below (a gitignored sub-directory contains its own `CLAUDE.md`), Gitignore-aware takes precedence — the gitignored CLAUDE.md is excluded from the Reference Index, since including it would create a broken reference in the committed parent CLAUDE.md. If the project is not a git repo, this rule is N/A and the hardcoded Exclusion List is the only filter.
 - **Idempotency**: `<!-- managed by md-optimize -->` marker prevents re-processing conflicts. On re-run, refresh existing optimization rather than duplicating.
 - **No data loss**: Never delete content without verifying it exists elsewhere. When in doubt, keep the original.
-- **Sequential execution**: Phase 3 steps run in order (a→b→c→d). Not atomic — on failure, guide user to `git checkout` for recovery.
+- **Sequential execution**: Phase 3 steps run in order (3.0→a→b→c→d). Not atomic — on failure, restore from the Step 3.0 backup by its manifest (§Phase 3).
 - **Scope boundary**: Only modify `.md` files. Never modify source code, configs, or non-markdown files.
 - **Sub-CLAUDE.md**: If subdirectories contain their own `CLAUDE.md`, treat as separate Inline Zones — do not merge into root CLAUDE.md. Add them to the Reference Index instead.
 - **Batch sizing**: Process files in batches of min(10, file_count/3). Adjust based on average file size — larger files get smaller batches.
