@@ -118,40 +118,22 @@ matches what you are measuring; they are not interchangeable.
 
 | Skill | Command | Description |
 |-------|---------|-------------|
-| **Harness** | `/harness <task>` | Entry point of the 3-Phase (Planner -> Generator -> Evaluator) pipeline: Setup, Convention Scan, Plan, then a Plan Critic converge loop over `spec.md`; every session ends at `plan_done`, where by default HARD GATE #1 is one in-session approval question whose approval chains into `/harness-build` in the same turn (`--separate-gate`: `Next → /harness-gate` instead). Inline single path by default; opt-in workflow path (ultracode or `--mode standard/multi`) runs plugin-shipped native Workflow segment scripts with schema-validated returns. Works with or without git. _(formerly `/workflow` — old name kept as a deprecation alias)_ `/harness doctor` gives a read-only environment diagnostic. |
+| **Harness** | `/harness <task>` | Entry point of the 3-Phase (Planner -> Generator -> Evaluator) pipeline: Setup, Convention Scan, Plan, then a Plan Critic converge loop over `spec.md`; every session ends at `plan_done`, where by default HARD GATE #1 is one in-session approval question whose approval chains into `/harness-build` in the same turn (`--separate-gate`: `Next → /harness-gate` instead). Inline single path by default; opt-in workflow path (ultracode or `--mode standard/multi`) runs plugin-shipped native Workflow segment scripts with schema-validated returns. Works with or without git. `/harness doctor` gives a read-only environment diagnostic. |
 | **Harness gate** | `/harness-gate` | HARD GATE #1 (spec confirmation) for a `--separate-gate` / `gate=separate` session, as its own skill with `Bash`, `Write`, `Edit`, `Glob` and every sub-agent tool removed — the turn that renders the gate cannot modify a file or run a command. It reads `state.json` and `spec.md`, asks once, and prints the next command for you to type (`/harness-build`, `/harness-build --epic`, or a `/harness --modify` / `--auto-revise` / `--critic` re-entry). Writes nothing. An inline session (the default) gets one line sending it back to `/harness`. |
 | **Harness build** | `/harness-build [--epic \| generate \| verify \| evaluate]` | The implementation half: Slice Plan / Epic Exit, Generate, Verify (Layer 1), Evaluate (Layer 2+3), Verdict loop, Cleanup. Performs the `generate_ready` write on entry; consumes only a `spec.md` HARD GATE #1 approved — an inline session's recorded approval must still match `spec.md`, or it refuses. In an in-session epic it also starts the slices one after another — each still asks for its own approval, and a slice that ends clean is committed without asking ([Epic Slices](#epic-slices)). Not an entry point. |
-| **Refactor** | `/refactor <target>` | Safe, behavior-preserving code structure improvement. Single (inline) or multi/comprehensive (2-3 analysts + cross-critique, native Workflow path). Execution stays gated and step-tested in the orchestrator. |
-| **Migrate** | `/migrate <target> [--from v4 --to v5]` | Staged migration of frameworks, libraries, and dependencies. Single (inline) or multi (parallel external-research + codebase-impact analysts + synthesis, native Workflow path) with WebSearch research. Staged execution stays gated and step-tested in the orchestrator. |
-| **Debug** | `/debug <error>` | Hypothesis-driven debugging with mandatory executable verification. Quick (inline) or deep (2 analysts + adversarial cross-verify, native Workflow path). |
-| **Spec** | `/spec <requirement>` | Multi-round Q&A requirements specification. Output directly compatible with `/harness` input. Quick (inline) or deep (4 analysts + Critic, native Workflow path). Specs open with a derived Review Sheet (TL;DR / decision table / open questions / changed-in-this-revision); `/spec digest <file>` gives a read-only 3-layer briefing of any existing doc. |
-| **Test Gen** | `/test-gen <target>` | Automated test generation with mutation-based quality verification. Single (inline) or multi (parallel coverage analysts + propose-only mutation skeptics, native Workflow path; test generation + mutation execution stay orchestrator-inline). Supports coverage-gap and regression modes. |
-| **Team Memory** | `/team-memory <cmd>` | Team knowledge base (save/show/clean/search). Team-shared decisions, patterns, and conventions, git-committed unless the store path is gitignored — which the save gate discloses. Human-gated CRUD — never escalates to sub-agents or the Workflow engine. _(formerly `/memory` — old name kept as a deprecation alias)_ |
 | **Handoff** | `/handoff generate/resume/list` | Session handoff for cross-session continuity: `generate` captures a verified HANDOFF document (git state, confirmed facts, next steps, reading order, an optional epic Progress Ledger) and writes it immediately — no save confirmation, because the filename convention never overwrites (`-2`/`-3` on collision); `resume` primes a fresh session from it with git-drift verification plus a live `.harness/state.json` cross-check (both report-only — never mutates git or `.harness/`). Complements `/harness` Session Recovery (task-internal state); `/harness` recommends `/handoff generate` at every session boundary. |
-| **Codebase Audit** | `/codebase-audit` | Systematic codebase analysis for team onboarding. Quick (inline) or deep/thorough (parameterized lens analysts + completeness critique + synthesis, native Workflow path; orchestrator writes the report). Incremental analysis support. |
-| **Deep Review** | `/deep-review <target>` | Systematic, bias-free code review. Quick (inline checklist) or deep/thorough (2-3 specialists + adversarial cross-verification, native Workflow path). Optional `--comment` (inline PR comments) / `--fix` (gated apply) / `--spec <path>` (opt-in spec-conformance pass, reviewers stay blind to it). Re-runs on the same target auto-advance review rounds with prior-finding reconciliation and an advisory Round Verdict. _(formerly `/code-review` — old name kept as a deprecation alias)_ |
+| **Deep Review** | `/deep-review <target>` | Systematic, bias-free code review. Quick (inline checklist) or deep/thorough (2-3 specialists + adversarial cross-verification, native Workflow path). Optional `--comment` (inline PR comments) / `--fix` (gated apply) / `--spec <path>` (opt-in spec-conformance pass, reviewers stay blind to it). Re-runs on the same target auto-advance review rounds with prior-finding reconciliation and an advisory Round Verdict. |
 | **MD Optimize** | `/md-optimize` | Optimize CLAUDE.md and project `.md` files for token efficiency. |
-| **MD Generate** | `/md-generate` | Analyze project and generate/enhance CLAUDE.md for effective Claude Code development. |
-| **Ship** | `/ship` | Q&A release pipeline: version bump, CHANGELOG (Conventional Commits), build/test verify, git ops (commit/tag/`merge_to_base`/push), GitHub release — HARD-GATE before every irreversible action. Auto-detects environment, skips unavailable stages. Stage 6.5 (`merge_to_base`, v8.4+) merges release branch into base branch BEFORE tag push so the tag is reachable from the base branch. |
-| **Study** | `/study` | Turn a `/harness` output, a whole project, or a git diff into a 7-section, 3-tier study guide (concept / code excerpts / interview Q&A / exercises / design rationale / anti-patterns / glossary) for post-hoc learning. Quick (inline, full path) or deep/thorough (3 evidence lenses + per-topic-bucket authors + a thorough-only critic + assemble, native Workflow path). Machine-checked provenance (repo-quote re-verification, inference-vs-repo claim basis) and a self-contained static HTML report — never a WebSearch/WebFetch dependency. |
 
 ### Skill Naming & Built-in Command Relationship
 
-Three skills were renamed into the plugin namespace to remove collisions with Claude Code built-ins, **keeping the old names as deprecation aliases** (no hard break — invoking an old name prints a localized notice and redirects):
-
-| New (canonical) | Old (alias, deprecated) | Why renamed |
-|-----------------|-------------------------|-------------|
-| `/deep-review` | `/code-review` | Literal collision with the built-in `/code-review` (2.1.147+, `--comment`/`--fix`). |
-| `/team-memory` | `/memory` | Trigger ambiguity with built-in personal auto-memory / the `#` shortcut / CLAUDE.md. |
-| `/harness` | `/workflow` | Conceptual collision with the native Workflow engine (`/ultracode`, formerly `/workflow`, renamed in 2.1.160). |
-
-Old names are scheduled for removal no earlier than the next MAJOR release.
+`/deep-review` and `/harness` once carried other names — the first collided with the built-in `/code-review`, the second with the native Workflow engine's own command. v9 removed the forwarding aliases that kept the old names working. The built-in `/code-review` is a different command and is unaffected.
 
 **Relationship to the native Workflow engine (`/ultracode`):** agent-harness does **not** compete with the engine — at opt-in depth (an ultracode session, or an explicit `--mode`) the multi-agent skills *author and run* native Workflow segment scripts (`${CLAUDE_PLUGIN_ROOT}/workflows/<skill>.<segment>.workflow.js`, copied to `.harness/wf/` immediately before each launch and deleted once that run finishes, because the `Workflow` tool accepts a `scriptPath` only when it returned that path itself or the file sits under the working directory or an added directory — `templates/_shared/segment_launch.md`), layering their opinionated phased methodology, auto-detection, and human-in-the-loop HARD-GATEs on top of the engine's `parallel()` / `phase()` / `runId`-resume primitives. The HARD-GATEs (spec-confirm, verify-fail, auto-fix-apply) always stay in the orchestrator and are never delegated to a background Workflow agent.
 
 ### Repository Layout
 
-Seven top-level directories, each with a fixed role:
+Eight top-level directories, each with a fixed role:
 
 | Directory | Role |
 |-----------|------|
@@ -159,11 +141,10 @@ Seven top-level directories, each with a fixed role:
 | `workflows/<skill>.<segment>.workflow.js` | Native Workflow engine segment scripts — the code that actually runs when a skill's deep/thorough/multi mode is opt-in. Filename pattern is fixed: `<skill>.<segment>.workflow.js`, 1:1 with the basename at the SKILL.md `Workflow { scriptPath: ... }` call site (which names the `.harness/wf/` copy — `templates/_shared/segment_launch.md`). |
 | `templates/<skill>/<role>.md` | Sub-agent persona templates a segment script copies in at author-time (`SYNC-SOURCE: templates/<skill>/<role>.md` comments mark the embedded copy). Some are DUAL-USE (the same file also dispatches as-is on a skill's inline path). `templates/_shared/` holds the cross-skill single sources instead — `mode_gate.md`, `segment_launch.md`, `status_format.md`, `project_defaults.md`, `session_conflict.md`, `orchestrator_contract.md`, `output_language.md`, `session_recovery.md`, `session_boundary.md`, `run_style.md`, `scale_assessment.md`, `path_validator.md`, `architecture_principles.md` and the rest; a skill cites one by name and never restates its body. `templates/harness/` is the same idea for one skill: procedures and static payloads `/harness` reads on demand (`doctor.md`, `state_schema.md`, `setup_summary.md`, `setup_prompts.md`, `auto_revise.md`, `spec_render.md`, `plan_segment_call.md`, `plan_critic_dispatch.md`, `plan_critic_failures.md`, `converge.md`), plus the converge loop's two sub-agent templates (`converge_review.md`, `converge_verify.md`). |
 | `scripts/*.{mjs,py}` | Repository self-verification lints (`check_workflow_syntax.mjs`, `verify_block_sync.py`, `verify_description_budget.py`, `verify_manifest_sync.py`, `verify_meta_literal.py`, `verify_sync_markers.py`) — they check this repo's own `workflows/`/`skills/`/`templates/`/`.claude-plugin/` source, and are never executed at skill runtime. |
+| `tests/segment_stubs/` | Behavioural tests for the Workflow segment scripts, run against a stub engine (no model, no network). `known_failures.json` is a two-way ratchet: an unlisted failure fails the run, and so does a listed case that starts passing. |
 | `.claude-plugin/*.json` | Plugin and marketplace manifests. The version string lives at three key paths across these two files. |
 | `.github/` | CI: `workflows/lint.yml` runs the lint layer on push and PR; `scripts/check_lint_wiring.sh` checks that every lint is actually wired into it. Also holds the issue and PR templates. |
 | `design/<epic>/` | Committed design records for a follow-up epic — the spec plus the measurements it rests on. Skill *runtime* output goes to `docs/`, which is `.gitignore`d; anything that must outlive the session that produced it lives here instead. Nothing at skill runtime reads this directory, and no lint scans it. |
-
-One additional asset type lives under `templates/`: a **skill-only static asset** (e.g. `templates/study/html_shell.html`) — a non-`.md` file a skill reads and splices content into directly (never dispatched to a sub-agent, never a `SYNC-SOURCE` embed target), author-time-authored once and reused unchanged across runs.
 
 ## Install
 
@@ -268,32 +249,13 @@ not its own. `/harness doctor` gives a read-only environment diagnostic and neve
 /harness-build generate                           # phase mode: resume from plan, generate only
 /harness-build verify                             # step mode: mechanical verification only
 /harness-build evaluate                           # step mode: evaluation only
-/harness --modify "<request>"                     # re-entry at plan_done: /harness edits spec.md and re-runs the converge loop (not when the critic was carried over from /spec or skipped by --fast); the approval question re-renders (separate-gate: Next → /harness-gate)
+/harness --modify "<request>"                     # re-entry at plan_done: /harness edits spec.md and re-runs the converge loop (not when the critic was skipped by --fast); the approval question re-renders (separate-gate: Next → /harness-gate)
 
 /harness draft product requirements spec           # works without git too (non-dev tasks)
-
-/debug "NullPointerException in UserController"    # hypothesis-driven debugging
-/debug --mode deep --attach error.log              # workflow path: 2 analysts + adversarial cross-verify
-
-/spec "Add payment retry on failure"               # multi-round Q&A -> structured spec (opens with a Review Sheet)
-/spec --mode deep                                  # workflow path: 4 analysts + Critic cold review
-/spec digest docs/design/auth-spec.md              # read-only 3-layer briefing of an existing doc (30s/5min/map)
-
-/test-gen src/auth/                                # generate tests for directory
-/test-gen --coverage-gap                           # auto-find low-coverage areas
-/test-gen --regression docs/harness/slug/debug_report.md  # regression tests from debug
-
-/team-memory save                                       # save team-valuable decisions from session
-/team-memory show                                       # list all team knowledge records
-/team-memory clean                                      # remove stale/completed records
-/team-memory search authentication                      # search across knowledge base
 
 /handoff                                           # capture this session -> HANDOFF document (written immediately)
 /handoff resume                                    # prime a fresh session from the newest handoff (+ git drift check)
 
-/codebase-audit                                    # auto-recommends mode based on project size
-/codebase-audit --mode thorough                    # comprehensive multi-agent analysis
-/codebase-audit --scope "src/**" --incremental     # analyze only changes in src/
 /harness doctor                                    # read-only environment diagnostic
 
 /deep-review #123                                  # review PR (quick inline by default; ultracode -> thorough)
@@ -303,16 +265,7 @@ not its own. `/harness doctor` gives a read-only environment diagnostic and neve
 /deep-review --staged --fix                        # apply suggested fixes behind an explicit gate
 /deep-review #123                                  # run again after fixes -> round N+1 auto-detected, prior findings reconciled
 
-/refactor extract auth logic from UserController    # single inline by default; ultracode -> comprehensive
-/refactor reduce coupling in src/services/ --mode single
-/refactor restructure data layer --mode comprehensive   # workflow path: 3 analysts + cross-critique
-
-/migrate react --from 17 --to 18                   # staged React migration
-/migrate replace moment with dayjs                 # library replacement
-/migrate nextjs                                    # auto-detect versions
-
 /md-optimize                                       # optimize markdown files
-/md-generate                                       # analyze project & generate CLAUDE.md
 ```
 
 ## Model Configuration (Advisor Strategy)
@@ -565,7 +518,7 @@ Higher modes use more tokens per run but have higher first-pass success rates, o
 | `--verifier-model <model>` | `haiku` | Override Layer 1 Verifier model. Allowed: `haiku`, `sonnet`, `opus`. Cost warning shown for sonnet/opus. |
 | `--output-dir <path>` | `docs/harness` | Override output directory base for spec, changes, verify, and QA reports. Relative path from repo root. Disallows: absolute paths, `..`, reserved names (`memory`, `spec`, `planner`, `generator`). |
 | `--epic` / `--no-epic` | Scale Assessment recommendation | `/harness` only — force the approval question to lead with "Plan as epic" / "Build now" (with `--separate-gate`, the gate's Pass B with "Plan as epic" / "Proceed as single"). Approving runs `/harness-build --epic` or `/harness-build`. |
-| `--modify "<request>"` / `--auto-revise` / `--critic` | — | `/harness` only, `plan_done` only — the re-entries `/harness-gate` prints for "Modify" / "Auto-revise" / "Run Critic anyway", which you may also type in an inline session. `--critic` and `--modify` each run the Plan Critic converge loop again (after `--modify`'s edit, its first round reviews only what changed when the session's last run completed and spec.md had not changed since — no editor edit, no interrupted write — and the whole spec otherwise) — except that in a session whose critic was carried over from `/spec` or skipped by `--fast`, `--modify` only edits spec.md. Each ends at the gate again: an inline session's approval question re-renders in the same turn, a separate one ends with `Next → /harness-gate`. A recorded approval does not block them: it is bound to the spec's stamp, so after a spec.md write `/harness-build` refuses it until you approve again. |
+| `--modify "<request>"` / `--auto-revise` / `--critic` | — | `/harness` only, `plan_done` only — the re-entries `/harness-gate` prints for "Modify" / "Auto-revise" / "Run Critic anyway", which you may also type in an inline session. `--critic` and `--modify` each run the Plan Critic converge loop again (after `--modify`'s edit, its first round reviews only what changed when the session's last run completed and spec.md had not changed since — no editor edit, no interrupted write — and the whole spec otherwise) — except that in a session whose critic was skipped by `--fast`, `--modify` only edits spec.md. Each ends at the gate again: an inline session's approval question re-renders in the same turn, a separate one ends with `Next → /harness-gate`. A recorded approval does not block them: it is bound to the spec's stamp, so after a spec.md write `/harness-build` refuses it until you approve again. |
 | `--no-cold-pass` | cold pass on | `/harness` only — recorded as `cli_flags.cold_pass=false`; `/harness-build` Step 5 skips the cold-review dispatch. Standing form: `cold-pass=off` on the `agent-harness-defaults:` line — a documented rule, not a defect of this key: a personal `cold-pass=off` in source 1 (`.claude/settings.local.json`) shadows a team `CLAUDE.md` defaults line WHOLESALE, so that line's `lint-cmd` is then not consumed either (see Project Defaults below). |
 | `--fast` / `--quick` | off | `/harness` only — the one-session shortcut for a small change. Forces the inline single path, skips the Plan Critic, the cold pass and the Model / Convention Scan questions; its approval question (header `Fast Gate`) has three options, `Build now` / `Modify` / `Stop`, with no `Plan as epic`. "Build now" records the approval and, when the style is `auto` and the session is interactive, chains into `/harness-build` in the same turn; `/harness-build` refuses the session without a matching approval, so the gate is moved, not removed. No text-fallback approval. Cannot be combined with `--epic`, `--separate-gate` or a workflow-tier `--mode`. |
 | `--separate-gate` | off (project default `gate=`) | `/harness` only — HARD GATE #1 at `/harness-gate` instead of in-session: the session ends at `plan_done` with `Next → /harness-gate`, a skill with no write tool, and you type the command it prints. Recorded once per session (`gate=separate` on the defaults line sets it too). Halts with `--fast`. |
@@ -584,7 +537,7 @@ If a session is interrupted, run the skill that owns the phase you stopped in, w
 
 ### Sub-command: doctor
 
-`/harness doctor` — read-only environment diagnostic. No arguments, no `.harness/state.json` (neither read nor written), no git branch, no Mode Gate, no sub-agents, no Workflow dispatch; nothing is written anywhere. Six items, each `✓` or `⚠` with remediation decided at run time: ① CR contamination in the installed copies’ `*.workflow.js`, judged by counting the byte `0x0D` across both known install locations; ② whether the `Workflow` tool is in this session’s tool list, reported as observed and never probed; ③ `git rev-parse --is-inside-work-tree`; ④ version and content drift on three axes, enumerating the cache’s version directories and listing backup-suffixed ones (the predicate is the skill contract’s, not this file’s) separately rather than as drift; ⑤ whether the `/team-memory` store is gitignored, by that skill’s own §Step 1.5 rules; and ⑥ which of the three `agent-harness-defaults` sources wins, and the final resolved reading. It reports and never repairs — a `⚠` points at the existing route (a reinstall, or the `/team-memory` store gate). Dispatch is by positional argument, not by position alone: `doctor` must be the **only** positional token, so `/harness --mode single doctor` is the same invocation while `/harness doctor xyz` is an ordinary task. Skips Session Recovery through a carve-out at the top of that section, so running it never disturbs an in-progress harness session.
+`/harness doctor` — read-only environment diagnostic. No arguments, no `.harness/state.json` (neither read nor written), no git branch, no Mode Gate, no sub-agents, no Workflow dispatch; nothing is written anywhere. Five items, each `✓` or `⚠` with remediation decided at run time: ① CR contamination in the installed copies’ `*.workflow.js`, judged by counting the byte `0x0D` across both known install locations; ② whether the `Workflow` tool is in this session’s tool list, reported as observed and never probed; ③ `git rev-parse --is-inside-work-tree`; ④ version and content drift on three axes, enumerating the cache’s version directories and listing backup-suffixed ones (the predicate is the skill contract’s, not this file’s) separately rather than as drift; and ⑤ which of the three `agent-harness-defaults` sources wins, and the final resolved reading. It reports and never repairs — a `⚠` points at the existing route (a reinstall). Dispatch is by positional argument, not by position alone: `doctor` must be the **only** positional token, so `/harness --mode single doctor` is the same invocation while `/harness doctor xyz` is an ordinary task. Skips Session Recovery through a carve-out at the top of that section, so running it never disturbs an in-progress harness session.
 
 ### Confirmation Gates
 
@@ -708,476 +661,6 @@ If no matching skill is found, the harness proceeds without it. No specific plug
 
 ---
 
-## refactor
-
-Safe, behavior-preserving code structure improvement. Separates impact analysis, atomic execution with safety checks, and isolated verification into distinct phases. "Same behavior, better structure."
-
-```
-/refactor  -> [Setup] Auto-detect + git safety + baseline tests + Mode Gate (derived, no roundtrip)
-                        -> [Phase 1] Impact Analysis
-                           single (inline):  1 agent analyzes + writes refactor_plan.md
-                           multi/comprehensive (workflow path):
-                                          refactor.plan.workflow.js — 2-3 analysts in parallel
-                                          -> cross-critique (comprehensive only)
-                                          -> synthesis -> schema-validated RefactorPlan
-                                          -> orchestrator renders refactor_plan.md
-                        -> Confirmation Gate: user approves plan (orchestrator)
-                        -> [Phase 2] Execution (atomic steps — ALWAYS orchestrator-run)
-                           single:              applies changes step-by-step
-                           multi/comprehensive:  Safety Advisor reviews each step
-                                                 -> Execute + test after each
-                           On test failure: STOP immediately (no auto-fix)
-                        -> [Phase 3] Verification (isolated evaluator)
-                           inline: evaluator sub-agent + qa_report verdict line
-                           workflow: refactor.eval.workflow.js -> VerifyVerdict object
-                           Compare tests with baseline -> PASS/FAIL
-```
-
-### Modes
-
-| Mode | Path | Best for | Analysis | Execution | Token cost |
-|------|------|----------|----------|-----------|------------|
-| **single** | inline | File/function level (< 3 files) | 1 agent | 1 agent, step-by-step | 1x |
-| **multi** | workflow | Module level (3-10 files) | 2 analysts + synthesis | orchestrator + Safety Advisor | ~1.7x |
-| **comprehensive** | workflow | Architecture level (10+ files) | 3 analysts + cross-critique + synthesis | orchestrator + Safety Advisor | ~2.5x |
-
-With no `--mode`: ultracode sessions resolve **comprehensive**; non-opted sessions resolve **single** (the old mode-selection roundtrip is removed — a scope advisory is printed, and the Plan Confirmation gate keeps its "Switch to single" exit). Multi/comprehensive require the native Workflow engine + git; otherwise the session falls back to single with a notice.
-
-### Core Principles
-
-- **Atomic changes**: One refactoring step at a time
-- **Test after each step**: Run full test suite between every change
-- **Stop on failure**: No auto-fix. Report and ask the user
-- **Baseline capture**: Snapshot test results before starting
-
-### Phase 1 — Impact Analysis
-
-Analysts examine the target code independently:
-
-| Persona | Focus | Modes |
-|---------|-------|-------|
-| **Structural Analyst** | Dependencies, coupling, cohesion, complexity | multi, comprehensive |
-| **Risk Analyst** | Impact scope, breakage risk, test coverage gaps | multi, comprehensive |
-| **Feasibility Analyst** | Framework constraints, practical blockers, hidden deps | comprehensive only |
-
-**comprehensive** adds cross-verification: each analyst reviews the other two analyses before synthesis, catching assumptions that synthesis alone would miss.
-
-### Phase 2 — Execution
-
-Changes are applied one step at a time with mandatory testing between each:
-
-| Event | Action |
-|-------|--------|
-| Step complete, tests pass | Continue to next step |
-| Step complete, new test failure | **STOP**. Report regression. User decides: revert / fix / abort |
-| Safety Advisor says STOP (multi/comprehensive) | Report to user. Skip / modify / abort |
-| No test suite available | Code review for behavior equivalence instead |
-
-### Phase 3 — Verification (Isolated)
-
-Runs as an isolated sub-agent with the same bias-reduction techniques as workflow:
-- **Context isolation** (separate subagent)
-- **Anchor-free input** (no execution reasoning passed)
-- **Baseline comparison** (tests compared against captured baseline)
-- **Behavior-first criteria** (behavior preservation is the primary criterion)
-
-### Error Handling
-
-| Scenario | Action |
-|----------|--------|
-| No test suite | Warn + proceed with code review only |
-| No tests cover target | Suggest writing tests first |
-| Baseline tests failing | Report + ask user (fix first or proceed) |
-| Test regression mid-refactor | Stop immediately, report, user decides |
-
-### Smart Routing
-
-| Finding | Suggestion |
-|---------|-----------|
-| User wants new features | `/harness` |
-| Version/dependency issues | `/migrate` |
-| Needs codebase understanding first | `/codebase-audit` |
-
-### Session Recovery
-
-If a session is interrupted, the harness detects the existing `.harness/state.json` on next invocation and offers to resume from where you left off.
-
-### File Structure
-
-```
-.harness/
-  state.json                        # Working state (temporary)
-  context.md                        # Shared context (multi/comprehensive)
-  refactor/
-    analysis_structural.md          # Structural Analyst's analysis
-    analysis_risk.md                # Risk Analyst's analysis
-    analysis_feasibility.md         # Feasibility Analyst's analysis (comprehensive)
-    critique_structural.md          # Cross-verification (comprehensive)
-    critique_risk.md                # Cross-verification (comprehensive)
-    critique_feasibility.md         # Cross-verification (comprehensive)
-    baseline_tests.txt              # Captured baseline test output
-
-docs/harness/<slug>/
-  refactor_plan.md                  # Analysis output (preserved)
-  changes.md                        # Execution output (preserved)
-  qa_report.md                      # Verification output (preserved)
-```
-
----
-
-## migrate
-
-Executes framework/library version upgrades, language transitions, and dependency replacements using a staged approach — one breaking change at a time with build/test verification at every step.
-
-```
-/migrate <target>  -> [Setup] Auto-detect versions + Mode Gate (derived; opt-in)
-                       -> [Phase 1] Analysis
-                          single (inline): 1 agent researches guide + scans codebase
-                          multi (Workflow): External Research Analyst (WebSearch)
-                                  + Codebase Impact Analyst (parallel, anchor-free)
-                                  -> Synthesis -> MigrationPlan (orchestrator writes migration_plan.md)
-                       -> Confirmation Gate: user approves plan
-                       -> [Phase 2] Staged Execution
-                          Per breaking change:
-                            1. Apply change
-                            2. Build check
-                            3. Test check (compare vs baseline)
-                            4. Migration Advisor review (multi only)
-                          On failure -> stop + report
-                       -> [Phase 3] Evaluator (isolated subagent)
-                          Full test suite vs baseline
-                          Deprecated API scan (codebase-wide)
-                          Version consistency check
-                       -> PASS -> Done / FAIL -> Fix / Stop / Rollback
-```
-
-### How it works
-
-1. You invoke the migrate skill with a target and optional version range
-2. **Setup**: Auto-detects current version, researches target version, captures baseline tests, saves original branch name, creates a `harness/migrate-*` git branch
-
-#### Phase 1 -- Analysis
-
-| Mode | Agents | What happens |
-|------|--------|-------------|
-| **single** | 1 agent | Researches migration guide via WebSearch, scans codebase for affected files, builds migration plan |
-| **multi** | 2 analysts | External Research Analyst + Codebase Impact Analyst work in parallel, then synthesize into migration plan |
-
-The analysis phase produces a `migration_plan.md` with ordered steps — one per breaking change — each listing affected files and concrete actions.
-
-**WebSearch fallback:** If WebSearch fails, the skill falls back to local CHANGELOG/MIGRATION files in the project or package directory.
-
-3. **Confirmation Gate**: The migration plan is shown to the user for explicit approval before any code changes.
-
-#### Phase 2 -- Staged Execution
-
-Each breaking change is applied as an isolated step:
-
-| Action | What happens | On failure |
-|--------|-------------|------------|
-| Apply change | Update deps, modify code, update config | — |
-| Build check | Run build command | 2 fix attempts, then stop |
-| Test check | Run tests, compare against baseline | 2 fix attempts, then stop |
-| Advisor review | Migration Advisor reviews step (multi only) | Critical → stop, Warning → continue |
-
-The key insight: **baseline test failures are excluded from regression detection.** Only NEW failures after migration count as regressions.
-
-#### Phase 3 -- Evaluator (Isolated)
-
-Runs as an isolated sub-agent with migration-specific checks:
-
-| Check | Purpose |
-|-------|---------|
-| **Full test suite** | Compare against baseline — any new failures? |
-| **Deprecated API scan** | Codebase-wide search for old patterns that should have been migrated |
-| **Version consistency** | No conflicting versions, peer dep mismatches, or duplicate packages |
-| **Code correctness** | New API usage follows correct patterns from migration guide |
-
-### Version Auto-Detection
-
-| File | Detection |
-|------|-----------|
-| `package.json` | dependencies / devDependencies |
-| `pyproject.toml` | project.dependencies / tool.poetry.dependencies |
-| `go.mod` | require block |
-| `Cargo.toml` | dependencies section |
-| `build.gradle(.kts)` | dependency declarations |
-| `pom.xml` | dependency elements |
-| `*.csproj` | PackageReference elements |
-
-### Options
-
-| Option | Default | Description |
-|--------|---------|-------------|
-| --from | auto-detect | Source version |
-| --to | auto-detect (latest stable) | Target version |
-| --mode | auto (1 BC → single, 2+ → multi) | `single` for fast, `multi` for thorough |
-
-### File Structure
-
-```
-.harness/
-  state.json                          # Working state (temporary)
-  migrate/
-    research_external.md              # External research output
-    research_internal.md              # Codebase impact analysis
-    baseline_tests.txt                # Baseline test output
-    advisor_step_1.md                 # Per-step advisor review (multi)
-    advisor_step_2.md                 # ...
-
-docs/harness/<slug>/
-  migration_plan.md                   # Analysis output (preserved)
-  changes.md                          # Execution log (preserved)
-  qa_report.md                        # Evaluator output (preserved)
-```
-
-### Session Recovery
-
-If a session is interrupted, the harness detects the existing `.harness/state.json` on next invocation and offers to resume — including mid-execution recovery (resumes from the last completed step).
-
----
-
-## debug
-
-Hypothesis-driven debugger with mandatory executable verification actions. Classifies error types, attempts reproduction, generates falsifiable hypotheses, and verifies them through code search, git history, and test execution.
-
-```
-/debug  -> [Setup] Error info collection + error type classification + mode gate (derived, no roundtrip)
-                    -> [Phase 0.5] Error Type Classification
-                       build/compile: fast path -> simplified HARD-GATE -> Fix
-                       runtime/logic: -> Phase 0.7
-                    -> [Phase 0.7] Reproduction Attempt
-                       success: record conditions, proceed
-                       failure: switch to log/environment analysis
-                    -> [Phase 1] Root Cause Analysis (Hypothesis Loop)
-                       quick (inline): orchestrator generates 3 hypotheses
-                              -> falsification (executable actions only)
-                              -> loop until High confidence or max 3 rounds
-                       deep (workflow): debug.analyze script — Error Analyst + Code
-                              Archaeologist (parallel) -> ADVERSARIAL cross-verify
-                              -> schema-validated RootCause return
-                    -> HARD-GATE: Fix it / Record only / Stop
-                    -> [Phase 2] Fix (optional, simple fixes only)
-                    -> [Phase 3] Prevention (optional, pattern scan + smart routing)
-```
-
-### Core: Falsification Rules
-
-Every hypothesis must be tested with **executable verification actions** -- pure reasoning-only falsification is prohibited (canonical source: `templates/_shared/falsification_rules.md`):
-
-1. **Record first**: hypotheses land in `.harness/debug/hypotheses.md` (inline) or the `hypotheses[]` schema field (workflow) before verification
-2. **Falsification question**: "If this hypothesis is WRONG, what evidence should exist in the code?"
-3. **Executable actions required** (at least 1 per hypothesis; schema-enforced `minItems: 1` on the workflow path):
-   - Code search (Grep/Glob) -- check for specific patterns
-   - `git blame`/`git log` -- check change history
-   - Test execution -- verify expected behavior
-   - File read -- check configs, env vars
-4. **Confidence adjusted only from evidence**, not reasoning
-5. **Refuted hypotheses marked `[REFUTED]`** with the evidence that refuted them
-
-### Error Type Fast Path
-
-| Type | Signals | Action |
-|------|---------|--------|
-| **build/compile** | Compiler error, syntax error, missing import | Skip hypothesis loop -- compiler output is direct evidence |
-| **runtime** | Exception at runtime, crash, null pointer | Reproduction attempt -> hypothesis loop |
-| **logic** | Wrong output, test failure, off-by-one | Reproduction attempt -> hypothesis loop |
-
-### Modes
-
-| Mode | Path | Agents | Process | Token cost |
-|------|------|--------|---------|------------|
-| **quick** | inline | Orchestrator only | Direct hypothesis loop | ~1x |
-| **deep** | workflow (opt-in: ultracode or `--mode deep`; requires git + Workflow tool) | Error Analyst + Code Archaeologist + Cross Verifier | Independent parallel analysis -> adversarial cross-verify (refute the survivor) | ~1.7x |
-
-### Smart Routing (after completion)
-
-| Signal | Suggested next step |
-|--------|-------------------|
-| Complex fix needed | `/harness "Fix based on docs/harness/<slug>/root_cause.md"` |
-| Regression test needed | `/test-gen --regression docs/harness/<slug>/debug_report.md` |
-| Pattern to record | `/team-memory save` |
-
-### Output
-
-```
-docs/harness/<slug>/
-  root_cause.md      # Root cause + evidence + confidence
-  fix_changes.md     # Fix details (if applied)
-  debug_report.md    # Comprehensive report (root cause + fix + prevention)
-```
-
----
-
-## spec
-
-Transforms vague or incomplete requirements into structured, actionable specifications through **multi-round Q&A discovery**. Output is directly compatible with `/harness` input via section mapping.
-
-```
-/spec  -> [Setup] mode gate (derived, no roundtrip: quick=inline / deep=workflow)
-                  -> [Phase 1] Requirements Discovery (Multi-round Q&A)
-                     Round 1: parse vague requirements -> generate up to 5 questions
-                     Round 2-3: follow-up questions from new ambiguities (conditional)
-                     Max 3 rounds. "Don't know" -> [unconfirmed]
-                  -> [Phase 2] Spec Generation
-                     quick (inline): orchestrator writes spec directly
-                     deep (workflow): spec.plan script — 4 analysts (requirements /
-                            user-scenario / risk / tech-constraint, parallel) -> Synthesis
-                            -> harness.critic script — Critic cold review -> Critic Gate
-                            (Auto-revise / Modify / Approve; max 1 re-synthesis round)
-                  -> HARD-GATE: Approve / Modify (re-generate) / Stop
-                  -> [Phase 3] Handoff: suggest /harness with spec path
-```
-
-### Core: Multi-round Q&A
-
-The key differentiator from `/harness`'s Planner phase:
-
-| Feature | /harness Planner | /spec |
-|---------|------------------|-------|
-| Input | Clear requirements | Vague/incomplete requirements |
-| Q&A | None | **Up to 3 rounds** with follow-up questions |
-| Approach section | Included (implementation-focused) | Not included (implementation is /harness's job) |
-| Acceptance criteria | Brief checklist | **Given/When/Then format** |
-| Out of Scope | Brief in Scope section | **Dedicated section** |
-| Refinement | One-shot | **Modify -> regenerate loop** |
-
-### Spec Output Format
-
-Seven canonical sections, all translated to `user_lang`:
-
-```
-Goal -> Background & Decisions -> Scope -> Out of Scope ->
-Edge Cases -> Acceptance Criteria (Given/When/Then) -> Risks
-```
-
-Maps directly to `/harness` input: Goal->Goal, Background->Background, Scope->Scope, Acceptance Criteria->Completion Criteria, Risks->Risks, Edge Cases->Testing Strategy.
-
-Every spec opens with a derived **Review Sheet** (reviewer-facing, non-canonical — `/harness` ignores it): ≤5-line TL;DR, decision table (options / chosen / why), invariants & top risks, open `[unconfirmed]` questions, reading order, and — on re-synthesis only — "Changed in this revision". Derived at render time from the seven sections + Q&A notes; introduces no new facts.
-
-### Modes
-
-| Mode | Path | Agents | Token cost |
-|------|------|--------|------------|
-| **quick** | inline | Orchestrator only | ~0.5x |
-| **deep** | workflow (opt-in: ultracode or `--mode deep`; requires git + Workflow tool) | Requirements + User Scenario + Risk Auditor + Tech Constraint analysts -> Synthesis -> Critic | ~1.9x (estimated, TBD per smoke test) |
-
-### Sub-command: digest
-
-`/spec digest <path> [--artifact]` — read-only 3-layer briefing of an EXISTING spec or design doc: 30-second TL;DR → 5-minute brief (decision table, invariants, risks, open questions, `path:line` reading order) → full section map, plus mermaid diagrams where genuinely diagrammable. No state, no Q&A, no sub-agents; nothing written to the repository (`--artifact` publishes a page from the session scratchpad). Skips Session Recovery — it never disturbs an in-progress spec session.
-
----
-
-## test-gen
-
-Automated test generator that writes real test code, executes it, and validates meaningfulness through **simplified mutation testing**. Supports framework auto-detection, dependency-aware mocking, and regression test generation from debug reports.
-
-```
-/test-gen  -> [Setup] Framework detection + Mode Gate (derived; opt-in) + model config
-                      -> [Phase 1] Analysis
-                         single (inline): coverage scan + dependency analysis + mocking + edge cases
-                         multi (Workflow): coverage analysts over file buckets (parallel) -> AnalysisResult
-                      -> HARD-GATE: confirm scope + mocking strategy
-                      -> [Phase 2] Generation (orchestrator-inline on both paths)
-                         Unit tests (happy path + edge cases) + integration + regression (if --regression)
-                      -> [Phase 3] Verification
-                         Step 1: Execute tests (up to 2 fix retries, test code only)
-                         Step 2: Mutation testing
-                                 single (inline): single-mutation heuristic + strengthen attempt
-                                 multi (Workflow): propose-only skeptics -> ORCHESTRATOR-INLINE
-                                   mutate/run/revert + clean guard -> MutationVerdict (no worktree)
-```
-
-### Framework Auto-Detection
-
-| Framework | Detection | Test pattern | Mock library |
-|-----------|-----------|-------------|-------------|
-| Jest | package.json jest dep | `*.test.ts` | jest.mock |
-| Vitest | package.json vitest | `*.test.ts` | vi.mock |
-| pytest | pyproject.toml / conftest.py | `test_*.py` | monkeypatch / unittest.mock |
-| JUnit | build.gradle junit | `*Test.java` | Mockito |
-| Go test | go.mod | `*_test.go` | testify/mock |
-| RSpec | Gemfile rspec | `*_spec.rb` | rspec-mocks |
-
-### Mocking Strategy (auto-detected per dependency)
-
-| Dependency | Default strategy |
-|-----------|-----------------|
-| DB (Repository, ORM) | Repository interface mock |
-| External API (HTTP) | HTTP client mock |
-| File system | Temp dir or fs mock |
-| Time (Date, Timer) | Fake timers |
-| Environment vars | Test-specific env |
-
-### Mutation Testing (Phase 3 quality verification)
-
-After tests pass, each test is verified for meaningfulness:
-1. Mutate target function (condition inversion, return value change, arithmetic swap)
-2. Re-run test -- if it still passes, the test is **trivial** (doesn't catch real logic changes)
-3. Attempt to strengthen trivial tests (1 try)
-4. Revert mutation immediately after each check
-5. Report quality score: meaningful / total non-skipped tests
-
-### Flags
-
-| Flag | Description |
-|------|-------------|
-| `--coverage-gap` | Auto-find and test low-coverage areas |
-| `--regression <path>` | Generate regression tests from a debug report |
-
-`--coverage-gap` and `--regression` are mutually exclusive.
-
-### Key Rules
-
-- **Never modify production code** -- test code only
-- **Mutations always reverted** -- never leave mutated code in place
-- **No trivial assertions** -- every test must have meaningful assertions
-
----
-
-## team-memory
-
-> Formerly `/memory`. The `/memory` alias still resolves (deprecated → redirects here).
-
-Team knowledge base manager. Saves, searches, and maintains **team-shared** records of decisions, patterns, bugs, and conventions — **git-committed when `docs/harness/memory/` is not gitignored**, which §Step 1.5 checks before the first write and the Save Report discloses either way. Completely separate from Claude Code's built-in personal auto-memory.
-
-```
-/team-memory save     -> analyze session -> extract team-valuable items -> per-item HARD-GATE -> save
-/team-memory show     -> scan docs/harness/memory/ -> categorized list
-/team-memory clean    -> identify stale records -> backup -> per-item HARD-GATE -> delete
-/team-memory search   -> grep keyword across all records
-```
-
-### How it differs from built-in auto-memory
-
-| | Built-in auto-memory | /team-memory |
-|-|---------------------|---------|
-| **Location** | `~/.claude/projects/` | `docs/harness/memory/` |
-| **Scope** | Personal, per-user | **Team-shared; git-committed when the store path is not gitignored** |
-| **Content** | Session context, preferences | Decisions, patterns, bugs, conventions |
-| **Index** | MEMORY.md | `docs/harness/memory/README.md` |
-| **CLAUDE.md** | Managed by built-in | **Never touched** |
-
-### Categories
-
-| Category | When to save | Team value |
-|----------|-------------|------------|
-| `decisions` | Architecture choices, technology selections | Prevents re-litigating decisions |
-| `bugs` | Non-obvious root causes, tricky debugging paths | Saves investigation time |
-| `patterns` | Reusable patterns, proven approaches, anti-patterns | Accelerates future work |
-| `todos` | Deferred work with context to pick up later | Enables work handoff |
-| `conventions` | Naming rules, style decisions, team norms | Discoverable by new members |
-
-Custom categories can be added freely.
-
-### Safety
-
-- **Per-item HARD-GATE** on both save and delete -- nothing happens without explicit confirmation
-- **Backup before delete** -- `.harness/memory_backup/<timestamp>/` created before any cleanup
-- **Date parse safety** -- unparseable dates excluded from staleness checks
-
----
-
 ## handoff
 
 Session handoff for cross-session, epic-level continuity — the durable complement to `/harness` Session Recovery (which restores a task's internal state machine, not a multi-day effort). `generate` writes without a save confirmation (the filename convention never overwrites); `resume` still gates before starting work.
@@ -1203,61 +686,6 @@ Session handoff for cross-session, epic-level continuity — the durable complem
 ```
 
 Key properties: stateless (no state.json of its own), inline-only for its own work (prose rule — the `Task`/`Agent`/`Workflow` entries were removed from `disallowed-tools`; `NotebookEdit`/`WebSearch`/`WebFetch` remain), `resume` may chain into the next command from its gate, resume is **context priming + fact verification** — never state restoration, never auto-checkout. When that command is an epic slice's `Command`, the started `/harness` session carries the epic's chain on by itself after its approval click ([Epic Slices](#epic-slices)).
-
----
-
-## codebase-audit
-
-A standalone utility skill that systematically analyzes project structure, dependencies, and patterns for team onboarding and codebase understanding.
-
-```
-/codebase-audit
-/codebase-audit --mode deep --scope "src/**"
-/codebase-audit --incremental
-```
-
-**What it does:**
-- **Structure analysis**: Maps directory layout, module boundaries, entry points, and architecture patterns
-- **Dependency analysis** (deep+): Internal module dependencies, circular references, external package health
-- **Pattern detection** (deep+): Design patterns, naming conventions, anti-patterns, consistency assessment
-- **Complexity hotspots** (deep+): Top 10 files ranked by complexity indicators
-- **Incremental mode**: Reuses prior audit, analyzes only changed files since last run
-
-### Modes
-
-| Mode | Agents | Best for | Token cost |
-|------|--------|----------|------------|
-| **quick** | 1 sequential | Small projects, quick overview | 1x |
-| **deep** | 2 parallel + synthesis | Mid-size projects, general analysis | ~1.5x |
-| **thorough** | 3 parallel + cross-verification + synthesis | Large/legacy projects, team onboarding | ~2.5x |
-
-Mode follows the **Mode Gate** — auto-recommended by file count (< 30: quick, 30-200: deep, 200+: thorough). **deep/thorough run on the native Workflow path** (opt-in via `--mode` or an ultracode session; the analysis segment returns a structured `AuditResult` and the orchestrator writes the report); **quick is inline**. A non-opted interactive session may still pick a deeper mode at the boundary prompt.
-
-### Options
-
-| Option | Default | Description |
-|--------|---------|-------------|
-| mode | (recommended) | `quick` for overview, `deep` for detailed analysis, `thorough` for comprehensive |
-| scope | (full project) | Restrict analysis to a glob pattern |
-| incremental | off | Reuse prior audit, analyze only changed files |
-
-### Output
-
-Report saved to `docs/harness/<slug>/audit_report.md` with sections:
-- Project Overview, Module Map
-- Dependency Graph (deep+), Pattern Analysis (deep+)
-- Complexity Hotspots top 10 (deep+)
-- Recommended Next Steps (smart routing to other skills)
-- Metadata (git HEAD, date, mode — enables incremental)
-
-### Smart Routing
-
-After analysis, suggests relevant next steps based on findings:
-- Anti-patterns detected -> `/refactor`
-- Outdated versions -> `/migrate`
-- No CLAUDE.md -> `/md-generate`
-
-**Safety features**: Read-only (never modifies source code), no git branches created, confirmation gate for deep/thorough modes.
 
 ---
 
@@ -1316,33 +744,6 @@ Round report saved to `docs/harness/<slug>/review_report.md` (round 1; later rou
 
 Communicates in the user's language. Report content is in the detected language. Assessment line (`## Assessment: APPROVE/REQUEST_CHANGES/COMMENT`) stays in English for programmatic parsing.
 
-### Deprecation
-
-`/code-review` (agent-harness) is now a ~30-line alias stub: it prints a deprecation notice and forwards to `/deep-review` with the same arguments after a confirmation.
-
----
-
-## md-generate
-
-A standalone utility skill that analyzes your project and generates/enhances CLAUDE.md for effective Claude Code development.
-
-```
-/md-generate
-```
-
-**What it does:**
-- **Project analysis**: Detects language, framework, architecture pattern, dependencies, and conventions from source code
-- **Command discovery**: Finds and verifies build/test/lint/dev commands from package configs and CI/CD
-- **Convention detection**: Samples source files to detect naming, testing, code style, and architecture patterns
-- **Gap analysis**: If CLAUDE.md already exists, identifies missing/outdated information and enhances it
-- **Monorepo support**: Generates root + sub-CLAUDE.md files for monorepo workspaces
-
-**Safety features**: Read-only analysis until confirmed, no secrets exposure, no speculative content, preserves existing CLAUDE.md content.
-
-**Composability**: Run `/md-generate` first to create content, then `/md-optimize` to compress for token efficiency.
-
----
-
 ## md-optimize
 
 A standalone utility skill that optimizes your project's CLAUDE.md and markdown files for token efficiency.
@@ -1353,152 +754,19 @@ A standalone utility skill that optimizes your project's CLAUDE.md and markdown 
 
 **What it does:**
 - **Dual-Zone CLAUDE.md model**: Splits CLAUDE.md into Inline Zone (rules that must always be in context) and Index Zone (reference paths to detailed docs)
-- **Deduplication**: Hash-based exact-match detection across all `.md` files
+- **Duplicate report**: Hash-based exact-match detection across all `.md` files — duplicates are reported, never deleted
 - **Token compression**: Removes redundancy, compresses verbose prose, generates before/after token savings report
-- **Smart Routing**: Detects project state and suggests `/md-generate` when CLAUDE.md is missing or thin
+- **Smart Routing**: Detects project state and, when CLAUDE.md is missing or thin, offers to stop so it can be created first (the built-in `/init` does this)
 
-**Safety features**: Git-based rollback, HARD GATE confirmation before any changes, YAML frontmatter preservation, idempotency markers for safe re-runs.
-
----
-
-## ship
-
-A Q&A-driven release pipeline orchestrator. Guides version bump, changelog generation, build/test verification, code review summary, git operations, and GitHub release through HARD-GATEs before every irreversible action.
-
-```
-/ship                              # interactive Q&A: detect environment, select stages, run pipeline
-```
-
-**What it does:**
-- **6-stage pipeline (auto-detected, skips unavailable)**: `version_bump` → `changelog` → `build_verify` → `code_review` → `git_ops` → `gh_release`
-- **Q&A driven**: detects environment (git, `gh` CLI, `gh auth`, package manifest), asks user for current/release version, selected stages, and confirmations
-- **Conventional Commits classification**: parses git log since last tag, categorizes by `feat:` / `fix:` / `docs:` / `chore:` / `BREAKING CHANGE`
-- **CHANGELOG ↔ release-notes integration**: writes Keep a Changelog format; later extracts the version section verbatim into GitHub release notes
-- **HARD-GATE before every irreversible action**: version bump confirm, changelog edit gate, commit gate, branch push gate, tag push gate, GitHub release create gate
-- **Session recovery with substep tracking**: resumes at the exact substep (e.g., after `git_branch_pushed` skips branch-push, retries tag-push)
-
-### Stages
-
-| # | Stage | What it does | HARD-GATE |
-|---|-------|-------------|-----------|
-| 2 | **version_bump** | Pass 1 detects version refs across package manifests, `.claude-plugin/{plugin,marketplace}.json`, and source constants; Pass 2 dispatches by file kind (JSON-aware path for plugin manifests preserves CRLF/LF, BOM, and trailing-newline; string-replace path for standard manifests) | Pass 1 confirm |
-| 3 | **changelog** | Parses git log → Conventional Commits categorization → drafts entry → prepends to `CHANGELOG.md` | Edit gate before write |
-| 4 | **build_verify** | Runs auto-detected build/test commands; writes `docs/harness/ship-<slug>/changes.md` | None (read-only verify) |
-| 5 | **code_review** | Optional release-readiness diff summary of staged changes (paths exist, no conflict markers, no secrets, version-string consistency). Self-contained sub-agent summary — NOT a delegation; for a line-level review run the built-in `/code-review` or the plugin's `/deep-review` separately | WARN/FAIL → Continue / Fix-retry / Stop |
-| 6 | **git_ops** | Commits via `-F` (no shell injection), creates annotated tag, splits branch push (6c-i), runs Stage 6.5 (merge_to_base), then tag push (6c-ii) | Commit + branch-push gates |
-| 6.5 | **merge_to_base** (v8.4+) | Merges release branch → base branch BEFORE tag push so the tag is reachable from base branch. Two execution paths: Path A (protected base → `gh pr create` fallback, 3-way gate) / Path B (standard merge — FF / Non-FF resolution / rebase-then-ff with force-push). Substep-level recovery via `merge_base_pending` / `merge_base_done` / `merge_base_pushed`. Persistent `push_retry_count` (state.json) caps retry loops across Stop/Resume cycles. | Pre-merge HARD-GATE + post-merge / pre-push HARD-GATE + 5-way push-rejection gate (Retry / Manual / Create PR / Skip / Stop) |
-| 7 | **gh_release** | Extracts `CHANGELOG.md`'s `## [{version}]` section → `gh release create --notes-file` | Release-create gate |
-
-### Auto-Detection
-
-| Signal | Detected via | Effect when missing |
-|--------|-------------|---------------------|
-| `has_git` | `git rev-parse --is-inside-work-tree` | Skip `git_ops` |
-| `has_gh` | `gh --version` | Skip `gh_release` |
-| `has_gh_auth` | `gh auth status` | Skip `gh_release` |
-| Package manifest | `package.json` / `pyproject.toml` / `Cargo.toml` / `pom.xml` / `build.gradle(.kts)` / `*.csproj` / `.claude-plugin/plugin.json` / `.claude-plugin/marketplace.json` | Skip `version_bump` |
-| Build/test commands | Inferred from manifest type | Skip `build_verify` |
-
-### Safety
-
-- **Tag-name regex (strict 254-char hard cap)**: `^(v[0-9a-zA-Z][0-9a-zA-Z._-]{0,252}|[0-9a-zA-Z][0-9a-zA-Z._-]{0,253})$` — rejects pathological inputs while preserving conventional tag names (introduced in v8.2.0).
-- **Branch name regex**: `^[a-zA-Z0-9/_.-]+$`
-- **`-F` patterns** for commit/tag messages — no shell injection via release notes or commit text.
-- **`.harness/` cleanup Safety Guard** (v8.2.0): skill identity check + resolved-parent depth check + unconditional `Path.resolve() ⊆ Path.cwd()` symlink-escape check + display-before-delete + symlink-aware deletion (`is_symlink()` short-circuit / `follow_symlinks=False`).
-- **Stage 6.5 rollback safety** (v8.4.0): `pre_merge_sha` (the base_branch tip BEFORE the merge) is captured by `git rev-parse --verify refs/heads/{base_branch}^{commit}` — exit-code + 40-char hex validated — and persisted to `state.stage_results.merge_to_base.pre_merge_sha` BEFORE the pre-merge HARD-GATE displays it; the rollback command is the explicit chain `git checkout {base_branch} && git reset --hard {pre_merge_sha} && git checkout {release_branch}` (never bare `reset --hard` since HEAD location varies between Path A and Path B).
-- **Stage 6.5 rebase-then-ff force-push safety** (v8.4.0): when the user picks rebase-then-ff, the rewritten release_branch is force-pushed via `git push --force-with-lease origin {release_branch}` (refuses to overwrite if the remote was updated externally between 6c-i and Stage 6.5) so the tag created at 6c-ii points to a commit that exists on the remote.
-- **Stage 6.5 base_branch URL-injection guard** (v8.4.0): `base_branch` is re-validated against `^[a-zA-Z0-9/_.-]+$` before the `gh api repos/:owner/:repo/branches/{base_branch}/protection` call so user-supplied free-text values cannot traverse or rewrite the API request URL.
-
-### Session Recovery
-
-State is checkpointed at every substep (`version_bump_pass1_done`, `git_branch_pushed`, `merge_base_pending` / `merge_base_done` / `merge_base_pushed` (v8.4+), `git_push_done`, etc.). Resuming `/ship` after interruption picks up at the exact substep, re-checks already-pushed branches/tags via `git ls-remote`, and skips completed operations. v8.4.0 also adds `current_stage` ↔ `substep` consistency validation on resume to surface corrupted/hand-edited state.json instead of auto-recovering.
-
-### File Structure
-
-```
-.harness/
-├── state.json               # current_stage, substep, stages_selected, release_version, tag_name
-│                            # state.stage_results.merge_to_base (v8.4+):
-│                            #   pre_merge_sha     — captured base_branch tip (Path B; null on Path A)
-│                            #   path_a_pr_url     — gh pr create result (Path A; or Path B step 7 Create PR)
-│                            #   push_retry_count  — persistent counter for the 5-way push-rejection gate
-├── changelog_draft.md       # Conventional Commits classification (Step 3)
-├── release_notes.md         # extracted CHANGELOG section (Step 7)
-├── commit_msg.txt           # commit message (Step 6, -F input)
-└── tag_msg.txt              # tag message (Step 6, -F input)
-
-docs/harness/ship-<slug>/
-└── changes.md               # build_verify output (Step 4)
-
-CHANGELOG.md                  # repo root, Keep a Changelog format (Step 3 prepends)
-```
-
-### Language Support
-
-Communicates in the user's language for progress, questions, confirmations, errors, and gate prompts. State.json field names, file names, branch/tag names, and commit message structure stay in English for tooling compatibility.
-
----
-
-## study
-
-Turns an already-produced development artifact — a `/harness` output directory, a whole project, or a git diff — into a study guide so a learner can internalize the work after the fact, grounded in cited real code rather than a prettier restatement of it.
-
-```
-/study                                # auto-detects the most recent /harness output (spec.md + changes.md)
-/study --harness anthropic-best-practices-skill-improvements
-/study --project
-/study --diff v8.7.0..HEAD
-/study --mode thorough --md           # Markdown output instead of HTML
-```
-
-**What it does:**
-- **7 sections per topic**: (a) concept explanation, (b) real code excerpts, (c) interview Q&A, (d) hands-on exercise (with answer + hint), (e) design rationale (incl. rejected alternatives), (f) anti-patterns & pitfalls, (g) glossary & further reading. One author owns all 7 sections of a topic, so its Q&A and exercise answers can never silently contradict each other.
-- **3-tier coverage**: topics are distributed across basic/practice/advanced tiers (a coverage allocation, not a per-topic 3x regeneration) — see the mode/quota table below.
-- **Machine-checked provenance, not a prompt promise**: every code excerpt is re-read against the real repository file before publishing (whitespace-normalized fingerprint match) and gets a badge computed from that check, never from a model-filled field; every narrative claim (design decision, anti-pattern, glossary term) carries a `repo`/`inference` basis, auto-downgraded to `inference` if its evidence path does not resolve. `disallowed-tools` includes `WebSearch`/`WebFetch`, so every external link is labeled unverified structurally, not by policy.
-- **Self-contained static HTML** by default (`--md` for a degraded Markdown view instead) — inline CSS/JS, dark/light aware, tier-filterable, zero external requests.
-
-### Modes
-
-| Mode | Topics (default) | Agents | Token cost |
-|------|-------------------|--------|------------|
-| **quick** | 4 (range 3-5) | 0 (inline, full 7-section/3-tier path — the Windows CRLF safety net) | 1x |
-| **deep** | 8 (range 6-10) | 3 evidence lenses + topic-bucket authors + assemble | ~1.5x *(estimated)* |
-| **thorough** | 10 (range 10-15) | + a reproducibility/misconception critic pass | ~2.5x *(estimated)* |
-
-deep/thorough run on the native Workflow path (opt-in via `--mode` or an ultracode session); quick is always inline and is a genuinely complete path, never a stub.
-
-### Options
-
-| Option | Default | Description |
-|--------|---------|--------------|
-| `--harness <slug>` | auto-detect | Target an existing `docs/harness/<slug>/` directory (needs `spec.md`; `changes.md` improves rationale evidence) |
-| `--project` | — | Whole-project target |
-| `--diff <range>` | — | A git diff range as the target |
-| `--md` | off (HTML) | Markdown output instead of HTML — mutually exclusive with HTML |
-| `--mode` | auto-recommend | `quick` / `deep` / `thorough` |
-
-### Output
-
-`docs/harness/<slug>/study_guide.html` (round 1) / `study_guide_round<N>.html` (round ≥ 2, prior rounds never deleted or overwritten — same rule as `/deep-review`), plus a `study_guide[_round<N>].json` SSOT object snapshot and a `docs/harness/study_index.md` append-only index. Completion prints 4 accounting lines: `Claims`, `Quotes`, `Exercises`, `Refs`.
-
-**Safety features**: read-only over the analyzed source (only 4 paths are ever written — the rendered guide, its JSON snapshot, the root index, and a session-scoped topic-approval cache), a single combined confirmation gate (topics + cost + Artifact-publish disclosure) before any authoring spend, and an un-approved-topic guard (the segment may narrow/merge the approved list but never silently add to it).
-
-**What is and is not machine-checked** (stated plainly, because the rest of this section reads like a capability list): what the tooling actually verifies is **quote realness** (the excerpt's path, line range, and whitespace-normalized fingerprint against the real file), **answer presence** (every exercise has a non-blank hint and answer; every Q&A item has a non-blank answer), and **reference-path validity** (repo-internal evidence paths resolve). What it does **not** and cannot verify is whether the explanations are pedagogically sound, whether the answers are *correct*, whether external links exist, or whether you will actually be able to reproduce and explain the work afterwards — **that final judgment is yours**. Token-cost multipliers are marked *(estimated)* until measured. Treat the guide as a well-sourced study aid, not an audited textbook.
+**Safety features**: a byte backup of every edited file for the length of the run (restored on failure, with or without git), HARD GATE confirmation before any changes, YAML frontmatter preservation, idempotency markers for safe re-runs.
 
 ---
 
 ## Roadmap
 
-See [ROADMAP.md](ROADMAP.md) for the full roadmap with rationale.
+See [ROADMAP.md](ROADMAP.md) for open items with rationale and [CHANGELOG.md](CHANGELOG.md) for what each release shipped.
 
-- **v8.7** (Shipped): model tiering + session continuity — `frontier` preset (Sonnet executor / Opus advisor / **Fable evaluator**) with the judgment-role remap (cross-verification / critic / cross-critique → evaluator; no-op for pre-8.7 presets) and a model **fallback chain** (`fable → opus → sonnet → haiku → parent`) for sunset model ids; **project defaults** (`agent-harness-defaults:` line — `.claude/settings.local.json` env / project CLAUDE.md / `~/.claude/CLAUDE.md`, first wins wholesale — standing workflow-path opt-in + silent model-config via Mode Gate step 4.5); **Ad-hoc Dispatch Contract** (output-language + model routing for non-template sub-agents — root-cause fix for the v8.6.0 English leak); new **`/handoff`** skill (generate / resume with git-drift verification / list); `/deep-review` round bookkeeping (auto round numbering + orchestrator-only prior-finding reconciliation + advisory Round Verdict); `/spec` Review Sheet + `/spec digest`; two new SYNC lint groups (project-defaults, adhoc-dispatch)
-- **v8.6** (Shipped): Mode Gate §Ambiguity Prompt (when no `--mode` and ultracode is OFF in an interactive session with the Workflow engine available, the 8 multi-path skills explicitly ask inline-vs-workflow instead of resolving silently; `--no-prompt` and non-interactive sessions keep silent auto-resolution) + §Path Transparency (every skill prints `Path : <inline|workflow> (<reason>)`), both driven from the `templates/_shared/mode_gate.md` single source, with `scripts/verify_sync_markers.py` tracking the §Ambiguity Prompt marker across the wired skills (marker presence + referential integrity; content-drift and a §Path Transparency group are follow-ups)
-- **v8.5** (Shipped): native Workflow reframe — 8 high-overlap skills (`/harness`, `/spec`, `/debug`, `/deep-review`, `/codebase-audit`, `/migrate`, `/refactor`, `/test-gen`) author & run shipped segment scripts (`workflows/*.workflow.js`, schema-validated `agent()` fan-out) at opt-in depth; skill renames `/workflow`→`/harness`, `/code-review`→`/deep-review`, `/memory`→`/team-memory` (deprecation aliases preserved); derived **Mode Gate** (`templates/_shared/mode_gate.md`) replaces the mode-selection roundtrip; `/deep-review --comment`/`--fix` parity; `disallowed-tools` frontmatter enforced on every skill
-- **v8.4** (Shipped): `/spec` deep-mode 4-analyst pipeline (Requirements + UserScenario + RiskAuditor + TechConstraint) with cold Critic stage and 3-way revise gate; `/spec` Convention Scan (Step 1.5) with `--reference` flag; `/spec` Phase 3 persists `qa_notes.md`/`critic_findings.md`/`conventions.md` with `/workflow` Step 1.5/Step 2 reuse; `/ship` Stage 6.5 (`merge_to_base`) closes develop→main lag — Path A (protected base, PR fallback) vs Path B (local merge with FF / Non-FF / rebase-then-ff + force-with-lease), substep-level recovery, persistent retry-count cap, branch-protected rollback documentation
-- **v8.3** (Shipped): `/ship` version_bump auto-detection for `.claude-plugin/plugin.json` (`$.version`) and `.claude-plugin/marketplace.json` (`$.metadata.version` + `$.plugins[*].version`) — JSON-aware Pass 2 preserves CRLF/LF, BOM, trailing-newline, and avoids the naive-string-replace regression on coincidentally-equal version strings in other fields
-- **v8.2** (Shipped): `/ship` Safety Guard parity with `/workflow` (unconditional symlink-escape check, display-before-delete, symlink-aware deletion), strict 254-char tag-name regex hard cap
-- **v8.1** (Shipped): Path Validator single source, Auto-fix State Transition Table (invariants I1–I4), `--verifier-model` flexibility, `--output-dir` flag, Auto-fix proposal for Layer 1 failures (both `/workflow` and `/refactor`), `.github/` contribution templates
-- **v8.7+** (Planned): Custom persona override (`templates/user-override/`), template compression, external CLI wrapper, demo GIF
+v9 keeps six skills and removes thirteen. The plan, the measurements it rests on, and the defect list it works through are in `design/v9-subtraction/`.
 
 ---
 

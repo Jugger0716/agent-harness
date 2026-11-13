@@ -65,7 +65,7 @@ line, verbatim and case-preserved; commas, `=` and `&&` inside it are content, n
 and the two backticks themselves are stripped. An unclosed backtick is an invalid value for that
 key (warn, ignore the key). This form exists for `lint-cmd` / `type-check-cmd`, whose values are
 shell commands; the other keys never need it. A key a skill does not consume (`lint-cmd` for
-`/debug`, say) is ignored silently by that skill — the unknown-key warning is for keys no skill
+`/deep-review`, say) is ignored silently by that skill — the unknown-key warning is for keys no skill
 defines. An invalid
 value → warn once (in `user_lang`) and ignore that key — NEVER halt on a malformed defaults
 line (defaults are a convenience, not a contract). A matched line that yields ZERO valid keys

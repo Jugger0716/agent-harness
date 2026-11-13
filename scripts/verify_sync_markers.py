@@ -20,10 +20,11 @@ enum tokens co-exist in each marked file, not that surrounding prose is identica
 Add a SYNC_GROUPS entry whenever a new SYNC-WITH contract is introduced.
 
 It ALSO runs a section-reference check (see SECTION_REF_TARGETS). That list now
-carries FOUR entries under TWO modes (one anchor-heading target and, since the C5 split of
-/harness on 2026-09-07, three harness-steps targets), so no single sentence describes them all:
+carries THREE entries, all under the harness-steps mode. CORRECTION (v9 stage 1): until v9 it
+carried FOUR entries under TWO modes; the anchor-heading mode's only target was removed with the
+skill that owned it. The mode's code and the description below are kept, with no target:
 
-  * mode "anchor-heading" (workflows/_reference/study_measurements.md) -- every
+  * mode "anchor-heading" (no target since v9; it was a measurements side-file) -- every
     `<file>` §<Section> pointer into that side-file must resolve to a real
     `## §<Section>` heading there. Behaviour unchanged since it shipped.
   * mode "harness-steps" (skills/harness/SKILL.md, skills/harness-gate/SKILL.md and

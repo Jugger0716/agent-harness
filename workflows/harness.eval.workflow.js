@@ -605,8 +605,7 @@ if (
     log(`Cold review: ${coldStatus} — Critical=${tally.Critical} Major=${tally.Major} Minor=${tally.Minor}`)
   } catch (e) {
     // AC-4: never let a cold-review failure lose the L1+L2/L3 verdict already earned above
-    // -- catch -> log -> fall through, same isolation pattern as
-    // workflows/study.analyze.workflow.js's critiqueResult/assembleDelta try/catch.
+    // -- catch -> log -> fall through.
     coldStatus = 'failed'
     log(`Cold review: failed — ${e && e.message ? e.message : e} (verdict above is unaffected)`)
   }

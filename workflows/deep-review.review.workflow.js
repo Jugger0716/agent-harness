@@ -484,7 +484,7 @@ Return a structured CrossVerifyReport object (the dispatching engine enforces th
 
 // ---- synthesis template (authored in-script — no .md SYNC-SOURCE exists) -----
 // Mirrors the merge rules the orchestrator previously applied inline in
-// skills/code-review/SKILL.md Step 5 (dedupe / higher-severity / cross-verification
+// skills/deep-review/SKILL.md Step 5 (dedupe / higher-severity / cross-verification
 // adjustments), now executed by a dispatched agent returning the final FindingSet.
 const TPL_SYNTHESIS = `# Review Synthesis
 

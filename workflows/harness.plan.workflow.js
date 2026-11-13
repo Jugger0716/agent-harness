@@ -25,8 +25,8 @@ export const meta = {
 //     "Auto-revise re-entry". (That section names its own trigger sites; they are not
 //     restated here.)
 //   - criticFindings is dispatch-dependent, and the caller section above names both documents:
-//     the FIRST dispatch carries {docs_path}critic_findings.md (the /spec requirements-spec
-//     critique), while the Auto-revise re-entry carries {docs_path}plan_critic_findings.md
+//     the FIRST dispatch carries {docs_path}critic_findings.md (a critique placed in docs_path
+//     before planning), while the Auto-revise re-entry carries {docs_path}plan_critic_findings.md
 //     (the Plan-specific critique).
 //   - The empty-priorProposals throw guard in the Propose `else` branch below has no
 //     counterpart in spec.plan.workflow.js — it is an addition, not a ported behavior.

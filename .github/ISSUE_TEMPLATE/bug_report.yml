@@ -44,7 +44,7 @@ body:
     attributes:
       label: Skill
       description: Which skill triggered the bug?
-      placeholder: "e.g. /harness, /refactor, /debug"
+      placeholder: "e.g. /harness, /handoff, /deep-review"
     validations:
       required: false
 

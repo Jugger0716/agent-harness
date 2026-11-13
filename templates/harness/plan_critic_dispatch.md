@@ -1,7 +1,6 @@
 # Plan Critic WORKFLOW dispatch — `harness.critic.workflow.js` (single source)
 
-> Issued by `skills/harness/SKILL.md` §Step 2.6, WORKFLOW branch. The segment is shared with
-> `/spec`, and this call changes none of its args contract. Read this file before dispatching.
+> Issued by `skills/harness/SKILL.md` §Step 2.6, WORKFLOW branch. Read this file before dispatching.
 
 <!-- SYNC-WITH: workflows/harness.critic.workflow.js §contract -->
 ```

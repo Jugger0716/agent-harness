@@ -4,8 +4,7 @@
 # `Workflow` invocation whose `scriptPath` file contains carriage returns —
 # "script contains control characters that would be hidden in the approval dialog".
 # On a Windows checkout with core.autocrlf=true these files arrive CRLF, so every
-# workflow-path skill (harness / spec / debug / deep-review / codebase-audit /
-# migrate / refactor / test-gen) fails to launch. Reproduced 2026-08-03: the same
+# workflow-path skill (harness / deep-review) fails to launch. Reproduced 2026-08-03: the same
 # script rejected as CRLF launched successfully as a byte-identical LF copy.
 #
 # Limits, stated honestly:
@@ -62,3 +61,7 @@
 #   - `*.py` (5 tracked files, same `i/lf w/crlf attr/` state) is deliberately NOT
 #     covered: U-1 scopes this to `*.md`.
 *.md  text eol=lf
+
+# Stub-test modules: the same reason as the lines above -- what gets committed must not
+# depend on a machine's core.autocrlf. Added in v9 stage 1; `*.py` stays uncovered (U-1).
+tests/**/*.mjs text eol=lf
