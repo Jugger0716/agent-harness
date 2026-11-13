@@ -30,6 +30,7 @@ application source, and the only behavioural tests are the segment stub tests un
 | Block sync lint (SHA256) | `python scripts/verify_block_sync.py` |
 | Workflow syntax + CR guard | `node scripts/check_workflow_syntax.mjs` |
 | Description budget ratchet | `python scripts/verify_description_budget.py` |
+| Destructive git command ban | `python scripts/verify_git_safety.py` |
 | Lint wiring equality | `bash .github/scripts/check_lint_wiring.sh` |
 | Segment stub tests | `node tests/segment_stubs/run.mjs` |
 
@@ -39,7 +40,7 @@ the line must start at column 0 and not sit inside a code fence, which is why it
 here). The `export` covers the cp949 console: `verify_sync_markers.py` prints `§` and dies with
 `UnicodeEncodeError` without it.
 
-agent-harness-defaults: lint-cmd=`export PYTHONIOENCODING=utf-8 && python scripts/verify_sync_markers.py && python scripts/verify_manifest_sync.py && python scripts/verify_meta_literal.py && python scripts/verify_block_sync.py && node scripts/check_workflow_syntax.mjs && python scripts/verify_description_budget.py && bash .github/scripts/check_lint_wiring.sh`
+agent-harness-defaults: lint-cmd=`export PYTHONIOENCODING=utf-8 && python scripts/verify_sync_markers.py && python scripts/verify_manifest_sync.py && python scripts/verify_meta_literal.py && python scripts/verify_block_sync.py && node scripts/check_workflow_syntax.mjs && python scripts/verify_description_budget.py && python scripts/verify_git_safety.py && bash .github/scripts/check_lint_wiring.sh`
 
 Run the whole chain after changing anything under `skills/`, `templates/`, `workflows/`, `scripts/`, or
 `.claude-plugin/`. Re-run `check_lint_wiring.sh` as well whenever `.github/workflows/lint.yml`
@@ -71,7 +72,7 @@ table above. It is not part of the `lint-cmd` chain; run it as well after changi
 | `templates/{generator,verify,evaluator}/` | `/harness` only, despite the role-based naming |
 | `workflows/<skill>.<segment>.workflow.js` | native Workflow segment; the naming pattern is fixed |
 | `workflows/_reference/` | reference documents (`schemas.md`, `state_fields.md`), not scripts |
-| `scripts/` | the 6 self-consistency lints |
+| `scripts/` | the 7 self-consistency lints |
 | `tests/segment_stubs/` | behavioural tests for the Workflow segments — `engine.mjs` (stand-ins for the engine globals, with the assumptions it encodes in its header), `cases.mjs`, `run.mjs`, and `known_failures.json`, a two-way ratchet: an unlisted failure fails the run, and so does a listed case that starts passing |
 | `docs/` | gitignored runtime output of the skills |
 | `design/<epic>/` | committed design records for follow-up epics — spec plus the measurement evidence it rests on. Outside `SCAN_DIRS`, so no lint reads them; that is why a forward-looking `§Step` citation here does not turn a lint red |
@@ -138,7 +139,7 @@ frontmatter is the plugin's exposure contract, so treat it as part of the skill'
 
 ## Verification
 
-The six lints under `scripts/`, plus `.github/scripts/check_lint_wiring.sh` and the CI wiring
+The seven lints under `scripts/`, plus `.github/scripts/check_lint_wiring.sh` and the CI wiring
 in `.github/workflows/lint.yml`, are the entire **static** verification layer (the segment stub tests under `tests/segment_stubs/`
 are the only behavioural one, and they cover the Workflow segments only):
 
@@ -193,6 +194,10 @@ are the only behavioural one, and they cover the Workflow segments only):
   characters. It exists because Claude Code caps the skill listing at a share of the context
   window and, when that overflows, drops the descriptions of least-used skills while keeping
   every name — a failure with no message to the user.
+- `verify_git_safety.py` — forbids `git checkout -- `, a bare `git stash`, `reset --hard` and
+  `clean -f` in `skills/`, `templates/` and `workflows/`: text a model follows must not tell it to
+  discard or move uncommitted work. It reads text, not intent, so a sentence that only warns about
+  one of them goes in its zero-slack `ALLOW` table with the reason.
 - `check_workflow_syntax.mjs` — compiles each script through `AsyncFunction` because `node --check`
   false-greens on ESM `export`, then guards CR in both the working tree and the index blob.
 - `.github/scripts/check_lint_wiring.sh` — compares the lint scripts that exist against the ones
