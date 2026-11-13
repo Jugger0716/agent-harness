@@ -92,7 +92,7 @@ PER_SKILL_CAP = 1024
 # Repository measurement at this commit (C2) -- a ceiling re-fixed in the commit that
 # creates it cannot cite its own SHA, so it is annotated this way rather than left bare.
 # Was 7709 at 4295156, before this slice trimmed four descriptions.
-TOTAL_CEILING = 2901  # v9 stage 1: the six kept skills, measured, zero slack. Was 7793 over 19 skills (harness-converge S2).
+TOTAL_CEILING = 2880  # v9 stage 1: the six kept skills, measured, zero slack. Was 7793 over 19 skills (harness-converge S2).
 
 # Per-skill ceilings (unquoted basis). Untouched skills keep their 4295156 measurement;
 # the five this commit edits are re-fixed at this commit. The three stub ceilings are the
@@ -100,7 +100,7 @@ TOTAL_CEILING = 2901  # v9 stage 1: the six kept skills, measured, zero slack. W
 PER_SKILL_CEILING = {
     "deep-review": 668,
     "handoff": 617,
-    "harness": 580,       # at this commit (harness-converge S2); was 555 at C5-c -- names the converge loop, the in-session approval chain and --separate-gate. C5-c: was 470 at 4295156 -- the entry point now names its two siblings
+    "harness": 559,       # v9 stage 1: 580 -> 559, the "(formerly ...)" alias note left with the alias. Earlier: at this commit (harness-converge S2); was 555 at C5-c -- names the converge loop, the in-session approval chain and --separate-gate. C5-c: was 470 at 4295156 -- the entry point now names its two siblings
     "harness-build": 404, # at this commit (harness-converge S2); was 379 at C5-c (new skill, split of harness) -- names both approval sites
     "harness-gate": 438,  # at this commit (harness-converge S2); was 401 at C5-c (new skill, split of harness) -- scoped to --separate-gate sessions, inline ones redirected
     "md-optimize": 194,
@@ -214,6 +214,13 @@ def main() -> int:
             problems.append(
                 "%s: unquoted plain scalar contains ': ' -- YAML cannot parse this and the skill "
                 "does not load" % skill
+            )
+        if not quoted and " #" in value:
+            # YAML starts a comment at " #" in a plain scalar, so the skill listing shows only the
+            # text before it. Measured on harness-gate, whose description opens "HARD GATE #1":
+            # the listing read "HARD GATE" until the value was quoted (v9 stage 1, K14).
+            problems.append(
+                "%s: unquoted description contains ' #' -- YAML truncates it there; quote the value" % skill
             )
 
         length = len(value)
