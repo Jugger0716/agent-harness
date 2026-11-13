@@ -1,5 +1,10 @@
 # Agent Harness Roadmap
 
+**Note (added 2026-11-13):** the next release line is **v9** — see `design/v9-subtraction/SPEC.md`.
+The `harness-converge` slices S1–S3 ship inside v9.0.0 rather than as a separate 8.15.0, and the
+open probe findings F1–F8 (`design/harness-converge/PROBE.md`) are carried into that spec's stage 5.
+The `practitioner-hardening` Stage 1 epic is superseded by the same spec and will not run.
+
 ## Unreleased — `harness-handoff-coldreview-epic-slice` epic (slices A–F)
 
 **Note (added 2026-08-19, v8.11.0 batch):** despite the heading, the epic this table tracks has

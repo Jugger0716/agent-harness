@@ -4,6 +4,7 @@
 > (finding id C1, M1~M4, M11~M14, M17, L7-10 등은 그 보고서의 id).
 > 실행: `/harness "Stage 1 practitioner hardening — see design/practitioner-hardening/STAGE1.md" --epic`
 > (태스크 문자열을 영어로 시작하는 이유: 한국어 태스크는 slug가 붕괴한다 — 보고서 M10.)
+> **대체됨 (2026-11-13):** 이 에픽은 실행하지 않는다. `design/v9-subtraction/SPEC.md`가 대체한다 — 유지 스킬에 해당하는 항목은 그 문서 1.2절과 2단계로 옮겼고, 나머지는 스킬 삭제로 대상이 사라진다(같은 문서 8.1절).
 
 ## 목표
 
