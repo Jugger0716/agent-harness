@@ -14,8 +14,6 @@
   "empty-args-deep-review.review": "W6",
   "empty-object-deep-review.review": "W6",
   "missing-diffContent-deep-review.review": "W6",
-  "build-null-implementation": "W1",
-  "build-null-plan-label": "W1",
   "plan-resubstitution": "W2",
   "build-resubstitution": "W2",
   "review-resubstitution": "W2",

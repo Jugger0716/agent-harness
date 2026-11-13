@@ -667,15 +667,16 @@ Print: `[harness] Phase: Generate`
    }
    ```
 3. Record `runs.build → { "runId": "<id>" }`.
-4. The segment returns `{ changes: ChangeSet, planDigest, advisorDigests }`. Store `workflow_ctx → { planDigest, advisorDigests, changedFiles }` in state.json — `changedFiles` = repo-relative paths from `changes.modifiedFiles[].path` + `createdFiles` (reasons stripped; normalize any absolute paths to repo-relative). Digests are reused on retries; `changedFiles` is the sanctioned Step 5 source on resume.
+4. The segment returns `{ changes: ChangeSet, planDigest, advisorDigests, stats: { planOk, advisorsSucceeded } }`. Store `workflow_ctx → { planDigest, advisorDigests, changedFiles }` in state.json — `changedFiles` = repo-relative paths from `changes.modifiedFiles[].path` + `createdFiles` (reasons stripped; normalize any absolute paths to repo-relative). Digests are reused on retries; `changedFiles` is the sanctioned Step 5 source on resume.
 5. **Orchestrator writes `{docs_path}changes.md` from the ChangeSet object**:
    - `## Round {round} Changes` header
    - `### Modified Files` ← `modifiedFiles[]` as `- path — reason` (normalize absolute paths to repo-relative) ; `### Created Files` / `### Deleted Files`
    - `### Advisor Feedback Applied` ← `advisorFeedbackApplied[]` ; `### Advisor Feedback Declined` ← `advisorFeedbackDeclined[]`
-6. Print per OLC: `  ✓ Code: {changes.summary}`
+6. Print per OLC: `  ✓ Code: {changes.summary}`. When `stats.planOk == false`, also print per OLC `  ⚠ Plan: unavailable — implemented without an implementation plan`.
 7. Verify `changes.md` exists (orchestrator-written).
 8. Update phase → `"generate_done"`, `updated_at → now`.
-9. **On Workflow error**: graceful fallback → re-run this step on the INLINE path (generator_single).
+9. **On Workflow error**: graceful fallback → re-run this step on the INLINE path (generator_single) — with one exception.
+   **If the error message contains `implementation returned null`**, the implementation agent may have edited files before it died, so do not fall back onto that tree unseen. When `has_git == true`, run `git status --porcelain` and print the changed paths; when it is `false`, say that the tree cannot be inspected. Then ask via AskUserQuestion (in `user_lang`) — header: "Partial edits" / question: "The implementation agent returned nothing, and the working tree may be partly edited. How should we proceed?" / options: "Continue inline" (re-run this step on the INLINE path on top of the current tree, with `{verify_failure}` = `An earlier implementation attempt may have partly edited: <paths> — inspect them before editing`) / "Stop" (keep `.harness/` and the tree as they are, print the path list, end the turn). In a non-interactive session take "Stop". This question is not one of the three HARD-GATEs; it exists only on this failure.
 
 **Retry entries (from Step 5/7 failure loops)** — regardless of path, a retry NEVER re-plans or re-reviews:
 - INLINE: re-dispatch the single implementation sub-agent with `{verify_failure}` + `{verify_report_path}` (current behavior).
