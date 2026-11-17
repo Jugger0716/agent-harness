@@ -1,11 +1,9 @@
 # Slugify — task string → `<slug>` (single source)
 
-> Cited by name from `skills/harness/SKILL.md` §Step 1 item 3 and `skills/spec/SKILL.md` §Step 1
-> item 2. The two skills share `docs/harness/<slug>/`: a `/spec` run's persisted artifacts are
-> picked up by the `/harness` run that derives the same slug (`/spec`'s M15 collision check and
-> `/harness` §Step 1.5's Persisted Spec Artifacts Check both rest on that), so the two MUST derive
-> it by one rule, defined here once. Other skills' slugs never cross a skill boundary and keep
-> their own inline rules.
+> Cited by name from `skills/harness/SKILL.md` §Step 1 item 3. A later `/harness` run for the same
+> task must derive the same `docs/harness/<slug>/` (§Step 1.5's Persisted Spec Artifacts Check
+> rests on that), so the rule is defined here once. Other skills' slugs never cross a skill
+> boundary and keep their own inline rules.
 
 ## Rule
 
@@ -24,7 +22,7 @@ Apply to the task string, in order:
 6. Truncate to 50 characters, then trim a trailing `-` again.
 7. **Empty result** (the task carries no ASCII letter or digit at all) → `task-<YYYYMMDD-HHMM>`
    (local time at Setup) and print, in `user_lang`, `[harness] Slug: the task has no ASCII word
-   — using <slug>` (`/spec` prints the same line under its own prefix).
+   — using <slug>`.
 
 Worked example — the probe's own task, `scripts/verify_sync_markers.py 모듈 docstring의 '§What
 this does not check' 항목 1·3의 수치를 …` → `scripts-verify-sync-markers-py-docstring-what-this`.
@@ -34,7 +32,7 @@ this does not check' 항목 1·3의 수치를 …` → `scripts-verify-sync-mark
 - It never asks. A slug question under `--fast` would add back the roundtrip `--fast` exists to
   remove; a task that wants a specific name says it in ASCII.
 - It does not guarantee uniqueness. `skills/harness/SKILL.md` §Step 1 item 8's branch-collision
-  rule and `/spec`'s M15 collision check own that.
+  rule owns that.
 - It does not relax the reserved-name rule. The slug is the last segment of `docs_path`, so
   `templates/_shared/safety_guard.md` step 3 (not `memory`, no `..`, no `/`) applies to it as
   before.

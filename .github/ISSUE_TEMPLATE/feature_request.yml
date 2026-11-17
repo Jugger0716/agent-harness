@@ -23,7 +23,7 @@ body:
     id: skill
     attributes:
       label: Affected skill(s)
-      placeholder: "e.g. /harness, /refactor, all skills"
+      placeholder: "e.g. /harness, /deep-review, all skills"
     validations:
       required: false
 

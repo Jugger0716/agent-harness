@@ -14,12 +14,6 @@ Write all output in **{user_lang}**.
 
 **Scope:** {scope} | **Max files:** {max_files}
 
-## Available Skills
-
-Search installed skills by keyword and invoke matches. Do not require specific plugin names.
-Search for "tdd" (if tests available), "subagent-driven-development" or "dispatching-parallel-agents", and invoke if found.
-If no matching skill is found, proceed without it.
-
 ## Instructions
 
 1. **Read the spec carefully.** Understand the goal, scope, approach, and completion criteria before writing a single line of code.

@@ -25,10 +25,9 @@ rule, with the prefix `[harness doctor]`: labels English raw, values per the Pre
 Glossary and remediation in `user_lang`, one `✓` or `⚠` per item. doctor does not read
 `.harness/state.json` and does not render that file's session status block.
 
-**No lint checks this section's item-number citations** — `§Step 1.5 items 1–2`, `§Storage
-Criteria`, `mode_gate.md` `rule 2`. They are prose pointers into other files, so a renumbering
-upstream rots them silently and nothing turns red. Re-read the cited section whenever either file
-changes.
+**No lint checks this section's item-number citation** — `mode_gate.md` `rule 2`. It is a prose
+pointer into another file, so a renumbering upstream rots it silently and nothing turns red.
+Re-read the cited section whenever either file changes.
 
 ① **Installed-copy CR contamination.** For each known install location, read every
 `*.workflow.js` under it as bytes and count the occurrences of the byte `0x0D`; the verdict is that
@@ -71,10 +70,9 @@ which this diagnostic never creates because it writes nothing. Say so in the row
 
 ③ **git work tree.** Run `git rev-parse --is-inside-work-tree` and decide on whether stdout is
 exactly `true` — not on the exit code, which is zero while `false` is printed inside a `.git/`
-directory. `{CLAUDE_PLUGIN_ROOT}/skills/team-memory/SKILL.md` §Step 1.5 item 1 owns this rule; the
-deciding clause is repeated here because item ⑤ reuses this item's answer — change it there first.
-Not being a work tree is not a fault: print `— (not a git work tree)`, which is **not** a `⚠`,
-exactly as ⑤ (iii) does with the same fact.
+directory. This item owns the rule: until v9 a knowledge-base skill owned it and this was a
+repeat; that skill is gone.
+Not being a work tree is not a fault: print `— (not a git work tree)`, which is **not** a `⚠`.
 
 ④ **Version and content drift**, on three axes, over the known install locations above.
    (a) Directory name against the `plugin.json` inside it, **for cache version directories only** —
@@ -123,28 +121,7 @@ exactly as ⑤ (iii) does with the same fact.
    judge ④ on axis (a) alone. No count, file list, or version string is written into this document
    as a constant; every one of them is measured at run time and printed.
 
-⑤ **Team-memory store ignore state.** (i) Apply the verdict rules of
-`{CLAUDE_PLUGIN_ROOT}/skills/team-memory/SKILL.md` §Step 1.5 items 1–2, together with the
-§Storage Criteria table that item 2 itself names, by name — do not restate the slug prefixes or
-the category directory names, which is the part that drifts. (ii) That plugin-root path is the read
-path, never a repository-relative one, because `/harness` runs in arbitrary projects; if the read
-fails, narrow the probe to the store directory and its `README.md`, say in the output that it was
-narrowed, and never report a narrowed verdict as `✓`. (iii) Argument-free form: reuse the work-tree
-answer item ③ already produced instead of running item 1 again, and when it is not a work tree
-print `— (not a git work tree)`, which is **not** a `⚠`. (iv) When it is one, anchor at the
-repository root and run item 2's check over every built-in category the cited table lists — the
-store directory, its `README.md`, each category directory, and one record-shaped path per category;
-do not add `-q`, which fails with several paths. (v) doctor does not create any of those paths: as
-that item states, the check matches patterns rather than the file system. (vi) Exit codes, as that
-item defines them: `0` = at least one path is ignored → `⚠`; `1` = none → `✓`; `128` = undetermined
-→ `⚠`. (vii) A `⚠` here is a report, not a gate — that item's "do not raise the gate" governs a
-gate doctor does not have; items 3–6 of that section, which own the gate and the `.gitignore`
-repair, do not apply here; and two limits stay uncovered and are printed with the verdict, namely a
-user-defined category, which only `save` Step 1's own output can enumerate, and the *Known limit*
-that item records for itself, an ignore pattern aimed at the free-form slug that follows a category
-prefix.
-
-⑥ **Project defaults.** Apply `templates/_shared/project_defaults.md` by name. Walk its three
+⑤ **Project defaults.** Apply `templates/_shared/project_defaults.md` by name. Walk its three
 sources in its own precedence order, treat the winning source as winning wholesale, and apply that
 file's parse rule as that file scopes it rather than restating it here. Report which source won,
 what the final resolved reading is, and on the same line that the sources below the winner were
@@ -159,8 +136,7 @@ ignored wholesale rather than merged. When no source declares anything — the c
   ② Workflow tool       : ✓  (this session's tool list only — launch surface .harness/wf/ not exercised)
   ③ git work tree       : ✓
   ④ Install drift       : ⚠  <measured summary>
-  ⑤ Memory store ignore : ⚠  <measured summary>
-  ⑥ Project defaults    : ✓  <winning source>
+  ⑤ Project defaults    : ✓  <winning source>
 ```
 
 A green ① or ④ says the copies on disk are current. It does not say the skill body this process is

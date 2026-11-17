@@ -106,7 +106,7 @@ const VerifyVerdictSchema = {
 // UPPERCASE severity enum (matches CriticReport.items[].severity, NOT FindingSchema's own
 // lowercase+suggestion vocabulary -- see that file's cold-review severity-vocabulary note).
 // counts keys are uppercase too, for the same reason -- do NOT copy the lowercase tally
-// pattern from spec.eval.workflow.js verbatim; only its NORMALIZE-FROM-ITEMS technique is
+// pattern from harness.critic.workflow.js verbatim; only its NORMALIZE-FROM-ITEMS technique is
 // reused below, with uppercase keys.
 const ColdFindingSchema = {
   type: 'object',
@@ -296,7 +296,7 @@ Before reviewing, identify the 2 most likely causes if this code fails in produc
 2. Run \`{test_cmd}\` and capture full output including pass/fail counts.
 3. Record all failures verbatim — do not summarise or omit error messages.
 
-If any test fails unexpectedly, search installed skills for "systematic-debugging" or "debugging" and invoke if found to diagnose the root cause before reporting.
+If any test fails unexpectedly, diagnose the root cause before reporting.
 
 ### Step 3 — Layer 2: Structural Verification
 
@@ -343,8 +343,6 @@ If ALL Layer 2 checks pass → proceed to Step 4.
 
 Only reached if ALL Layer 2 checks passed.
 
-Search installed skills for "requesting-code-review" or "code-review" and invoke if found.
-
 Read every changed file directly from the filesystem. For each criterion: identify key risks, then verify with code-level evidence before marking PASS.
 
 1. **Completion** — each spec criterion has corresponding code? Fully implemented, not superficial?
@@ -353,7 +351,7 @@ Read every changed file directly from the filesystem. For each criterion: identi
 4. **Consistency** — matches existing code style, naming, patterns?
 5. **Minimal changes** — no unrelated refactors, debug prints, unnecessary deps?
 
-Search installed skills for "verification-before-completion" or "verification" and invoke if found. Run verification commands rather than assuming correctness.
+Run verification commands rather than assuming correctness.
 
 ### Step 5 — Write QA Report
 
@@ -593,7 +591,7 @@ if (
       { schema: ColdFindingSetSchema, label: 'cold_review', phase: 'Cold review', ...mopt(MODELS.evaluator) },
     )
     // Normalize counts from findings[] -- same NORMALIZE-FROM-ITEMS technique as
-    // spec.eval.workflow.js's tally precedent, uppercase keys (ColdFindingSetSchema above).
+    // harness.critic.workflow.js's tally precedent, uppercase keys (ColdFindingSetSchema above).
     const tally = { Critical: 0, Major: 0, Minor: 0 }
     for (const f of cold.findings || []) {
       if (f && tally[f.severity] !== undefined) tally[f.severity] += 1
@@ -607,8 +605,7 @@ if (
     log(`Cold review: ${coldStatus} — Critical=${tally.Critical} Major=${tally.Major} Minor=${tally.Minor}`)
   } catch (e) {
     // AC-4: never let a cold-review failure lose the L1+L2/L3 verdict already earned above
-    // -- catch -> log -> fall through, same isolation pattern as
-    // workflows/study.analyze.workflow.js's critiqueResult/assembleDelta try/catch.
+    // -- catch -> log -> fall through.
     coldStatus = 'failed'
     log(`Cold review: failed — ${e && e.message ? e.message : e} (verdict above is unaffected)`)
   }

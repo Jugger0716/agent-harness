@@ -22,7 +22,7 @@ Sub-agents run on models chosen by the session's `model_config` preset (role →
 
 ## §Harness role map
 
-Role map: Architect / Senior Developer / QA Specialist / Synthesis → advisor; Lead Developer & Implementation & Generator(single) → executor; Combined / Code Quality / Test & Stability Advisor → advisor; Evaluator → evaluator; Verify (Layer 1) → verifier (haiku default); Cold review → evaluator (the same review tier as Evaluator — `skills/harness-build/SKILL.md` §Step 5 "Cold Review Input Collection" / `skills/harness-build/SKILL.md` §Step 6).
+Role map: Architect / Senior Developer / QA Specialist / Synthesis → advisor; Lead Developer & Implementation & Generator(single) → executor; Combined / Code Quality / Test & Stability Advisor → advisor; Evaluator → evaluator; Verify (Layer 1) → verifier (haiku default); Cold review → evaluator (the same review tier as Evaluator — `skills/harness-build/SKILL.md` §Step 5 "Cold Review Input Collection" / `skills/harness-build/SKILL.md` §Step 6); Converge review → advisor and Converge verify → evaluator (`templates/harness/converge.md` — the loop's two inline sub-agents on both paths; the round-1 critic keeps the Plan Critic's own mapping). Converge review is critic-type yet stays on advisor — a deliberate exception to the judgment → `evaluator` rule above, for cost (`design/harness-converge/SPEC.md` §위험, item 6): it runs every round, while verify, which judges, is the one on `evaluator`.
 
 - INLINE path: pass `model` per role at sub-agent launch (preset ≠ "default").
 - WORKFLOW path: pass the whole resolved map once as `args.models` (`{executor, advisor, evaluator, verifier}`; null role = inherit) — segment scripts apply it per agent.

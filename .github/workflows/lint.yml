@@ -27,7 +27,9 @@ jobs:
       # Every lint MUST be invoked from a ONE-LINE `- run:` step: that form is the contract
       # .github/scripts/check_lint_wiring.sh greps. A block-form step would not be counted.
       - run: python3 scripts/verify_block_sync.py
+      - run: python3 scripts/verify_cited_paths.py
       - run: python3 scripts/verify_description_budget.py
+      - run: python3 scripts/verify_git_safety.py
       - run: python3 scripts/verify_manifest_sync.py
       - run: python3 scripts/verify_meta_literal.py
       - run: python3 scripts/verify_sync_markers.py
@@ -43,4 +45,7 @@ jobs:
           grep -Eq 'OK: [0-9]+ index blobs are LF' "$RUNNER_TEMP/cws.log" \
             || { echo "::error::index-blob CR guard OK line missing"; exit 1; }
           ! grep -q 'SKIP index-blob CR guard' "$RUNNER_TEMP/cws.log"
+      # Behavioural tests, not a lint: the Workflow segment scripts run against a stub engine.
+      # Lives outside scripts/ on purpose, so check_lint_wiring.sh does not count it as a lint.
+      - run: node tests/segment_stubs/run.mjs
       - run: bash .github/scripts/check_lint_wiring.sh

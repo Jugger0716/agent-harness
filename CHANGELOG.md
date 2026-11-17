@@ -6,6 +6,317 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/).
 
+## [Unreleased]
+
+## [9.0.0] — 2026-11-17
+
+**Breaking.** v9 "subtraction", stage 1 (`design/v9-subtraction/SPEC.md` §5, plan
+`design/v9-subtraction/STAGE1.md`): the plugin goes from 19 skill directories to 6, and the
+data-loss paths found in the kept skills are closed. This section has two parts — the stage 1
+changes directly below, then the `harness-converge` epic exactly as it stood under
+`[Unreleased]` (the installed copies had carried that content under the `8.14.0` label since
+October; this release is where the label catches up with the content).
+
+### Removed
+
+Thirteen skill directories, ten Workflow segments and eight template directories. Everything
+removed is preserved at the `v8.14.0` tag.
+
+| Removed | Use instead |
+|---|---|
+| `/spec` | The plan phase of `/harness`. For the old behaviour, check out `v8.14.0`. |
+| `/md-generate` | The built-in `/init`. |
+| `/code-review` (forwarding alias) | `/deep-review`, or the built-in `/code-review`. |
+| `/workflow` (forwarding alias) | `/harness`. |
+| `/memory` (forwarding alias) | Claude Code's built-in auto-memory. |
+| `/refactor`, `/migrate`, `/test-gen`, `/debug`, `/study`, `/codebase-audit`, `/team-memory`, `/ship` | No successor in this plugin. Preserved at `v8.14.0`. |
+
+Kept: `/handoff`, `/harness`, `/harness-gate`, `/harness-build`, `/deep-review`, `/md-optimize`.
+
+- **`md-optimize` no longer deletes duplicate files.** Step 3d reports them instead. A copy that
+  looks redundant may be read by a tool or referenced from a file the skill never scans.
+- **`/harness` no longer skips its plan critic for a `critic_findings.md` left in the output
+  directory.** That was the hand-over from the removed spec skill (`plan_critic.source ==
+  "carried_over"`). A state written before v9 that still carries the value lands on gate row ③,
+  where "Run Critic anyway" is offered.
+- **`/harness doctor`** has five items, not six: the knowledge-base store check went with the
+  skill it inspected.
+
+### Fixed
+
+Each item is a path that could lose or misdirect work. Letters and numbers are the defect ids
+of `design/v9-subtraction/SPEC.md` appendix A.
+
+- **Auto-fix snapshot (K1).** `/harness-build` took its pre-apply snapshot with a bare
+  `git stash`, which moved the uncommitted implementation out of the working tree before the
+  patch was applied to it, never restored it on success, and did not cover new files. The
+  snapshot is now a byte copy of each validated path with a manifest, with or without git.
+- **Implementation agent returning nothing (W1).** `harness.build` threw a bare `TypeError`
+  and the skill re-ran the whole generate step inline on a tree the dead agent may already have
+  edited. The segment now throws an error that names the agent; the skill shows the changed
+  paths and asks before continuing. The return carries `stats { planOk, advisorsSucceeded }`.
+- **`md-optimize` recovery (W3, W4).** Recovery advice was `git checkout -- .`, which cannot
+  restore an untracked file and discards unrelated work. Phase 3 now starts with a byte backup
+  and a manifest and restores from it on failure; the evaluator is given the pre-run bytes; a
+  backup left by an interrupted run is detected at the next start and never overwritten.
+- **`deep-review --fix` on the wrong revision (W5).** A review of a PR, another branch or an
+  older commit produced findings for that revision, and `--fix` edited whatever was checked
+  out. `--fix` now refuses unless `HEAD` is the reviewed revision.
+- **Keyword skill lookup (W14).** Generator, evaluator and inline-planner prompts — and the
+  two orchestrator contracts' Key Rules — said to search installed skills by keyword and invoke
+  what matched, so behaviour and cost depended on what else was installed. Removed.
+- **`harness-gate` description cut short (K14).** Its unquoted description was truncated at
+  ` #` by YAML, so the skill listing read `HARD GATE`. The value is quoted.
+
+Three more paths in the same safeguards were found by review before the release and closed in
+it (`design/v9-subtraction/BASELINE.md`, the pre-release review subsection). None of the three
+has been exercised in a live session.
+
+- **`md-optimize` backup deleted by a `/harness` cleanup.** The backup lives under `.harness/`,
+  which a `/harness` session deletes when it ends. `/harness` now refuses to start while
+  `.harness/md-optimize/` exists, and `/md-optimize` refuses to start while a `/harness` session
+  is open in the directory.
+- **`md-optimize` backup deleted after "Skip".** When evaluator issues are left unfixed, the
+  backup is kept and its path printed; the next run asks whether to restore or discard it.
+- **Auto-fix interrupted while a patch is being applied.** The resumed session says the patch
+  may be partly applied. "Apply patch" starts again from the pre-apply copies and no longer
+  snapshots over them; "Reject" puts them back.
+
+### Changed
+
+- The plan-critic Workflow segment is `workflows/harness.critic.workflow.js` (was
+  `spec.eval`), and its templates are `templates/harness/plan_critic.md` and
+  `plan_critic_inline.md`. Args and return are unchanged. A leftover
+  `.harness/wf/spec.eval.workflow.js` copy in a working directory is ignored.
+- `skills/harness/SKILL.md` §Step 1.5 is the single source of the `conventions` field contract.
+- `md-optimize` routing: with no `.md` files it stops without asking; where a fuller CLAUDE.md
+  is needed first it offers "Stop" (pointing at the built-in `/init`) or "Continue".
+- `/handoff resume` rule 5 declines to chain into any skill that needs `WebSearch`/`WebFetch`,
+  without naming one.
+- Plugin description and keywords describe the six kept skills.
+- `README.md` drops the removed skills' sections (1,511 → about 780 lines). The rewrite to a
+  short README is a later stage.
+
+### Added
+
+- `scripts/verify_git_safety.py` — fails on `git checkout -- ` / `git checkout .`, a worktree
+  `git restore`, `git stash` (bare, `push`, `drop`), `reset … --hard` and `clean -f` / `--force`
+  in `skills/`, `templates/` and `workflows/`.
+- `scripts/verify_cited_paths.py` — every skill, template, workflow and script file path cited
+  from the contracts, `CLAUDE.md` or `README.md` must exist.
+- `scripts/verify_description_budget.py` fails on an unquoted description containing ` #`.
+- `RELEASING.md` — the release checklist that replaces the removed release skill.
+- The stub test runner names every segment script that has no representative case.
+
+### Lint pins
+
+`verify_sync_markers.py` floors, previous → new: `ambiguity-prompt` 10 → 2, `project-defaults`
+9 → 2, `adhoc-dispatch` 13 → 4, `session-conflict` 7 → 1, `conventions-field-contract` 3 → 1,
+`plan-critic-contract` (was `spec-eval-dual-caller`) 3 → 2. Description budget total 7,793 →
+2,880. Segment stub tests: 7 pass, 23 known failures (was 5 and 25).
+
+### Also in this release — the `harness-converge` epic
+
+What follows is the text that sat under `[Unreleased]`, unchanged. Two sentences in it are out
+of date (corrections, 2026-11-17).
+
+First, "none of the paths below has been observed in a live session". The stage 1 live
+verification — `design/v9-subtraction/BASELINE.md`, the live verification subsection of its
+stage 1 section — observed these and only these: the converge loop ending `converged`, the
+decision triage and the in-session approval question, on both the INLINE and the WORKFLOW
+path; and the chain into `/harness-build` on the INLINE path. Every other path below is still
+unobserved — among them `--fast`, `--separate-gate` with `/harness-gate`, the epic slice chain
+and its automatic commit, the approval's "Modify", the resume routing, the merged-severity
+raise, the `/harness-build` §Entry refusal and the non-interactive stop. S4, the scripted
+probe, is still not in.
+
+Second, "so `--fast` and carried-over sessions still skip the loop". In v9 a new session skips
+it only with `--fast`: nothing writes the carried-over record any more (see Removed above). A
+state written before v9 that still carries that record is read as before.
+
+The `harness-converge` epic (`design/harness-converge/SPEC.md`), slices S1–S3 and S3.5 (the
+follow-up decisions of the S1–S3 cold review and the AC-26 measurement). S4 (the live probe) is
+not in yet, so none of the paths below has been observed in a live session.
+
+### Added
+
+- **`/harness` §Step 2.6 converge loop (S1).** The own-critic pass is now one run of a loop —
+  `templates/harness/converge.md`, with the sub-agent templates `converge_review.md` and
+  `converge_verify.md`: review → verify and classify against a ledger under
+  `.harness/converge/` → apply every open `auto` correction in one write event → delta
+  re-review, at most five rounds, ending `converged` (no open `auto` Critical/Major on the
+  ledger), `capped` or `failed`. Decisions are asked once per session in their own question;
+  the run's end is mapped once into `plan_critic`, whose `counts` become the ledger residual.
+  (S3.5: the decision question is now a triage — see Changed.)
+- **In-session approval — `skills/harness/SKILL.md` §Approval Gate (S2).** HARD GATE #1 now
+  renders inside `/harness` for every new session by default (gate mode **inline**): a summary
+  (converge result, auto-applied list, residual, Scale Assessment), then ONE approval question —
+  "Build now", "Plan as epic", "Modify", "Stop" (`--fast`: three, no "Plan as epic"). Only the
+  first two labels approve. The approval is recorded once — `gate.approved`, `gate.approved_at`,
+  `gate.mode`, `gate.spec_stamp`, `gate.route` — and, under the new §Chain Condition (inline,
+  `run_style == auto`, interactive), `/harness` invokes `/harness-build` (with `--epic` on the
+  epic route) in the same turn. A normal task is now one typed message, `/harness "task"`.
+- **`--separate-gate` and the project default `gate=separate|inline` (S2).** Keep the tool-less
+  `/harness-gate` turn: the session ends at `plan_done` with `Next → /harness-gate`, exactly the
+  former flow. `--fast` is always inline; `--fast --separate-gate` halts. The mode is recorded in
+  `cli_flags.separate_gate` and echoed in the Setup Summary's new `Gate` row; a session written
+  before the field is read as inline when it was `--fast`, separate otherwise.
+- **Epic slice chaining — `skills/harness-build/SKILL.md` §Epic Slice Chain (S3).** After a
+  "Plan as epic" approval in a session where §Chain Condition holds, §Step 3.6 starts the first
+  row's `Command` in the same turn — the condition judged before `.harness/` is deleted, the
+  chain run only after the delete succeeded. A slice session is recognised without a state
+  field: its task equals exactly one `Slice` of the `slice_plan.md` in its `docs_path`'s parent.
+  It asks its own approval with three options (no "Plan as epic", so epics never nest), and on a
+  clean end — `QA PASS`, Layer 1 `PASS`, cold review `clean` or turned off — its §Step 8 applies
+  "Commit code only" without asking and starts the next row. A row whose `Command` is not exactly
+  `/harness --output-dir <dir> "<Slice>"` (now spelled out in §Step 3.5's format), or whose
+  `Slice` breaks the slice id rule, is never chained; the table's last row ends with an
+  `Epic : complete` row. §Chain Condition's `run_style` is the one §Step 1 recorded, so a
+  `/harness-build` typed later never commits or chains on an approval whose description promised
+  neither; a slice session takes `user_lang` from the user's most recent message, its task being
+  an English slice id.
+- **`dirty_at_start` (S3).** In a slice session only, `/harness` §Step 1 item 7 records each
+  changed or untracked path with its `git hash-object` before it creates anything, so the
+  automatic commit can name, and commit by pathspec (`git commit --only -- <paths>`), only what
+  changed in the working tree since; with no path to name it commits nothing and stops at the
+  slice boundary. Absent or `null`, the commit question renders instead. Other sessions do not
+  record it. Additive; `version` stays `"3.0"`.
+
+### Changed
+
+- **`/harness-build` §Entry refuses an unapproved inline session (S2).** Its new approval check
+  writes no gate-crossing field and halts when the approval is missing, is not bound to a `spec_stamp`, when
+  either stamp is null or malformed, when they differ, when spec.md cannot be read or its live
+  line count differs from `spec_stamp.lines`, or when `--epic` disagrees with the recorded route.
+  `/harness --modify` after an approval therefore leaves `/harness-build` refused until
+  `/harness` re-renders the approval question — the old "Fast Gate already approved" refusal in
+  the re-entry flags is gone. A separate session is unchanged (decision A).
+- **`/harness-gate` serves separate sessions only (S2).** An inline session gets one redirect
+  line and no question (§Entry Check, now eight points). Row ①-c's third non-exposure reason
+  reads "automatic revision already spent (Auto-revise or the converge loop)"; row ④'s default
+  banner names an interrupted converge run; its INLINE-retry rule now cites one statement of
+  §Step 2.6 branch (ii)'s footprint instead of a `failure_reason` no string records — with its
+  one blind spot disclosed: a denial that follows a branch (iii) record is not seen, so the
+  denied Workflow call can be issued once more (ROADMAP).
+  `disallowed-tools` is unchanged.
+- **`/harness` resume routing at `plan_done` (S2).** A valid approval chains (or stops) without
+  re-running anything; a null/malformed stamp or a line count that moved is re-stamped and then
+  reviewed in full (a session with no critic record yet goes through §Step 2.6, so `--fast` and
+  carried-over sessions still skip the loop); an interrupted run or (inline) a stale record starts
+  a new run; an unanswered decision is asked before the gate. The "Boundary Q&A already
+  answered" halt now applies to a separate session only — an inline one is routed by its
+  approval record, so a boundary answer recorded before spec.md changed no longer bounces
+  between `/harness` and `/harness-build --epic`.
+- **Wording that described the old guarantee (S2).** The `hx-state-machine` BLOCK (v2 → v3),
+  Architecture Principles #6 and slots (1) and (8), the run_style table and CLI surface,
+  `CLAUDE.md`, `README.md` (the default flow, the skills table, the first-task walkthrough, Quick
+  Start, the pipeline diagram, Execution Styles, the options table — now with `--separate-gate`
+  and `--no-prompt` rows — Session Recovery and Confirmation Gates), and in-row corrections to
+  `design/harness-ordering-enforcement/SPEC.md` (decisions ①·A·⑧, §1, §2.2, §2.3, §3.3a, §4.2,
+  §8, rev.9 (b)/(e)) and four `ROADMAP.md` rows.
+- **`spec_stamp.generation` never repeats a recorded value (S2).** A write that starts from a
+  `null` stamp — one an interrupted write left — now continues above the largest generation
+  `gate.spec_stamp` or `plan_critic.spec_stamp_at_critic` holds instead of restarting at 1, so an
+  approval (or a critic record) bound to an earlier generation cannot match a spec.md changed
+  since.
+  Description ceilings rose by 87 characters (harness 580, harness-build 404, harness-gate 438).
+- **The Type B block of an epic and its slices (S3).** The epic variant and every slice
+  session's Type B end with `Check` / `Next` / `Epic` / `Chain` / `Handoff` rows. A boundary stop
+  — the chain condition failing, an end that is not clean, a `Command` failing its shape check, a
+  failed delete, an automatic commit that failed or could not apply, a refused Skill call, or
+  context — prints the next row's
+  `Command` and offers `/handoff generate`; the epic variant's "`/handoff generate` is not
+  offered here" is corrected in place. A stop inside a slice prints only its own resume command.
+- **`/harness` Resume of a `completed` session deletes `.harness/` before Step 1 (S3).** A
+  session whose commit failed keeps `.harness/`, and the next `/harness` — the next slice's
+  `Command` included — used to start on top of it, inheriting the previous session's converge
+  ledger (and so skipping a decision question that ledger had already answered).
+- **§Step 3.6 now reads the first row's `Command` (S3)**, so its "never content" sentence is
+  corrected to cite Architecture Principles #1 slot (8), whose sites are now named; the
+  `/harness-build` subset of that registry counts four reads. Slot count unchanged (8, 7 live).
+- **Wording (S3).** `/harness` §Approval Gate's "Plan as epic" description announces the chain
+  under §Chain Condition, and a slice skips the Scale Assessment render; the run_style CLI
+  surface; `skills/handoff/SKILL.md` (one line on a slice `Command` continuing the chain — no
+  rule change — and "`/harness` §Step 3.5" corrected to `/harness-build`); `README.md` (a new
+  Epic Slices section — `gate=separate` keeps every slice on the tool-less gate — plus the skills
+  table, first-task walkthrough, Quick Start, Interactive UX, pipeline diagram, File Structure and
+  handoff notes); state docs; `CLAUDE.md`. Descriptions unchanged.
+
+- **The converge decision question is a triage (S3.5).** AC-26 (`design/harness-converge/AC26.md`)
+  sent 32 decisions to one session — 8 question calls. Now, settled once per session as before: a Minor
+  decision with a recommended option takes it without a question (ledger `answered`, `by:
+  "default"`), listed under `Defaulted` in the summary and in `plan_critic_findings.md`, where a
+  Modify takes it back; Critical/Major decisions come first as ONE `Decisions` question —
+  `Accept all recommended (N)` / `Review individually` (then up to four per call, as before);
+  "Other" on that first question is read as `Review individually`. Decisions first, then the
+  apply, a new run and the approval (decision D3) — unchanged. A first question left unanswered
+  (or dismissed — no individual question follows) applies nothing, the defaults included, so the
+  next run end or a later interactive resume asks again. A defaults-only triage makes no call, so
+  a session whose AskUserQuestion call would fail keeps the defaults it applied — the failure is
+  first seen at the approval question.
+- **A merged re-raise can raise a ledger item's severity (S3.5).** `converge_verify.md`'s
+  `merged` entries now carry a `severity`, and the merge sets the item's severity to the higher
+  of the two — never lower, nothing else changed — so a Minor `auto` re-raised as Major enters
+  the exit check and a Minor decision re-raised as Major before the triage ran is no longer
+  defaulted (one already defaulted stays answered, its current severity shown beside it and a banner above the summary).
+  Unconfirmed evidence merges without raising anything. A `merged` entry without a valid
+  `severity` fails the verdict's shape (`loop_parse_failed`).
+- **An `auto` fix that cannot be applied becomes a decision (S3.5).** It used to be marked
+  `rejected` (`fix no longer applicable` / `fix not a spec edit`) on the claim that a persisting
+  defect would be re-raised with new evidence — but a re-raise with the same fingerprint merges
+  into the rejected item unless its evidence lies in a changed region, so the defect could
+  vanish. It now stays open as a decision with its severity, its reason, and the options
+  `Specify the fix` (answer with Other) / `Ignore and proceed`, with no recommended option — it
+  is always asked individually and never defaulted. A round whose open `auto` items all turned
+  into decisions writes nothing to spec.md and ends the run `converged` instead of reviewing an
+  unchanged spec again; a fix already standing in its own section of spec.md (a write cut off
+  before its ledger update) is marked applied, not converted.
+- **A retried slice is never committed automatically (S3.5).** `/harness` §Step 1 item 7 records
+  no `dirty_at_start` when the slice's `{docs_path}` already exists (an earlier attempt of the
+  same slice): that attempt's uncommitted edits would otherwise count as pre-existing and be
+  left out of the commit. The slice's `Build now` then promises neither commit nor next slice,
+  and it ends with the commit question and a boundary stop. The automatic commit also prints a
+  second line listing the paths left out — changed before the session began and untouched since.
+
+### Removed — regressions, disclosed
+
+- **Minor converge decisions are taken without asking (S3.5).** The recommended option of every
+  Minor decision is applied to spec.md by the loop itself; the human sees each in an inline
+  session's approval summary — in a separate session, in the summary of the `/harness` turn that
+  ran the loop and in `plan_critic_findings.md` `## Defaulted`, but not at `/harness-gate`
+  (ROADMAP) — and can only take it back by a Modify. A decision without a recommended option is never
+  taken this way.
+
+- **The text-fallback approval is gone, `--fast` included.** The former §Fast Gate accepted a
+  numbered or keyword reply when AskUserQuestion was unavailable. An approval is now a label
+  selection only: with AskUserQuestion unavailable or failing, or in a non-interactive run
+  (`--no-prompt`, headless, cron, sub-agent), `/harness` records no approval, chains nothing and
+  stops at `plan_done`, printing an escape line — start a new session with `--separate-gate`
+  (where not even the resume question can be answered — headless, cron — delete `.harness/` first).
+- **`--fast` no longer chains under `run_style` `phase`/`step` or without an interactive
+  session.** The chain now needs §Chain Condition; a `--fast` approval outside it stops with
+  Resume `/harness-build`, one more typed message than before.
+- **The default gate turn is no longer tool-less.** An inline session's approval is a
+  model-written record checked by the next skill — the assurance grade the former Fast Gate
+  had, now the default (`design/harness-converge/SPEC.md` risk 1). Use `--separate-gate` or
+  `gate=separate` to keep the structural guarantee. The record is checked against the spec's
+  stamp and live line count only, so an editor change that keeps the line count, made after an
+  approval and before `/harness-build`, passes the check (`skills/harness-gate/SKILL.md`
+  §Stale Determination's disclosed limits 1–2). A converge-loop sub-agent writing
+  `.harness/state.json` inside the tree check's blind spot could forge the record too: the
+  loop's mapping writes `gate.*` back to its run-start values, so only a run that never reaches
+  its mapping (a Workflow denial, a session cut off mid-run) carries such a write forward (ROADMAP).
+- **A clean slice end in an in-session epic is committed without a question (S3).** The consent
+  is that slice's "Build now" click, whose description says so; outside §Chain Condition, or on
+  an end that is not clean, the commit question is unchanged. Every path that changed in the
+  working tree since the slice's session started is committed, listed as it commits — build or
+  test output that `.gitignore` does not cover, and a file edited by hand during the chain,
+  included. A file the slice edited is committed whole — an uncommitted edit you had made to it
+  before the slice started included, marked in the list — while files that did not change
+  meanwhile stay as they were, staged or not. Each slice branches from the previous slice's
+  commit and nothing is merged; the epic directory's own `spec.md` and `slice_plan.md` are
+  never part of an automatic commit (ROADMAP).
+
 ## [8.14.0] — 2026-09-28
 
 ### Added

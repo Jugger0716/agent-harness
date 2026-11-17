@@ -15,12 +15,12 @@ validate_path(path, kind) where kind ∈ {output_dir, file_reference, diff_targe
      "output-dir must not contain '..'." (exact segment match, never substring).
   4. kind-specific:
      - output_dir:
-         First segment (path.split("/")[0], trailing slash stripped first) ∉
+         First segment (path.split("/")[0], trailing slash stripped first) ∈
          {memory, spec, planner, generator, evaluator, verify, harness, .harness}
          → halt "output-dir value starts with a reserved directory name."
          Special case: if the first segment == "docs", the SECOND segment MUST == "harness"
          → otherwise halt "output-dir under docs/ must be docs/harness/...".
-         Rationale: the default output_base is docs/harness, so the /spec handoff value
+         Rationale: the default output_base is docs/harness, so
          docs/harness/<slug>/ is the only legitimate docs/... override; any other
          docs/<other>/ override is rejected to keep writes inside the harness namespace.
      - file_reference (failing_files_list, cold-review inputs, cold finding.file):

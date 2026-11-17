@@ -92,32 +92,18 @@ PER_SKILL_CAP = 1024
 # Repository measurement at this commit (C2) -- a ceiling re-fixed in the commit that
 # creates it cannot cite its own SHA, so it is annotated this way rather than left bare.
 # Was 7709 at 4295156, before this slice trimmed four descriptions.
-TOTAL_CEILING = 7706  # at this commit (C5-c); was 6841 at C2 of review-fixes-v8-12 -- +865 for the /harness split (470 -> 555 + 401 + 379), wordings fixed against SPEC §7.2
+TOTAL_CEILING = 2880  # v9 stage 1: the six kept skills, measured, zero slack. Was 7793 over 19 skills (harness-converge S2).
 
 # Per-skill ceilings (unquoted basis). Untouched skills keep their 4295156 measurement;
 # the five this commit edits are re-fixed at this commit. The three stub ceilings are the
 # lengths of the target wordings the epic plan fixed, not a projection.
 PER_SKILL_CEILING = {
-    "code-review": 45,   # at this commit (C2); was 226 at 4295156
-    "codebase-audit": 410,
-    "debug": 495,
     "deep-review": 668,
     "handoff": 617,
-    "harness": 555,       # at this commit (C5-c); was 470 at 4295156 -- the entry point now names its two siblings
-    "harness-build": 379, # at this commit (C5-c) -- new skill (split of harness)
-    "harness-gate": 401,  # at this commit (C5-c) -- new skill (split of harness)
-    "md-generate": 469,
+    "harness": 559,       # v9 stage 1: 580 -> 559, the "(formerly ...)" alias note left with the alias. Earlier: at this commit (harness-converge S2); was 555 at C5-c -- names the converge loop, the in-session approval chain and --separate-gate. C5-c: was 470 at 4295156 -- the entry point now names its two siblings
+    "harness-build": 404, # at this commit (harness-converge S2); was 379 at C5-c (new skill, split of harness) -- names both approval sites
+    "harness-gate": 438,  # at this commit (harness-converge S2); was 401 at C5-c (new skill, split of harness) -- scoped to --separate-gate sessions, inline ones redirected
     "md-optimize": 194,
-    "memory": 45,     # at this commit (C2); was 229 at 4295156
-    "migrate": 397,
-    "refactor": 329,
-    "ship": 520,
-    "spec": 595,      # at this commit (C2); was 594 at 4295156. Raised by exactly the
-                      # one character the YAML repair costs (": " -> " -- " em dash).
-    "study": 662,     # at this commit (C2); was 1009 at 4295156
-    "team-memory": 412,
-    "test-gen": 472,
-    "workflow": 41,   # at this commit (C2); was 198 at 4295156
 }
 
 # Lower bounds for the descriptions this slice shortens, set from the landed text at this
@@ -126,10 +112,6 @@ PER_SKILL_CEILING = {
 # slice's actual risk. The required-token lists below already pin the content; these bounds
 # are the backstop for a future edit that guts a description while keeping its tokens.
 LOWER_BOUND = {
-    "study": 600,        # landed 662 at this commit (C2)
-    "code-review": 30,   # landed 45
-    "memory": 30,        # landed 45
-    "workflow": 30,      # landed 41
     "harness": 400,      # landed 555 at C5-c; the entry point must keep naming the pipeline it fronts
 }
 
@@ -142,37 +124,9 @@ LOWER_BOUND = {
 # that satisfies the character target while deleting the discriminating tokens passes
 # every other check.
 REQUIRED_TOKENS = {
-    "study": [
-        "study guide",
-        "3-tier study guide",
-        "concept explanation",
-        "real code excerpts",
-        "interview Q&A",
-        "hands-on exercises",
-        "engineering principles",
-        "anti-patterns",
-        "glossary",
-        "verified revision material",
-        "not a usage guide",
-        "transferable technical knowledge",
-        "engineering judgment",
-        "Machine-checked provenance",
-        "repo-quote re-verification",
-        "inference-vs-repo claim basis",
-        "HTML report",
-        "/harness",
-        "project",
-        "git diff",
-    ],
 }
 
 FORBIDDEN_TOKENS = {
-    "study": [
-        "3-tier mode",
-        "opt-in gated",
-        "WebSearch/WebFetch are disallowed",
-        "structurally unverified",
-    ],
 }
 
 # First and second person is a discovery hazard: the description is injected into the
@@ -185,7 +139,6 @@ POV_RE = re.compile(r"(?<![\w/-])(I|we|our|us|you|your|my|me)(?![\w/-])", re.I)
 # violating is itself an error, so a fixed description cannot leave a stale entry behind.
 POV_ALLOWLIST = {
     "handoff": "pre-existing 'you' in the resume-gate sentence; outside this slice's scope",
-    "spec": "pre-existing 'you' in the when-to-use sentence; outside this slice's scope",
 }
 
 DESC_RE = re.compile(r"^description:[ \t]*(.*)$", re.M)
@@ -261,6 +214,13 @@ def main() -> int:
             problems.append(
                 "%s: unquoted plain scalar contains ': ' -- YAML cannot parse this and the skill "
                 "does not load" % skill
+            )
+        if not quoted and " #" in value:
+            # YAML starts a comment at " #" in a plain scalar, so the skill listing shows only the
+            # text before it. Measured on harness-gate, whose description opens "HARD GATE #1":
+            # the listing read "HARD GATE" until the value was quoted (v9 stage 1, K14).
+            problems.append(
+                "%s: unquoted description contains ' #' -- YAML truncates it there; quote the value" % skill
             )
 
         length = len(value)

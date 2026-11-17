@@ -305,12 +305,6 @@ You are the **Lead Developer** executing the implementation. You have the spec, 
 
 Write all output in **{user_lang}**.
 
-## Available Skills
-
-Search installed skills by keyword and invoke matches. Do not require specific plugin names.
-Search for "tdd" (if tests available) and invoke if found.
-If no matching skill is found, proceed without it.
-
 ## Instructions
 
 1. **Review advisor feedback.** Before writing any code, process the feedback:
@@ -374,12 +368,6 @@ You are the **Lead Developer** executing the implementation. You have the spec, 
 
 Write all output in **{user_lang}**.
 
-## Available Skills
-
-Search installed skills by keyword and invoke matches. Do not require specific plugin names.
-Search for "tdd" (if tests available) and invoke if found.
-If no matching skill is found, proceed without it.
-
 ## Instructions
 
 1. **Review advisor feedback.** Before writing any code, process the feedback from both advisors:
@@ -441,7 +429,9 @@ if (!A.retry) {
     }),
     { schema: AnalysisResultSchema, label: 'lead_developer', phase: 'Plan', ...mopt(MODELS.executor) },
   )
-  planDigest = digest(implPlan)
+  // A plan that never arrived is labelled as such — not blamed on an advisor (digest()'s
+  // null label), and reported to the caller through stats.planOk below.
+  planDigest = implPlan ? digest(implPlan) : '(plan unavailable)'
   // Fold the File-by-File plan's target paths into the digest as an explicit
   // inventory, so advisors + the implementer (and retry passes, which reuse this
   // digest verbatim) can open those files directly instead of each re-running
@@ -530,8 +520,18 @@ const changes =
         { schema: ChangeSetSchema, label: 'implementation', phase: 'Implement', ...mopt(MODELS.executor) },
       )
 
+// The implementation agent edits source files BEFORE it returns. A null here (skipped, or a
+// terminal API error) can therefore leave a half-edited tree, so it must not look like an
+// ordinary script error: the orchestrator keys its partial-edit check on this message.
+if (!changes) throw new Error('harness.build: implementation returned null — partial edits possible')
+
 log(`Implement: ${(changes.modifiedFiles || []).length} modified, ${(changes.createdFiles || []).length} created`)
 
 // Orchestrator writes changes.md from `changes`, stores the digests in state.json
 // (reused verbatim on retry entries), then proceeds to harness.eval.
-return { changes, planDigest, advisorDigests }
+// stats is derived from the digests, so it reads the same on a retry entry (which reuses them).
+const stats = {
+  planOk: Boolean(planDigest) && !planDigest.startsWith('(plan unavailable)'),
+  advisorsSucceeded: Object.values(advisorDigests).filter((d) => d && d !== '(advisor unavailable)').length,
+}
+return { changes, planDigest, advisorDigests, stats }

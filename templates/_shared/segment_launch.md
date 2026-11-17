@@ -25,7 +25,7 @@ fallback and is not a launch surface: a dispatch site never carries a repository
 
 **Correction, appended 2026-09-28:** the "no WORKFLOW-path run from an installed copy" sentence
 above was true when written and is not any more. The sixth probe in that same `PROBE.md` ran
-`harness.plan` (three agents) and `spec.eval` (one agent) from `.harness/wf/` copies of the
+`harness.plan` (three agents) and `harness.critic` (one agent) from `.harness/wf/` copies of the
 installed plugin in one `/harness --mode standard` session: both launched on the first attempt,
 ran to completion and returned schema-valid results, and the copy was gone after each. No other
 segment has been measured launching this way.
@@ -42,8 +42,7 @@ segment has been measured launching this way.
    every launch (and step 2's `cp` would read from `/workflows/…`). Substitute the literal root
    before running steps 0–2: the directory Claude Code reports as the invoking skill's base
    directory, minus its last two components — `skills/` and the invoking skill's own directory,
-   which is not always the script's `<skill>` prefix (`/harness` launches `spec.eval`,
-   `/harness-build` launches `harness.build`).
+   which is not always the script's `<skill>` prefix (`/harness-build` launches `harness.build`).
 1. `mkdir -p .harness/wf` — `.harness/` is the directory every launching skill already creates
    or touches (a stateless skill declares it session-scoped audit space; that declaration is not
    weakened, because step 4 removes what this procedure adds).
@@ -60,9 +59,8 @@ segment has been measured launching this way.
    no launching skill performs a `runId` resume at all (`resumeFromRunId` appears in the skills
    only as a same-session audit note or a prohibition), so no later step needs the file. This
    deletion is what keeps the skills' existing cleanup steps
-   true — `codebase-audit`, `deep-review` and `study` remove `.harness/` only "if empty", and
-   `/debug` has no end-of-session cleanup at all; a copy left behind would defeat the first three
-   and leak in the fourth.
+   true — `deep-review` removes `.harness/` only "if empty", and a copy left behind would defeat
+   that.
    **"Has returned" — here and in every dispatch site's "once this call returns" — means the run
    has finished.** The `Workflow` tool answers a launch at once with a task id and runs the
    script in the background, so for an accepted launch the moment to delete is the run's
@@ -90,16 +88,14 @@ session believes it is. Neither is a permission denial; rule 3's denial branch i
 This repository's `.gitignore` covers `.harness/`; a target repository may not. There the copy is
 an untracked file for the window between steps 2 and 4 — for an accepted launch that is the whole
 background run (minutes, in the sixth probe), closed by its completion notification, and never
-longer, because step 4 is unconditional — and `/ship`'s pre-commit check for `.harness/` files in
-the staging list (`skills/ship/SKILL.md`) is the existing net for anything a crashed session leaves
-behind.
+longer, because step 4 is unconditional. A crashed session can still leave the copy behind; in
+such a repository it then shows in `git status` as an untracked file.
 
 ## What this does not do
 
 - It does not make `/harness doctor` launch anything — item ② keeps reporting the tool's presence
   from the session's tool list, because doctor writes nothing, and this file's copy is a write.
 - It does not change what any skill's own cleanup step deletes: the copy is removed by step 4,
-  inside the launching step, before those cleanup steps run (`/spec`'s cleanup sentence now
-  names `wf/` in its enumeration, which changes the wording, not the deletion).
+  inside the launching step, before those cleanup steps run.
 - It does not apply to `/harness-gate`, which holds neither `Bash` nor `Workflow` and launches
   nothing.

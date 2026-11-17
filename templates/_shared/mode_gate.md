@@ -167,7 +167,7 @@ impossible request degrades correctly.
    - question: "No mode specified — choose how to run:"
    - options = the skill's modes, each mapping to inline/workflow per its §Mode Gate table.
      Append "(Recommended)" to the scope-advised tier for skills that print a scope advisory
-     (deep-review, codebase-audit, migrate, refactor); otherwise to the shallowest (inline) mode.
+     (deep-review); otherwise to the shallowest (inline) mode.
      **Exception — ultracode UNDETERMINED (step 4):** recommend the skill's ultracode-target
      tier instead, so an unobserved opt-in does not default to a downgrade.
    On answer: set `mode` + `path_resolved`, then emit §Path Transparency.

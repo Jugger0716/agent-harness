@@ -24,6 +24,9 @@
 
 > **게이트가 렌더되는 턴에는 파일 수정도 명령 실행도 구조적으로 불가능하다** — 그 턴을 소유한 스킬이
 > `Write`/`Edit`/`Bash`를 보유하지 않기 때문이다.
+>
+> (정정 2026-10-02, harness-converge S2, D1: 이 명제는 separate 경로(`--separate-gate`·`gate=separate`)에만
+> 해당한다. 기본 inline 경로는 모델이 쓴 승인 기록을 순서 근거로 채택한다(Fast Gate와 같은 등급) — §1 정정.)
 
 이것이 P-10(턴 스코프)이 무료로 주는 「build 진입에 사용자 메시지 1회 강제」 위에 **분할이 새로 사는 유일한 것**이며,
 따라서 이 에픽의 광고 명제다. `PROBE-FINDINGS-enforcement.md` §5가 광고하려던
@@ -34,15 +37,15 @@
 
 | # | 항목 | 결정 | 근거 / 파급 |
 |---|---|---|---|
-| ① | 광고 명제 | **(b) 무도구 게이트 스킬 3분할** — **rev.9 (2026-09-07) 사람이 재확인: 유지.** C4가 확정한 교환(+62 KB·재앵커 62·영구 3중 동기화 대 게이트 턴 무능력 1문장)을 제시하고 유지/철회/보류 중 유지가 선택됐다. 그 직후 §5.4의 배분이 비용 산식을 +26 KB(6절 기준)/+35 KB(전체)로 정정했으므로, 판정은 rev.8의 수치로 내려졌고 실제 비용은 그보다 작다 | (a) 명제 하향은 P-10이 이미 무료로 주는 것이라 분할이 새로 사는 것이 없다 (REMEASURE §1-c 안 2) |
+| ① | 광고 명제 | **(b) 무도구 게이트 스킬 3분할** — **rev.9 (2026-09-07) 사람이 재확인: 유지.** C4가 확정한 교환(+62 KB·재앵커 62·영구 3중 동기화 대 게이트 턴 무능력 1문장)을 제시하고 유지/철회/보류 중 유지가 선택됐다. 그 직후 §5.4의 배분이 비용 산식을 +26 KB(6절 기준)/+35 KB(전체)로 정정했으므로, 판정은 rev.8의 수치로 내려졌고 실제 비용은 그보다 작다. **정정 2026-10-02 (harness-converge S2, D1):** 무도구 게이트 스킬은 존속하지만 `--separate-gate`·`gate=separate` opt-in 전용이 되었다. 새 세션의 기본은 `/harness` 안의 세션 내 승인(`skills/harness/SKILL.md` §Approval Gate)이고, **기본 inline 경로는 모델이 쓴 승인 기록을 순서 근거로 채택한다(Fast Gate와 같은 등급)** — 기록은 `spec_stamp`에 결속되고 `/harness-build` §Entry가 어긋나면 fail-closed로 거부한다. 「게이트 턴 무능력」 명제는 separate 경로에만 남는다(`design/harness-converge/SPEC.md` 확정 결정 D1·위험 1) | (a) 명제 하향은 P-10이 이미 무료로 주는 것이라 분할이 새로 사는 것이 없다 (REMEASURE §1-c 안 2) |
 | ② | Stale Determination | **mtime → 세대 카운터** (강제) | 무도구 게이트는 `Bash`도 `Glob`도 없어 mtime 순서조차 얻지 못한다. 동률(same-second) 규칙 문제도 함께 소멸 |
 | ③ | `Modify` 수행 주체 | **명문화 + 형태 변경**: plan 스킬 오케스트레이터가 수행, 게이트는 halt + 재진입 안내 (강제) | 무도구 게이트는 `update spec.md`를 수행할 수 없다 |
-| A | 게이트 통과 기록 | **`phase`를 감사 전용으로 강등** — 게이트 증거로 쓰지 않는다 | 게이트가 `phase → "generate_ready"`를 쓸 수 없다(§Step 3 Pass B). 위조 가능한 값을 게이트 근거로 쓰는 척을 그만둔다 |
+| A | 게이트 통과 기록 | **`phase`를 감사 전용으로 강등** — 게이트 증거로 쓰지 않는다. **정정 2026-10-02 (harness-converge S2, D1):** `phase`는 여전히 감사 전용이지만, 「사람이 타이핑한 명령만이 증거」라는 귀결은 separate 경로에만 적용된다. 기본 inline 경로는 모델이 쓴 승인 기록(`gate.approved`·`gate.spec_stamp`·`gate.route`, 라벨 선택으로만 기록)을 순서 근거로 채택한다(Fast Gate와 같은 등급) | 게이트가 `phase → "generate_ready"`를 쓸 수 없다(§Step 3 Pass B). 위조 가능한 값을 게이트 근거로 쓰는 척을 그만둔다. inline 경로가 위조 가능한 값을 다시 쓰는 이유와 완화책: `design/harness-converge/SPEC.md` 확정 결정 D1·위험 1 |
 | ④ | 공유 계약 40,734 B | **`templates/_shared/` 추출** | 저장소 관례에 부합. **런타임 제약이 리스크 R-1로 남는다** — 아래 §5 |
 | ⑤ | epic-exit 분기 | **되당긴다 — 단, 착지점이 재해석됐다**: §Step 8에서 분리해 게이트 **직후 스킬**의 맨 앞으로 | 원안(「§Step 3.5 뒤」)은 무도구 게이트 안에 착지해 실행 불가. §0-B 참조 |
 | ⑥ | mode 파라미터화 | **선행 커밋으로 분리** | 스크립트 리팩터 + 인용 62건 재앵커 + SKILL.md 3분할을 한 커밋에 담으면 리뷰 불가 (REMEASURE §5-⑥) |
 | ⑦ | description 문안 | **미확정 — §7에 초안, 예산 재계산 포함** | 스크립트가 강제하는 토큰 0개. 트리거 신호 보존은 자발적 선택 |
-| ⑧ | 직접 호출 차단 불가 | **막지 않는다. 위협 모델을 문서로 분리한다** | 순서 선언 필드 부재(PROBE §1-16). 드리프트가 아니라 명시적 선택 |
+| ⑧ | 직접 호출 차단 불가 | **막지 않는다. 위협 모델을 문서로 분리한다.** **정정 2026-10-02 (harness-converge S2, D1):** separate 세션은 그대로 막지 않는다. 기본 inline 세션은 `/harness-build` 직접 호출을 §Entry 승인 검사로 거부한다(결속된 승인 기록이 없거나 spec·경로와 어긋나면 아무것도 쓰지 않고 거부) — 기록이 모델-작성 값이므로 명시적 우회가 아니라 드리프트를 막는 장치다. (정정 2026-10-02, S2 리뷰: 「아무것도 쓰지 않고」는 「게이트 횡단 필드(`phase`, `gate.*`, `spec_stamp`, `epic.*`)를 쓰지 않고」로 읽는다 — 그보다 먼저 도는 `session_recovery.md` item 5–6의 복원 쓰기는 남을 수 있다(`skills/harness-build/SKILL.md` §Entry). 또 기본 inline 경로는 모델이 쓴 승인 기록을 순서 근거로 채택한다(Fast Gate와 같은 등급, §3.3a).) | 순서 선언 필드 부재(PROBE §1-16). 드리프트가 아니라 명시적 선택 |
 
 ### Open questions (이 rev에서 닫히지 않은 것)
 
@@ -207,11 +210,18 @@ rev.5가 「나머지 15건은 판정 미완」이라 적은 그 목록은 **커
 상호배타」가 분할 후 거짓이 된다 — plan 스킬은 **항상** `plan_done`에서 세션을 끝내므로 §After Plan Phase
 render가 항상 발화하고, Pass B render는 다음 턴에 또 발화한다. (b) 같은 이유로 `run_style: auto`의
 「Step 2 → 2.6 → 3 직행」이 Plan→Gate 경계에서 소멸한다 — **auto 세션도 `plan_done`에서 멈춘다.** 이는
-§2.2가 이미 함의하는 것이지만 §run_style 본문이 그렇게 말해야 한다. (c) Session Conflict gate 문안의
+§2.2가 이미 함의하는 것이지만 §run_style 본문이 그렇게 말해야 한다. (정정 2026-10-02, harness-converge S2, D1:
+기본 inline 경로에서는 auto 세션이 `plan_done`에서 세션 내 승인을 받고, `skills/harness/SKILL.md` §Chain Condition이
+성립하면 같은 턴에 `/harness-build`로 체인한다 — `/harness`는 여전히 `plan_done`에서 끝나지만 다음 스킬이 같은 턴에
+이어진다. 「auto 세션도 `plan_done`에서 멈춘다」는 separate 경로와 체인 조건이 어긋난 inline 경로에만 남는다. 기본
+inline 경로는 모델이 쓴 승인 기록을 순서 근거로 채택한다(Fast Gate와 같은 등급).) (c) Session Conflict gate 문안의
 「Starting /harness here will delete it」은 바이트 동일 복제를 위해 스킬 중립 문장으로 바꿔야 한다.
 (d) §Session Boundary 머리말 812 B는 렌더 사이트를 열거하므로 파일별로 다시 써야 하고 동기화 대상이
 아니다. (e) harness의 Session Recovery `plan_done` 행은 더 이상 파일 안의 Step 3으로 라우팅하지 않고
 `/harness-gate`를 안내하고 halt한다; build의 `completed` 행은 「활성 세션 없음 — `/harness`를 실행하라」다.
+(정정 2026-10-02, harness-converge S2: (e)의 `plan_done` 행은 이제 separate 세션에만 `/harness-gate`를 안내한다. inline
+세션은 §Approval Gate를 렌더하거나, 승인이 유효하면 기록된 경로로 체인한다 — 순서는 그 파일의 §Session Recovery.
+Step 3으로 라우팅하지 않는다는 점은 그대로다.)
 
 **rev.8 (2026-09-07) — 결정 ④를 「소유권 분할」로 확정하고 경계를 실측했다. 분할이 커버하는
 것은 26%이고, 나머지 74%는 원리적으로 전역이다 — 이 수치가 에픽의 비용을 처음으로 확정한다.**
@@ -432,6 +442,12 @@ REMEASURE §1-③-c 안 1은 §Step 8의 `#### If epic exit:` 블록을 「§Ste
 3. 게이트 통과 사실은 **어디에도 기록되지 않는다**(결정 A). 명제는 「게이트 턴의 무능력」이지
    「게이트를 통과했음의 증명」이 아니다.
 
+**정정 2026-10-02 (harness-converge S2, D1):** 이 명제는 이제 separate 경로(`--separate-gate`·`gate=separate`)에만
+해당한다. 새 세션의 기본인 inline 경로에서는 게이트를 렌더하는 턴(`/harness`의 §Approval Gate)이 쓰기 도구를 갖고
+있으므로 명제가 성립하지 않으며, 그 자리를 라벨 선택으로만 성립하는 승인, `spec_stamp`에 결속된 승인 기록, `/harness-build`
+§Entry의 fail-closed 거부가 대신한다 — Fast Gate와 같은 등급(§3.3a). 위 항목 3도 inline 경로에서는 거짓이다: 승인
+기록이 남는다. 근거와 완화책: `design/harness-converge/SPEC.md` 확정 결정 D1·위험 1.
+
 ---
 
 ## 2. 스킬 분할 설계
@@ -481,6 +497,11 @@ REMEASURE §1-③-c 안 1은 §Step 8의 `#### If epic exit:` 블록을 「§Ste
 (「모델이 쓴 값은 모델이 위조한다」)를 **회피가 아니라 인정**으로 처리한 것이다: 게이트의 산출을
 모델이 쓸 수 있는 저장소에 두지 않고, 사람이 타이핑하는 채널에 둔다.
 
+**정정 2026-10-02 (harness-converge S2, D1):** 위 3메시지 흐름과 「전달 매체는 사용자 메시지」는 separate 경로의 것이다.
+기본 inline 경로는 `/harness "작업"` 한 메시지 안에서 수렴 → (결정 질문) → 승인 질문 → Skill 체인으로
+`/harness-build`까지 이어진다. 전달 매체는 승인 라벨 선택과 그것을 담은 모델-작성 승인 기록이며, PROBE §3이 지적한
+위조 가능성은 인정된 잔여 위험이다(Fast Gate와 같은 등급, `design/harness-converge/SPEC.md` 확정 결정 D1·위험 1).
+
 ### 2.3 `phase`의 지위 변경 (결정 A)
 
 - `phase`는 **§Session Recovery와 감사에만** 쓴다. **게이트 통과 증거로 인용하지 않는다.**
@@ -490,6 +511,10 @@ REMEASURE §1-③-c 안 1은 §Step 8의 `#### If epic exit:` 블록을 「§Ste
   표현하던 자리이므로, 그 의미를 「이 스킬은 별도 스킬이며 호출 자체가 사용자 행위다」로 바꾼다.
 - **`skills/harness/SKILL.md` §Session Recovery의 phase 점프 테이블**은 세 스킬로 쪼개지며,
   각 스킬은 **자기 소유 phase 범위만** 라우팅한다. 범위 밖 phase를 만나면 해당 스킬 이름을 안내하고 halt.
+- **정정 2026-10-02 (harness-converge S2, D1):** `phase`를 게이트 증거로 인용하지 않는다는 점은 그대로다. 다만 기본
+  inline 경로의 build 진입 근거는 `phase`가 아닌 별도의 승인 기록(`gate.*`, `spec_stamp` 결속)이고, §Step Mode
+  Prerequisites는 inline 세션에 그 승인 검사(`skills/harness-build/SKILL.md` §Entry)를 조건으로 더했다. 「호출 자체가
+  사용자 행위」라는 의미는 separate 경로에 남는다.
 
 ---
 
@@ -556,6 +581,12 @@ mtime은 모든 외부 편집을 잡았고 I/O 실패라는 fail-closed 축도 �
 **무도구 게이트가 성립하지 않고**, 그것이 이 에픽의 전제다. 결정 A가 금지한 것은 「위조 가능한
 값을 **순서 집행의 근거**로 쓰는 것」이지 「어떤 모델-작성 값도 읽지 않는 것」이 아니다.
 
+**정정 2026-10-02 (harness-converge S2, D1):** 위 문단의 마지막 문장은 separate 경로에만 남는다. 기본 inline 경로는
+바로 그 일을 한다 — **모델이 쓴 승인 기록(`gate.spec_stamp`에 결속)을 순서 근거로 채택한다(Fast Gate와 같은 등급).**
+위 표의 「적대적」 위협 모델, 곧 게이트를 우회하려는 모델은 기록·스탬프·줄 수를 함께 맞출 수 있으므로 이 기제가 막지
+못한다. 받아들인 이유와 완화책(라벨 선택만 승인, 승인 뒤 spec 쓰기 없음, build fail-closed 거부, separate opt-in
+존속): `design/harness-converge/SPEC.md` 확정 결정 D1·위험 1.
+
 ### 3.4 latch (b) 대체 — 디스패치 전 삭제
 
 §Step 2.6은 own-critic을 디스패치하기 **직전에** `{docs_path}plan_critic_findings.md`를 삭제한다.
@@ -607,6 +638,9 @@ Auto-revise·Modify / §Pass B Modify / §Modify Interaction 2항목 / §Step 6 
 **대가 (정직하게)**: 「Modify → 즉시 재표시」가 「Modify → 사용자 메시지 2회 왕복」이 된다.
 태스크당 사용자 메시지는 최소 **3회**(`/harness` → `/harness-gate` → `/harness-build`),
 Modify 1회당 **+2회**.
+(정정 2026-10-02, `harness-converge` S2, 결정 D1: 3메시지 최소치, Modify당 +2회, 위 동작 4항은 이제
+separate 경로(`--separate-gate`·`gate=separate`)에만 해당한다. 기본 inline 경로는 `/harness "task"` 1메시지이고,
+Modify는 `skills/harness/SKILL.md` §Approval Gate 안에서 같은 턴에 반영되어 승인 질문이 다시 렌더된다.)
 
 ---
 
@@ -981,6 +1015,13 @@ OK: 9 sync group(s), 51 marker site(s)
 
 각 스킬은 진입 시 선행 산출물 부재를 **감지해 안내**한다(차단이 아니라 안내 — `phase`가 감사 전용이므로
 차단 근거로 쓸 수 없다).
+
+**정정 2026-10-02 (harness-converge S2, D1):** 기본 inline 세션에서는 `/harness-build` 직접 호출이 §Entry 승인 검사에서
+거부된다(결속된 승인 기록이 없거나 spec·`--epic` 유무와 어긋나면 아무것도 쓰지 않고 거부). 근거는 `phase`가 아닌 승인
+기록이며, 모델-작성 값이므로 드리프트 방지 장치이지 명시적 우회 차단이 아니다. 「게이트 턴에 도구가 없으므로 어길 수
+있는 일이 없다」는 separate 경로에만 해당한다. (정정 2026-10-02, S2 리뷰: 「아무것도 쓰지 않고」는 「게이트 횡단
+필드(`phase`, `gate.*`, `spec_stamp`, `epic.*`)를 쓰지 않고」로 읽는다 — 그보다 먼저 도는 `session_recovery.md` item 5–6의
+복원 쓰기는 거부된 호출에도 남을 수 있다(`skills/harness-build/SKILL.md` §Entry).)
 
 ---
 

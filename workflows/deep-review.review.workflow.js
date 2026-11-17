@@ -484,7 +484,7 @@ Return a structured CrossVerifyReport object (the dispatching engine enforces th
 
 // ---- synthesis template (authored in-script — no .md SYNC-SOURCE exists) -----
 // Mirrors the merge rules the orchestrator previously applied inline in
-// skills/code-review/SKILL.md Step 5 (dedupe / higher-severity / cross-verification
+// skills/deep-review/SKILL.md Step 5 (dedupe / higher-severity / cross-verification
 // adjustments), now executed by a dispatched agent returning the final FindingSet.
 const TPL_SYNTHESIS = `# Review Synthesis
 
@@ -636,7 +636,7 @@ const merged = await agent(
 )
 
 // Normalize counts from findings[] — findings are the ground truth the report displays
-// (spec.eval tally precedent).
+// (harness.critic tally precedent).
 const tally = { critical: 0, major: 0, minor: 0, suggestion: 0 }
 for (const f of merged.findings || []) {
   if (f && tally[f.severity] !== undefined) tally[f.severity] += 1

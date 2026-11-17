@@ -43,7 +43,14 @@ re-entry is itself interrupted before its write completes, resume lands on row �
 reason. The staleness the stamps would have shown is still real — the re-entry advanced
 `spec_stamp.generation` past the recorded `spec_stamp_at_critic`, or left `spec_stamp` at `null` —
 but row ④ is evaluated first, so that axis is never reached. Choosing "Run Critic anyway" there
-re-charges one critic dispatch, which is idempotent.
+re-charges one critic dispatch, which is idempotent. Correction (2026-10-02, harness-converge
+S1): the re-critic is now a converge run (`templates/harness/converge.md`), so neither half
+holds as written. Row ④ is reached only when the run is interrupted between its round-1 delete
+and the round-1 critic's write; after that write the old record is well-formed again and, the
+re-render having moved the stamp, lands on row ①-b / ②-b. And the re-charge is no
+longer idempotent: rounds the interrupted run applied stay in spec.md until a later run reviews
+them. The current landing rows are in `skills/harness/SKILL.md` §Step 2.6, its "Two recorded
+limits" paragraph.
 
 **Why no `runs` slot.** `state.runs` has exactly `{plan, build, eval}` — there is no reserved fourth
 slot. Recording Step 2.6's WORKFLOW run id under `runs.eval` would silently clobber the record

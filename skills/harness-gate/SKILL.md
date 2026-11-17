@@ -1,7 +1,7 @@
 ---
 name: harness-gate
 disallowed-tools: Bash, Write, Edit, Glob, NotebookEdit, WebSearch, WebFetch, Task, Agent, Workflow
-description: HARD GATE #1 of the /harness pipeline — spec confirmation only. Holds no Bash, Write, Edit, Glob or sub-agent tools — reads .harness/state.json and spec.md, renders critic status and Scale Assessment, asks once, prints the next command (/harness-build, /harness-build --epic, or a /harness re-entry) and writes nothing. Run after /harness reaches plan_done; any other phase is redirected to its owner.
+description: "HARD GATE #1 for a --separate-gate /harness session — spec confirmation only. Holds no Bash, Write, Edit, Glob or sub-agent tools — reads .harness/state.json and spec.md, renders critic status and Scale Assessment, asks once, prints the next command (/harness-build, /harness-build --epic, or a /harness re-entry) and writes nothing. Run after /harness reaches plan_done; any other phase, or an inline session, is redirected to its owner."
 ---
 
 # Agent Harness — /harness-gate (v3, HARD GATE #1)
@@ -14,8 +14,13 @@ command). `phase` is never written here and is never read as proof that this gat
 (SPEC decision A — `design/harness-ordering-enforcement/SPEC.md`) — the human's typed command
 is the only carrier of the decision.
 
-Pipeline: `/harness` (Steps 1–2.6, ends at `plan_done`) → **this skill** (Step 3) →
-`/harness-build` (Steps 3.5–8). See `skills/harness/SKILL.md` §Session Recovery for the full
+This skill gates a **separate** session only — one started with `--separate-gate` or under the
+project default `gate=separate` (`skills/harness/SKILL.md` §Approval Gate's gate-mode rule). An
+**inline** session, the default, renders HARD GATE #1 in `/harness` itself
+(`skills/harness/SKILL.md` §Approval Gate) and is redirected there by §Entry Check.
+
+Pipeline (separate session): `/harness` (Steps 1–2.6, ends at `plan_done`) → **this skill**
+(Step 3) → `/harness-build` (Steps 3.5–8). See `skills/harness/SKILL.md` §Session Recovery for the full
 phase machine; this file only needs §Entry Check below.
 
 ## User Language Detection
@@ -40,7 +45,7 @@ When rendering a `Print:` directive: translate natural-language portions to `use
 
 Read `.harness/state.json` with `Read`. Evaluate in order; the first match halts. Every message is
 printed per §Output Language Contract (`[harness-gate]` is a Glossary-class prefix — English raw).
-**No option is offered at any of the seven points below** — this section contains no
+**No option is offered at any of the eight points below** — this section contains no
 AskUserQuestion: the recovery actions `/harness` offers (deleting or re-creating `.harness/`)
 are actions this skill cannot perform, and offering an action one cannot perform is a false
 promise, not a contract.
@@ -55,10 +60,14 @@ promise, not a contract.
    run /harness, which offers the recovery options.`
 5. `phase != "plan_done"` → `[harness-gate] phase is {phase}; this gate only reads plan_done.
    Owner: /harness for plan_ready|planning, /harness-build for generate_ready…completed.`
-6. `validate_path(docs_path, kind=output_dir)` fails (§Path Validator — this skill's own copy)
+6. The session's gate mode is **inline** (`skills/harness/SKILL.md` §Approval Gate's gate-mode
+   rule, by name: `cli_flags.separate_gate == false`, or the field absent with
+   `cli_flags.fast == true`) → `[harness-gate] This session's approval is /harness — run /harness.`
+   One line, no AskUserQuestion, nothing else rendered.
+7. `validate_path(docs_path, kind=output_dir)` fails (§Path Validator — this skill's own copy)
    → print the validator's halt message and halt. No recovery is offered; that belongs to /harness.
-7. Otherwise → restore the display fields from state.json (`task`, `mode`, `path_resolved`,
-   `docs_path`, `plan_critic.*`, `spec_stamp`, `scale.*`, `cli_flags.epic`, `user_lang`), then
+8. Otherwise → restore the display fields from state.json (`task`, `mode`, `path_resolved`,
+   `docs_path`, `plan_critic.*`, `converge.*`, `spec_stamp`, `scale.*`, `cli_flags.epic`, `user_lang`), then
    proceed to §Workflow Steps — Step 3. `{docs_path}spec.md` and
    `{docs_path}plan_critic_findings.md` / `critic_findings.md` are read from here on; a missing
    file is detected by the failed `Read` itself (no Glob — SPEC OQ-4 closed).
@@ -69,15 +78,18 @@ Never emit a `{...}` token verbatim — substitute from state.json before render
 
 Every option of Step 3 that used to write state, dispatch a sub-agent, or edit `spec.md` now
 ends this turn by printing ONE line the human types next. The mapping is exhaustive over both
-passes; a label absent here does not exist in this skill.
+passes; a label absent here does not exist in this skill. Every row serves a separate session
+(§Entry Check 6 redirects an inline one), so each `/harness` re-entry below ends at that
+skill's separate ending, `Next → /harness-gate`, and the `/harness-build` rows are admitted by
+the human typing them (decision A) — never by a recorded approval.
 
 | Chosen option | Printed next command | What that skill does with it |
 |---|---|---|
 | "Proceed as single" / "Proceed" (Pass B) | `/harness-build` | writes `phase → "generate_ready"`, resets `epic.boundaries → null`, runs Step 4 → 8 |
 | "Plan as epic" (Pass B) | `/harness-build --epic` | runs `skills/harness-build/SKILL.md` §Step 3.5 (Slice Plan) and then its Epic Exit (Step 3.6) |
-| "Modify" (either pass) | `/harness --modify "<the user's change request, quoted>"` | the /harness orchestrator edits `spec.md` under its `spec_stamp` write protocol, then prints `Next → /harness-gate` |
+| "Modify" (either pass) | `/harness --modify "<the user's change request, quoted>"` | the /harness orchestrator edits `spec.md` under its `spec_stamp` write protocol, runs a new converge run on the edit (not in a loop-skipping session — `templates/harness/converge.md` §Terms), then prints `Next → /harness-gate` |
 | "Auto-revise" (Pass A row ①-a) | `/harness --auto-revise` | Auto-revise re-entry + a fresh Plan Critic pass, then `Next → /harness-gate` |
-| "Run Critic anyway" / "Retry Critic" (Pass A rows ①-b/①-c/②-b/③/④) | `/harness --critic` | a fresh own-critic dispatch (`skills/harness/SKILL.md` §Step 2.6), then `Next → /harness-gate` |
+| "Run Critic anyway" / "Retry Critic" (Pass A rows ①-b/①-c/②-b/③/④) | `/harness --critic` | a new converge run, full review (`skills/harness/SKILL.md` §Step 2.6) — its non-ending rounds may apply `auto` corrections to spec.md (`templates/harness/converge.md`) — then `Next → /harness-gate` |
 | "Proceed as-is" (Pass A) | (none — Pass B renders in this same turn) | — |
 | "Stop" (either pass) | (none — halt; `.harness/` is left exactly as found) | — |
 
@@ -143,7 +155,7 @@ second — both by name, neither restated here), plus the line count of `{docs_p
 read **fresh at every Pass A render**, never carried over from an earlier render in the same
 turn. That is not a new read site: §Architecture Principles #1's exception list entry (1) is
 "spec.md at plan gate", and re-executing a declared read is not declaring another one — the
-list keeps its 7 numbered slots (6 live). **The word "fresh" is load-bearing and is why this is spelled out
+list keeps its 8 numbered slots (7 live). **The word "fresh" is load-bearing and is why this is spelled out
 rather than phrased as reusing what the gate already read.** Every Modify now crosses a
 session boundary (`/harness --modify` edits in its own turn; this gate re-renders in the
 next), so the count is taken from the file as it stands when THIS session's Pass A renders;
@@ -154,7 +166,7 @@ check exists to catch.
 Evaluated in this fixed order, first match wins:
 
 - `plan_critic.last_findings_path == null` (no findings file recorded — covers the
-  carried-over and failed branches) → render as **stale-unknown**.
+  skipped and failed branches) → render as **stale-unknown**.
 - `spec_stamp == null` OR `spec_stamp_at_critic == null` → **fail closed**, treat as
   **stale**. `null` is the documented default of both fields (`skills/harness/SKILL.md` §Step 1 item 11's new-field
   table), so a `"3.0"` session written before they existed lands here rather than comparing
@@ -179,7 +191,8 @@ Evaluated in this fixed order, first match wins:
 - `spec_stamp.lines != spec_stamp_at_critic.lines` → **stale**. Redundant with the generation
   check whenever the write protocol ran in full; it is here for the case where it did not — a
   spec.md rewritten by a site that forgot to advance the generation.
-- the live line count of spec.md `!=` `spec_stamp.lines` → **stale**. This is the only check
+- the live line count of spec.md (counted as `skills/harness/SKILL.md` §Step 2's `spec_stamp`
+  write protocol step 3 defines) `!=` `spec_stamp.lines` → **stale**. This is the only check
   that sees an edit made OUTSIDE the orchestrator — a user opening spec.md in an editor.
 - otherwise → **not stale**.
 
@@ -207,9 +220,10 @@ committed copy is at that path in this repository).
 
 This determination applies unchanged whether Pass A is rendered by a first `/harness-gate`
 session, by the `/harness-gate` session that follows a `/harness --modify` / `--auto-revise` /
-`--critic` re-entry, or reached via `skills/harness/SKILL.md` §Session Recovery routing
-predicate (c) after a session boundary — see that predicate's note about the
-interrupted-Auto-revise case.
+`--critic` re-entry, or by the one a human types after a session boundary, once
+`skills/harness/SKILL.md` §Session Recovery item 6 printed `Next → /harness-gate` for a separate
+session — an interrupted Auto-revise lands as `skills/harness/SKILL.md` §Step 2.6's "Two
+recorded limits" paragraph describes.
 
 #### Auto-revise Exposure Predicate (single source — Pass A rows ①-a/①-b/①-c and the
 pre-dispatch check in `skills/harness/SKILL.md` §Step 2 WORKFLOW path — Auto-revise re-entry both cite this by name;
@@ -237,7 +251,7 @@ option sets below, none of which depend on Auto-revise being available.
 frozen for the remainder of that render; referenced by NAME — never restated — by every Pass A
 row condition below and by §State-Space Derivation just below it)
 
-Applies only when `plan_critic.applied == "executed"` (the carried-over, `"failed"`, and
+Applies only when `plan_critic.applied == "executed"` (the `"skipped"`, `"failed"`, and
 unrecorded states never reach this check — see §State-Space Derivation). A record is
 **well-formed** when ALL of:
 - `plan_critic.counts.critical` and `plan_critic.counts.major` are both present and are
@@ -264,7 +278,7 @@ is the absence of a record, `unrecorded`):
 | `applied` | Reachable via | → Row |
 |---|---|---|
 | unrecorded | no Step 2.6 write yet, OR `skills/harness/SKILL.md` §Step 2.6 failure branch (ii) (the only branch that leaves `plan_done` without writing `plan_critic`; it reaches this gate when the user types `/harness-gate` — the command §After Plan Phase names — instead of re-running `/harness`, whose routing predicate (b) would land back on Step 2.6) | ④ |
-| `"skipped"` | TWO writers, each co-writing its own `source` in the SAME write: `skills/harness/SKILL.md` §Step 2.6 Skip-vs-run's carried-over branch (`source = "carried_over"`), and that step's `cli_flags.fast` skip (`source = "fast"`). `applied == "skipped"` therefore implies `source ∈ {"carried_over", "fast"}` — row ③ splits on which | ③ |
+| `"skipped"` | ONE writer: `skills/harness/SKILL.md` §Step 2.6's `cli_flags.fast` skip, which co-writes `source = "fast"` in the same write. Row ③ takes every `"skipped"` record whatever its `source` — a state written before v9 can carry a value this release no longer writes | ③ |
 | `"failed"` | failure branch (iii) | ④ |
 | `"executed"` | success path, or a fresh "Run Critic anyway" / "Retry Critic" / Auto-revise re-dispatch | split below |
 
@@ -329,7 +343,7 @@ between them cover, not a simplification.
 
 When `plan_critic.source == "own"` AND `plan_critic.applied == "executed"` AND the record is
 well-formed (§Well-formedness Determination above), render this status line immediately before
-the table below — never when `source == "carried_over"`, `applied == "failed"`, `applied` is
+the table below — never when `applied == "skipped"`, `applied == "failed"`, `applied` is
 unrecorded, or the record is malformed (rows ③/④ carry their own literal instead, so this line
 never duplicates them and never dereferences a null `counts`):
 `Critic: <workflow (schema-validated) | inline (1-line parse)> — C=<counts.critical>
@@ -339,20 +353,28 @@ already prints (`skills/harness/SKILL.md` §Step 2.6's WORKFLOW/INLINE branches 
 unaligned — do NOT apply `skills/harness/SKILL.md` §Standard Status Format's aligned convention here, or AC-4's
 `grep -F` check breaks. This re-render exists because a `run_style == "phase"` session halts
 right after `skills/harness/SKILL.md` §Step 2.6's own print, and the session that reaches Step 3 is a DIFFERENT one,
-routed here by routing predicate (c) — without this line the assurance-level literal would
-never reach the user in that later session.
+the human typing `/harness-gate` (or `/harness` resuming and printing it — `skills/harness/SKILL.md` §Session
+Recovery item 6) — without this line the assurance-level literal would
+never reach the user in that later session. In a session that has started a converge run
+(`converge.runs` ≥ 1) the line is instead `Critic: converge (ledger residual) —
+C=<counts.critical> M=<counts.major>`, same spacing rule: the record is then a converge
+mapping's, whose `counts` are the loop's residual (`templates/harness/converge.md`
+§Residual — what that session's §Summary Block printed as `Residual`), not a critic's report,
+so neither critic literal may vouch for them. A session older than the loop whose runs so far
+were all interrupted or denied (branch (ii)) still holds its older critic counts under this
+literal — display only.
 
 Rows are evaluated top-to-bottom — **first match wins**.
 
 | Row | Condition | Options |
 |---|---|---|
 | ①-a dirty, predicate holds | `plan_critic.applied == "executed"` AND well-formed (§Well-formedness Determination) AND (`counts.critical >= 1` OR `counts.major >= 1`) AND the Auto-revise Exposure Predicate holds on ALL 4 points | `{"Auto-revise", "Proceed as-is", "Modify", "Stop"}` |
-| ①-b dirty, stale | well-formed (§Well-formedness Determination) AND same counts condition as ①-a, and the Stale Determination says stale (Exposure Predicate point 4 fails — regardless of whether points 1–3 also fail) | `{"Run Critic anyway", "Proceed as-is", "Modify", "Stop"}` — same option swap as row ③; a badge line "⚠ critic 이후 spec.md가 변경됨 — 아래 카운트는 그 이전 spec 기준" precedes the question. **This is how an interrupted Auto-revise loop actually resolves on resume**: `skills/harness/SKILL.md` §Session Recovery routes here per routing predicate (c); this row detects the staleness and offers the equivalent of a fresh Step 2.6 pass via "Run Critic anyway", instead of an automatic phase jump back to Step 2.6. |
-| ①-c dirty, not stale, predicate fails on 1/2/3 | well-formed (§Well-formedness Determination) AND same counts condition, the Stale Determination says NOT stale (point 4 holds), but the Exposure Predicate fails on point 1 (no WORKFLOW-path Plan run on record), point 2 (proposals.json invalid or missing), and/or point 3 (`round` already at its bound) | `{"Run Critic anyway", "Proceed as-is", "Modify", "Stop"}` — same option set as row ①-b, but the banner names the actual non-exposure reason instead of staleness: "⚠ Auto-revise unavailable — <no WORKFLOW-path Plan run on record / proposals.json invalid or missing / revision round limit reached>" (never silently blank; required even though the option labels match row ①-b, because the underlying cause differs and a user comparing sessions should be able to tell which one applies). |
+| ①-b dirty, stale | well-formed (§Well-formedness Determination) AND same counts condition as ①-a, and the Stale Determination says stale (Exposure Predicate point 4 fails — regardless of whether points 1–3 also fail) | `{"Run Critic anyway", "Proceed as-is", "Modify", "Stop"}` — same option swap as row ③; a badge line "⚠ critic 이후 spec.md가 변경됨 — 아래 카운트는 그 이전 spec 기준" precedes the question. **This is how an interrupted Auto-revise loop actually resolves on resume**: `skills/harness/SKILL.md` §Session Recovery item 6 prints `Next → /harness-gate` for a separate session, and the human types it; this row detects the staleness and offers the equivalent of a fresh Step 2.6 pass via "Run Critic anyway", instead of an automatic phase jump back to Step 2.6. |
+| ①-c dirty, not stale, predicate fails on 1/2/3 | well-formed (§Well-formedness Determination) AND same counts condition, the Stale Determination says NOT stale (point 4 holds), but the Exposure Predicate fails on point 1 (no WORKFLOW-path Plan run on record), point 2 (proposals.json invalid or missing), and/or point 3 (`round` already at its bound) | `{"Run Critic anyway", "Proceed as-is", "Modify", "Stop"}` — same option set as row ①-b, but the banner names the actual non-exposure reason instead of staleness: "⚠ Auto-revise unavailable — <no WORKFLOW-path Plan run on record / proposals.json invalid or missing / automatic revision already spent (Auto-revise or the converge loop)>" (never silently blank; required even though the option labels match row ①-b, because the underlying cause differs and a user comparing sessions should be able to tell which one applies). |
 | ② clean, not stale | `plan_critic.applied == "executed"` AND well-formed (§Well-formedness Determination) AND `counts.critical == 0` AND `counts.major == 0` AND the Stale Determination says NOT stale | **Pass A does NOT render** — the "clean AND not stale ⇒ exactly one interrupt" case (AC-7's clean case). Go straight to Pass B. Clean AND stale is a DIFFERENT case — see row ②-b, which AC-C22 requires to render even though the record itself is clean. |
 | ②-b clean, stale | `plan_critic.applied == "executed"` AND well-formed (§Well-formedness Determination) AND `counts.critical == 0` AND `counts.major == 0` AND the Stale Determination says stale | `{"Run Critic anyway", "Proceed as-is", "Modify", "Stop"}` — badge line reused VERBATIM from row ①-b ("⚠ critic 이후 spec.md가 변경됨 — 아래 카운트는 그 이전 spec 기준"; no separate `(C=0 M=0)` suffix — the status line immediately above this table already prints the current counts, and repeating them in the badge would be a second, driftable copy of the same string). This is AC-C22's clean+stale case: the 0/0 shown is the count as of the PRE-edit spec.md, not the current one — without this row that fact would be silently lost, exactly the gap AC-C22 clause 1 exists to close. |
-| ③ carried-over or --fast | `plan_critic.applied == "skipped"` AND `plan_critic.source ∈ {"carried_over", "fast"}`. With `source == "fast"` there is no `{docs_path}critic_findings.md` to parse: render `C=? M=?` and the `skipped by --fast` literal in place of the `carried over from /spec` one, and keep the same option set — a `--fast` session that reaches this gate has left `skills/harness/SKILL.md` §Fast Gate unanswered, so "Proceed as-is" still prints `/harness-build`, which that skill's §Entry refuses until `gate.approved` is set. Everything below describes `source == "carried_over"` | `{"Run Critic anyway", "Proceed as-is", "Modify", "Stop"}`. Counts for display are parsed from `{docs_path}critic_findings.md`'s `## Summary` line — if that parse fails (the file is `(none)`-only, absent from a prior `dispatch_failed`, hand-edited without a `## Summary` line, or a stale leftover from a different `--output-dir` reuse), render `C=? M=?` (never `0`); show the `carried over from /spec` literal either way. |
-| ④ failed / unrecorded / unknown | `plan_critic.applied == "failed"` OR `state.plan_critic` has no recorded `applied` value (unrecorded — `skills/harness/SKILL.md` §Step 2.6 failure branch (ii) is the only source of this state; see §State-Space Derivation) OR (`plan_critic.applied == "executed"` AND the record is malformed — §Well-formedness Determination above); equivalently, every state that is neither row ③ (`applied == "skipped"`) nor rows ①-a/①-b/①-c/②/②-b (`applied == "executed"` AND well-formed) | `{"Retry Critic", "Proceed as-is", "Modify", "Stop"}` + a banner showing `plan_critic.failure_reason` if present, or — when `applied` is unrecorded (`failure_reason` is absent-or-null there, since branch (ii) never writes it; null-safe per the guard rule above) — the default banner "critic 미실행 — Workflow 권한 거부 등". A THIRD combination reaches this row and matches neither clause: `applied == "executed"` with a malformed record and no `failure_reason` (the record was written by a successful pass, so nothing set that field; `skills/harness/SKILL.md` §Step 2.6's pre-dispatch delete then removed the file a later interrupted pass was about to replace). Render "critic 기록이 현재 spec에 대해 무효 — 재실행 필요" for it. Never silently blank in any of the three. Counts render as `C=? M=?` (unknown, never `0`). **"Retry Critic" dispatches on the INLINE branch only** whenever `failure_reason` indicates a permission denial OR `applied` is unrecorded (both are footprints of branch (ii), which never leaves a distinguishing `failure_reason` behind) — the `/harness --critic` session it prints never re-issues the denied Workflow call, because a bare re-entry command does not state that anything changed (`templates/_shared/mode_gate.md` rule 3: retry only after the user states in a NEW message that something changed; `skills/harness/SKILL.md` §Gate re-entry flags carries the same two-way condition). When the banner shows `spec_stamp_invalid`, add one line: `spec.md` is a partial write — `/harness --modify "<request>"` completes it, or Restart via `/harness`; no option here re-runs Step 2. Choosing anything other than "Retry Critic" here while `applied` is unrecorded leaves `plan_critic` permanently unrecorded for this task (see failure branch (ii) above). |
+| ③ skipped | `plan_critic.applied == "skipped"`, whatever `plan_critic.source` says. The only writer left is the `--fast` skip (`source == "fast"`), and that does not reach this row: a `--fast` session is always inline, and §Entry Check 6 redirects it to `skills/harness/SKILL.md` §Approval Gate before Pass A renders. The row is kept so the State-Space Derivation stays total, and it is where a state written before v9 lands when its skip record carries another `source` | `{"Run Critic anyway", "Proceed as-is", "Modify", "Stop"}`. Render `C=? M=?` (never `0` — no critic judged this spec) and the literal `skipped by --fast` when `source == "fast"`, `critic skipped` otherwise. |
+| ④ failed / unrecorded / unknown | `plan_critic.applied == "failed"` OR `state.plan_critic` has no recorded `applied` value (unrecorded — `skills/harness/SKILL.md` §Step 2.6 failure branch (ii) is the only source of this state; see §State-Space Derivation) OR (`plan_critic.applied == "executed"` AND the record is malformed — §Well-formedness Determination above); equivalently, every state that is neither row ③ (`applied == "skipped"`) nor rows ①-a/①-b/①-c/②/②-b (`applied == "executed"` AND well-formed) | `{"Retry Critic", "Proceed as-is", "Modify", "Stop"}` + a banner showing `plan_critic.failure_reason` if present, or — when `applied` is unrecorded (`failure_reason` is absent-or-null there, since branch (ii) never writes it; null-safe per the guard rule above) — the default banner — "수렴 루프 중단 — /harness로 재개" when `converge.status == "running"` (a converge run was cut off before its mapping; `/harness` resumes it with a new run), "critic 미실행 — Workflow 권한 거부 등" otherwise. A THIRD combination reaches this row and matches neither clause: `applied == "executed"` with a malformed record and no `failure_reason` (the record was written by a successful pass, so nothing set that field; `skills/harness/SKILL.md` §Step 2.6's pre-dispatch delete then removed the file a later interrupted pass was about to replace). Render "critic 기록이 현재 spec에 대해 무효 — 재실행 필요" for it. Never silently blank in any of the three. Counts render as `C=? M=?` (unknown, never `0`). **"Retry Critic" dispatches on the INLINE branch only** whenever branch (ii)'s footprint holds — defined once, in `skills/harness/SKILL.md` §Gate re-entry flags' `--critic` row: `applied` unrecorded, or `converge.status == "failed"` with an `applied` other than `"failed"` — and that row discloses the one state it cannot see, a (ii) after a (iii) record. No `failure_reason` string records a Workflow denial, so none is consulted for it. Outside that blind spot, the `/harness --critic` session it prints never re-issues the denied Workflow call, because a bare re-entry command does not state that anything changed (`templates/_shared/mode_gate.md` rule 3: retry only after the user states in a NEW message that something changed). When the banner shows `spec_stamp_invalid`, add one line: `spec.md` is a partial write — `/harness --modify "<request>"` completes it, or Restart via `/harness`; no option here re-runs Step 2. Choosing anything other than "Retry Critic" here while `applied` is unrecorded leaves `plan_critic` permanently unrecorded for this task (see failure branch (ii) above). |
 
 **Exhaustiveness**: rows ①-a/①-b/①-c/②/②-b/③/④ — seven rows covering all four `applied`
 states (`executed` well-formed: clean × stale-or-not, dirty × stale-or-not × Exposure-points
@@ -361,13 +383,19 @@ for the full axis-by-axis derivation and the 9-cell → 7-row coverage table pro
 and 0 gap — it is not re-derived here.
 
 "Run Critic anyway" / "Retry Critic" (rows ①-b / ①-c / ②-b / ③ / ④): end this turn with the
-`/harness --critic` line (§Next command). The fresh own-critic dispatch (a single write to
-`plan_critic`, `source = "own"`) runs in `/harness` (`skills/harness/SKILL.md` §Step 2.6); the
+`/harness --critic` line (§Next command). The new converge run (full review; its non-ending
+rounds may apply `auto` corrections to spec.md; one write to `plan_critic` at its mapping,
+`source = "own"`) runs in `/harness` (`skills/harness/SKILL.md` §Step 2.6); the
 NEXT `/harness-gate` session re-presents from Pass A and observes the FRESH `plan_critic` state,
-landing on whichever row now matches (typically ①-a or ②). For rows ①-b/②-b/③ it does not
+landing on whichever row now matches (typically ② or ①-c — a completed converge run writes
+`plan_critic.round = 1`, which fails the Auto-revise Exposure Predicate's point 3). For rows ①-b/②-b/③ it does not
 re-land on the same row for the same spec.md, since a completed own dispatch writes a
 non-null `last_findings_path` and records `spec_stamp_at_critic` equal to that spec.md's
-current `spec_stamp` — row ④ CAN recur if the fresh dispatch itself fails again, e.g. a second permission denial or a second parse failure.
+current `spec_stamp` — except when the stale verdict came from the live-line-count check alone
+(an edit made outside the orchestrator) and the new run applied nothing: a separate session is
+never re-stamped (`skills/harness/SKILL.md` §Session Recovery item 3 is inline-only), so the
+mapping copies the unchanged `spec_stamp` and ①-b/②-b re-lands; a non-empty "Modify"
+re-stamps spec.md through its write event, and "Proceed as-is" proceeds on it — row ④ CAN recur if the fresh dispatch itself fails again, e.g. a second permission denial or a second parse failure.
 
 **Exception — row ①-c.** That row's non-exposure cause may be §Auto-revise Exposure Predicate
 point 3 (`plan_critic.round` already at its bound), and a critic re-run does not reset it — so
@@ -394,8 +422,12 @@ Pass A** — its condition table is re-evaluated fresh, including the Stale Dete
 will now find `spec_stamp.generation` ahead of `spec_stamp_at_critic.generation` and render the
 row-①-b / row-②-b / row-③ shape as appropriate, depending on which side of the record's
 clean/dirty split applies — row ④ is not on this list, since malformed/unrecorded/`"failed"`
-records never consult the Stale Determination at all). See Modify Interaction below for the
-contract shared with Pass B's own "Modify".
+records never consult the Stale Determination at all). That stale shape is what a loop-skipping
+session (`templates/harness/converge.md` §Terms — a skip record) sees. Outside one,
+`/harness --modify` ends with a new converge run — a full review whenever spec.md had changed
+since the last record (`templates/harness/converge.md` §Starting a run item 1) — whose
+mapping records the post-edit stamp in `spec_stamp_at_critic`, so the re-evaluated table
+lands on a not-stale row for the edited spec.md. See Modify Interaction below for the contract shared with Pass B's own "Modify".
 
 "Proceed as-is" (every row) / "Stop" (every row): same semantics as Pass B's identical
 options — "Proceed as-is" writes nothing; control falls through to Pass B in this same turn,
@@ -444,16 +476,23 @@ is expected, not a duplicate) immediately before this question, using the values
    (Pass A rows ①-a/①-b/①-c/②-b/③/④) computed against the spec.md version that was current
    BEFORE this Modify's edit, until a fresh Step 2.6 / "Run Critic anyway" dispatch updates
    them — the Stale Determination above is exactly what surfaces this ("critic 이후 spec.md가
-   변경됨").
+   변경됨"). Outside a loop-skipping session that fresh dispatch is the converge run
+   `/harness --modify` itself ends with, so this item describes the loop-skipping case and an
+   interrupted run.
 2. Once a Modify has changed spec.md, Auto-revise is NEVER offered on the immediate
    re-presentation — the Stale Determination's stamp comparison (point 4 of the Auto-revise
-   Exposure Predicate) already enforces this structurally; no separate flag is needed. This
+   Exposure Predicate) already enforces this structurally; no separate flag is needed. Outside
+   a loop-skipping session point 3 closes it instead — the converge run `/harness --modify`
+   ends with writes `plan_critic.round = 1` (`skills/harness/SKILL.md` §Step 2.6). This
    holds across the session boundary every Modify now crosses (`/harness --modify` runs in
    its own turn, and this gate re-renders in the next) exactly as it held for the former
    same-turn loop — the stamps live in state.json and the comparison is recomputed fresh at
    every render (see the Stale Determination header note), so the rule cannot silently expire at
    a session boundary. Item 1's "computed against the spec.md version that was current BEFORE
-   this Modify's edit" is what `spec_stamp_at_critic` now records literally.
+   this Modify's edit" is what `spec_stamp_at_critic` still holds when the converge run
+   `/harness --modify` ends with was interrupted before its mapping (a `failed` record holds
+   `null` instead); a completed run records the post-edit stamp, and a loop-skipping session
+   records none (`null`).
 3. Re-presentation after Modify ALWAYS restarts at Pass A (never Pass B directly) — even
    when the edit was made from Pass B's own "Modify" — so the fresh staleness state gets a
    chance to render its row before Pass B is reached again.
@@ -468,17 +507,19 @@ write, and `/harness` owns every re-entry (`--modify` / `--auto-revise` / `--cri
 The registry of invariants is `skills/harness/SKILL.md` §Architecture Principles; this skill
 exercises the subset below and nothing beyond it.
 
-1. **Orchestrator reads no intermediate files** — of the registry's 6 live read exceptions (7 numbered slots) this skill
+1. **Orchestrator reads no intermediate files** — of the registry's 7 live read exceptions (8 numbered slots) this skill
    performs **2**: (1) `spec.md` at the plan gate (the line count for the Stale Determination is
    re-read at every Pass A render), and (7) gate-display critic count parsing
    (`plan_critic_findings.md` / `critic_findings.md` `## Summary` line). It performs NO write —
    not `state.json`, not `spec.md`, nothing under `.harness/` (the tool set makes this
    structural, not a rule).
 5. **All external paths pass through Path Validator before use** (see §Path Validator below —
-   `docs_path` from state.json is validated at §Entry Check 6 before any file under it is read).
-6. **Gates never enter segment scripts.** This skill IS the spec-confirm gate (HARD GATE #1 of
-   the pipeline's 3); it dispatches no script. The gate renders as up to two sequential passes
-   (Pass A, Pass B) inside ONE `<HARD-GATE>` tag — a pass is not a separate gate.
+   `docs_path` from state.json is validated at §Entry Check 7 before any file under it is read).
+6. **Gates never enter segment scripts.** HARD GATE #1 (spec-confirm) renders at
+   `skills/harness/SKILL.md` §Approval Gate (every variant) in an inline session and at this
+   skill in a separate one — one gate, two render sites, of the pipeline's 3; this skill
+   dispatches no script. Here the gate renders as up to two sequential passes (Pass A, Pass B)
+   inside ONE `<HARD-GATE>` tag — a pass is not a separate gate.
 
 <!-- BLOCK-START:hx-path-validator v2 — shared by /harness, /harness-gate, /harness-build; edit every copy in one commit and bump the version -->
 ### Path Validator
@@ -490,7 +531,7 @@ Call sites: `--output-dir` parsing (`skills/harness/SKILL.md` §Step 1 item 2, `
 
 ## Key Rules
 
-- **Confirmation gates are non-negotiable.** No implicit approval. Gates live in the orchestrators — this skill renders #1 — never in a segment script.
+- **Confirmation gates are non-negotiable.** No implicit approval. Gates live in the orchestrators — this skill renders #1 for a separate session — never in a segment script.
 - **No writes, ever.** This skill has no Bash, Write or Edit; every decision leaves as a printed command (§Next command).
 - **User language.** All user-facing output in `user_lang` per §Output Language Contract. Glossary tokens (`PASS`/`FAIL`/`Verdict`/`[harness]`/etc.) preserved English.
 - **Orchestrator reads no intermediate files.** See §Architecture Principles above for the two reads this skill performs.

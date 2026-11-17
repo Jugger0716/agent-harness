@@ -3,11 +3,11 @@
 
 ## Project Overview
 
-agent-harness is a **Claude Code plugin repository**, not an application. It ships 19 skills whose
+agent-harness is a **Claude Code plugin repository**, not an application. It ships 6 skills whose
 primary artifact is a contract document (`skills/<name>/SKILL.md`), plus the prompt templates,
 native Workflow segment scripts, and self-consistency lints those contracts depend on. There is no
-application source and no test suite — the contracts *are* the code, and a wrong sentence is a
-defect.
+application source, and the only behavioural tests are the segment stub tests under
+`tests/segment_stubs/` — the contracts *are* the code, and a wrong sentence is a defect.
 
 ## Tech Stack
 
@@ -30,7 +30,10 @@ defect.
 | Block sync lint (SHA256) | `python scripts/verify_block_sync.py` |
 | Workflow syntax + CR guard | `node scripts/check_workflow_syntax.mjs` |
 | Description budget ratchet | `python scripts/verify_description_budget.py` |
+| Destructive git command ban | `python scripts/verify_git_safety.py` |
+| Cited path existence | `python scripts/verify_cited_paths.py` |
 | Lint wiring equality | `bash .github/scripts/check_lint_wiring.sh` |
+| Segment stub tests | `node tests/segment_stubs/run.mjs` |
 
 The same chain is declared once, below, as this repository's project default so a `/harness`
 session runs it as Layer 1 without a `--lint-cmd` flag (`templates/_shared/project_defaults.md`;
@@ -38,9 +41,9 @@ the line must start at column 0 and not sit inside a code fence, which is why it
 here). The `export` covers the cp949 console: `verify_sync_markers.py` prints `§` and dies with
 `UnicodeEncodeError` without it.
 
-agent-harness-defaults: lint-cmd=`export PYTHONIOENCODING=utf-8 && python scripts/verify_sync_markers.py && python scripts/verify_manifest_sync.py && python scripts/verify_meta_literal.py && python scripts/verify_block_sync.py && node scripts/check_workflow_syntax.mjs && python scripts/verify_description_budget.py && bash .github/scripts/check_lint_wiring.sh`
+agent-harness-defaults: lint-cmd=`export PYTHONIOENCODING=utf-8 && python scripts/verify_sync_markers.py && python scripts/verify_manifest_sync.py && python scripts/verify_meta_literal.py && python scripts/verify_block_sync.py && node scripts/check_workflow_syntax.mjs && python scripts/verify_description_budget.py && python scripts/verify_git_safety.py && python scripts/verify_cited_paths.py && bash .github/scripts/check_lint_wiring.sh`
 
-Run all six after changing anything under `skills/`, `templates/`, `workflows/`, `scripts/`, or
+Run the whole chain after changing anything under `skills/`, `templates/`, `workflows/`, `scripts/`, or
 `.claude-plugin/`. Re-run `check_lint_wiring.sh` as well whenever `.github/workflows/lint.yml`
 changes or a file matching `scripts/verify_*.py` or `scripts/*.mjs` is added or removed.
 
@@ -53,35 +56,36 @@ Exit codes: `0` pass, `1` violation found, `2` structural problem. One exception
 in `verify_sync_markers.py` a **missing target file is `1`**, and `2` means a declared SYNC group's
 marker was found **nowhere** (the single source lost all its sync sites).
 
-There is no build, test, dev, or deploy command.
+There is no build, dev, or deploy command. The one test command is the segment stub runner in the
+table above. It is not part of the `lint-cmd` chain; run it as well after changing anything under
+`workflows/`, and it runs in the same CI workflow.
 
 ## Architecture
 
 | Path | Role |
 |---|---|
 | `skills/<name>/SKILL.md` | one skill = one directory = one contract file |
-| `skills/harness{,-gate,-build}/SKILL.md` | one contract split three ways (C5, 2026-09-07): `/harness` owns Steps 1–2.6 plus the `--fast` Fast Gate, `/harness-gate` owns Step 3 with no `Bash`/`Write`/`Edit`/`Glob`, `/harness-build` owns Steps 3.5–8. Since the v8.14 prompt diet most of what they shared lives in `templates/_shared/` single sources they cite by name; only four `hx-*` BLOCK groups remain byte-identical (`verify_block_sync.py`), for text that must stay inline. §Architecture Principles #3·#5·#6 and §User Interaction Rules are duplicated WITHOUT a sync group — disclosed here, to be blocked the day they drift |
+| `skills/harness{,-gate,-build}/SKILL.md` | one contract split three ways (C5, 2026-09-07): `/harness` owns Steps 1–2.6 (the Step 2.6 converge loop included) plus §Approval Gate — HARD GATE #1 rendered in-session, the default for every new session since harness-converge S2, which chains into `/harness-build` (`--fast` is its three-option variant; §Fast Gate is now a pointer) — `/harness-gate` owns Step 3 with no `Bash`/`Write`/`Edit`/`Glob` and gates only a `--separate-gate` session, `/harness-build` owns Steps 3.5–8 and, since harness-converge S3, §Epic Slice Chain — an epic's slices chained in one turn, each still approved at its own §Approval Gate, a clean end committed without asking. Since the v8.14 prompt diet most of what they shared lives in `templates/_shared/` single sources they cite by name; only four `hx-*` BLOCK groups remain byte-identical (`verify_block_sync.py`), for text that must stay inline. §Architecture Principles #3·#5·#6 and §User Interaction Rules are duplicated WITHOUT a sync group — disclosed here, to be blocked the day they drift |
 | `templates/_shared/` | cross-skill single sources (`mode_gate.md`, `status_format.md`, `project_defaults.md`, `session_conflict.md`, `orchestrator_contract.md`, `output_language.md`, `session_recovery.md`, `session_boundary.md`, `run_style.md`, `scale_assessment.md`, `path_validator.md`, `architecture_principles.md`, `slugify.md`, `segment_launch.md`, ...) |
-| `templates/harness/` | `/harness`-only procedures and static payloads read on demand (`doctor.md`, `state_schema.md`, `setup_summary.md`, `setup_prompts.md`, `auto_revise.md`, `spec_render.md`, `plan_segment_call.md`, `plan_critic_dispatch.md`, `plan_critic_failures.md`) — the v8.14 prompt diet's destination for everything that is not an execution rule |
+| `templates/harness/` | `/harness`-only procedures and static payloads read on demand (`doctor.md`, `state_schema.md`, `setup_summary.md`, `setup_prompts.md`, `auto_revise.md`, `spec_render.md`, `plan_segment_call.md`, `plan_critic_dispatch.md`, `plan_critic_failures.md`, and — since harness-converge S1 — `converge.md`, the Step 2.6 converge loop's single source, with its two sub-agent templates `converge_review.md` and `converge_verify.md`) — the v8.14 prompt diet's destination for everything that is not an execution rule |
 | `templates/<skill>/` | skill-specific prompt templates |
-| `templates/planner/` | shared by `/harness` and `/spec` — hence the `verify_block_sync.py` BLOCK groups |
+| `templates/planner/` | `/harness` planner templates; four of them carry the BLOCK groups `verify_block_sync.py` compares against `templates/_shared/` |
 | `templates/{generator,verify,evaluator}/` | `/harness` only, despite the role-based naming |
 | `workflows/<skill>.<segment>.workflow.js` | native Workflow segment; the naming pattern is fixed |
-| `workflows/_reference/` | reference documents (`schemas.md`, `study_measurements.md`), not scripts |
-| `scripts/` | the 6 self-consistency lints |
-| `docs/` | gitignored runtime output of 13 skills |
+| `workflows/_reference/` | reference documents (`schemas.md`, `state_fields.md`), not scripts |
+| `scripts/` | the 8 self-consistency lints |
+| `tests/segment_stubs/` | behavioural tests for the Workflow segments — `engine.mjs` (stand-ins for the engine globals, with the assumptions it encodes in its header), `cases.mjs`, `run.mjs`, and `known_failures.json`, a two-way ratchet: an unlisted failure fails the run, and so does a listed case that starts passing |
+| `docs/` | gitignored runtime output of the skills |
 | `design/<epic>/` | committed design records for follow-up epics — spec plus the measurement evidence it rests on. Outside `SCAN_DIRS`, so no lint reads them; that is why a forward-looking `§Step` citation here does not turn a lint red |
-| `README.md` | 1,100+ lines including `### Repository Layout`; keep it in sync when a skill's surface changes |
-
-`skills/{code-review,memory,workflow}/` are deprecation stubs forwarding to
-`{deep-review,team-memory,harness}`.
+| `README.md` | about 780 lines including `### Repository Layout`; keep it in sync when a skill's surface changes |
 
 **Mode Gate** — every multi-path skill follows `templates/_shared/mode_gate.md`: the INLINE path is
 the default, and the native Workflow path runs only on opt-in (ultracode ON, an explicit
 `--mode standard/multi/...`, or an `agent-harness-defaults: path=workflow` project line).
 `has_git == false` or an engine failure falls back to INLINE, never a hard error. This is the
 repository's largest cross-file contract; `verify_sync_markers.py` enforces it through the
-`ambiguity-prompt` (`min_sites=10`) and `project-defaults` (`min_sites=9`) groups.
+`ambiguity-prompt` (`min_sites=2`) and `project-defaults` (`min_sites=2`) groups — two sites each
+since v9 removed the other multi-path skills.
 
 Skills dispatch their segments as `${CLAUDE_PLUGIN_ROOT}/workflows/<skill>.<segment>.workflow.js`,
 the plugin-root file — but they LAUNCH it from a copy at `.harness/wf/<skill>.<segment>.workflow.js`
@@ -128,7 +132,7 @@ frontmatter is the plugin's exposure contract, so treat it as part of the skill'
 
 ### Git
 
-- Branch as `harness/<slug>` (or `feature/<name>`); base is `develop`, releases merge to `main`.
+- Branch as `harness/<slug>` (or `feature/<name>`); base is `develop`, releases merge to `main` (checklist: `RELEASING.md`).
 - Write Conventional Commits with a skill scope: `feat(harness): ...`, `fix(handoff,docs): ...`,
   `chore(release): ...`.
 - Every recent merge is a merge commit. No `merge.ff` config enforces this — it is convention, so
@@ -136,34 +140,35 @@ frontmatter is the plugin's exposure contract, so treat it as part of the skill'
 
 ## Verification
 
-The six lints under `scripts/`, plus `.github/scripts/check_lint_wiring.sh` and the CI wiring
-in `.github/workflows/lint.yml`, are the entire verification layer:
+The eight lints under `scripts/`, plus `.github/scripts/check_lint_wiring.sh` and the CI wiring
+in `.github/workflows/lint.yml`, are the entire **static** verification layer (the segment stub tests under `tests/segment_stubs/`
+are the only behavioural one, and they cover the Workflow segments only):
 
 - `verify_sync_markers.py` — SYNC group referential integrity, `min_sites` occurrence floor, and
   token consistency; **plus** a section-reference check over `SECTION_REF_TARGETS`, which now
-  holds **four files under two modes** — no single sentence covers them all:
-  mode `anchor-heading` (`workflows/_reference/study_measurements.md`) requires every `§Section`
-  pointer into that file to resolve to a real `## §Section` heading there, unchanged since it
-  shipped; mode `harness-steps` (`skills/harness/SKILL.md`, `skills/harness-gate/SKILL.md`,
+  holds **three files under one mode** (a second mode, `anchor-heading`, lost its only target
+  when v9 removed the study-measurements reference file; its code remains, unused):
+  mode `harness-steps` (`skills/harness/SKILL.md`, `skills/harness-gate/SKILL.md`,
   `skills/harness-build/SKILL.md` — one entry each since C5) exists because those files have
   **zero** `## §Name` headings, so the anchor rule cannot apply — six layers instead check the
   `§Step N(.N)` citation family and the path-anchored cross-file pointers against zero-slack
   structural pins carried **on each entry** (`step_ids` / `subpaths` / `files` /
-  `min_cross_files` / `non_heading_anchors`; the harness entry's `non_heading_anchors` binds a
-  literal inside its `§Step 1.5`, so a split cutting there must re-pin it). A `§Step` citation that
+  `min_cross_files` / `non_heading_anchors`; `non_heading_anchors` is empty for all three since v9 — its one entry was cited only
+  from a removed skill). A `§Step` citation that
   points at another of the three files must carry that file's path anchor — a bare `§Step 4` in
   `skills/harness/SKILL.md` is judged against harness's own ids and fails. Renaming a heading
-  breaks the lint **in the `anchor-heading` target; in the `harness-steps` targets only some
-  renames do** — it checks Step numbers, not section titles. **Just under
+  breaks the lint **only for some renames** — it checks Step numbers, not section titles. **Just under
   half its in-file citations are deliberately unchecked**, and the scan never reaches the
   repository's root documents at all — the script's own `§What this does not check` docstring
   carries all seven limits with the command that produces each figure. Correction (dated, deliberate
   exception to the "read the docstring" rule below — do not treat this as license to copy other
   numbers here): the "just under half" sentence above has been false for harness and harness-gate
   since the 2026-09-07 C5 re-measurement, not merely since the latest one; the RE-MEASURED
-  2026-09-18 line of that docstring's item 1 supplies the current shares — harness 86/102 (84%),
+  2026-09-18 line of that docstring's item 1 supplied the shares as of that date — harness 86/102 (84%),
   harness-gate 81/81 (100%), harness-build 86/176 (49%), so "just under half" is now approximate
-  only for harness-build, which itself read 113/204 (55%) on 2026-09-07. Only one figure is restated
+  only for harness-build, which itself read 113/204 (55%) on 2026-09-07. Correction 2026-10-02:
+  harness-converge S1–S3 grew all three files; the docstring's latest RE-MEASURED line supplies
+  the current shares, and "just under half" now holds for none of the three. Only one figure is restated
   by an OK line; read the docstring rather than copying a number into this file.
   It is a marker-and-token check, **not** a
   semantic diff: it proves tokens coexist, not that the surrounding prose still agrees.
@@ -190,6 +195,18 @@ in `.github/workflows/lint.yml`, are the entire verification layer:
   characters. It exists because Claude Code caps the skill listing at a share of the context
   window and, when that overflows, drops the descriptions of least-used skills while keeping
   every name — a failure with no message to the user.
+- `verify_git_safety.py` — forbids `git checkout -- ` / `git checkout .`, a worktree `git restore`,
+  `git stash` (bare, `push`, `drop`), `reset … --hard` and `clean -f` / `--force` in `skills/`,
+  `templates/` and `workflows/`: text a model follows must not tell it to
+  discard or move uncommitted work. It reads text, not intent, so a sentence that only warns about
+  one of them goes in its zero-slack `ALLOW` table with the reason. Two destructive forms pass
+  it (`git checkout <ref> -- <path>`, `git restore --staged --worktree <path>`); its docstring
+  says why.
+- `verify_cited_paths.py` — every `skills/…`, `templates/…`, `workflows/…` or `scripts/…` file path
+  cited from `skills/`, `templates/`, `workflows/`, `CLAUDE.md` or `README.md` must exist. It was
+  added with the v9 removal of thirteen skills. Placeholder paths (`templates/<skill>/…`), directory
+  citations and paths under `docs/`, `design/` or `tests/` are outside it — its docstring lists the
+  limits.
 - `check_workflow_syntax.mjs` — compiles each script through `AsyncFunction` because `node --check`
   false-greens on ESM `export`, then guards CR in both the working tree and the index blob.
 - `.github/scripts/check_lint_wiring.sh` — compares the lint scripts that exist against the ones
@@ -203,9 +220,6 @@ in `.github/workflows/lint.yml`, are the entire verification layer:
   `(gitignored — not a public link)`. A document that must SURVIVE — a design spec, a measurement
   record another session will act on — does not belong under `docs/` at all: put it in
   `design/<epic>/`, which is committed.
-- **`/team-memory` conflicts with this repository's own `.gitignore`.** It declares its store as
-  git-committed, shared, and version-controlled at `docs/harness/memory/`, but `docs/` is ignored
-  here — so team-memory records written in this repository are not committed.
 - `.harness/` is a live session directory holding `state.json`. Do not hand-edit it while a skill
   session is running.
 - The plugin is installed in **two** places — `~/.claude/plugins/marketplaces/agent-harness-marketplace/`
@@ -217,12 +231,17 @@ in `.github/workflows/lint.yml`, are the entire verification layer:
   `$.metadata.version`, and `marketplace.json` `$.plugins[*].version`. A bump that edits only the
   first two is incomplete.
 - The pipeline's 3 HARD-GATEs stay in the orchestrator SKILL.md files, never in a segment script:
-  #1 (spec-confirm) is the whole of `skills/harness-gate/SKILL.md`, #2 (verify-fail) and #3
-  (auto-fix-apply) are in `skills/harness-build/SKILL.md`; `verify_meta_literal.py` rejects gate
-  tokens inside segment scripts. The gate skill's `disallowed-tools` line IS the guarantee that the
-  gate turn cannot write — do not add `Bash`, `Write`, `Edit` or `Glob` back, and do not give it a
-  scope pattern (patterns are a no-op; only bare tool names are enforced).
-- `.gitattributes` covers `*.workflow.js`, `*.sh`, `*.yml`, and `*.md`. Other file types —
+  #1 (spec-confirm) renders at `skills/harness/SKILL.md` §Approval Gate (every variant) in an
+  inline session — the default — and as the whole of `skills/harness-gate/SKILL.md` in a separate
+  one (`--separate-gate` or `gate=separate`); #2 (verify-fail) and #3 (auto-fix-apply) are in
+  `skills/harness-build/SKILL.md`; `verify_meta_literal.py` rejects gate tokens inside segment
+  scripts. The gate skill's `disallowed-tools` line IS the guarantee that a separate session's gate
+  turn cannot write — do not add `Bash`, `Write`, `Edit` or `Glob` back, and do not give it a
+  scope pattern (patterns are a no-op; only bare tool names are enforced). The inline default has
+  no such guarantee: it rests on a model-written approval record bound to `spec_stamp` and on
+  `/harness-build` §Entry refusing a mismatch (the Fast Gate grade —
+  `design/harness-ordering-enforcement/SPEC.md` §3.3a and its decision ① row's correction).
+- `.gitattributes` covers `*.workflow.js`, `*.sh`, `*.yml`, `*.md`, and `tests/**/*.mjs`. Other file types —
   `*.py` included — are not EOL-normalized by the repository, so what they commit still
   depends on the machine's `core.autocrlf`. The `*.md` line renormalized nothing when it
   landed (all 94 tracked `.md` blobs were already LF); it fixes what a checkout with
