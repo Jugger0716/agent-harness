@@ -18,6 +18,8 @@ Each group is `(tag, version, [marker-delimited files], shared-source-file | Non
 Groups:
   - spec-context-block (v1) : 4 planner templates + templates/_shared/spec_context_block.md
   - input-trust-model  (v2) : 4 planner templates + templates/_shared/input_trust_model.md
+  - wf-prelude (v1)         : the five workflows/*.workflow.js scripts -- single-pass render(),
+                              requireArgs() and must(); no shared source
   - hx-* (v1)               : 16 groups across skills/harness{,-gate,-build}/SKILL.md with
                               NO shared source (the /harness copy is canonical) -- see
                               design/harness-ordering-enforcement/SPEC.md §5.4.4
@@ -60,6 +62,16 @@ PLANNERS = [
 HX_HB = ["skills/harness/SKILL.md", "skills/harness-build/SKILL.md"]
 HX_HGB = ["skills/harness/SKILL.md", "skills/harness-gate/SKILL.md", "skills/harness-build/SKILL.md"]
 HX_HG = ["skills/harness/SKILL.md", "skills/harness-gate/SKILL.md"]
+# The five Workflow segment scripts. Each is self-contained (C1: no shared imports), so the
+# helpers they all need are one byte-identical block per file; the markers sit inside a JS
+# line comment (`// <!-- BLOCK-START:... -->`), which the marker patterns below read as-is.
+WF_SCRIPTS = [
+    "workflows/harness.plan.workflow.js",
+    "workflows/harness.build.workflow.js",
+    "workflows/harness.eval.workflow.js",
+    "workflows/harness.critic.workflow.js",
+    "workflows/deep-review.review.workflow.js",
+]
 
 GROUPS: list[tuple[str, str, list[str], str | None]] = [
     ("spec-context-block", "v1", PLANNERS, "templates/_shared/spec_context_block.md"),
@@ -83,6 +95,7 @@ GROUPS: list[tuple[str, str, list[str], str | None]] = [
     ("hx-state-machine", "v3", HX_HB, None),
     ("hx-path-validator", "v2", HX_HGB, None),
     ("hx-scale-render", "v2", HX_HG, None),
+    ("wf-prelude", "v1", WF_SCRIPTS, None),
 ]
 
 

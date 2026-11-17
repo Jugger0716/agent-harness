@@ -54,14 +54,35 @@ const LANG = A.userLang || 'the language of the task description'
 const MODELS = A.models || {}
 const mopt = (m) => (m ? { model: m } : {})
 
-// Substitution order = vars insertion order. Keep STRUCTURAL keys first and
-// user-influenced payload keys LAST: a payload substituted early could otherwise
-// hijack later {placeholders} with injected literals.
+// <!-- BLOCK-START:wf-prelude v1 — shared by the five segment scripts; edit every copy in one commit and bump the version -->
+// Single-pass substitution: the template is split on its {snake_case} tokens once, so a value
+// that itself contains a {placeholder} is never scanned again. A token with no entry in `vars`
+// is left as written.
 const render = (tpl, vars) =>
-  Object.entries(vars).reduce(
-    (t, [k, v]) => t.split('{' + k + '}').join(v == null ? '' : String(v)),
-    tpl,
-  )
+  String(tpl)
+    .split(/(\{[a-z][a-z0-9_]*\})/)
+    .map((seg, i) => {
+      if (i % 2 === 0) return seg
+      const k = seg.slice(1, -1)
+      if (!Object.hasOwn(vars, k)) return seg
+      return vars[k] == null ? '' : String(vars[k])
+    })
+    .join('')
+// Refuse to run without the payload the segment exists to process.
+const requireArgs = (segment, a, keys) => {
+  for (const k of keys) {
+    const v = a[k]
+    if (v == null || (typeof v === 'string' && v.trim() === '')) {
+      throw new Error(`${segment}: missing required argument "${k}"`)
+    }
+  }
+}
+// A single agent() resolves to null when the user skips it or it ends in a terminal API error.
+const must = (segment, label, result) => {
+  if (!result) throw new Error(`${segment}: ${label} returned null`)
+  return result
+}
+// <!-- BLOCK-END:wf-prelude v1 -->
 
 // ---- schema (inlined per C1; canonical: workflows/_reference/schemas.md) ----
 const VerifyVerdictSchema = {

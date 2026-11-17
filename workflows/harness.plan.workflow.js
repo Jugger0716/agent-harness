@@ -93,19 +93,35 @@ const LANG = A.userLang || 'the language of the task description'
 const MODELS = A.models || {}
 const mopt = (m) => (m ? { model: m } : {}) // null/undefined -> inherit parent model
 
-// ---- minimal deterministic renderer (replaces dead render.js, C1) ----------
-// Substitution order = vars insertion order. Keep STRUCTURAL keys first and
-// user-influenced payload keys LAST (task last of all): a payload substituted
-// early could otherwise hijack later {placeholders} with injected literals.
-// Ordering is basic hygiene here, not a sufficient guard. On the re-entry path
-// `all_proposals` is itself user-influenced — it is built from `priorProposals`, which
-// the caller reads off disk — and ordering cannot separate two mutually untrusted
-// payloads. The synthesis call site below records what that leaves open.
+// <!-- BLOCK-START:wf-prelude v1 — shared by the five segment scripts; edit every copy in one commit and bump the version -->
+// Single-pass substitution: the template is split on its {snake_case} tokens once, so a value
+// that itself contains a {placeholder} is never scanned again. A token with no entry in `vars`
+// is left as written.
 const render = (tpl, vars) =>
-  Object.entries(vars).reduce(
-    (t, [k, v]) => t.split('{' + k + '}').join(v == null ? '' : String(v)),
-    tpl,
-  )
+  String(tpl)
+    .split(/(\{[a-z][a-z0-9_]*\})/)
+    .map((seg, i) => {
+      if (i % 2 === 0) return seg
+      const k = seg.slice(1, -1)
+      if (!Object.hasOwn(vars, k)) return seg
+      return vars[k] == null ? '' : String(vars[k])
+    })
+    .join('')
+// Refuse to run without the payload the segment exists to process.
+const requireArgs = (segment, a, keys) => {
+  for (const k of keys) {
+    const v = a[k]
+    if (v == null || (typeof v === 'string' && v.trim() === '')) {
+      throw new Error(`${segment}: missing required argument "${k}"`)
+    }
+  }
+}
+// A single agent() resolves to null when the user skips it or it ends in a terminal API error.
+const must = (segment, label, result) => {
+  if (!result) throw new Error(`${segment}: ${label} returned null`)
+  return result
+}
+// <!-- BLOCK-END:wf-prelude v1 -->
 
 // ---- schemas (inlined per C1; canonical hand-sync copy: workflows/_reference/schemas.md) ----
 // sliceHint delta note: schemas.md §Contract delta — `sliceHint` (prose note, NOT its
@@ -578,7 +594,7 @@ let proposals = Array.isArray(A.priorProposals) ? A.priorProposals.filter(Boolea
 if (!A.reSynthesisOnly) {
   phase('Propose')
 
-  // Structural keys first; user-influenced payloads last (task_description last of all).
+  // render() is single-pass (wf-prelude block above), so the order of these keys carries no meaning.
   const commonVars = {
     repo_path: A.repoPath,
     lang: A.lang,
@@ -677,6 +693,9 @@ Revise the prior synthesis to resolve each finding above. These findings reach y
 // covers existence, JSON parse, array shape, non-emptiness and per-element persona/summary; it
 // does not sanitize template placeholders, so this exposure is current and the decision on
 // whether that file needs sanitizing before it is passed back in is still open.
+// Closed 2026-11-17: render() is single-pass, so a placeholder inside a proposal is no longer
+// substituted, and the ordering described above no longer does anything. The paragraph is kept
+// as the record of what the multi-pass renderer left open.
 const plan = await agent(
   render(synthTpl, {
     user_lang: A.userLang,

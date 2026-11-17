@@ -122,9 +122,12 @@ frontmatter is the plugin's exposure contract, so treat it as part of the skill'
 - Name a whole prompt `TPL_*` and a reusable fragment spliced into several prompts `FRAG_*`.
   Declare schemas per script — each script is self-contained (C1): no shared imports, no runtime
   template reads.
-- Substitute with `split`/`join`, never `String.replace` — a payload containing a `$` substitution
-  pattern would corrupt the result. Substitute structural keys first, user-influenced payload
-  (`task`, `task_description`) last.
+- Substitute only through `render()`, the single-pass implementation in the `wf-prelude` block
+  every script carries: it splits the template on its `{snake_case}` tokens once, so a value that
+  contains a placeholder is never scanned again and key order carries no meaning. Never write a
+  substitution of your own, and never `String.replace` — a payload containing a `$` substitution
+  pattern would corrupt the result. The same block holds `requireArgs()` and `must()`; edit all
+  five copies in one commit and bump the block version.
 - Never use `Date.now`, `new Date`, or `Math.random`; they break cached-prefix resume.
 - Never write `AskUserQuestion`, `HARD-GATE`, or the apply-patch option label into a script. Gates
   belong to SKILL.md only.
@@ -182,6 +185,9 @@ are the only behavioural one, and they cover the Workflow segments only):
   4 by PROMOTING the rest to `templates/_shared/` single sources — one copy, nothing to compare,
   which is strictly stronger than byte-identity. A promotion is also the one sanctioned reason a
   `min_sites` floor in `verify_sync_markers.py` may be LOWERED; two were, in that change.
+  A seventh group, `wf-prelude`, covers the five `workflows/*.workflow.js` scripts instead of
+  Markdown: its markers sit inside a JS line comment, and it has no shared source because a
+  script may not import one (C1).
 - `verify_manifest_sync.py` — `.claude-plugin/plugin.json` and `marketplace.json`: the plugin
   description, the keywords set, and the version string at all three key paths.
   `metadata.description` and `owner` are marketplace-only, and `author` is carried by both files

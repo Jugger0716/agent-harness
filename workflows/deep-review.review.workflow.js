@@ -31,15 +31,35 @@ const LANG = A.userLang || 'the language of the review request'
 const MODELS = A.models || {}
 const mopt = (m) => (m ? { model: m } : {}) // null/undefined -> inherit parent model
 
-// Substitution order = vars insertion order. Keep STRUCTURAL keys first and
-// user-influenced payload keys LAST (diff content last of all — it is the
-// quintessential user-shaped payload): a payload substituted early could otherwise
-// hijack later {placeholders}.
+// <!-- BLOCK-START:wf-prelude v1 — shared by the five segment scripts; edit every copy in one commit and bump the version -->
+// Single-pass substitution: the template is split on its {snake_case} tokens once, so a value
+// that itself contains a {placeholder} is never scanned again. A token with no entry in `vars`
+// is left as written.
 const render = (tpl, vars) =>
-  Object.entries(vars).reduce(
-    (t, [k, v]) => t.split('{' + k + '}').join(v == null ? '' : String(v)),
-    tpl,
-  )
+  String(tpl)
+    .split(/(\{[a-z][a-z0-9_]*\})/)
+    .map((seg, i) => {
+      if (i % 2 === 0) return seg
+      const k = seg.slice(1, -1)
+      if (!Object.hasOwn(vars, k)) return seg
+      return vars[k] == null ? '' : String(vars[k])
+    })
+    .join('')
+// Refuse to run without the payload the segment exists to process.
+const requireArgs = (segment, a, keys) => {
+  for (const k of keys) {
+    const v = a[k]
+    if (v == null || (typeof v === 'string' && v.trim() === '')) {
+      throw new Error(`${segment}: missing required argument "${k}"`)
+    }
+  }
+}
+// A single agent() resolves to null when the user skips it or it ends in a terminal API error.
+const must = (segment, label, result) => {
+  if (!result) throw new Error(`${segment}: ${label} returned null`)
+  return result
+}
+// <!-- BLOCK-END:wf-prelude v1 -->
 
 // ---- schemas (inlined per C1; canonical: workflows/_reference/schemas.md) ----
 // filesReviewed is REQUIRED — the report's "Files Reviewed" table (incl. no-issue
@@ -537,7 +557,7 @@ const ROSTER =
         { id: 'architecture_maintainability_reviewer', tpl: TPL_ARCH_MAINTAINABILITY },
       ]
 
-// Structural keys first; user-influenced payloads last (diff content last of all).
+// render() is single-pass (wf-prelude block above), so the order of these keys carries no meaning.
 const rawReviews = await parallel(
   ROSTER.map((r) => () =>
     agent(
