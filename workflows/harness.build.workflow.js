@@ -340,9 +340,7 @@ Write all output in **{user_lang}**.
 
 3. **Implement** — follow the plan, incorporating accepted advisor feedback.
 
-4. **TDD** — if a TDD skill was found above, follow it: write a failing test, then implement, then verify. Run tests after each change.
-
-5. **If this is Round 2 or later:**
+4. **If this is Round 2 or later:**
    - Review the QA feedback above carefully.
    - **Only fix items marked FAIL** in the QA report.
    - **Do not touch items already marked PASS.**
@@ -404,9 +402,7 @@ Write all output in **{user_lang}**.
 
 3. **Implement** — follow the plan, incorporating accepted advisor feedback.
 
-4. **TDD** — if a TDD skill was found above, follow it: write a failing test, then implement, then verify. Run tests after each change.
-
-5. **If this is Round 2 or later:**
+4. **If this is Round 2 or later:**
    - Review the QA feedback above carefully.
    - **Only fix items marked FAIL** in the QA report.
    - **Do not touch items already marked PASS.**
