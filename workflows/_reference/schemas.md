@@ -51,12 +51,14 @@ const AnalysisResultSchema = {
 }
 ```
 
-> Phase 2a (spec) additive delta: `spec.plan.workflow.js`'s inlined copy ADDS
+> Phase 2a (spec) additive delta: the inlined copy in the spec skill's plan segment (removed
+> in v9; original at the v8.14.0 tag) ADDED
 > `hasFindings: { type: 'boolean', description: 'false ONLY for a genuine greenfield/input-ambiguous result with no actionable findings' }`
-> and lists it in `required` — it replaces the old `— no findings —` 1-line sentinel scan
-> (the orchestrator's empty-input contract now checks `proposals.every(p => p.hasFindings === false)`).
-> The canonical shape above is unchanged for the other consumers (harness scripts); treat
-> `hasFindings` as a spec-only extension until another consumer adopts it.
+> and listed it in `required` — it replaced the old `— no findings —` 1-line sentinel scan
+> (that skill's orchestrator empty-input contract then checked `proposals.every(p => p.hasFindings === false)`).
+> The canonical shape above is unchanged for the other consumers (harness scripts); no script
+> in the current tree carries `hasFindings`, so it is a historical spec-only extension, not a
+> live one.
 
 ## PlanResult
 
@@ -71,24 +73,27 @@ this object, then renders HARD GATE #1.
 > faithfully (Goal/Background/Scope/Approach/Completion Criteria/Testing
 > Strategy/Risks). `risks[].source` added (which persona raised it).
 
-> Phase 2a (spec) tightening delta: `spec.plan.workflow.js`'s inlined copy promotes
+> Phase 2a (spec) tightening delta: the inlined copy in the spec skill's plan segment (removed
+> in v9; original at the v8.14.0 tag) promoted
 > `background`/`scope`/`edgeCases` into `required` (and `scope.required =
-> [inScope, outOfScope]`) — the seven-section spec.md format makes them mandatory,
+> [inScope, outOfScope]`) — that skill's seven-section spec.md format made them mandatory,
 > and live dry-run wf_75de1836 showed prose-only "populate all seven sections"
-> gets skipped for schema-optional fields. The canonical shape above is unchanged
+> gets skipped for schema-optional fields. No script in the current tree carries this delta.
+> The canonical shape above is unchanged
 > for /harness (its plan output has no seven-section obligation).
 
-> Phase 2e (refactor) additive delta: `refactor.plan.workflow.js`'s inlined copy (named
-> `RefactorPlanSchema` in-script) promotes `steps` into `required` (items gain a required
-> `risk: {enum: [low, med, high]}` and `files` becomes required) and ADDS three
+> Phase 2e (refactor) additive delta: the inlined copy in the refactor skill's plan segment
+> (removed in v9; original at the v8.14.0 tag; named
+> `RefactorPlanSchema` in-script) promoted `steps` into `required` (items gained a required
+> `risk: {enum: [low, med, high]}` and `files` became required) and ADDED three
 > refactor-only fields — `currentState` (string, Current State Analysis),
 > `impactScope` (`{direct[], indirect[]}`, both required), `testCoverage`
-> (`[{target, coverage: good|partial|none, gapAction}]`, required; the array may be
-> empty — the orchestrator renders "N/A" for an empty array) — so the orchestrator can
+> (`[{target, coverage: good|partial|none, gapAction}]`, required; the array could be
+> empty — that skill's orchestrator rendered "N/A" for an empty array) — so the orchestrator could
 > faithfully reconstruct the seven-section refactor_plan.md (Goal / Current State
 > Analysis / Impact Scope / Refactoring Steps / Test Coverage Assessment / Completion
 > Criteria / Risks). Same wf_75de1836 lesson: rendered sections must be schema-required.
-> The canonical shape above is unchanged for the other consumers.
+> No script in the current tree carries this delta. The canonical shape above is unchanged for the other consumers.
 
 ```js
 const PlanResultSchema = {
@@ -437,3 +442,7 @@ const CrossVerifyReportSchema = {
 > unplanned-but-needed `CrossVerifyReport` (deep-review). Ten more schemas landed for segments
 > that v9 removed with their skills (debug, migrate, codebase-audit, test-gen); their entries
 > were deleted here in the same change and remain at the v8.14.0 tag.
+> The three PlanResult/AnalysisResult delta notes above (Phase 2a additive, Phase 2a tightening,
+> Phase 2e refactor) were corrected in place after v9 removed the spec and refactor skills'
+> plan segments: they now name those segments by role instead of by script file, and describe
+> the deltas as history (originals at the v8.14.0 tag). No schema fact changed.

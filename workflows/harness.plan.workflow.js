@@ -21,17 +21,20 @@ export const meta = {
 //             priorProposals: AnalysisResult[]|null,
 //             models: {executor,advisor,evaluator,verifier} }
 //   - reSynthesisOnly/priorProposals: re-entry re-synthesis, structurally mirroring
-//     spec.plan.workflow.js. Caller: skills/harness/SKILL.md §Step 2 — WORKFLOW path,
+//     the spec skill's plan segment, removed in v9 (its original stays at the v8.14.0 tag).
+//     Caller: skills/harness/SKILL.md §Step 2 — WORKFLOW path,
 //     "Auto-revise re-entry". (That section names its own trigger sites; they are not
 //     restated here.)
 //   - criticFindings is dispatch-dependent, and the caller section above names both documents:
 //     the FIRST dispatch carries {docs_path}critic_findings.md (a critique placed in docs_path
 //     before planning), while the Auto-revise re-entry carries {docs_path}plan_critic_findings.md
 //     (the Plan-specific critique).
-//   - The empty-priorProposals throw guard in the Propose `else` branch below has no
-//     counterpart in spec.plan.workflow.js — it is an addition, not a ported behavior.
+//   - The empty-priorProposals throw guard in the Propose `else` branch below had no
+//     counterpart in the spec skill's plan segment (removed in v9) — it is an addition, not
+//     a ported behavior.
 //   - Both re-entry gates are TRUTHY checks and must stay that way: Propose is gated on
-//     `!A.reSynthesisOnly` (AC-B9 pins that form verbatim from spec.plan.workflow.js) and the
+//     `!A.reSynthesisOnly` (AC-B9 pins the form this file ported verbatim from
+//     the spec skill's plan segment, removed in v9) and the
 //     critic-block splice below on `A.reSynthesisOnly`. Because they share one truthiness
 //     semantics they cannot disagree. Do NOT "harden" the splice to `=== true` on its own:
 //     measured 2026-08-10 (run wf_6631e9c1-dcd, 0 agents, 16ms) — `reSynthesisOnly: "false"`
@@ -40,7 +43,8 @@ export const meta = {
 //     critic input.
 //   - Callers SHOULD still pass a boolean literal. If both gates are ever made strict, make
 //     them strict TOGETHER (`!== true` / `=== true`), which sends malformed input down the
-//     normal full-Propose path — but that diverges from the spec.plan port AC-B9 requires.
+//     normal full-Propose path — but that diverges from the port of
+//     the spec skill's plan segment (removed in v9) that AC-B9 requires.
 //   - Template section order (Approach -> Implementation Steps -> Completion Criteria -> ...)
 //     does not match the spec.md render order in skills/harness/SKILL.md §Step 2 — WORKFLOW
 //     path, the item carrying the `### Implementation Steps` ← `steps[]` mapping (that order
@@ -59,9 +63,10 @@ export const meta = {
 //     planner_single.md (the INLINE
 //     template) never produces sliceHint at all — so a `scale.slice_hint` consumer must handle
 //     its absence, which SKILL.md §Step 3's Scale Assessment gate table does.
-//   - This PlanResultSchema is a DIFFERENT shape from spec.plan.workflow.js's same-named
-//     schema (that copy has no sliceHint and different required fields) — same type name, two
-//     independent shapes, by design (each script inlines its own copy per C1).
+//   - This is now the only script that inlines a PlanResultSchema. Before v9 the spec skill's
+//     plan segment inlined a same-named schema of a DIFFERENT shape (no sliceHint, different
+//     required fields); that segment was removed in v9 and stays at the v8.14.0 tag. Same type
+//     name, independent shapes, by design (each script inlines its own copy per C1).
 //   - sliceHint.candidates may legitimately be an empty array (no minItems is declared here,
 //     matching the "do not invent minItems" constraint) — a consumer must defend against that.
 //   - stats.proposalsRequested reports PERSONAS.length (the mode's nominal fan-out) even on
@@ -79,6 +84,10 @@ export const meta = {
 //     without that distinction and deferred the Plan-specific file to a later slice.
 //   - [both-gates truthy] An earlier revision of this comment claimed the opposite; it
 //     described a `=== true` splice this file never had.
+//   - [removed plan segments] An earlier revision of this comment and of three comments further
+//     down (the re-entry guard, the substitution order, the proposals persistence) cited the
+//     script of a plan segment that v9 removed with its skill by file name, as if it were still
+//     in the tree; they now name it by role. Its original remains at the v8.14.0 tag.
 const A = typeof args === 'string' ? JSON.parse(args) : (args || {})
 const LANG = A.userLang || 'the language of the task description'
 const MODELS = A.models || {}
@@ -598,7 +607,8 @@ if (!A.reSynthesisOnly) {
   }
 } else {
   log(`Re-synthesis re-entry: skipping Propose (${proposals.length} prior proposals supplied)`)
-  // Extra guard beyond spec.plan.workflow.js's re-entry pattern: an empty priorProposals on
+  // Extra guard beyond the re-entry pattern of the spec skill's plan segment (removed in v9,
+  // kept at the v8.14.0 tag): an empty priorProposals on
   // the reSynthesisOnly path means synthesis would have nothing to synthesize from.
   if (proposals.length === 0) {
     throw new Error('harness.plan: reSynthesisOnly requested but priorProposals is empty — re-run with reSynthesisOnly:false to regenerate proposals')
@@ -654,7 +664,8 @@ Revise the prior synthesis to resolve each finding above. These findings reach y
 
 // Substitution order: structural keys first, critic_findings/task_description last
 // (task_description last of all) — matches this file's render() convention above and
-// spec.plan.workflow.js's synthesis call. all_proposals substitutes before critic_findings, so
+// the synthesis call of the spec skill's plan segment (removed in v9; original at the
+// v8.14.0 tag). all_proposals substitutes before critic_findings, so
 // a literal "{critic_findings}" inside proposal text would get filled on this pass; this is the
 // same pre-existing ordering risk already present between all_proposals and task_description
 // (proposal/analysis text is model output, not raw untrusted input — not a new exposure).
@@ -679,7 +690,8 @@ const plan = await agent(
 // PlanResult is schema-validated -> no 1-line parsing. The orchestrator writes
 // spec.md from this object, then renders HARD GATE #1 (spec confirmation).
 // `proposals` is returned AS IS for the orchestrator to persist on the first dispatch and on
-// a FULL re-run (re-synthesis + resume source, spec.plan.workflow.js precedent) — see
+// a FULL re-run (re-synthesis + resume source; the spec skill's plan segment, removed in v9,
+// set the precedent) — see
 // skills/harness/SKILL.md §Step 2 — WORKFLOW path for when persistence applies — do NOT
 // analyze or print its contents here.
 return {
