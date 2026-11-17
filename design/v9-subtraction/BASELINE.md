@@ -202,3 +202,71 @@ SPEC 1.3의 시뮬레이션 값과 다른 것은 `session-conflict`(2로 예상,
 | m10 | `harness.build`가 계획이 없어도 "implementation plan ready"를 로그한다 | 2단계 |
 
 실사용 검증(SPEC 1.4)의 결과는 이 절 아래에 덧붙인다.
+
+### 실사용 검증 (2026-11-16 ~ 17)
+
+`STAGE1.md` Task 16의 Step 1 후반부터 Step 6까지의 결과다. 관측 대상은 설치본이고, 그 내용은 릴리스 커밋 `e047218`과 같다. 실패한 Step은 없다. SPEC 1.4의 "계획 검토 INLINE, WORKFLOW 각 1회"도 채워졌다.
+
+| Step | 결과 | 관측 |
+|---|---|---|
+| 1 후반 (설치본 확인) | 통과. K7은 미해소 | 스킬 6개와 세그먼트 5개만 목록에 나오고 harness-gate 설명이 끝까지 보인다. 두 설치본은 릴리스 커밋과 내용이 같다. `plugin.json`은 9.0.0인데 cache 폴더 이름은 `8.14.0` 그대로다 |
+| 2 (`/harness` 완주, WORKFLOW 경로) | 통과 | `multi` 모드로 Setup부터 Step 8까지 갔고 2라운드에 QA PASS. 세그먼트 4종(`harness.plan`, `harness.critic`, `harness.build`, `harness.eval`)이 모두 `.harness/wf/` 사본에서 첫 시도에 실행됐다. 권한 거부와 엔진 오류는 0건 |
+| 2 (`/harness` 완주, INLINE 경로) | 통과 | `--mode single`로 Setup부터 Step 8까지 갔고 2라운드에 QA PASS. INLINE 계획 검토, 수렴 루프, 세션 안 승인과 체인, `generator_single`, `verify_layer1`, 평가자, INLINE 콜드 리뷰(`clean`), "Commit code only"가 모두 돌았다 |
+| 3 (계획 검토 WORKFLOW, 옛 사본 무시) | 통과 | `.harness/wf/`에 빈 `spec.eval.workflow.js`를 두고 실행했다. `harness.critic.workflow.js` 사본이 실행됐고 옛 이름 파일은 0바이트 그대로였다 |
+| 4 (`/handoff generate`, `resume`) | 통과 | resume은 드리프트 검사, 축소 검사, 브리핑, 승인 질문, 선택 후 같은 턴 착수까지 동작했다 |
+| 5 (md-optimize 복구) | 통과 | git 폴더: Phase 3 도중 중단 → 다음 실행이 남은 백업을 알아챔 → Restore 뒤 두 파일의 sha256이 실행 전과 같다. 비-git 폴더: Step 3b 실패 → manifest 복구 뒤 sha256이 같다. 중단과 실패는 시험자가 일으켰다(모의 중단, 0바이트 쓰기). Phase 4·5는 돌지 않았다 |
+| 6 (deep-review `--fix` 거부) | 통과 | 체크아웃되지 않은 브랜치를 대상으로 실행했다. Step 7이 건너뛰어졌고 거부 메시지가 출력과 보고서 Notes에 남았다. 작업 트리 변경은 0건. quick 경로만 봤다 |
+
+#### 질문 수 (SPEC 5단계 9번의 기준선)
+
+| 경로 | 멈춤 | 질문 | 내역 |
+|---|---|---|---|
+| WORKFLOW (`multi`) | 5 | 6 | Path와 Model(한 호출에 2개), Decisions, Approval, QA(Layer 3 FAIL → Fix), Commit |
+| INLINE (`--mode single`) | 5 | 5 | Model, Decisions, Approval, QA(Layer 3 FAIL → Fix), Commit |
+
+묻지 않고 처리된 것은 수렴 루프의 Minor 결정(WORKFLOW 6건, INLINE 3건)과 Convention Scan이다. Path와 Model을 한 호출로 묶은 것은 오케스트레이터의 선택이다. 계약대로 따로 물으면 WORKFLOW는 멈춤 6회다.
+
+#### 수렴 루프
+
+| 경로 | run | 라운드 | 발견 → 원장 | 처리 | 검사 |
+|---|---|---|---|---|---|
+| WORKFLOW | 2 | 3 | 27건 → 18항목 | 자동 적용 6, 사용자 답 1, 기본값 6, 기각 3, 잔여 3 | 트리 검사 8회, 커버리지 검사 3회 모두 통과 |
+| INLINE | 2 | 4 | 30건 → 27항목 | 자동 적용 16, 사용자 답 3, 기본값 3, 기각 1, 잔여 4 | 트리 검사 8회, 커버리지 검사 4회 모두 통과 |
+
+두 실행 모두 `converged`로 끝났다. INLINE 실행에서는 결정을 반영하면서 들어간 결함 1건(CR 검사 명령이 CRLF를 세지 못함)을 다음 delta 라운드가 잡았다.
+
+#### 서브에이전트 토큰
+
+| 경로 | 계획 | 계획 검토와 수렴 루프 | 구현 | 검증·평가·콜드 리뷰 | 합계 |
+|---|---|---|---|---|---|
+| WORKFLOW | 32.6만 | critic 13.1만 + inline 리뷰·검증 6회 약 78만 | 34.0만 + 32.0만 | 16.9만 + 16.8만 | 약 223만 |
+| INLINE | 15.4만 | 9회 115.8만 | 2회 12.8만 | Layer 1 2회 9.6만, 평가 2회 20.6만, 콜드 리뷰 11.6만 | 약 186만 |
+
+과제는 둘 다 주석·문서 몇 줄의 정정이었다(m6, m4). 스펙은 각각 110줄, 135줄이었고 완료 기준은 10개, 13개였다.
+
+#### 실사용에서 드러난 것
+
+| # | 내용 | 갈 곳 |
+|---|---|---|
+| r1 | WORKFLOW 실행에서 스펙이 구현자에게 커밋을 시켰다. 스펙 단계와 완료 기준이 "커밋 1개"를 요구했고 계획 검토 2회가 이를 잡지 못했다. 그 결과 콜드 리뷰 입력이 두 라운드 모두 0건이라 `skipped`가 됐고, Step 8의 권장 선택지는 "nothing to commit"으로 실패할 수밖에 없었다 | 미정 (1단계의 실패로 볼지, 5단계 1번의 입력으로 넘길지) |
+| r2 | r1의 `Remaining` 표기가 사실과 다르다. 건너뛴 이유는 "구현자가 이미 커밋함"인데 파생 규칙은 `none (cold pass skipped — git failure or empty input)`을 낸다 | 5단계 1번 |
+| r3 | INLINE 실행의 과제와 스펙은 커밋 금지를 명시했다. 그래도 Step 8은 "Commit code only (Recommended)"를 낸다 | 5단계 9번 |
+| r4 | 스펙과 conventions 전문이 프롬프트와 인자로 실린다(K9). WORKFLOW에서 conventions 약 20KB를 1회, 스펙 약 28~30KB를 5회 실었다. INLINE 계약도 planner에 conventions 전문을, 구현자와 평가자에 스펙 전문을 싣게 한다 | 5단계 3번 |
+| r5 | 결정 질문은 세션당 한 번이다. 두 번째 run에서 나온 결정은 잔여로 승인 화면에 남는다(WORKFLOW 결정 2건과 auto 1건, INLINE Major 결정 1건을 포함한 결정 2건과 auto 2건) | 5단계 2번 (K11) |
+| r6 | 2라운드의 `changes.md`가 1라운드 내용을 덮어쓴다. INLINE 경로에서는 평가자의 파일 목록이 2라운드에 고친 파일로 좁아진다 | 5단계 1번 (W8) |
+| r7 | `templates/generator/generator_single.md`가 "a parallel execution skill was found above", "a TDD skill was found above"라고 쓴다. 그 검색 지시는 W14로 지워졌으므로 가리킬 대상이 없다 | 2단계 |
+| r8 | 프로젝트 기본값 줄에 `lint-cmd`만 있으면 스텁 테스트는 Layer 1에서 실행되지 않는다. 두 실행 모두 평가자가 직접 돌렸다 | 5단계 7번 (K13) |
+| r9 | md-optimize: 대상 폴더 인자가 없어 CWD 기준으로만 동작한다. manifest의 `created` 줄은 파일을 만든 뒤에 적으므로 그 사이에 끊기면 새 파일이 기록 없이 남는다(읽어서 확인, 미시험). 복구 뒤 빈 `.harness/`가 남는다. Exclusion List의 `.harness/` 금지와 백업 위치의 충돌(m9)은 그대로다 | 2단계 (m9와 함께) |
+| r10 | deep-review의 리비전 가드는 산문 지시다. 이번 통과는 계약을 읽은 모델이 그대로 따른 것이고, m8(annotated tag, 조회 실패 시 `null`)은 시험하지 않았다 | 4단계 |
+
+#### 오케스트레이터가 계약과 다르게 한 것
+
+- WORKFLOW 실행: 브랜치 생성을 Setup 체크포인트 기록보다 먼저 했다. 승인 화면 Summary Block의 항목 요약을 줄여 적었다. Step 8 커밋 질문의 권장 표시를 "No commit"으로 옮겼다.
+- INLINE 실행: 구현자와 평가자의 스펙·QA 피드백 자리에 전문 대신 경로 포인터를 넣었다(r4의 비용과 옮겨 적다 달라질 위험 때문). 결정을 반영하려고 읽기 전용 측정 명령을 직접 실행했고 스펙 전문을 읽었다. 상태 전이 일부를 한 번의 쓰기로 합쳤다. `cold_review.md`의 첫 몇 줄을 읽었다(계약은 존재와 크기만 확인).
+- md-optimize 시험: 게이트 질문 2개를 한 호출로 묶은 것이 2회 있다.
+
+#### 남은 것
+
+- K7은 닫히지 않았다. cache 폴더 이름과 내부 버전이 다르다.
+- 검증용 과제 2건의 결과물은 릴리스 커밋 위의 로컬 작업 브랜치에만 있다(`d349a34`는 m6, `c653d8d`는 m4의 정정). v9.0.0에 넣을지 2단계로 넘길지는 정해지지 않았다. 이 문서의 m4·m6 행은 그 결정 전까지 그대로 둔다.
+- 관측하지 못한 경로: HARD GATE #2와 #3, Layer 2 자동 재시도, 콜드 리뷰 되먹임 재시도, WORKFLOW 경로의 콜드 리뷰, `--fast`, `--separate-gate`와 `/harness-gate`, epic과 slice 체인, Session Recovery, 권한 거부와 엔진 오류 폴백, 승인 화면의 "Modify".
