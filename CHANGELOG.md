@@ -68,6 +68,25 @@ of `design/v9-subtraction/SPEC.md` appendix A.
 - **`harness-gate` description cut short (K14).** Its unquoted description was truncated at
   ` #` by YAML, so the skill listing read `HARD GATE`. The value is quoted.
 
+### Known limits of the new safeguards
+
+Found by review before the release and not fixed in it. Each needs an interrupted or abandoned
+run to occur, and 8.14.0 handled the same situations worse (no backup, or a bare `git stash`).
+`design/v9-subtraction/BASELINE.md` records them with the stage that takes each.
+
+- **The `md-optimize` backup lives under `.harness/`.** A `/harness` session run in the same
+  directory after an interrupted `md-optimize` run deletes `.harness/` when it ends, and the
+  backup with it. Re-run `/md-optimize` and answer its backup question before starting
+  `/harness` there.
+- **`md-optimize` deletes its backup at the end of a run, also after "Skip".** If the evaluator
+  reports content at risk and the fixes are skipped, the pre-run copies still go with the
+  report. Commit first, or copy `.harness/md-optimize/backup/` aside before choosing "Skip".
+- **Auto-fix interrupted while a patch is being applied.** The resumed session asks the
+  auto-fix question again without saying that the patch is partly applied. Applying again
+  overwrites the pre-apply copies with the partly patched files; rejecting leaves what was
+  already applied in the tree. The pre-apply copies are under `.harness/autofix_pre_apply/`
+  until the session ends.
+
 ### Changed
 
 - The plan-critic Workflow segment is `workflows/harness.critic.workflow.js` (was
@@ -116,8 +135,9 @@ and its automatic commit, the approval's "Modify", the resume routing, the merge
 raise, the `/harness-build` §Entry refusal and the non-interactive stop. S4, the scripted
 probe, is still not in.
 
-Second, "so `--fast` and carried-over sessions still skip the loop". In v9 only `--fast` skips
-it: the carried-over path is removed (see Removed above).
+Second, "so `--fast` and carried-over sessions still skip the loop". In v9 a new session skips
+it only with `--fast`: nothing writes the carried-over record any more (see Removed above). A
+state written before v9 that still carries that record is read as before.
 
 The `harness-converge` epic (`design/harness-converge/SPEC.md`), slices S1–S3 and S3.5 (the
 follow-up decisions of the S1–S3 cold review and the AC-26 measurement). S4 (the live probe) is

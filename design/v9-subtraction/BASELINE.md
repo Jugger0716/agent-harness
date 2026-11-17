@@ -268,6 +268,35 @@ SPEC 1.3의 시뮬레이션 값과 다른 것은 `session-conflict`(2로 예상,
 #### 남은 것
 
 - K7은 닫히지 않았다. cache 폴더 이름과 내부 버전이 다르다.
-- `/harness doctor` (2026-11-17, 릴리스 브랜치의 작업 트리에서 실행): ① ✓, ② ✓, ③ ✓, ④ ⚠, ⑤ ✓. ④의 ⚠는 K7 하나다. cache 폴더 이름은 `8.14.0`이고 그 안의 `plugin.json`은 9.0.0이다. 두 설치본의 `plugin.json`은 저장소와 같다(9.0.0). 추적 파일 116개 가운데 설치본과 내용이 다른 것은 릴리스 커밋 뒤에 고친 문서 4개(`CHANGELOG.md`, `RELEASING.md`, `SPEC.md`, 이 문서)뿐이고 스킬·템플릿·워크플로·스크립트에는 없다. 줄 끝만 다른 파일이 28개, 설치본에 없는 추적 파일과 설치본에만 있는 파일은 0개다. `RELEASING.md` 9번이 요구하는 "✓"는 이 릴리스에서 채워지지 않았다. K7을 알려진 예외로 두고 릴리스 뒤에 닫는다.
+- `/harness doctor` (2026-11-17, 릴리스 브랜치의 작업 트리에서 실행): ① ✓, ② ✓, ③ ✓, ④ ⚠, ⑤ ✓. ④의 ⚠는 K7 하나다. cache 폴더 이름은 `8.14.0`이고 그 안의 `plugin.json`은 9.0.0이다. 두 설치본의 `plugin.json`은 저장소와 같다(9.0.0). 추적 파일 116개 가운데 설치본과 내용이 다른 것은 릴리스 커밋 뒤에 고친 문서 4개(`CHANGELOG.md`, `RELEASING.md`, `SPEC.md`, 이 문서)뿐이고 스킬·템플릿·워크플로·스크립트에는 없다. 줄 끝만 다른 파일이 28개, 설치본에 없는 추적 파일과 설치본에만 있는 파일은 0개다. `RELEASING.md` 9번이 요구하는 "✓"는 이 릴리스에서 채워지지 않았다. K7을 알려진 예외로 두고 릴리스 뒤에 닫는다. (이 줄은 실행 시점의 관측이다. 그 뒤 "릴리스 전 리뷰"의 수정이 스킬 2개와 스크립트 1개를 바꿨다.)
 - 검증용 과제 2건의 결과물은 릴리스 커밋 위의 로컬 작업 브랜치에만 있다(`d349a34`는 m6, `c653d8d`는 m4의 정정). v9.0.0에는 넣지 않고 2단계로 보류한다(2026-11-17 결정). m4·m6는 원래 2단계 배정이고, 넣으면 실사용 검증을 마친 설치본과 릴리스 내용이 달라진다. 이 문서의 m4·m6 행은 2단계에서 병합될 때까지 그대로 둔다.
 - 관측하지 못한 경로: HARD GATE #2와 #3, Layer 2 자동 재시도, 콜드 리뷰 되먹임 재시도, WORKFLOW 경로의 콜드 리뷰, `--fast`, `--separate-gate`와 `/harness-gate`, epic과 slice 체인, Session Recovery, 권한 거부와 엔진 오류 폴백, 승인 화면의 "Modify".
+
+### 릴리스 전 리뷰 (2026-11-17)
+
+독립 리뷰 2회. 두 번 모두 Critical은 0건이다.
+
+| 회차 | 범위 | 판정 | Critical / Major / Minor |
+|---|---|---|---|
+| 1 | `b187a3b`(브랜치 리뷰 지적을 고친 커밋, 그때까지 재검토 없음), `1f83905` | 수정 후 릴리스 | 0 / 6 / 9 |
+| 2 | `717490c`(1회차 수정), 손실 경로 절차 통독(md-optimize 전체, 자동 수정 스냅샷, deep-review `--fix` 가드, `harness.build`의 빈 결과 처리), `8f25b64` | 수정 후 릴리스 | 0 / 3 / 12 |
+
+**고친 것.** 1회차 Major 6건은 `8f25b64`(CHANGELOG 정정 문단 2건)와 `717490c`(4건)에서 고쳤다. 그중 둘은 문서만 고쳤다: `verify_git_safety.py`는 통과하는 위험 형태를 독스트링에 공개했고 정규식은 그대로다. README는 다른 플러그인 의존이 한 곳 남아 있다고 적었고 그 의존은 그대로다. 2회차의 Minor 7건(생성기에 넘기는 경로 목록의 설명, "Continue inline"의 경로 기록, md-optimize 남은 백업 질문의 근거·복구 실패 처리·문구, CHANGELOG의 carried-over 정정, 이 문서의 doctor 줄)은 이 절을 넣은 커밋에서 고쳤다.
+
+**고치지 않고 남긴 것.** 2회차 Major 3건(p1~p3)은 모두 중단되거나 버려진 실행에서만 생기고, 8.14.0에서는 같은 상황에 백업이 없거나 `git stash`였다. CHANGELOG 9.0.0의 "Known limits of the new safeguards"에 공개했다. "갈 곳"은 오케스트레이터가 SPEC 단계 목록에 맞춰 배정한 것이다.
+
+| # | 심각도 | 내용 | 갈 곳 |
+|---|---|---|---|
+| p1 | Major | md-optimize 백업이 `.harness/` 아래에 있어, 중단된 md-optimize 뒤에 같은 폴더에서 돈 `/harness` 세션이 끝나며 `.harness/`를 지우면 실행 전 사본도 사라진다 | 2단계 (m9와 함께) |
+| p2 | Major | 자동 수정 적용이 도중에 끊긴 뒤 재개하면 부분 적용을 알리지 않고 다시 묻는다. 다시 적용하면 스냅샷이 덮어써지고(m7), 거절하면 부분 패치가 트리에 남는다 | 5단계 (m7과 함께) |
+| p3 | Major | md-optimize Phase 4d "Skip" 뒤 Phase 5가 백업을 지운다 (m9에 이미 있음) | 2단계 |
+| p4 | Minor | `verify_git_safety.py`가 `git checkout <ref> -- <path>`, `git restore --staged --worktree <path>`를 통과시킨다. 강제 체크아웃 계열도 보지 않는다 | 2단계 |
+| p5 | Minor | INLINE 평가자가 다른 플러그인의 에이전트 유형을 "있으면" 쓴다 | 5단계 4번 |
+| p6 | Minor | 재시도 지점들이 `phase → "generating"` 쓰기를 디스패치 뒤에 나열한다. Session Recovery의 `verify_ready`/`verifying` 행은 재시도 횟수를 0으로 되돌린다 | 5단계 7번 (K16) |
+| p7 | Minor | Key Rules의 "Graceful engine fallback"에 빈 결과 질문 예외가 없다. 상태 도표에 `generating → generate_ready`가 없다. harness-gate는 `generate_ready` 쓰기를 §Entry만 한다고 적는다 | 5단계 7번 (K18) |
+| p8 | Minor | deep-review는 `reviewed_sha`를 얻지 못하면 가드 없이 진행한다 (m8과 같다) | 4단계 |
+| p9 | Minor | 빈 결과가 아닌 Workflow 오류로 구현이 끊기면 묻지 않고 부분 편집된 트리 위에서 INLINE으로 다시 실행한다 | 2단계 (W9와 함께) |
+| p10 | Minor | README의 "skills that dispatch sub-agents ask via AskUserQuestion"이 남은 스킬과 맞지 않는다 | 6단계 |
+| p11 | Minor | 삭제 토큰 검사가 `scripts/verify_sync_markers.py`를 통째로 빼서 그 파일의 현재형 문장 2곳이 가려진다. 이 문서 "린트와 테스트"의 "이력 주석 밖에서 0건"은 그 때문에 정확하지 않다 | 2단계 |
+
+**명명된 예외** (`RELEASING.md` §If a step fails). ① K7 — 위 "남은 것". 닫는 방법: 릴리스 뒤 설치본의 버전 표기를 맞춘다. ② 리뷰 수정으로 바뀐 두 경로(`/harness-build`의 "Partial edits" 질문, md-optimize의 남은 백업 질문)는 실사용 세션에서 돌리지 않았다. 설치본은 릴리스 커밋 `e047218`의 내용이고, 실사용 검증은 그 내용에서 했다. 닫는 방법: 2단계 실사용 검증에서 두 경로를 돌린다.
