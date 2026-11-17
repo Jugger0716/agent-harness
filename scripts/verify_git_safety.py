@@ -6,10 +6,13 @@ A SKILL.md, a template or a workflow script is text a model follows. A sentence 
 tells it to run one of the commands below is a data-loss path, because each of them
 discards or moves work the user has not committed:
 
-  git checkout -- <path>   discards uncommitted edits; cannot restore an untracked file
+  git checkout -- <path>   discards uncommitted edits; cannot restore an untracked file.
+                           Matched with a <ref> before the `--` as well
   git checkout .           the same, without the `--`
   git restore <path>       the same (a `git restore` whose first argument is `--staged`, which
-                           unstages, is let through -- see the limits below)
+                           unstages, is let through -- unless `--worktree` / `-W` follows)
+  git checkout -f / --force, git switch -f / --force / --discard-changes
+                           throw local changes away to reach the target
   git stash                bare or `push`: moves the uncommitted implementation OUT of the
                            working tree. `drop`: destroys a stash entry
   reset ... --hard         discards uncommitted and, with a ref, committed work
@@ -37,6 +40,10 @@ What this does not check:
     `checkout`) and `git restore --staged --worktree <path>` (only the first argument is
     tested for `--staged`). Correction, 2026-11-17: an earlier revision of this docstring
     said the first form "is matched through its `-- `". It is not.
+    Correction, v9.0.1: both forms are matched now, and so is every command above when
+    `-C <path>` or `-c <key=value>` sits between `git` and the subcommand -- until then
+    `git -C <dir> checkout -- <path>` was not seen at all. This paragraph is kept as the
+    record of what 9.0.0 let through.
 
 Exit codes:
   0  no forbidden command found
@@ -61,13 +68,23 @@ ROOT = Path(__file__).resolve().parent.parent
 SCAN_DIRS = ["skills", "templates", "workflows"]
 SCAN_SUFFIXES = {".md", ".js"}
 
+# `git`, then any number of `-C <path>` / `-c <key=value>` options, up to the subcommand. Without
+# this a command anchored to another directory (`git -C <dir> checkout -- .`) was not seen at all.
+GIT = r"git\s+(?:-[Cc]\s+\S+\s+)*"
+
 FORBIDDEN = [
-    # `git checkout -- <path>`, and `git checkout .` which is the same thing without the `--`
-    ("git checkout -- ", re.compile(r"git\s+checkout\s+(?:--\s|\.(?![\w/]))")),
-    # a worktree restore discards uncommitted edits; `--staged` alone only unstages
-    ("git restore (worktree)", re.compile(r"git\s+restore\s+(?!--staged\b)")),
+    # `git checkout -- <path>` with or without a <ref> in front of the `--`, and `git checkout .`
+    # which is the same thing without the `--`
+    ("git checkout -- ", re.compile(GIT + r"checkout\s+(?:[^\s-]\S*\s+)?(?:--\s|\.(?![\w/]))")),
+    # a worktree restore discards uncommitted edits; `--staged` alone only unstages ...
+    ("git restore (worktree)", re.compile(GIT + r"restore\s+(?!--staged\b)")),
+    # ... but not once `--worktree` / `-W` rides along with it
+    ("git restore --worktree", re.compile(GIT + r"restore\b[^\n`]*(?:--worktree\b|\s-W\b)")),
+    # a forced checkout or switch throws local changes away to reach its target
+    ("forced checkout / switch", re.compile(
+        GIT + r"(?:checkout\s+(?:-f\b|--force\b)|switch\b[^\n`]*(?:\s-f\b|--force\b|--discard-changes\b))")),
     # bare, `push` (the same command spelled out) and `drop` (destroys a stash entry)
-    ("git stash (bare / push / drop)", re.compile(r"git\s+stash(?!\s+(?:pop|apply|list|show)\b)")),
+    ("git stash (bare / push / drop)", re.compile(GIT + r"stash(?!\s+(?:pop|apply|list|show)\b)")),
     ("reset --hard", re.compile(r"\breset\b[^\n`]*--hard\b")),
     ("clean -f", re.compile(r"\bclean\b(?:\s+-{1,2}[A-Za-z-]+)*?\s+(?:-[A-Za-z]*f[A-Za-z]*|--force)\b")),
 ]
@@ -76,6 +93,11 @@ FORBIDDEN = [
 ALLOW = {
     ("skills/handoff/SKILL.md", "git clean -fdx"): (
         "warns the user what destroys a gitignored handoff document; nothing here runs it"
+    ),
+    ("templates/harness/doctor.md", "git -C <location> checkout -- workflows/"): (
+        "the repair for CR-contaminated segment scripts in the plugin's own install copy: the "
+        "same line has just removed those tracked files, the checkout brings them back, and "
+        "both halves are anchored to <location> -- never the caller's project"
     ),
 }
 

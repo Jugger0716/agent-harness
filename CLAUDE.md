@@ -211,9 +211,11 @@ are the only behavioural one, and they cover the Workflow segments only):
   `git stash` (bare, `push`, `drop`), `reset … --hard` and `clean -f` / `--force` in `skills/`,
   `templates/` and `workflows/`: text a model follows must not tell it to
   discard or move uncommitted work. It reads text, not intent, so a sentence that only warns about
-  one of them goes in its zero-slack `ALLOW` table with the reason. Two destructive forms pass
-  it (`git checkout <ref> -- <path>`, `git restore --staged --worktree <path>`); its docstring
-  says why.
+  one of them goes in its zero-slack `ALLOW` table with the reason. Two destructive forms passed
+  it in 9.0.0 (`git checkout <ref> -- <path>`, `git restore --staged --worktree <path>`), and so
+  did any of these commands with `-C <path>` between `git` and the subcommand. Since 9.0.1 all
+  of them are matched, together with a forced `checkout` / `switch` (`-f`, `--force`,
+  `--discard-changes`); the docstring keeps the correction beside the old claim.
 - `verify_cited_paths.py` — every `skills/…`, `templates/…`, `workflows/…` or `scripts/…` file path
   cited from `skills/`, `templates/`, `workflows/`, `CLAUDE.md` or `README.md` must exist. It was
   added with the v9 removal of thirteen skills. Placeholder paths (`templates/<skill>/…`), directory
