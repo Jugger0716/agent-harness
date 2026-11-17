@@ -91,8 +91,8 @@ GROUPS: list[tuple[str, str, list[str], str | None]] = [
     # the new hx-mode-gate group below, the rest moved to status_format.md.
     # shared_source is None for all four -- the /harness copy is canonical; no copy lives under
     # templates/.
-    ("hx-mode-gate", "v2", HX_HB, None),
-    ("hx-state-machine", "v3", HX_HB, None),
+    ("hx-mode-gate", "v3", HX_HB, None),
+    ("hx-state-machine", "v4", HX_HB, None),
     ("hx-path-validator", "v2", HX_HGB, None),
     ("hx-scale-render", "v2", HX_HG, None),
     ("wf-prelude", "v1", WF_SCRIPTS, None),

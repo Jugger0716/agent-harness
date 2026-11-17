@@ -59,7 +59,7 @@ promise, not a contract.
 4. `epic.boundaries != null AND phase == "completed"` → `[harness-gate] Epic session residue —
    run /harness, which offers the recovery options.`
 5. `phase != "plan_done"` → `[harness-gate] phase is {phase}; this gate only reads plan_done.
-   Owner: /harness for plan_ready|planning, /harness-build for generate_ready…completed.`
+   Owner: /harness for setup|plan_ready|planning|completed, /harness-build for generate_ready…finalizing.`
 6. The session's gate mode is **inline** (`skills/harness/SKILL.md` §Approval Gate's gate-mode
    rule, by name: `cli_flags.separate_gate == false`, or the field absent with
    `cli_flags.fast == true`) → `[harness-gate] This session's approval is /harness — run /harness.`

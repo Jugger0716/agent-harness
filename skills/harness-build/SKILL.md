@@ -16,7 +16,7 @@ prevented — §Entry below refuses an inline session without a matching approva
 and redirects a missing session.
 
 Your role is:
-1. Manage phase transitions via `state.json` from `plan_done` (§Entry) to `completed`
+1. Manage phase transitions via `state.json` from `plan_done` (§Entry) to `finalizing`, and end the session in §Step 8
 2. Resolve the execution path per §Mode Gate — **INLINE** (dispatch sub-agents directly) or **WORKFLOW** (run plugin-shipped native Workflow segment scripts)
 3. On the WORKFLOW path: invoke `Workflow {scriptPath}` and receive **schema-validated objects** — no text parsing
 4. On the INLINE path: dispatch sub-agents with minimal context and parse 1-line returns (legacy contract, inline only)
@@ -50,7 +50,7 @@ When rendering a `Print:` directive: translate natural-language portions to `use
 
 Parse phase is English raw (keyword extraction for state transitions); display phase forces `user_lang` on the free-text summary after the first ` — `, idempotently. Split failure → the `confidence: Unknown` fallback. On the WORKFLOW path, display the object's `summary` as returned — no parsing, no translation pass. Full rules: `templates/_shared/output_language.md`.
 
-<!-- BLOCK-START:hx-mode-gate v2 — shared by /harness, /harness-build; edit every copy in one commit and bump the version -->
+<!-- BLOCK-START:hx-mode-gate v3 — shared by /harness, /harness-build; edit every copy in one commit and bump the version -->
 ## Mode Gate — path & mode resolution (single source: `templates/_shared/mode_gate.md`)
 
 Apply the shared opt-in convention in `templates/_shared/mode_gate.md`. The mode-selection roundtrip is removed EXCEPT §Ambiguity Prompt, which fires only when opt-in is absent:
@@ -75,8 +75,8 @@ Apply the shared opt-in convention in `templates/_shared/mode_gate.md`. The mode
 
 ## Standard Status Format
 
-Block shape, label rules and the harness phase labels (`plan_ready` → "Plan — ready" … `completed` → "Completed"): `templates/_shared/status_format.md`. Mode enum `<single | standard | multi>`; extra row `Path : <inline | workflow>  (<reason>)`.
-<!-- BLOCK-END:hx-mode-gate v2 -->
+Block shape, label rules and the harness phase labels (`setup` → "Setup — in progress" … `completed` → "Completed"): `templates/_shared/status_format.md`. Mode enum `<single | standard | multi>`; extra row `Path : <inline | workflow>  (<reason>)`.
+<!-- BLOCK-END:hx-mode-gate v3 -->
 
 ## Entry (how a `/harness-build` invocation starts)
 
@@ -109,7 +109,7 @@ re-validation; this skill's own phase jump table picks up from there:
 
 
 
-     - `plan_ready` / `planning` → **owned by `/harness`** — print `[harness-build] Planning is
+     - `setup` / `plan_ready` / `planning` → **owned by `/harness`** — print `[harness-build] Planning is
        not finished (phase: {phase}) — run /harness` and halt. Nothing is written.
      - `plan_done` → §Entry above (this skill's gate-crossing write, or §Step 3.5 with `--epic`).
      - `generate_ready` → Step 4 (Generate)
@@ -123,8 +123,14 @@ re-validation; this skill's own phase jump table picks up from there:
        - if `autofix.applied` is `"stopped"` or `"rejected"` → Step 5 "1st HARD-GATE" (Auto-fix HIDE per I2; `layer1_retries` unchanged — I4 clamp applies to "stopped")
      - `evaluate_ready` → Step 6 (Evaluate)
      - `evaluating` / `evaluate_done` → Step 7 (Verdict)
+     - `finalizing` → Step 8 (Cleanup & Finalize). The verdict is settled and recorded, so nothing is
+       re-evaluated and no question of Step 7 is asked again: Step 8 starts over from its
+       slice-session decision and its commit question. This is where a session whose commit
+       failed, or that was cut off between the verdict and the commit question, comes back.
      - `completed` → no active session — print `[harness-build] No active session — run
-       /harness "<task>" to start one` and halt.
+       /harness "<task>" to start one` and halt. A state.json written before `finalizing`
+       existed can be `completed` with Step 8 unfinished (a commit that failed): this skill
+       cannot resume it — commit by hand, or run `/harness`, which clears it and starts again.
 
 If `.harness/state.json` does not exist, proceed to this skill's §Fresh Start.
 
@@ -263,16 +269,16 @@ written by `skills/harness-build/SKILL.md` §Step 5 (WORKFLOW) / `skills/harness
 
 ---
 
-<!-- BLOCK-START:hx-state-machine v3 — shared by /harness, /harness-build; edit every copy in one commit and bump the version -->
+<!-- BLOCK-START:hx-state-machine v4 — shared by /harness, /harness-build; edit every copy in one commit and bump the version -->
 ## State Machine
 
 ### State Transition Diagram
 
 ```
-plan_ready → planning → plan_done → [User Gate] → generate_ready
+setup → plan_ready → planning → plan_done → [User Gate] → generate_ready
   → generating → generate_done → verify_ready → verifying → verify_done
   → evaluate_ready → evaluating → evaluate_done → [Verdict Gate]
-  → completed
+  → finalizing → (Step 8 ends the session and deletes .harness/)
 
 plan_done → completed (epic exit only — skills/harness-build/SKILL.md §Step 3.6; Steps 4–8 not executed)
 
@@ -289,9 +295,11 @@ On the WORKFLOW path the same machine applies; `harness.eval` covers verifying�
 - `*ing` → `*_done`: sub-agent / segment completion
 - `*_done` → next `*_ready`: auto mode = automatic / phase mode = next session
 - Phase mode can end a session at `plan_done`, `generate_done`, `verify_done`, `evaluate_done`
+- `setup` is the value `skills/harness/SKILL.md` §Step 1 item 7's checkpoint writes; item 11 replaces it with `plan_ready`. A session found at `setup` was interrupted inside Setup, and `skills/harness/SKILL.md` §Session Recovery re-enters Setup at item 8.
+- `finalizing` is written at the Verdict Gate (`skills/harness-build/SKILL.md` §Step 7) once the verdict is settled and only `skills/harness-build/SKILL.md` §Step 8 — the commit question and the cleanup — remains. A Step 8 that succeeds deletes `.harness/`, so no phase follows it; a session found at `finalizing` re-enters Step 8. `completed` is written by the epic exit alone — a state.json written before `finalizing` existed can still carry it from Step 7.
 - `plan_done` → `completed` directly is the one epic-exit exception, taken only via `skills/harness-build/SKILL.md` §Step 3.6 (by name); no other transition skips a state.
 - `[User Gate]` is HARD GATE #1, rendered where the session's gate mode puts it: `skills/harness/SKILL.md` §Approval Gate in an inline session (the default, `--fast` included), which records an approval bound to `spec_stamp` that `skills/harness-build/SKILL.md` §Entry checks before it performs the `generate_ready` write; `/harness-gate` in a separate session, where the human typing `/harness-build` is the proof.
-<!-- BLOCK-END:hx-state-machine v3 -->
+<!-- BLOCK-END:hx-state-machine v4 -->
 
 ### Auto-fix State Transition Table
 
@@ -1040,7 +1048,7 @@ It sits HERE, in Tier 1's preamble rather than inside `#### If PASS:`, precisely
 
 #### If PASS:
 
-**Cold review feedback branch (Tier 2 — evaluated BEFORE `phase → "completed"` is written, AC-19 (f)).** `cold_ran_this_round` (single definition, cited by name elsewhere — never restated): `verify.cold_round == round AND verify.cold_result ∈ {clean, findings, retried_unverified}`. Branch condition (single definition): `verdict == PASS AND cold_ran_this_round AND (cold_counts.Critical + cold_counts.Major) >= 1 AND verify.cold_retries == 0` — cold never reads or writes `verify.layer2_result`.
+**Cold review feedback branch (Tier 2 — evaluated BEFORE `phase → "finalizing"` is written, AC-19 (f)).** `cold_ran_this_round` (single definition, cited by name elsewhere — never restated): `verify.cold_round == round AND verify.cold_result ∈ {clean, findings, retried_unverified}`. Branch condition (single definition): `verdict == PASS AND cold_ran_this_round AND (cold_counts.Critical + cold_counts.Major) >= 1 AND verify.cold_retries == 0` — cold never reads or writes `verify.layer2_result`.
 
 **Why `cold_round` alone, and no freshness latch (AC-21).** `skills/harness/SKILL.md` §Step 2.6's latch confirms `plan_critic_findings.md` exists after that section deleted it pre-dispatch, so existence alone proves this pass wrote it. Cold review's counterpart baseline, `qa_report.md`, is rewritten by the Evaluator on every L1 retry, every L2 auto-retry and every cold feedback pass, and no section deletes it first — so neither that existence rule nor the mtime comparison this latch used before would carry any freshness meaning there, and the latch is deliberately NOT ported; file existence is used only to confirm a successful write (absent → `failed` + banner). **Correction, recorded rather than rewritten away**: this sentence used to state the latch compares mtimes and that the comparison is sound "because `spec.md` is written once per plan". The mechanism changed; the conclusion — not ported — did not, and it now rests on `qa_report.md` having no pre-dispatch delete rather than on a per-plan single write. **Cost of the non-deterministic `skipped` re-evaluation**: its two reasons (git command failure / empty input) do not write `cold_round`, so re-entering §Step 5 or §Step 6 inside the SAME round can charge one additional cold pass — for those two the ceiling is entry count, not round count.
 
@@ -1092,7 +1100,7 @@ lives in the vocabulary table above, not restated here), disclose: "되먹임 �
 to `retried_unverified` before Step 7 is reached again, so most resumes never see this branch
 fire for this value — disclosed here rather than asserted as a guaranteed-reachable path.
 
-Update state.json: `phase → "completed"`, `updated_at → now`.
+Update state.json: `phase → "finalizing"`, `updated_at → now`.
 Print: `[harness] ✓ QA PASS — task complete.`
 Proceed to Step 8.
 
@@ -1128,7 +1136,7 @@ Ask via AskUserQuestion (in `user_lang`):
   - "Accept as-is" / "Finish without fixing"
 
 If "Fix": same as Layer 3 Fix below.
-If "Accept as-is": phase → `"completed"`, proceed to Step 8.
+If "Accept as-is": phase → `"finalizing"`, proceed to Step 8.
 
 #### If FAIL — Layer 3 (verify.layer2_result == "PASS") and rounds remaining (round < max_rounds):
 
@@ -1145,12 +1153,12 @@ If "Fix":
 - Go to Step 4 (Generate) — a NEW round is a full pass: INLINE normal dispatch with `{qa_feedback}`; WORKFLOW `harness.build {retry: false}` with `qaFeedback` = qa_report.md content (fresh plan + advise + implement).
 
 If "Accept as-is":
-- Update phase → `"completed"`, `updated_at → now`.
+- Update phase → `"finalizing"`, `updated_at → now`.
 - Proceed to Step 8.
 
 #### If FAIL and max rounds reached:
 
-Update phase → `"completed"`, `updated_at → now`.
+Update phase → `"finalizing"`, `updated_at → now`.
 Print: `[harness] Max rounds reached. Remaining issues in qa_report.md.`
 Proceed to Step 8.
 
@@ -1219,7 +1227,7 @@ Actions (apply Safety Guard before each delete):
      silent-skip rule above (which applies only when the source file itself does not exist).
 
      **(s4) Per-file staging failure handling**: if `git add <file>` fails for a specific artifact file (permission, `.gitignore` conflict, etc.), warn the user (in `user_lang`): "Failed to stage `<file>`: <error>. Artifact may not be in git history — it remains on disk at `{docs_path}` regardless (this path never deletes `{docs_path}`)." Continue with remaining files — do NOT abort the whole sequence on a single staging failure. The code commit (step 3) is more critical than any individual artifact preservation. Because `{docs_path}` is never deleted here, a staging failure can never strand a file — it stays on disk even when `git add` failed for it (e.g. `docs/` is `.gitignore`d, the common case in this repo itself — `.gitignore:7`).
-  3. **Commit** the staged code changes plus artifacts, then **confirm the commit succeeded** (git exit 0 / a new commit object exists). **If the commit FAILS** (pre-commit hook rejection, signing failure, locked index, disk error, nothing-to-commit): **STOP without deleting anything** — `.harness/` and `{docs_path}` stay intact so the session is resumable and all artifacts recoverable. Surface the git error (in `user_lang`) and tell the user to resolve it and re-run, or commit manually. Do NOT proceed to step 4. **This sub-path does not end the session** — do NOT print the §Session Boundary block here. The one exception is §Epic Slice Chain's automatic commit, whose failure (and whose step 1 ABORT) is a boundary stop: still nothing deleted, but the Type B block prints with the commit-failure rows.
+  3. **Commit** the staged code changes plus artifacts, then **confirm the commit succeeded** (git exit 0 / a new commit object exists). **If the commit FAILS** (pre-commit hook rejection, signing failure, locked index, disk error, nothing-to-commit): **STOP without deleting anything** — `.harness/` and `{docs_path}` stay intact so the session is resumable and all artifacts recoverable. Surface the git error (in `user_lang`) and tell the user to resolve it and run `/harness-build` again — the session is at `finalizing`, so §Session Recovery brings it back to this step's commit question — or to commit manually. Do NOT proceed to step 4. **This sub-path does not end the session** — do NOT print the §Session Boundary block here. The one exception is §Epic Slice Chain's automatic commit, whose failure (and whose step 1 ABORT) is a boundary stop: still nothing deleted, but the Type B block prints with the commit-failure rows.
   4. **Delete `.harness/`** — only after a confirmed-successful commit (the Safety Guard already validated the parent context). `{docs_path}` is **never deleted** on this path.
 
   **(m2) commit-first, no-delete-of-docs_path ordering note**: the commit (step 3) precedes the only delete in this sequence (`.harness/`, step 4), so artifacts physically exist on disk at commit time and are captured normally when staging succeeds. `{docs_path}` itself is never deleted by this branch (P0-2 removes the prior "delete `{docs_path}` working-directory contents" step), so `spec.md` / `qa_report.md` remain on disk even when `docs/` is `.gitignore`d and staging silently fails per (s4). Because nothing is deleted until the commit is confirmed, a commit failure can never strand the session: `state.json` (`.harness/`) and `{docs_path}` survive for resume/manual recovery. (This supersedes the prior stage→delete→commit order, in which a final-step commit failure left state and docs already deleted.)
