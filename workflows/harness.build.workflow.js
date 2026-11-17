@@ -472,7 +472,7 @@ if (!A.retry) {
       'do not re-run broad codebase discovery to locate them):\n' +
       planFiles.map((p) => `- ${p}`).join('\n')
   }
-  log('Plan: implementation plan ready')
+  log(implPlan ? 'Plan: implementation plan ready' : 'Plan: implementation plan unavailable — implementing from the spec alone')
 
   phase('Advise')
   const advisorDefs =

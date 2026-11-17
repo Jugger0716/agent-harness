@@ -201,6 +201,7 @@ const report = await agent(
   }),
   { schema: CriticReportSchema, label: 'critic', phase: 'Critique', ...mopt(MODELS.evaluator || MODELS.advisor) },
 )
+must('harness.critic', 'critic', report)
 
 // Normalize counts from items[] — items are the ground truth the Critic Gate displays.
 // A disagreeing tally is corrected here so the orchestrator can branch on counts directly.

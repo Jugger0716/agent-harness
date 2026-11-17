@@ -239,6 +239,22 @@ const defectCases = [
       return { ok: namesAgent(r.error, 'synthesis'), detail: r.error ? r.error : `returned ${JSON.stringify(r.result).slice(0, 80)} although synthesis returned null` }
     },
   },
+  // The same rule for every other single agent() a script cannot go on without: the error has
+  // to say which agent came back empty, not die on a null read.
+  ...[
+    ['eval-null-l1', 'harness.eval', 'verify_l1'],
+    ['eval-null-evaluator', 'harness.eval', 'evaluator'],
+    ['critic-null', 'harness.critic', 'critic'],
+    ['review-null-synthesis', 'deep-review.review', 'synthesis'],
+  ].map(([id, script, label]) => ({
+    id,
+    defect: 'W9',
+    script,
+    async check(e) {
+      const r = await e.run(script, REP[script], (p, o) => (o.label === label ? null : e.minimal(o.schema)))
+      return { ok: namesAgent(r.error, label), detail: r.error ? r.error : `returned a result although the ${label} agent returned null` }
+    },
+  })),
   {
     id: 'eval-scope-placeholder',
     defect: 'W15',

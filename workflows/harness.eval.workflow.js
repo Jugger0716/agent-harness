@@ -531,6 +531,7 @@ if (!A.skipL1) {
     }),
     { schema: VerifyVerdictSchema, label: 'verify_l1', phase: 'Verify L1', ...mopt(MODELS.verifier || 'haiku') },
   )
+  must('harness.eval', 'verify_l1', l1)
   log(`Verify L1: ${l1.verdict}${l1.summary ? ' — ' + l1.summary : ''}`)
   // L1 fail -> orchestrator handles the retry loop / HARD GATE #2; post-auto-fix
   // re-verify (onlyL1) returns here too.
@@ -560,6 +561,7 @@ const verdict = await agent(
   }),
   { schema: VerifyVerdictSchema, label: 'evaluator', phase: 'Evaluate', ...mopt(MODELS.evaluator) },
 )
+must('harness.eval', 'evaluator', verdict)
 log(`Evaluate: ${verdict.verdict}${verdict.summary ? ' — ' + verdict.summary : ''}`)
 
 // ---- Phase 3: Cold review (conditional -- 3rd meta.phase, gated at runtime; see the L1

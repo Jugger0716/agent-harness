@@ -655,6 +655,7 @@ const merged = await agent(
   }),
   { schema: FindingSetSchema, label: 'synthesis', phase: 'Synthesize', ...mopt(MODELS.advisor) },
 )
+must('deep-review.review', 'synthesis', merged)
 
 // Normalize counts from findings[] — findings are the ground truth the report displays
 // (harness.critic tally precedent).

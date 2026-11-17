@@ -706,6 +706,7 @@ const plan = await agent(
   }),
   { schema: PlanResultSchema, label: 'synthesis', phase: 'Synthesize', ...mopt(MODELS.advisor) },
 )
+must('harness.plan', 'synthesis', plan)
 
 // PlanResult is schema-validated -> no 1-line parsing. The orchestrator writes
 // spec.md from this object, then renders HARD GATE #1 (spec confirmation).
