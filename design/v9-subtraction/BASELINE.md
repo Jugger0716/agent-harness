@@ -250,7 +250,7 @@ SPEC 1.3의 시뮬레이션 값과 다른 것은 `session-conflict`(2로 예상,
 |---|---|---|
 | r1 | WORKFLOW 실행에서 스펙이 구현자에게 커밋을 시켰다. 스펙 단계와 완료 기준이 "커밋 1개"를 요구했고 계획 검토 2회가 이를 잡지 못했다. 그 결과 콜드 리뷰 입력이 두 라운드 모두 0건이라 `skipped`가 됐고, Step 8의 권장 선택지는 "nothing to commit"으로 실패할 수밖에 없었다 | 5단계 1번 (2026-11-17 결정: 1단계의 실패로 보지 않는다. 1단계가 만든 회귀가 아니고 데이터 손실도 없다) |
 | r2 | r1의 `Remaining` 표기가 사실과 다르다. 건너뛴 이유는 "구현자가 이미 커밋함"인데 파생 규칙은 `none (cold pass skipped — git failure or empty input)`을 낸다 | 5단계 1번 |
-| r3 | INLINE 실행의 과제와 스펙은 커밋 금지를 명시했다. 그래도 Step 8은 "Commit code only (Recommended)"를 낸다 | 5단계 9번 (r1과 뿌리가 같다 — 스펙의 커밋 지시·금지를 Step 8이 읽지 않는다. 함께 본다) |
+| r3 | INLINE 실행의 과제와 스펙은 커밋 금지를 명시했다. 그래도 Step 8은 "Commit code only (Recommended)"를 낸다 | 5단계 9번 (r1과 뿌리가 같다 — 스펙의 커밋 지시·금지를 Step 8이 읽지 않는다. 9번에서 다루되 5단계 1번의 r1을 참조한다) |
 | r4 | 스펙과 conventions 전문이 프롬프트와 인자로 실린다(K9). WORKFLOW에서 conventions 약 20KB를 1회, 스펙 약 28~30KB를 5회 실었다. INLINE 계약도 planner에 conventions 전문을, 구현자와 평가자에 스펙 전문을 싣게 한다 | 5단계 3번 |
 | r5 | 결정 질문은 세션당 한 번이다. 두 번째 run에서 나온 결정은 잔여로 승인 화면에 남는다(WORKFLOW 결정 2건과 auto 1건, INLINE Major 결정 1건을 포함한 결정 2건과 auto 2건) | 5단계 2번 (K11) |
 | r6 | 2라운드의 `changes.md`가 1라운드 내용을 덮어쓴다. INLINE 경로에서는 평가자의 파일 목록이 2라운드에 고친 파일로 좁아진다 | 5단계 1번 (W8) |

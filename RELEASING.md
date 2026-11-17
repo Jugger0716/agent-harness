@@ -12,7 +12,8 @@ time. An earlier go-ahead does not carry over.
 2. **Nothing names a removed path.** `python scripts/verify_cited_paths.py` exits `0` (it is part
    of the chain; this line is here because a release is when a removal lands).
 3. **CHANGELOG.** Move the `[Unreleased]` content under a `## [X.Y.Z] — YYYY-MM-DD` heading and
-   leave an empty `[Unreleased]` above it. A breaking release carries a migration table: what
+   leave an empty `[Unreleased]` above it. The date is the day the tag is made (step 12), not
+   the day of the version commit — set it last if the two differ. A breaking release carries a migration table: what
    was removed, what to use instead.
 4. **Version, at all three key paths.** `.claude-plugin/plugin.json` `$.version`,
    `.claude-plugin/marketplace.json` `$.metadata.version`, and

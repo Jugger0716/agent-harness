@@ -8,7 +8,7 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
 
 ## [Unreleased]
 
-## [9.0.0] — 2026-11-13
+## [9.0.0] — 2026-11-17
 
 **Breaking.** v9 "subtraction", stage 1 (`design/v9-subtraction/SPEC.md` §5, plan
 `design/v9-subtraction/STAGE1.md`): the plugin goes from 19 skill directories to 6, and the
@@ -103,14 +103,21 @@ of `design/v9-subtraction/SPEC.md` appendix A.
 
 ### Also in this release — the `harness-converge` epic
 
-What follows is the text that sat under `[Unreleased]`, unchanged. One sentence in it is out of
-date (correction, 2026-11-17): "none of the paths below has been observed in a live session".
-The stage 1 live verification — `design/v9-subtraction/BASELINE.md`, the live verification
-subsection of its stage 1 section — records the converge loop, the decision triage and the
-in-session approval question on both the INLINE and the WORKFLOW path, and the chain into
-`/harness-build` on the INLINE path. Still unobserved among the paths below: `--fast`,
-`--separate-gate` with `/harness-gate`, the epic slice chain and its automatic commit, the
-approval's "Modify", and the resume routing. S4, the scripted probe, is still not in.
+What follows is the text that sat under `[Unreleased]`, unchanged. Two sentences in it are out
+of date (corrections, 2026-11-17).
+
+First, "none of the paths below has been observed in a live session". The stage 1 live
+verification — `design/v9-subtraction/BASELINE.md`, the live verification subsection of its
+stage 1 section — observed these and only these: the converge loop ending `converged`, the
+decision triage and the in-session approval question, on both the INLINE and the WORKFLOW
+path; and the chain into `/harness-build` on the INLINE path. Every other path below is still
+unobserved — among them `--fast`, `--separate-gate` with `/harness-gate`, the epic slice chain
+and its automatic commit, the approval's "Modify", the resume routing, the merged-severity
+raise, the `/harness-build` §Entry refusal and the non-interactive stop. S4, the scripted
+probe, is still not in.
+
+Second, "so `--fast` and carried-over sessions still skip the loop". In v9 only `--fast` skips
+it: the carried-over path is removed (see Removed above).
 
 The `harness-converge` epic (`design/harness-converge/SPEC.md`), slices S1–S3 and S3.5 (the
 follow-up decisions of the S1–S3 cold review and the AC-26 measurement). S4 (the live probe) is
