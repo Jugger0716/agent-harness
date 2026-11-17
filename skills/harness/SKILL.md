@@ -420,4 +420,4 @@ Call sites: `--output-dir` parsing (`skills/harness/SKILL.md` §Step 1 item 2, `
 <!-- SYNC-WITH: templates/_shared/adhoc_dispatch.md §Ad-hoc Dispatch Contract -->
 - **Intermediate outputs are ephemeral.** Only final artifacts persist in `docs/`, and the orchestrator reads none of them beyond §Architecture Principles #1's list.
 - **Workflow args are a JSON object;** segment scripts parse defensively (`args` may arrive as a JSON string). Never put user-gate decisions into args.
-- **Graceful engine fallback.** Any Workflow failure degrades to the inline single path with a notice, never a hard error.
+- **Graceful engine fallback.** Any Workflow failure degrades to the inline single path with a notice, never a hard error. (`/harness-build` asks before it does so after a build-segment error — `skills/harness-build/SKILL.md` §Step 4; no segment this skill runs edits source files.)

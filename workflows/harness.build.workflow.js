@@ -544,7 +544,8 @@ const changes =
 
 // The implementation agent edits source files BEFORE it returns. A null here (skipped, or a
 // terminal API error) can therefore leave a half-edited tree, so it must not look like an
-// ordinary script error: the orchestrator keys its partial-edit check on this message.
+// ordinary script error. The orchestrator asks about partial edits after ANY error of this
+// segment; this message tells the user which case it was.
 if (!changes) throw new Error('harness.build: implementation returned null — partial edits possible')
 
 log(`Implement: ${(changes.modifiedFiles || []).length} modified, ${(changes.createdFiles || []).length} created`)
