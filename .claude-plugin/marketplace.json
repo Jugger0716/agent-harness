@@ -5,7 +5,7 @@
   },
   "metadata": {
     "description": "Multi-agent workflow harness with 3-layer quality gates (mechanical + structural + LLM review). Thin orchestrator enforces Plan → Generate → Verify → Evaluate phases with model-tiered sub-agents. For teams that want reviewable AI automation without custom infrastructure — no dependencies required.",
-    "version": "9.0.0"
+    "version": "9.0.1"
   },
   "plugins": [
     {
@@ -15,7 +15,7 @@
         "repo": "Jugger0716/agent-harness"
       },
       "description": "Plan → Generate → Verify → Evaluate harness with human approval gates and 3-layer review (/harness, /harness-gate, /harness-build), session handoff (/handoff), deep code review (/deep-review), and markdown optimization for Claude Code (/md-optimize). Multi-agent paths are opt-in native Workflow segments; the default path runs inline.",
-      "version": "9.0.0",
+      "version": "9.0.1",
       "author": {
         "name": "Jugger"
       },
