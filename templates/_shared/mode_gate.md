@@ -176,6 +176,9 @@ This does NOT reintroduce effort gating. Opt-in signals (ultracode, `--mode`, th
 defaults line) still resolve
 silently; the prompt fires only when NO opt-in is present. Resume never re-fires this prompt —
 it reuses the stored `{ mode, path_resolved }` (only the workflow→inline downgrade may change it).
+One exception: a `/harness` session resumed from `setup` (or from a 9.0.0 checkpoint with no `phase`)
+that stored no such pair has not been through this prompt yet — `skills/harness/SKILL.md` §Step 1
+item 9 then resolves the path in full, this prompt included.
 
 A skill with no Workflow segment (e.g. `team-memory`) never reaches this prompt: step 2 always
 resolves it to inline because no workflow path exists for it.

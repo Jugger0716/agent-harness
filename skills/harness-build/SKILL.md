@@ -818,7 +818,7 @@ Auto-fix re-verify call; `true` at the L1-max-fail "Continue" call; from
    `workflows/harness.eval.workflow.js`). Branch on **(layer, verdict)** — never verdict alone:
    - `layer == "L1"` and `verdict == "PASS"` → unreachable (segment continues to evaluate) — treat as L2/L3 verdict below.
    - `layer == "L1"` and `verdict != "PASS"` → **Layer 1 FAIL**: `verify.layer1_result → "FAIL"`, phase → `"verify_done"`, go to the L1 FAIL branch below. (Cold review never ran this call — no `verify.cold_*` write here.)
-   - `layer == "L2" | "L3"` → the segment reached the evaluator: Layer 1 passed inside it, or the call skipped it. **Single read-modify-write** — write ALL of the following together, once: `verify.layer1_result → "PASS"` — except on a `skipL1: true` call ("Continue to Evaluator"), where Layer 1 did not run inside the segment: leave `verify.layer1_result` at `"FAIL"`, as the INLINE path does, so a slice that never passed Layer 1 cannot read as a clean end to §Epic Slice Chain — `verify.verdict → verdict.verdict` (`PASS` / `FAIL_L2` / `FAIL_L3`), `verify.layer2_result → "FAIL"` iff `verdict.verdict == "FAIL_L2"` else `"PASS"`, `phase → "evaluate_done"`, AND the cold-review recording below:
+   - `layer == "L2" | "L3"` → the segment reached the evaluator: Layer 1 passed inside it, or the call skipped it. **Single read-modify-write** — write ALL of the following together, once: `verify.layer1_result → "PASS"` — except on a `skipL1: true` call ("Continue to Evaluator"), where Layer 1 did not run inside the segment: write `verify.layer1_result → "FAIL"` instead, the value the INLINE path is left with, so a slice that never passed Layer 1 cannot read as a clean end to §Epic Slice Chain — `verify.verdict → verdict.verdict` (`PASS` / `FAIL_L2` / `FAIL_L3`), `verify.layer2_result → "FAIL"` iff `verdict.verdict == "FAIL_L2"` else `"PASS"`, `phase → "evaluate_done"`, AND the cold-review recording below:
      - If `coldStatus` is present (`"clean"` / `"findings"` / `"failed"`): `verify.cold_round →
        round`, `verify.cold_counts → coldCounts` (if `coldStatus == "failed"` and `coldCounts`
        is undefined — the segment's `catch` branch returns no counts — write
@@ -860,7 +860,9 @@ Auto-fix re-verify call; `true` at the L1-max-fail "Continue" call; from
        undefined (a segment that returned no cold fields at all) leave `verify.cold_*`
        untouched.
      Record the verdict for Step 7 (skip Steps 5-PASS print and 6 — already evaluated). Print
-     per OLC: `  ✓ Verify (Layer 1): PASS → Evaluate: {verdict.verdict}` and go to **Step 7**
+     per OLC: `  ✓ Verify (Layer 1): PASS → Evaluate: {verdict.verdict}` — on a `skipL1: true` call, where
+     Layer 1 did not pass, `  ⚠ Verify (Layer 1): FAIL (skipped — Continue to Evaluator) → Evaluate:
+     {verdict.verdict}` instead — and go to **Step 7**
      with this verdict.
 5. **On Workflow error**: graceful fallback → run Step 5 INLINE, then continue the inline route (Step 6 inline evaluate).
 
@@ -966,7 +968,7 @@ After 2nd HARD-GATE decision, set `verify.autofix_attempted = true` in state.jso
    - **L1 FAIL** (`layer == "L1"`) → update state.json: `autofix.applied → "stopped"`, `layer1_retries = min(layer1_retries, 3)` (clamp — see §State Machine I4). Return to FAIL retries >= 3 HARD-GATE (Auto-fix option hidden since `verify.autofix_attempted == true`). The patch stays applied; print `[harness] Pre-apply copies: .harness/autofix_pre_apply/ (manifest.txt lists them)` so it can be undone by hand. The copies live until Step 8 deletes `.harness/`.
 
 **If "Reject":**
-1. If `.harness/autofix_pre_apply/manifest.txt` exists (the interrupted Apply the gate announced), restore from the snapshot by its manifest, exactly as item 3 of "Apply patch" restores — if that restore itself fails, keep the snapshot and print its path instead — then delete `.harness/autofix_pre_apply/` and print the restored paths — a rejected proposal leaves none of its patch in the tree.
+1. If `.harness/autofix_pre_apply/manifest.txt` exists (the interrupted Apply the gate announced), restore from the snapshot by its manifest, exactly as item 3 of "Apply patch" restores. **Restore succeeded** → delete `.harness/autofix_pre_apply/` and print the restored paths — a rejected proposal leaves none of its patch in the tree. **Restore failed** → delete nothing: print the snapshot's path and that part of the rejected patch is still in the working tree, skip items 2–3 — `autofix.applied` stays `"proposed"`, so the next `/harness-build` returns to this gate and announces the interrupted Apply again — and end the turn.
 2. Update state.json: `autofix.applied → "rejected"`.
 3. Return to FAIL retries >= 3 HARD-GATE (Auto-fix option hidden).
 
