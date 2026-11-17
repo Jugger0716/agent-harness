@@ -13,6 +13,12 @@
 //     makes that item's result null.
 //   - `export const meta = {...}` is the only module syntax a script carries; the body may use a
 //     top-level `return`.
+//   - This stub does NOT enforce an agent's schema: a case may hand back a value the schema
+//     forbids. Nothing here assumes the real engine filters such a value, so a script that
+//     depends on the shape has to normalize it itself.
+//   - A script file that cannot be read is the runner's failure, not a case's result: run()
+//     rejects, and run.mjs reports the case as ERROR. Only an error thrown by the script's own
+//     body comes back as `error`.
 import fs from 'node:fs'
 import { fileURLToPath } from 'node:url'
 
@@ -65,8 +71,9 @@ export function residual(prompt) {
 
 // Run one segment script. `agentImpl(prompt, opts, index)` supplies each agent's result.
 // Resolves to { result | error, calls, logs, phases }; a script that throws yields `error`
-// ("<ErrorName>: <message>") instead of rejecting.
+// ("<ErrorName>: <message>") instead of rejecting. An unreadable script file rejects.
 export async function run(name, args, agentImpl) {
+  const source = load(name)
   const calls = []
   const logs = []
   const phases = []
@@ -95,7 +102,7 @@ export async function run(name, args, agentImpl) {
   const phase = (title) => phases.push(title)
   const log = (message) => logs.push(message)
   try {
-    const body = new AsyncFunction('args', 'agent', 'parallel', 'pipeline', 'phase', 'log', load(name))
+    const body = new AsyncFunction('args', 'agent', 'parallel', 'pipeline', 'phase', 'log', source)
     const result = await body(args, agent, parallel, pipeline, phase, log)
     return { result, calls, logs, phases }
   } catch (e) {
