@@ -745,7 +745,7 @@ A standalone utility skill that optimizes your project's CLAUDE.md and markdown 
 - **Token compression**: Removes redundancy, compresses verbose prose, generates before/after token savings report
 - **Smart Routing**: Detects project state and, when CLAUDE.md is missing or thin, offers to stop so it can be created first (the built-in `/init` does this)
 
-**Safety features**: a byte backup of every edited file for the length of the run (restored on failure, with or without git), HARD GATE confirmation before any changes, YAML frontmatter preservation, idempotency markers for safe re-runs.
+**Safety features**: a byte backup of every edited file, kept in `.md-optimize/` for the length of the run (restored on failure, with or without git), HARD GATE confirmation before any changes, YAML frontmatter preservation, idempotency markers for safe re-runs.
 
 ---
 
