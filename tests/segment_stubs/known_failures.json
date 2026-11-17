@@ -1,6 +1,4 @@
 {
   "review-dropped-findings": "W7",
-  "eval-scope-placeholder": "W15",
-  "eval-pass-with-critical": "W16",
   "critic-summary": "W17"
 }

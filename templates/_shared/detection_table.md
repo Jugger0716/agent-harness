@@ -31,6 +31,8 @@ Check in order, stop at first match:
 
 If none match → `null` (SKIPPED during verify).
 
+Row 4's `{scope}` is not passed on as written: `skills/harness/SKILL.md` §Step 1 items 5–6 replaces it with the session's scope, or with `.` when there is none, before the command is stored.
+
 ## Type-check (skip if `--type-check-cmd` provided, or if the project-defaults line declares `type-check-cmd`)
 
 Check in order, stop at first match:

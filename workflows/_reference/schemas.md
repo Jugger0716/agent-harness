@@ -271,6 +271,18 @@ const VerifyVerdictSchema = {
 }
 ```
 
+`workflows/harness.eval.workflow.js` gives the evaluator a second schema, `EvaluatorVerdictSchema`:
+the same shape with `layer` limited to `['L2', 'L3']`. It does not rely on the engine enforcing
+either enum and normalizes what it returns:
+
+- a Layer 1 result always carries `layer: 'L1'`;
+- an evaluator result carries `layer: 'L2'` when `verdict` is `FAIL_L2`, otherwise `'L3'`;
+- an evaluator `PASS` that lists a `critical` or `major` failure becomes `FAIL_L3`, with
+  `summary` prefixed `verdict normalized: …` — a Layer 3 failure is shown to the user, a
+  Layer 2 failure is retried without asking;
+- a literal `{scope}` inside `buildCmd` / `testCmd` / `lintCmd` / `typeCheckCmd` is replaced by
+  `scope`, or by `.` when `scope` is empty or `(no limit)`.
+
 ## CriticReport
 
 Returned by the plan-critic segment (`harness.critic.workflow.js`). Replaces the

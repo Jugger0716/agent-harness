@@ -85,6 +85,13 @@ const must = (segment, label, result) => {
 // <!-- BLOCK-END:wf-prelude v1 -->
 requireArgs('harness.eval', A, ['specContent', 'verifyReportPath', 'qaReportPath'])
 
+// A command the project declared may carry a literal {scope} — the detection table's
+// `pylint {scope}` is one. Resolve it before it reaches a prompt: the session's scope when it
+// is a path, '.' when the session has none (the stored value is then "(no limit)", or empty).
+const scopeArg =
+  typeof A.scope === 'string' && A.scope.trim() !== '' && !A.scope.trim().startsWith('(') ? A.scope.trim() : '.'
+const cmd = (c) => (c ? render(String(c), { scope: scopeArg }) : c)
+
 // ---- schema (inlined per C1; canonical: workflows/_reference/schemas.md) ----
 const VerifyVerdictSchema = {
   type: 'object',
@@ -117,6 +124,13 @@ const VerifyVerdictSchema = {
     },
     summary: { type: 'string', description: `one-line, render in ${LANG}` },
   },
+}
+
+// The evaluator never reports Layer 1: the same shape with `layer` limited to the two layers it
+// runs. The script does not rely on the engine enforcing this — see the normalization below.
+const EvaluatorVerdictSchema = {
+  ...VerifyVerdictSchema,
+  properties: { ...VerifyVerdictSchema.properties, layer: { enum: ['L2', 'L3'] } },
 }
 
 // ---- cold-review schema (C1/AC-2: PHYSICALLY SEPARATE from VerifyVerdictSchema above --
@@ -520,10 +534,10 @@ if (!A.skipL1) {
   phase('Verify L1')
   l1 = await agent(
     render(TPL_VERIFY_LAYER1, {
-      build_cmd: A.buildCmd || 'SKIP',
-      test_cmd: A.testCmd || 'SKIP',
-      lint_cmd: A.lintCmd || 'SKIP',
-      type_check_cmd: A.typeCheckCmd || 'SKIP',
+      build_cmd: cmd(A.buildCmd) || 'SKIP',
+      test_cmd: cmd(A.testCmd) || 'SKIP',
+      lint_cmd: cmd(A.lintCmd) || 'SKIP',
+      type_check_cmd: cmd(A.typeCheckCmd) || 'SKIP',
       changes_md_path: A.changesMdPath,
       verify_report_path: A.verifyReportPath,
       todo_blocking: A.todoBlocking ? 'true' : 'false',
@@ -532,6 +546,9 @@ if (!A.skipL1) {
     { schema: VerifyVerdictSchema, label: 'verify_l1', phase: 'Verify L1', ...mopt(MODELS.verifier || 'haiku') },
   )
   must('harness.eval', 'verify_l1', l1)
+  // The caller branches on (layer, verdict); a Layer 1 result is Layer 1 whatever label the
+  // model attached to it.
+  l1.layer = 'L1'
   log(`Verify L1: ${l1.verdict}${l1.summary ? ' — ' + l1.summary : ''}`)
   // L1 fail -> orchestrator handles the retry loop / HARD GATE #2; post-auto-fix
   // re-verify (onlyL1) returns here too.
@@ -549,8 +566,8 @@ const verifyContext = A.skipL1
 const verdict = await agent(
   render(TPL_EVALUATOR, {
     test_available: A.testAvailable ? 'true' : 'false',
-    build_cmd: A.buildCmd || '',
-    test_cmd: A.testCmd || '',
+    build_cmd: cmd(A.buildCmd) || '',
+    test_cmd: cmd(A.testCmd) || '',
     round_num: A.roundNum,
     scope: A.scope,
     user_lang: A.userLang,
@@ -559,9 +576,22 @@ const verdict = await agent(
     changed_files_list: A.changedFilesList,
     spec_content: A.specContent,
   }),
-  { schema: VerifyVerdictSchema, label: 'evaluator', phase: 'Evaluate', ...mopt(MODELS.evaluator) },
+  { schema: EvaluatorVerdictSchema, label: 'evaluator', phase: 'Evaluate', ...mopt(MODELS.evaluator) },
 )
 must('harness.eval', 'evaluator', verdict)
+// Normalize what the caller branches on. A PASS that lists a critical or major failure
+// contradicts itself; it becomes FAIL_L3, because a Layer 3 failure is put in front of the
+// user while a Layer 2 failure is retried without asking. `layer` then follows the verdict
+// and is never taken from the model's label.
+const blocking = (verdict.failures || []).filter(
+  (f) => f && ['critical', 'major'].includes(String(f.severity).toLowerCase()),
+).length
+if (verdict.verdict === 'PASS' && blocking > 0) {
+  log(`Evaluate: verdict normalized — PASS with ${blocking} blocking failure(s) -> FAIL_L3`)
+  verdict.verdict = 'FAIL_L3'
+  verdict.summary = `verdict normalized: PASS with ${blocking} blocking failure(s) -> FAIL_L3. ${verdict.summary || ''}`.trim()
+}
+verdict.layer = verdict.verdict === 'FAIL_L2' ? 'L2' : 'L3'
 log(`Evaluate: ${verdict.verdict}${verdict.summary ? ' — ' + verdict.summary : ''}`)
 
 // ---- Phase 3: Cold review (conditional -- 3rd meta.phase, gated at runtime; see the L1
