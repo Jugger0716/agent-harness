@@ -579,6 +579,17 @@ const verdict = await agent(
   { schema: EvaluatorVerdictSchema, label: 'evaluator', phase: 'Evaluate', ...mopt(MODELS.evaluator) },
 )
 must('harness.eval', 'evaluator', verdict)
+// Neither enum is assumed to have been enforced by the engine. `failures` becomes an array; the
+// verdict is matched without regard to case, and one still off the enum fails closed as
+// FAIL_L3 rather than reaching a caller that defines no branch for it.
+if (!Array.isArray(verdict.failures)) verdict.failures = []
+const VERDICTS = ['PASS', 'FAIL_L2', 'FAIL_L3']
+const folded = String(verdict.verdict).toUpperCase()
+if (verdict.verdict !== folded || !VERDICTS.includes(folded)) {
+  const fixed = VERDICTS.includes(folded) ? folded : 'FAIL_L3'
+  log(`Evaluate: verdict normalized — ${JSON.stringify(verdict.verdict)} -> ${fixed}`)
+  verdict.verdict = fixed
+}
 // Normalize what the caller branches on. A PASS that lists a critical or major failure
 // contradicts itself; it becomes FAIL_L3, because a Layer 3 failure is put in front of the
 // user while a Layer 2 failure is retried without asking. `layer` then follows the verdict

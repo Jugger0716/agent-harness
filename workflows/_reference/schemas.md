@@ -277,6 +277,8 @@ either enum and normalizes what it returns:
 
 - a Layer 1 result always carries `layer: 'L1'`;
 - an evaluator result carries `layer: 'L2'` when `verdict` is `FAIL_L2`, otherwise `'L3'`;
+- an evaluator `verdict` is matched without regard to case, and one still off the enum becomes
+  `FAIL_L3`; a `failures` value that is not an array becomes `[]`;
 - an evaluator `PASS` that lists a `critical` or `major` failure becomes `FAIL_L3`, with
   `summary` prefixed `verdict normalized: …` — a Layer 3 failure is shown to the user, a
   Layer 2 failure is retried without asking;

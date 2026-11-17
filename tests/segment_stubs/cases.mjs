@@ -350,6 +350,49 @@ const defectCases = [
       return { ok: res.verdict === 'FAIL_L3' && res.layer === 'L3', detail: `verdict=${res.verdict} layer=${res.layer} with one major failure listed` }
     },
   },
+  // Neither enum is assumed to have been enforced: case is folded, anything else fails closed.
+  {
+    id: 'eval-verdict-lowercase',
+    defect: 'W16',
+    script: 'harness.eval',
+    async check(e) {
+      const r = await e.run('harness.eval', REP['harness.eval'], (p, o) => {
+        if (o.label === 'verify_l1') return { verdict: 'PASS', layer: 'L1', failures: [] }
+        if (o.label === 'evaluator') return { verdict: 'pass', layer: 'L3', failures: [{ file: 'a.ts', severity: 'Critical', fix: 'f' }] }
+        return null
+      })
+      const res = resultOf(r)
+      return { ok: res.verdict === 'FAIL_L3', detail: `verdict=${JSON.stringify(res.verdict)} layer=${res.layer} from an evaluator "pass" with one Critical failure` }
+    },
+  },
+  {
+    id: 'eval-verdict-off-enum',
+    defect: 'W16',
+    script: 'harness.eval',
+    async check(e) {
+      const r = await e.run('harness.eval', REP['harness.eval'], (p, o) => {
+        if (o.label === 'verify_l1') return { verdict: 'PASS', layer: 'L1', failures: [] }
+        if (o.label === 'evaluator') return { verdict: 'FAIL', layer: 'L3', failures: [] }
+        return null
+      })
+      const res = resultOf(r)
+      return { ok: res.verdict === 'FAIL_L3' && res.layer === 'L3', detail: `verdict=${JSON.stringify(res.verdict)} layer=${res.layer} from an evaluator "FAIL"` }
+    },
+  },
+  {
+    id: 'eval-failures-not-array',
+    defect: 'W16',
+    script: 'harness.eval',
+    async check(e) {
+      const r = await e.run('harness.eval', REP['harness.eval'], (p, o) => {
+        if (o.label === 'verify_l1') return { verdict: 'PASS', layer: 'L1', failures: [] }
+        if (o.label === 'evaluator') return { verdict: 'PASS', layer: 'L3', failures: 'none' }
+        return e.minimal(o.schema)
+      })
+      if (r.error) return { ok: false, detail: r.error }
+      return { ok: Array.isArray(r.result.failures) && r.result.verdict === 'PASS', detail: `verdict=${r.result.verdict} failures=${JSON.stringify(r.result.failures)}` }
+    },
+  },
   {
     // The other side of the rule: a minor note under PASS is not a contradiction.
     id: 'eval-pass-with-minor',
