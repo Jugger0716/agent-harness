@@ -194,8 +194,8 @@ SPEC 1.3의 시뮬레이션 값과 다른 것은 `session-conflict`(2로 예상,
 | # | 내용 | 갈 곳 |
 |---|---|---|
 | m1 | harness-gate §Entry Check 항목 8과 §Architecture Principles #1이 행 ③이 더는 하지 않는 `critic_findings.md` 읽기를 나열한다 | 5단계 (K18) |
-| m4 | `schemas.md`와 `harness.plan.workflow.js`의 주석이 삭제된 스크립트를 파일 이름으로 든다. `verify_cited_paths.py`는 접두 없는 파일 이름을 보지 않는다 | 2단계 |
-| m6 | `verify_description_budget.py` 독스트링과 CLAUDE.md의 해당 항목이 삭제 뒤 낡았다 | 2단계 |
+| m4 | `schemas.md`와 `harness.plan.workflow.js`의 주석이 삭제된 스크립트를 파일 이름으로 든다. `verify_cited_paths.py`는 접두 없는 파일 이름을 보지 않는다 | 2단계 (2단계에서 반영) |
+| m6 | `verify_description_budget.py` 독스트링과 CLAUDE.md의 해당 항목이 삭제 뒤 낡았다 | 2단계 (2단계에서 반영) |
 | m7 | 자동 수정 적용이 도중에 끊긴 뒤 다시 적용하면 스냅샷이 덮어써진다 | 5단계 (Auto-fix 존폐와 함께) |
 | m8 | deep-review `reviewed_sha`: annotated tag는 `^{commit}`이 필요하고, 조회 실패 시 `null`이 되어 가드가 꺼진다 | 4단계 |
 | m9 | md-optimize: 자기 작업 폴더와 Exclusion List 문구의 충돌, Step 3c의 비-md 참조 미확인, Phase 4d "Skip" 뒤 백업 삭제 | 2단계 |
