@@ -38,14 +38,14 @@ Never modify: `.git/`, `.harness/`, `node_modules/`, `vendor/`, `dist/`, `build/
        - label: "Abort" / description: "Stop and commit/stash first"
    On "Abort": halt. On "Continue": proceed.
 3. Search all `.md` files for the idempotency marker `<!-- managed by md-optimize -->`. If CLAUDE.md contains this marker, inform user: "This project was previously optimized. Re-running will refresh the optimization." Proceed normally (marker ensures idempotency).
-4. **Leftover backup.** If `.harness/md-optimize/manifest.txt` exists, an earlier run was interrupted before it could finish or restore, and that backup holds the only pre-run copy of the files it edited. Ask the user using AskUserQuestion (in `user_lang`):
+4. **Leftover backup.** If `.harness/md-optimize/` exists, an earlier run was interrupted before it could finish or restore, and that backup holds the only pre-run copy of the files it edited. First print what a restore would touch, one path per line (in `user_lang`): the paths it would OVERWRITE with their backed-up bytes — every `modified` path in `.harness/md-optimize/manifest.txt`, plus every file under `.harness/md-optimize/backup/` the manifest does not list (a copy is taken before its file is edited, so an unlisted copy is restored like a `modified` one) — and the paths it would DELETE — every `created` path in the manifest. If there is nothing to print (no manifest line and no backup copy), delete the empty `.harness/md-optimize/` without asking and continue. Otherwise ask the user using AskUserQuestion (in `user_lang`):
      header: "Backup"
-     question: "An interrupted md-optimize run left a backup. Restore the files to their pre-run state first?"
+     question: "An interrupted md-optimize run left a backup of the files listed above. Restore them to their state before that run? Anything changed in them since — your own later edits included — would be overwritten."
      options:
-       - label: "Restore" / description: "Put every backed-up file back, remove files that run created, then continue"
+       - label: "Restore" / description: "Overwrite the listed files with their backed-up copies and delete the files that run created, then continue. Edits made to them since that run are lost"
        - label: "Discard" / description: "Keep the files as they are now and delete the old backup"
        - label: "Abort" / description: "Stop; change nothing"
-   On "Restore": restore by the manifest exactly as §Phase 3 describes for a failed step, delete `.harness/md-optimize/`, continue. On "Discard": delete `.harness/md-optimize/`, continue. On "Abort": halt. Never start Phase 3 while that manifest exists.
+   On "Restore": restore exactly the paths printed above, as §Phase 3 describes for a failed step, delete `.harness/md-optimize/`, continue. On "Discard": delete `.harness/md-optimize/`, continue. On "Abort": halt. Phase 3 never starts on top of a leftover `.harness/md-optimize/`.
 
 ### 1b. Smart Routing & Markdown Inventory
 

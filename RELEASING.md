@@ -3,7 +3,8 @@
 A checklist, not a tool. Until v9 a release skill drove these steps; v9 removed it, and the
 steps are few enough to run by hand. Steps marked **confirm** change something outside this
 working tree or cannot be undone — get the maintainer's explicit go-ahead for each one, every
-time. An earlier go-ahead does not carry over.
+time. An earlier go-ahead does not carry over. Pushing the release branch (steps 7 and 10) is
+the one outside change that is not marked.
 
 ## Before the version commit
 
@@ -52,3 +53,6 @@ time. An earlier go-ahead does not carry over.
 Stop at that step. Do not skip ahead, and do not tag a commit whose lint chain or stub tests are
 red. A failed real-session check (steps 8–10) sends the work back to the branch, not forward to
 the tag.
+
+The one way past a failed step is a named exception: the maintainer accepts it explicitly, and
+it is recorded next to the measurements of step 6 together with what will close it.

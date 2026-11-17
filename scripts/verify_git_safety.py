@@ -8,7 +8,8 @@ discards or moves work the user has not committed:
 
   git checkout -- <path>   discards uncommitted edits; cannot restore an untracked file
   git checkout .           the same, without the `--`
-  git restore <path>       the same (only `git restore --staged`, which unstages, is let through)
+  git restore <path>       the same (a `git restore` whose first argument is `--staged`, which
+                           unstages, is let through -- see the limits below)
   git stash                bare or `push`: moves the uncommitted implementation OUT of the
                            working tree. `drop`: destroys a stash entry
   reset ... --hard         discards uncommitted and, with a ref, committed work
@@ -29,9 +30,13 @@ What this does not check:
     executes, and are not scanned.
   * It matches one line at a time: a command broken across two lines is not seen.
   * It cannot see a command assembled at run time, an alias, or another tool that does
-    the same thing (`rm -rf`, a script that calls git). `git checkout <ref> -- <path>`
-    is matched through its `-- `; `git checkout <ref>` (a branch switch) is not, and
-    should not be.
+    the same thing (`rm -rf`, a script that calls git). `git checkout <ref>` (a branch
+    switch) is not matched, and should not be.
+  * Two destructive forms pass, because each pattern looks only at what directly follows
+    the subcommand: `git checkout <ref> -- <path>` (the `--` is matched only right after
+    `checkout`) and `git restore --staged --worktree <path>` (only the first argument is
+    tested for `--staged`). Correction, 2026-11-17: an earlier revision of this docstring
+    said the first form "is matched through its `-- `". It is not.
 
 Exit codes:
   0  no forbidden command found

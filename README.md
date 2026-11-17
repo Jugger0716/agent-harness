@@ -317,7 +317,6 @@ can live in three places — the first source that declares it wins wholesale:
 All user-facing prompts use **AskUserQuestion** — a numbered selection UI where you pick by number instead of typing keywords. Every prompt includes descriptive options and an automatic `Other` option for free text input.
 
 Key interaction points:
-- **Mode selection** (refactor/migrate/debug/spec — `/harness` derives mode via its Mode Gate, no roundtrip): numbered options with token cost hints and auto-recommendation
 - **Execution-path ambiguity prompt** (no `--mode` + ultracode OFF + interactive session with the Workflow engine available): explicit inline-vs-workflow choice instead of silent auto-resolution — and every run prints `Path : <inline|workflow> (<reason>)` so the chosen path and its cause are always visible
 - **Confirmation gates**: HARD GATE #1 renders in `/harness` itself by default — one `Approval` question, `Build now` / `Plan as epic` / `Modify` / `Stop` (`--fast` and an epic's slices: no `Plan as epic`); only the first two labels approve, and an approval chains into `/harness-build`. With `--separate-gate` it is its own skill, `/harness-gate` — `Proceed as single` (plain `Proceed` when there is no scale recommendation) / `Plan as epic` / `Modify` / `Stop`, plus critic-status options on its first pass when they apply; it prints the next command instead of proceeding. Neither accepts freeform text as approval
 - **Converge decisions** (`/harness`, settled once per session, before the approval): Minor decisions take their recommended option without a question and are listed in the summary (`Modify` changes one); Critical/Major ones come as one `Decisions` question — `Accept all recommended (N)` / `Review individually` (then one question per decision, up to 4 per call). A finding whose automatic fix could not be applied is asked with no recommendation — `Specify the fix` (answer with Other) / `Ignore and proceed`
@@ -645,7 +644,7 @@ the case in this repository itself) — the file still remains on disk.
 
 ### Plugin Compatibility
 
-The harness needs no other plugin and does not look for one. Until v9 its prompts told the orchestrator and its sub-agents to search installed skills by keyword ("tdd", "code-review", "brainstorming", …) and invoke whatever matched, so behaviour and cost depended on what else happened to be installed. That lookup is removed. Other plugins' skills keep working alongside the harness, and you can invoke them yourself at any point.
+The harness needs no other plugin. Until v9 its prompts told the orchestrator and its sub-agents to search installed skills by keyword ("tdd", "code-review", "brainstorming", …) and invoke whatever matched, so behaviour and cost depended on what else happened to be installed. That lookup is removed. One named reference remains: on the inline path `/harness-build` dispatches its evaluator as the `superpowers:code-reviewer` agent type when that is available, and as an ordinary sub-agent otherwise. Other plugins' skills keep working alongside the harness, and you can invoke them yourself at any point.
 
 ---
 
