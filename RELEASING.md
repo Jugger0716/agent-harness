@@ -34,7 +34,9 @@ time. An earlier go-ahead does not carry over.
    version. `/harness doctor` reports `✓` for install drift.
 10. **One real run of each changed path.** At least: `/harness` on a small, easily reverted task
     through plan, plan critic, approval, build and evaluation; `/handoff generate` and
-    `/handoff resume`. Record what was observed next to the measurements of step 6.
+    `/handoff resume`. Record what was observed next to the measurements of step 6, then commit
+    that record to the release branch and push it — the merge of step 11 carries it, so the tag
+    sits on a tree that includes what was verified.
 
 ## Publish
 
@@ -42,7 +44,7 @@ time. An earlier go-ahead does not carry over.
 12. **confirm — Tag** `vX.Y.Z` on the merge commit.
 13. **confirm — Push** `main` and the tag.
 14. **confirm — GitHub release** for the tag, with the CHANGELOG section as its notes.
-15. Bring `develop` up to date with `main`.
+15. **confirm — Bring `develop` up to date** with `main` and push it.
 
 ## If a step fails
 

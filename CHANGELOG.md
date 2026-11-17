@@ -103,7 +103,14 @@ of `design/v9-subtraction/SPEC.md` appendix A.
 
 ### Also in this release — the `harness-converge` epic
 
-What follows is the text that sat under `[Unreleased]`, unchanged.
+What follows is the text that sat under `[Unreleased]`, unchanged. One sentence in it is out of
+date (correction, 2026-11-17): "none of the paths below has been observed in a live session".
+The stage 1 live verification — `design/v9-subtraction/BASELINE.md`, the live verification
+subsection of its stage 1 section — records the converge loop, the decision triage and the
+in-session approval question on both the INLINE and the WORKFLOW path, and the chain into
+`/harness-build` on the INLINE path. Still unobserved among the paths below: `--fast`,
+`--separate-gate` with `/harness-gate`, the epic slice chain and its automatic commit, the
+approval's "Modify", and the resume routing. S4, the scripted probe, is still not in.
 
 The `harness-converge` epic (`design/harness-converge/SPEC.md`), slices S1–S3 and S3.5 (the
 follow-up decisions of the S1–S3 cold review and the AC-26 measurement). S4 (the live probe) is
