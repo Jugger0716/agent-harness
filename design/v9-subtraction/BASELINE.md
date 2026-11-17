@@ -181,7 +181,7 @@ SPEC 1.3의 시뮬레이션 값과 다른 것은 `session-conflict`(2로 예상,
 - 린트 8종(6종에서 `verify_git_safety.py`, `verify_cited_paths.py` 추가)과 배선 검사 통과.
 - `verify_cited_paths.py`: 73개 파일의 경로 인용 854건이 모두 실재. (정정 2026-11-17: `b187a3b`와 `e047218`에서 다시 실행한 값은 둘 다 856건이다.)
 - 스텁 테스트: `7 pass, 23 known-fail, 0 fail, 0 fixed, 0 stale, 0 error; 0 script(s) without a representative case` (기준선 5 / 25, 대표 케이스 없는 스크립트 10개). W1의 두 케이스가 통과로 옮겨 갔다.
-- 삭제된 스킬의 슬래시 토큰과 경로: CHANGELOG·ROADMAP·design과 `scripts/verify_sync_markers.py`의 이력 주석 밖에서 0건.
+- 삭제된 스킬의 슬래시 토큰과 경로: CHANGELOG·ROADMAP·design과 `scripts/verify_sync_markers.py`의 이력 주석 밖에서 0건. (정정 2026-11-17: 그때의 검사는 이 파일을 통째로 뺐고, 날짜가 붙은 측정 이력이 아닌 현재형 문장 3곳이 가려져 있었다 — 독스트링 1곳, 주석 2곳. "릴리스 전 리뷰" p11은 2곳으로 적었다. 2단계에서 세 곳 모두 고쳤다.)
 
 ### 부록 A 결함
 
