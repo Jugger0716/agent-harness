@@ -46,6 +46,7 @@ Never modify: `.git/`, `.harness/`, `node_modules/`, `vendor/`, `dist/`, `build/
        - label: "Discard" / description: "Keep the files as they are now and delete the old backup"
        - label: "Abort" / description: "Stop; change nothing"
    On "Restore": restore exactly the paths printed above, as §Phase 3 describes for a failed step — if the restore itself fails, keep the directory, print its path and halt — then delete `.harness/md-optimize/` and continue. On "Discard": delete `.harness/md-optimize/`, continue. On "Abort": halt. Phase 3 never starts on top of a leftover `.harness/md-optimize/`.
+5. **Open `/harness` session.** If `.harness/state.json` exists, halt and say (in `user_lang`) that a `/harness` session is open in this directory, that its cleanup deletes `.harness/` — where this run's backup would be kept — and that the session has to be finished or stopped before `/md-optimize` is run again. Change nothing.
 
 ### 1b. Smart Routing & Markdown Inventory
 
@@ -225,7 +226,7 @@ Verdict: PASS | NEEDS_REVISION
     question: "Evaluator found {N} issues."
     options:
       - label: "Fix all" / description: "Auto-fix all reported issues"
-      - label: "Skip" / description: "Proceed without fixing"
+      - label: "Skip" / description: "Proceed without fixing; the pre-run backup is kept"
     "Other" allows selective fix (user specifies which issues to fix).
   Apply fixes for each confirmed issue. Do not re-run the full evaluator — only verify the specific fixes were applied correctly.
 
@@ -245,7 +246,7 @@ Print final report (in `user_lang`):
   Token estimate   : before → after (−X%)
 ```
 
-If any evaluation criterion has unresolved issues, append warnings. List the duplicate groups Step 3d collected. Then delete `.harness/md-optimize/` — the backup lasts for the run only.
+If any evaluation criterion has unresolved issues, append warnings. List the duplicate groups Step 3d collected. Then delete `.harness/md-optimize/` — the backup lasts for the run only. One exception: if the evaluator reported issues and any was left unfixed (Phase 4d "Skip", or a selective fix that left some), keep it and print (in `user_lang`) its path, that it holds the pre-run copy of every file this run edited or deleted, and that the next `/md-optimize` asks whether to restore or discard it (§1a item 4).
 
 ## Safety Rules
 

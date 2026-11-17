@@ -68,24 +68,19 @@ of `design/v9-subtraction/SPEC.md` appendix A.
 - **`harness-gate` description cut short (K14).** Its unquoted description was truncated at
   ` #` by YAML, so the skill listing read `HARD GATE`. The value is quoted.
 
-### Known limits of the new safeguards
+Three more paths in the same safeguards were found by review before the release and closed in
+it (`design/v9-subtraction/BASELINE.md`, the pre-release review subsection). None of the three
+has been exercised in a live session.
 
-Found by review before the release and not fixed in it. Each needs an interrupted or abandoned
-run to occur, and 8.14.0 handled the same situations worse (no backup, or a bare `git stash`).
-`design/v9-subtraction/BASELINE.md` records them with the stage that takes each.
-
-- **The `md-optimize` backup lives under `.harness/`.** A `/harness` session run in the same
-  directory after an interrupted `md-optimize` run deletes `.harness/` when it ends, and the
-  backup with it. Re-run `/md-optimize` and answer its backup question before starting
-  `/harness` there.
-- **`md-optimize` deletes its backup at the end of a run, also after "Skip".** If the evaluator
-  reports content at risk and the fixes are skipped, the pre-run copies still go with the
-  report. Commit first, or copy `.harness/md-optimize/backup/` aside before choosing "Skip".
-- **Auto-fix interrupted while a patch is being applied.** The resumed session asks the
-  auto-fix question again without saying that the patch is partly applied. Applying again
-  overwrites the pre-apply copies with the partly patched files; rejecting leaves what was
-  already applied in the tree. The pre-apply copies are under `.harness/autofix_pre_apply/`
-  until the session ends.
+- **`md-optimize` backup deleted by a `/harness` cleanup.** The backup lives under `.harness/`,
+  which a `/harness` session deletes when it ends. `/harness` now refuses to start while
+  `.harness/md-optimize/` exists, and `/md-optimize` refuses to start while a `/harness` session
+  is open in the directory.
+- **`md-optimize` backup deleted after "Skip".** When evaluator issues are left unfixed, the
+  backup is kept and its path printed; the next run asks whether to restore or discard it.
+- **Auto-fix interrupted while a patch is being applied.** The resumed session says the patch
+  may be partly applied. "Apply patch" starts again from the pre-apply copies and no longer
+  snapshots over them; "Reject" puts them back.
 
 ### Changed
 

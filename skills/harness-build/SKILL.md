@@ -933,6 +933,7 @@ If "Stop": **(P1-2)** print the §Session Boundary block (Type A: Step 5 L1 max-
 <HARD-GATE>
 Show confidence level + 1-line summary from patch file.
 Print before question: `[harness] ℹ Auto-fix model: {model_config.advisor ?? 'opus'}`
+**Interrupted Apply.** If `.harness/autofix_pre_apply/manifest.txt` exists when this gate is reached, an earlier "Apply patch" was cut off before `autofix.applied → "applied"` was written, and the patch may be partly applied. Also print before the question, per OLC: `[harness] ⚠ An earlier Apply was interrupted — the patch may be partly applied to: <the paths in the manifest>. "Apply patch" starts again from the pre-apply copies, "Reject" puts them back, "Stop" leaves the tree as it is. Copies: .harness/autofix_pre_apply/`
 Ask via AskUserQuestion (in `user_lang`):
 - header: "Auto-fix"
 - question: "Proposed fix generated (confidence: {level}). [If confidence == Low: ⚠ Low confidence — review the diff carefully before applying.] Apply the patch?"
@@ -948,17 +949,18 @@ After 2nd HARD-GATE decision, set `verify.autofix_attempted = true` in state.jso
 1. **Pre-apply path validation**: parse all `--- a/<path>` and `+++ b/<path>` headers from `auto_fix_patch.md` (metadata only — the `--- a/` / `+++ b/` pair is 2 header lines per file, not per hunk; hunk bodies are not parsed). Apply `validate_path(path, kind=diff_target)` to each path.
    - Print to user: `[harness] Applying patch to: <path list>`
    - If any path fails validation: reject Apply, print `[harness] ✗ Diff path validation failed: <path>`, return to HARD-GATE (Auto-fix hidden).
-2. **Snapshot the validated paths as byte copies** — the same procedure with and without git; no `git` command is involved, so uncommitted work is never moved out of the working tree. For each path item 1 validated, copy the file's current bytes to `.harness/autofix_pre_apply/<path>` and append one line to `.harness/autofix_pre_apply/manifest.txt`: `existing <path>`, or `absent <path>` when the file does not exist yet (the patch creates it; there is nothing to copy).
+2. **Snapshot the validated paths as byte copies** — the same procedure with and without git; no `git` command is involved, so uncommitted work is never moved out of the working tree. For each path item 1 validated, copy the file's current bytes to `.harness/autofix_pre_apply/<path>` and append one line to `.harness/autofix_pre_apply/manifest.txt`: `existing <path>`, or `absent <path>` when the file does not exist yet (the patch creates it; there is nothing to copy). If the manifest already exists — the interrupted Apply the gate announced — do not snapshot again: a second copy would be a partly patched file. Restore from the existing snapshot by its manifest first, exactly as item 3 restores, so the patch is applied to the pre-apply bytes.
 3. Apply unified diff from `.harness/generator/auto_fix_patch.md` using Edit tool.
-   - If any hunk fails to apply: restore from the snapshot by its manifest — copy each `existing` path back over the working file, delete each `absent` path the patch created — then warn user "Apply failed — reverted to pre-apply state.", return to HARD-GATE (retries >= 3, Auto-fix hidden).
+   - If any hunk fails to apply: restore from the snapshot by its manifest — copy each `existing` path back over the working file, delete each `absent` path the patch created — then delete `.harness/autofix_pre_apply/` (a snapshot left behind would read as an interrupted Apply at the next resume; if the restore itself fails, keep it and print its path instead), warn user "Apply failed — reverted to pre-apply state.", return to HARD-GATE (retries >= 3, Auto-fix hidden).
 4. Update state.json: `autofix.applied → "applied"`. Reset `verify.layer1_result → null`.
 5. Re-run verification (retry counter `layer1_retries` unchanged — do NOT increment). INLINE → re-dispatch verify_layer1. WORKFLOW → run ONE full `harness.eval` (`skipL1: false, onlyL1: false`) — its L1 phase IS the re-verification (no separate `onlyL1` pre-pass; avoids running L1 twice):
    - **L1 PASS** → INLINE: proceed to Step 6. WORKFLOW: the same eval run already continued to L2/L3 — take its verdict to Step 7.
    - **L1 FAIL** (`layer == "L1"`) → update state.json: `autofix.applied → "stopped"`, `layer1_retries = min(layer1_retries, 3)` (clamp — see §State Machine I4). Return to FAIL retries >= 3 HARD-GATE (Auto-fix option hidden since `verify.autofix_attempted == true`). The patch stays applied; print `[harness] Pre-apply copies: .harness/autofix_pre_apply/ (manifest.txt lists them)` so it can be undone by hand. The copies live until Step 8 deletes `.harness/`.
 
 **If "Reject":**
-1. Update state.json: `autofix.applied → "rejected"`.
-2. Return to FAIL retries >= 3 HARD-GATE (Auto-fix option hidden).
+1. If `.harness/autofix_pre_apply/manifest.txt` exists (the interrupted Apply the gate announced), restore from the snapshot by its manifest, exactly as item 3 of "Apply patch" restores, delete `.harness/autofix_pre_apply/`, and print the restored paths — a rejected proposal leaves none of its patch in the tree.
+2. Update state.json: `autofix.applied → "rejected"`.
+3. Return to FAIL retries >= 3 HARD-GATE (Auto-fix option hidden).
 
 **Layer 2 FAIL path:** Auto-fix proposal does **NOT** apply to Layer 2 structural failures (Step 7). Mechanical diff cannot fix structural issues.
 

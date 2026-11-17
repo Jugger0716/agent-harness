@@ -285,6 +285,14 @@ SPEC 1.3의 시뮬레이션 값과 다른 것은 `session-conflict`(2로 예상,
 
 **고치지 않고 남긴 것.** 2회차 Major 3건(p1~p3)은 모두 중단되거나 버려진 실행에서만 생기고, 8.14.0에서는 같은 상황에 백업이 없거나 `git stash`였다. CHANGELOG 9.0.0의 "Known limits of the new safeguards"에 공개했다. "갈 곳"은 오케스트레이터가 SPEC 단계 목록에 맞춰 배정한 것이다.
 
+**정정 (같은 날): p1~p3은 릴리스 전에 고쳤다.** 윗문단과 아래 표의 p1~p3 행은 그 전의 기록이다. CHANGELOG의 "Known limits" 절은 Fixed의 세 항목으로 바꿨다.
+
+- p1: `/harness`는 `.harness/md-optimize/`가 있으면 아무것도 만들지 않고 멈춘다(§Step 1 item 2). `/md-optimize`는 `.harness/state.json`이 있으면 멈춘다(§1a 5번). `.harness/`를 지우는 지점 10여 곳은 건드리지 않았다. 남는 것: 이미 열려 있던 `/harness` 세션 옆에 이 수정 이전 판이 만든 백업이 있는 경우는 막지 못한다.
+- p2: 두 번째 자동 수정 질문에 도달했을 때 스냅샷 manifest가 있으면 끊긴 적용으로 보고 알린다. "Apply patch"는 스냅샷을 다시 뜨지 않고 그 사본으로 되돌린 뒤 적용한다. "Reject"는 사본으로 되돌린다. 적용 실패로 되돌린 뒤에는 스냅샷을 지운다(남아 있으면 다음 재개에서 끊긴 적용으로 읽힌다).
+- p3: 평가자 지적을 고치지 않고 끝내면 Phase 5가 백업을 지우지 않고 경로를 출력한다. 다음 `/md-optimize`가 복구할지 버릴지 묻는다.
+
+이 세 수정은 독립 리뷰도 실사용 검증도 받지 않았다. 린트 체인과 스텁 테스트만 통과했다. m7과 m9의 해당 부분(스냅샷 덮어쓰기, "Skip" 뒤 백업 삭제)은 이 수정으로 닫혔고, m9의 나머지(Exclusion List 문구 충돌, Step 3c의 비-md 참조)는 그대로다.
+
 | # | 심각도 | 내용 | 갈 곳 |
 |---|---|---|---|
 | p1 | Major | md-optimize 백업이 `.harness/` 아래에 있어, 중단된 md-optimize 뒤에 같은 폴더에서 돈 `/harness` 세션이 끝나며 `.harness/`를 지우면 실행 전 사본도 사라진다 | 2단계 (m9와 함께) |
@@ -299,4 +307,4 @@ SPEC 1.3의 시뮬레이션 값과 다른 것은 `session-conflict`(2로 예상,
 | p10 | Minor | README의 "skills that dispatch sub-agents ask via AskUserQuestion"이 남은 스킬과 맞지 않는다 | 6단계 |
 | p11 | Minor | 삭제 토큰 검사가 `scripts/verify_sync_markers.py`를 통째로 빼서 그 파일의 현재형 문장 2곳이 가려진다. 이 문서 "린트와 테스트"의 "이력 주석 밖에서 0건"은 그 때문에 정확하지 않다 | 2단계 |
 
-**명명된 예외** (`RELEASING.md` §If a step fails). ① K7 — 위 "남은 것". 닫는 방법: 릴리스 뒤 설치본의 버전 표기를 맞춘다. ② 리뷰 수정으로 바뀐 두 경로(`/harness-build`의 "Partial edits" 질문, md-optimize의 남은 백업 질문)는 실사용 세션에서 돌리지 않았다. 설치본은 릴리스 커밋 `e047218`의 내용이고, 실사용 검증은 그 내용에서 했다. 닫는 방법: 2단계 실사용 검증에서 두 경로를 돌린다.
+**명명된 예외** (`RELEASING.md` §If a step fails). ① K7 — 위 "남은 것". 닫는 방법: 릴리스 뒤 설치본의 버전 표기를 맞춘다. ② 리뷰 수정으로 바뀐 경로(`/harness-build`의 "Partial edits" 질문과 자동 수정의 끊긴 적용 처리, md-optimize의 남은 백업 질문·"Skip" 뒤 백업 유지·열린 세션 확인, `/harness` Setup의 남은 백업 확인)는 실사용 세션에서 돌리지 않았다. 설치본은 릴리스 커밋 `e047218`의 내용이고, 실사용 검증은 그 내용에서 했다. 닫는 방법: 2단계 실사용 검증에서 두 경로를 돌린다.
