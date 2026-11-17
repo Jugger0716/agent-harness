@@ -132,7 +132,7 @@ Before any write, and with or without git — no `git` command is involved, so u
 - Create `.md-optimize/` and, before anything else goes into it, write `.md-optimize/.gitignore` holding the single line `*` — the backup then never shows up as untracked work and is never committed.
 - For each file Phase 3 will edit or delete, copy its current bytes to `.md-optimize/backup/<path>` and append `modified <path>` to `.md-optimize/manifest.txt`.
 - Before a later step creates a file that does not exist yet, append `created <path>` to the manifest — record first, create second. A run cut off between the two then leaves a recorded path that was never written, which a restore skips, instead of a new file nothing recorded.
-- Phase 4d fixes follow the same two rules: back up a file before its first edit, record a file when it is created.
+- Phase 4d fixes follow the same two rules: back up a file before its first edit, record a file before it is created.
 - Never overwrite a backup copy. A path that already has a copy under `.md-optimize/backup/` keeps that first copy, and a path already in the manifest is not appended again — the first copy is the pre-run state; a later one would be a half-edited file.
 
 ### Step 3a: Create/Update Split Files
