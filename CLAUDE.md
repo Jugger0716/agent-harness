@@ -189,8 +189,10 @@ are the only behavioural one, and they cover the Workflow segments only):
   cannot carry a comment.
 - `verify_description_budget.py` — per-skill description caps, per-skill and total ceilings
   (a ratchet: lowering is free, raising needs an explicit ceiling raise in the same commit),
-  lower bounds for the descriptions the v8.12 batch shortened, required/forbidden token lists,
-  frontmatter structure, and a third-person check with a zero-slack allowlist. The measurement
+  lower bounds (a length guard only; the current entries and their reasons are in the script's
+  comments — the v8.12 batch's bounds were deleted in v9 together with their skills),
+  required/forbidden token lists (the mechanism remains but both are empty since v9, because the
+  only skill that had entries was deleted), frontmatter structure, and a third-person check with a zero-slack allowlist. The measurement
   basis is fixed in its docstring before any total: quotes removed, `\r` excluded, UTF-8
   characters. It exists because Claude Code caps the skill listing at a share of the context
   window and, when that overflows, drops the descriptions of least-used skills while keeping
