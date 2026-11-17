@@ -8,7 +8,7 @@
 
 | Style | Behavior | Session end points |
 |---|---|---|
-| `auto` | Automatic progression WITHIN a skill; `/harness` always ends at `plan_done` (SPEC rev.9 (b)). In an inline session (the default) it renders HARD GATE #1 there — `skills/harness/SKILL.md` §Approval Gate — and an approval chains into `/harness-build` in the same turn when that skill's §Chain Condition holds; a separate session (`--separate-gate`) ends with `Next → /harness-gate`. In `/harness-build`, user gates at evaluate_done(FAIL) only | `plan_done` (`/harness`, or past it through the chain), `completed` (`/harness-build`) |
+| `auto` | Automatic progression WITHIN a skill; `/harness` always ends at `plan_done` (SPEC rev.9 (b)). In an inline session (the default) it renders HARD GATE #1 there — `skills/harness/SKILL.md` §Approval Gate — and an approval chains into `/harness-build` in the same turn when that skill's §Chain Condition holds; a separate session (`--separate-gate`) ends with `Next → /harness-gate`. In `/harness-build`, user gates at evaluate_done(FAIL) only | `plan_done` (`/harness`, or past it through the chain); `/harness-build` ends when `skills/harness-build/SKILL.md` §Step 8 deletes `.harness/` — the last phase it writes is `finalizing`, and `completed` belongs to the epic exit alone |
 | `phase` | Stop at each `*_done` state, resume in the next session. An inline session's approval at `plan_done` does not chain (`skills/harness/SKILL.md` §Chain Condition needs `auto`): it stops with Resume `/harness-build` | `plan_done`, `generate_done`, `verify_done`, `evaluate_done` |
 | `step` | Execute only the specified step, then stop | immediately after the step |
 
