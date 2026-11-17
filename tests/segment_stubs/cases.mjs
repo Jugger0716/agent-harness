@@ -390,7 +390,40 @@ const defectCases = [
         return e.minimal(o.schema)
       })
       if (r.error) return { ok: false, detail: r.error }
-      return { ok: Array.isArray(r.result.failures) && r.result.verdict === 'PASS', detail: `verdict=${r.result.verdict} failures=${JSON.stringify(r.result.failures)}` }
+      // A `failures` that cannot be read as a list says nothing about what failed, so a PASS
+      // beside it is not taken on trust.
+      return { ok: Array.isArray(r.result.failures) && r.result.verdict === 'FAIL_L3', detail: `verdict=${r.result.verdict} failures=${JSON.stringify(r.result.failures)}` }
+    },
+  },
+  {
+    // One failure returned as a bare object instead of a one-element list must still count.
+    id: 'eval-failures-object',
+    defect: 'W16',
+    script: 'harness.eval',
+    async check(e) {
+      const r = await e.run('harness.eval', REP['harness.eval'], (p, o) => {
+        if (o.label === 'verify_l1') return { verdict: 'PASS', layer: 'L1', failures: [] }
+        if (o.label === 'evaluator') return { verdict: 'PASS', layer: 'L3', failures: { file: 'a.ts', severity: 'critical', fix: 'f' } }
+        return e.minimal(o.schema)
+      })
+      if (r.error) return { ok: false, detail: r.error }
+      return { ok: r.result.verdict === 'FAIL_L3' && r.result.failures.length === 1, detail: `verdict=${r.result.verdict} failures=${JSON.stringify(r.result.failures)}` }
+    },
+  },
+  {
+    // Folding has to land on the right member, not merely away from PASS: a Layer 2 failure
+    // is retried without asking, a Layer 3 failure is shown to the user.
+    id: 'eval-verdict-folded',
+    defect: 'W16',
+    script: 'harness.eval',
+    async check(e) {
+      const r = await e.run('harness.eval', REP['harness.eval'], (p, o) => {
+        if (o.label === 'verify_l1') return { verdict: 'PASS', layer: 'L1', failures: [] }
+        if (o.label === 'evaluator') return { verdict: 'fail_l2', layer: 'L3', failures: [] }
+        return null
+      })
+      const res = resultOf(r)
+      return { ok: res.verdict === 'FAIL_L2' && res.layer === 'L2', detail: `verdict=${JSON.stringify(res.verdict)} layer=${res.layer} from an evaluator "fail_l2"` }
     },
   },
   {

@@ -579,30 +579,49 @@ const verdict = await agent(
   { schema: EvaluatorVerdictSchema, label: 'evaluator', phase: 'Evaluate', ...mopt(MODELS.evaluator) },
 )
 must('harness.eval', 'evaluator', verdict)
-// Neither enum is assumed to have been enforced by the engine. `failures` becomes an array; the
-// verdict is matched without regard to case, and one still off the enum fails closed as
-// FAIL_L3 rather than reaching a caller that defines no branch for it.
-if (!Array.isArray(verdict.failures)) verdict.failures = []
+// Normalize what the caller branches on; neither enum is assumed to have been enforced by the
+// engine. Every rule fails closed — towards FAIL_L3, the failure that is put in front of the
+// user (a Layer 2 failure is retried without asking):
+//   - `failures` that is one bare object counts as a one-element list; anything else that is
+//     not a list and not empty cannot be read, so a PASS beside it is not taken on trust;
+//   - `verdict` is matched without regard to case, and one still off the enum is FAIL_L3;
+//   - a PASS that lists a critical or major failure contradicts itself.
+// `layer` then follows the verdict and is never taken from the model's label.
+const notes = []
+let unreadable = false
+if (!Array.isArray(verdict.failures)) {
+  const raw = verdict.failures
+  if (raw && typeof raw === 'object') {
+    verdict.failures = [raw]
+  } else {
+    if (raw != null && raw !== '') {
+      unreadable = true
+      notes.push(`failures was ${JSON.stringify(raw)}, not a list`)
+    }
+    verdict.failures = []
+  }
+}
 const VERDICTS = ['PASS', 'FAIL_L2', 'FAIL_L3']
 const folded = String(verdict.verdict).toUpperCase()
-if (verdict.verdict !== folded || !VERDICTS.includes(folded)) {
-  const fixed = VERDICTS.includes(folded) ? folded : 'FAIL_L3'
-  log(`Evaluate: verdict normalized — ${JSON.stringify(verdict.verdict)} -> ${fixed}`)
-  verdict.verdict = fixed
+let settled = folded
+if (!VERDICTS.includes(folded)) {
+  notes.push(`verdict ${JSON.stringify(verdict.verdict)} is not one of ${VERDICTS.join(' / ')}`)
+  settled = 'FAIL_L3'
 }
-// Normalize what the caller branches on. A PASS that lists a critical or major failure
-// contradicts itself; it becomes FAIL_L3, because a Layer 3 failure is put in front of the
-// user while a Layer 2 failure is retried without asking. `layer` then follows the verdict
-// and is never taken from the model's label.
-const blocking = (verdict.failures || []).filter(
+const blocking = verdict.failures.filter(
   (f) => f && ['critical', 'major'].includes(String(f.severity).toLowerCase()),
 ).length
-if (verdict.verdict === 'PASS' && blocking > 0) {
-  log(`Evaluate: verdict normalized — PASS with ${blocking} blocking failure(s) -> FAIL_L3`)
-  verdict.verdict = 'FAIL_L3'
-  verdict.summary = `verdict normalized: PASS with ${blocking} blocking failure(s) -> FAIL_L3. ${verdict.summary || ''}`.trim()
+if (settled === 'PASS' && blocking > 0) {
+  notes.push(`PASS with ${blocking} blocking failure(s)`)
+  settled = 'FAIL_L3'
 }
-verdict.layer = verdict.verdict === 'FAIL_L2' ? 'L2' : 'L3'
+if (settled === 'PASS' && unreadable) settled = 'FAIL_L3'
+if (notes.length) {
+  log(`Evaluate: verdict normalized — ${notes.join('; ')} -> ${settled}`)
+  verdict.summary = `verdict normalized: ${notes.join('; ')} -> ${settled}. ${verdict.summary || ''}`.trim()
+}
+verdict.verdict = settled
+verdict.layer = settled === 'FAIL_L2' ? 'L2' : 'L3'
 log(`Evaluate: ${verdict.verdict}${verdict.summary ? ' — ' + verdict.summary : ''}`)
 
 // ---- Phase 3: Cold review (conditional -- 3rd meta.phase, gated at runtime; see the L1
