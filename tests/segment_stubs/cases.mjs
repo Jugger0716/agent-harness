@@ -379,6 +379,23 @@ const defectCases = [
       return { ok: String(res.summary).includes('Critical=1'), detail: `counts=${JSON.stringify(res.counts)} summary=${JSON.stringify(res.summary)}` }
     },
   },
+  {
+    id: 'review-summary',
+    defect: 'W17',
+    script: 'deep-review.review',
+    async check(e) {
+      const r = await e.run('deep-review.review', REP['deep-review.review'], (p, o) => {
+        if (o.label !== 'synthesis') return e.minimal(o.schema)
+        return {
+          findings: [{ file: 'x', line: 1, severity: 'minor', category: 'Maintainability', title: 't', detail: 'd' }],
+          counts: { critical: 5, major: 0, minor: 0, suggestion: 0 }, filesReviewed: ['x'], summary: 'critical=5',
+        }
+      })
+      const set = resultOf(r).findingSet
+      const s = String(set.summary)
+      return { ok: s.includes('Critical=0') && s.includes('Minor=1'), detail: `counts=${JSON.stringify(set.counts)} summary=${JSON.stringify(set.summary)}` }
+    },
+  },
 ]
 
 export const cases = [...repCases, ...emptyArgsCases, ...argShapeCases, ...defectCases]

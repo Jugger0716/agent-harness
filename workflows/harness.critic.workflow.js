@@ -216,6 +216,9 @@ if (c.critical !== tally.critical || c.major !== tally.major || c.minor !== tall
   log(`Critique: counts normalized from items (reported C=${c.critical} M=${c.major} m=${c.minor} -> tallied C=${tally.critical} M=${tally.major} m=${tally.minor})`)
   report.counts = tally
 }
+// The summary is what the caller prints, so it is always rebuilt from the tallied counts —
+// never the model's own line, which can disagree with the items it was written beside.
+report.summary = `Critical=${report.counts.critical}, Major=${report.counts.major}, Minor=${report.counts.minor}`
 log(`Critique: C=${report.counts.critical} M=${report.counts.major} m=${report.counts.minor}`)
 
 // The orchestrator branches the Critic Gate on report.counts; critic_findings.md was

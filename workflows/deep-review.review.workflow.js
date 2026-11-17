@@ -667,6 +667,8 @@ const c = merged.counts || {}
 if (c.critical !== tally.critical || c.major !== tally.major || c.minor !== tally.minor || c.suggestion !== tally.suggestion) {
   log(`Synthesize: counts normalized from findings (reported c=${c.critical} M=${c.major} m=${c.minor} s=${c.suggestion} -> tallied c=${tally.critical} M=${tally.major} m=${tally.minor} s=${tally.suggestion})`)
   merged.counts = tally
+  // A summary written beside the wrong counts repeats them; replace it with the tally.
+  merged.summary = `Critical=${tally.critical}, Major=${tally.major}, Minor=${tally.minor}, Suggestion=${tally.suggestion}`
 }
 
 // Fill a missing/short filesReviewed from the union of the reviewers' lists — the
