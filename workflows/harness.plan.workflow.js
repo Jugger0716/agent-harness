@@ -8,7 +8,7 @@
 //   no agentType (SPIKE-F3), no Date/random (resume), schemas inlined (C1).
 export const meta = {
   name: 'harness.plan',
-  description: '/harness Plan segment: 2-3 persona proposals in parallel, then synthesis into a structured spec object. Spawns 3-4 sub-agents. No files are modified.',
+  description: 'INTERNAL — launched by /harness only. Plan segment: persona proposals in parallel, then synthesis into one structured spec object; modifies no file.',
   phases: [
     { title: 'Propose', detail: 'independent persona proposals (parallel)' },
     { title: 'Synthesize', detail: 'merge proposals into one PlanResult' },
@@ -122,6 +122,7 @@ const must = (segment, label, result) => {
   return result
 }
 // <!-- BLOCK-END:wf-prelude v1 -->
+requireArgs('harness.plan', A, ['task'])
 
 // ---- schemas (inlined per C1; canonical hand-sync copy: workflows/_reference/schemas.md) ----
 // sliceHint delta note: schemas.md §Contract delta — `sliceHint` (prose note, NOT its

@@ -13,7 +13,7 @@
 //   no agentType (SPIKE-F3), no Date/random (resume), schemas/templates inlined (C1).
 export const meta = {
   name: 'deep-review.review',
-  description: '/deep-review review segment: parallel specialist reviews (2 in deep mode, 3 in thorough), adversarial cross-verification in thorough mode, then synthesis into one deduplicated FindingSet. Read-only — no source files are modified, no files are written.',
+  description: 'INTERNAL — launched by /deep-review only. Review segment: parallel specialist reviews, cross-verification in thorough mode, then synthesis into one FindingSet; modifies no file.',
   phases: [
     { title: 'Review', detail: 'independent specialist reviews (parallel, anchor-free)' },
     { title: 'Cross-verify', detail: 'adversarial verification of the other reviewers (thorough)' },
@@ -22,8 +22,8 @@ export const meta = {
 }
 
 // ---- args (SPIKE-F1: defensive parse) -------------------------------------
-// contract — keep 1:1 with skills/deep-review/SKILL.md Step 4 WORKFLOW dispatch (a field
-// missing on either side silently renders as ''):
+// contract — keep 1:1 with skills/deep-review/SKILL.md Step 4 WORKFLOW dispatch. diffContent is
+// required — the requireArgs() call below refuses a blank one; any other missing field renders as '':
 //   { mode: 'deep'|'thorough', diffContent, fileList, userLang,
 //     models: { executor, advisor, evaluator } }
 const A = typeof args === 'string' ? JSON.parse(args) : (args || {})
@@ -60,6 +60,7 @@ const must = (segment, label, result) => {
   return result
 }
 // <!-- BLOCK-END:wf-prelude v1 -->
+requireArgs('deep-review.review', A, ['diffContent'])
 
 // ---- schemas (inlined per C1; canonical: workflows/_reference/schemas.md) ----
 // filesReviewed is REQUIRED — the report's "Files Reviewed" table (incl. no-issue

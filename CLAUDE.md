@@ -179,7 +179,11 @@ are the only behavioural one, and they cover the Workflow segments only):
   zero slack**, so adding a marker site means raising the floor in the same change, and removing
   one fails immediately.
 - `verify_meta_literal.py` — `meta` literal purity, module-syntax ban, nondeterministic-API ban,
-  gate-token tripwire, and the defensive-args guard.
+  gate-token tripwire, the defensive-args guard, a `meta.description` that starts
+  `INTERNAL — launched by /` (segments are listed beside the skills but are never picked from
+  that listing), and a `requireArgs('<meta.name>', A, [...])` call placed before the first
+  `phase(...)` statement. It checks that the call exists and comes first, not that its keys are
+  the right ones — the stub tests do that.
 - `verify_block_sync.py` — SHA256 comparison of BLOCK-delimited content. `GROUPS` declares
   `(tag, version, files, shared_source)`. The v8.14 prompt diet cut the `hx-*` groups from 16 to
   4 by PROMOTING the rest to `templates/_shared/` single sources — one copy, nothing to compare,

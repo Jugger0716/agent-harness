@@ -75,11 +75,11 @@ const repCases = Object.keys(REP).map((script) => ({
 // Three shapes, because a guard that only rejects `undefined` would still run on `{}` or on
 // arguments that lack the one payload the script exists to process.
 const REQUIRED = {
-  'harness.plan': 'task',
-  'harness.build': 'specContent',
-  'harness.eval': 'specContent',
-  'harness.critic': 'specContent',
-  'deep-review.review': 'diffContent',
+  'harness.plan': ['task'],
+  'harness.build': ['specContent'],
+  'harness.eval': ['specContent', 'verifyReportPath', 'qaReportPath'],
+  'harness.critic': ['specContent', 'criticFindingsPath'],
+  'deep-review.review': ['diffContent'],
 }
 const without = (obj, key) => Object.fromEntries(Object.entries(obj).filter(([k]) => k !== key))
 const refusal = (r, mustName) => {
@@ -102,15 +102,32 @@ const emptyArgsCases = Object.keys(REP).flatMap((script) => [
     script,
     check: async (e) => refusal(await e.run(script, {}, (p, o) => e.minimal(o.schema))),
   },
-  {
-    // The error has to name the missing argument, so the caller can tell which one it was.
-    id: `missing-${REQUIRED[script]}-${script}`,
+  // The error has to name the missing argument, so the caller can tell which one it was.
+  ...REQUIRED[script].map((key) => ({
+    id: `missing-${key}-${script}`,
     defect: 'W6',
     script,
-    check: async (e) =>
-      refusal(await e.run(script, without(REP[script], REQUIRED[script]), (p, o) => e.minimal(o.schema)), REQUIRED[script]),
-  },
+    check: async (e) => refusal(await e.run(script, without(REP[script], key), (p, o) => e.minimal(o.schema)), key),
+  })),
 ])
+const argShapeCases = [
+  {
+    // Whitespace is not a payload: a reviewer run over a blank diff reports a clean result.
+    id: 'blank-diffContent-deep-review.review',
+    defect: 'W6',
+    script: 'deep-review.review',
+    check: async (e) =>
+      refusal(await e.run('deep-review.review', { ...REP['deep-review.review'], diffContent: '  \n' }, (p, o) => e.minimal(o.schema)), 'diffContent'),
+  },
+  {
+    // Arguments may arrive as a JSON string; the guard has to run on the parsed object.
+    id: 'string-args-harness.build',
+    defect: 'W6',
+    script: 'harness.build',
+    check: async (e) =>
+      refusal(await e.run('harness.build', JSON.stringify(without(REP['harness.build'], 'specContent')), (p, o) => e.minimal(o.schema)), 'specContent'),
+  },
+]
 
 const defectCases = [
   {
@@ -265,4 +282,4 @@ const defectCases = [
   },
 ]
 
-export const cases = [...repCases, ...emptyArgsCases, ...defectCases]
+export const cases = [...repCases, ...emptyArgsCases, ...argShapeCases, ...defectCases]

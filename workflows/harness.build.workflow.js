@@ -9,7 +9,7 @@
 // (top-level body, args JSON-string guard, inlined schemas/templates, no agentType).
 export const meta = {
   name: 'harness.build',
-  description: '/harness Build segment: implementation plan, advisory review, then implementation that edits source files in this repo. Spawns 2-4 sub-agents.',
+  description: 'INTERNAL — launched by /harness-build only. Build segment: implementation plan, advisory review, then one implementation pass that edits source files.',
   phases: [
     { title: 'Plan', detail: 'lead developer implementation plan' },
     { title: 'Advise', detail: 'advisory plan review (parallel in multi mode)' },
@@ -55,6 +55,7 @@ const must = (segment, label, result) => {
   return result
 }
 // <!-- BLOCK-END:wf-prelude v1 -->
+requireArgs('harness.build', A, ['specContent'])
 
 // ---- schemas (inlined per C1; canonical: workflows/_reference/schemas.md) ----
 const AnalysisResultSchema = {

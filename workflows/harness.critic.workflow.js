@@ -20,8 +20,8 @@ export const meta = {
 // <!-- SYNC-WITH: workflows/harness.critic.workflow.js §contract -->
 // (skills/harness/SKILL.md), dispatched through templates/harness/plan_critic_dispatch.md.
 // Until v9 it carried another name and a second caller, a spec-writing skill v9 removed.
-// Keep args 1:1 with the caller — a missing field is not an exception, it silently
-// renders as '' via render()'s v==null fallback below:
+// Keep args 1:1 with the caller. specContent and criticFindingsPath are required — the
+// requireArgs() call below refuses a run without them; any other missing field renders as '':
 //   { task, userLang, specContent, qaNotes, criticFindingsPath, models: {advisor, evaluator} }
 // criticFindingsPath is a caller-specified value, not a literal owned by this file:
 // /harness passes `{docs_path}plan_critic_findings.md`.
@@ -59,6 +59,7 @@ const must = (segment, label, result) => {
   return result
 }
 // <!-- BLOCK-END:wf-prelude v1 -->
+requireArgs('harness.critic', A, ['specContent', 'criticFindingsPath'])
 
 // ---- schema (inlined per C1; canonical: workflows/_reference/schemas.md) ----
 const CriticReportSchema = {

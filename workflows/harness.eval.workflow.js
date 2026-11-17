@@ -23,7 +23,7 @@
 // already exists in this same file.
 export const meta = {
   name: 'harness.eval',
-  description: '/harness Eval segment: runs build/test/lint/typecheck mechanically (Layer 1), then an isolated evaluator review (Layer 2+3). Writes verify/QA reports; does not modify source.',
+  description: 'INTERNAL — launched by /harness-build only. Eval segment: Layer 1 commands, an isolated Layer 2+3 evaluation and an optional cold review; modifies no source file.',
   phases: [
     { title: 'Verify L1', detail: 'mechanical build/test/lint/typecheck' },
     { title: 'Evaluate', detail: 'Layer 2 structural + Layer 3 judgment' },
@@ -83,6 +83,7 @@ const must = (segment, label, result) => {
   return result
 }
 // <!-- BLOCK-END:wf-prelude v1 -->
+requireArgs('harness.eval', A, ['specContent', 'verifyReportPath', 'qaReportPath'])
 
 // ---- schema (inlined per C1; canonical: workflows/_reference/schemas.md) ----
 const VerifyVerdictSchema = {
