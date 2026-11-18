@@ -451,7 +451,7 @@ SPEC 1.3의 시뮬레이션 값과 다른 것은 `session-conflict`(2로 예상,
 
 #### 명명된 예외 (`RELEASING.md` §If a step fails)
 
-① **설치본 = 릴리스, `/harness doctor` ④ ✓ (`RELEASING.md` 8~9번).** 태그 전에는 관측할 수 없다. 닫는 방법: 릴리스 뒤 설치본을 9.0.1로 바꾸고 `/harness doctor` ④ ✓를 확인한다.
+① **설치본 = 릴리스, `/harness doctor` ④ ✓ (`RELEASING.md` 8~9번).** 태그 전에는 관측할 수 없다. 닫는 방법: 릴리스 뒤 설치본을 9.0.1로 바꾸고 `/harness doctor` ④ ✓를 확인한다. (2026-11-18 종결: 릴리스 뒤 `claude plugin marketplace update` → `claude plugin update`로 설치본을 9.0.1(`90fbad7`)로 바꿨다. 새로 시작한 세션의 `/harness doctor`는 ①②④ ✓, ③·⑤ —였다. ④는 실행 중인 사본이 cache `9.0.1`이고 폴더 이름이 `plugin.json`과 같다는 축 (a)로 판정했다 — 저장소 밖에서 실행해 축 (b)(c)는 건너뛰었다. 그 둘은 업데이트 직후 따로 쟀다: 두 설치본 모두 추적 파일 117개 가운데 내용이 다른 것 0개, 줄 끝만 다른 것 16개, 빠진 것 0개, 워크플로 스크립트의 CR 0건. 이전 cache 폴더 `9.0.0`은 열린 세션이 쓰고 있어 남겨 두었다 — 폴더 이름과 내용이 같아 불일치는 아니다.)
 
 ② **1단계 예외 ②에서 남은 둘.** 하나는 "Partial edits" 질문이다(시험 9 미관측). 스크립트 쪽 — 빈 반환이 `implementation returned null — partial edits possible`이 되는 것 — 은 스텁 케이스 `build-null-implementation`이 고정한다. 다른 하나는 끊긴 자동 수정의 처리다(시험 11 안 돌림). 1단계 예외 ②의 나머지는 이번에 닫혔다: md-optimize의 남은 백업 질문과 "Skip" 뒤 백업 유지(시험 1·7·8), `/harness` Setup의 남은 백업 확인(시험 1). md-optimize의 열린 세션 확인은 9.0.1에서 없어졌다. 닫는 방법: "Partial edits"는 다음 실사용 검증에서 구현 에이전트를 건너뛰어 본다. 자동 수정은 5단계 4번이 Auto-fix를 남기면 그 단계에서 돌리고, 없애면 예외도 함께 사라진다.
 
