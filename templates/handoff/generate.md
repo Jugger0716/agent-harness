@@ -7,8 +7,8 @@
 
 Gather, in this order:
 
-1. **Git state:** run `node "{HANDOFF_JS}" git-state --cwd "."` — never run git by hand or
-   recall it from memory. It returns `isGit`, `toplevel`, `branch`, `head`, `subject`, `dirty` (a
+1. **Git state:** run `node "{HANDOFF_JS}" git-state --cwd "."` — never fall back to running git
+   by hand or recall it from memory. It returns `isGit`, `toplevel`, `branch`, `head`, `subject`, `dirty` (a
    list of `{status, path}`) and `upstream` (`{ahead, behind}` or null). Header values: `Branch` =
    `branch` (a detached HEAD is the script's `(detached)`) and `Worktree` = `toplevel`, but when
    `isGit` is false, `Branch` and `Worktree` are `n/a`; `HEAD` = the FULL 40-char `head` and
@@ -43,7 +43,7 @@ Gather, in this order:
      read, test result), each bullet `fact — evidence`; no beliefs or intentions.
    - In Progress — what is mid-flight. Blockers / Risks — unresolved questions included.
    - Next Steps — ordered; step 1 concrete enough to start cold, and with a Progress Ledger
-     written to its slice command convention (item 5).
+     written to its slice command convention (item 5) — read item 5's file before drafting this.
    - Definition of Done — how a future session knows the effort is finished.
    - Reading Order — files to read, in order, each with a one-line reason (prefer: this handoff →
      key spec/plan docs → the 1–3 most central source files). Inside a path's backticks,
@@ -56,8 +56,9 @@ Gather, in this order:
      that one section). "Same as the previous handoff's Do NOT", a bare path or "the earlier items
      still apply" is not allowed, however worded: `resume` reads only this document's section.
 5. **Progress Ledger** (epic continuity, optional): only when this handoff is part of a
-   multi-slice epic — then read `{CLAUDE_PLUGIN_ROOT}/templates/handoff/generate-ledger.md` and
-   follow it verbatim (items 5a–5g, the column contract, step 1's slice command convention).
+   multi-slice epic — then read `{CLAUDE_PLUGIN_ROOT}/templates/handoff/generate-ledger.md` before
+   drafting item 4's Next Steps and follow it verbatim (items 5a–5g, the column contract, step 1's
+   slice command convention).
    Otherwise skip it entirely: never an empty table.
 
 ### Step 2 — Compose

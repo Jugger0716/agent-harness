@@ -28,8 +28,8 @@ headings stay English raw (parse anchors) and their content is in `user_lang`.
 | `list` | §Sub-command: list |
 | anything else | a help message in `user_lang` listing these commands |
 
-**Location convention:** `docs/harness/handoff/YYYY-MM-DD-<slug>.md` — today's date; the slug is an
-English kebab-case summary of the title, `[a-z0-9-]`, at most 40 characters. There is no
+**Location convention (single canonical path):** `docs/harness/handoff/YYYY-MM-DD-<slug>.md` —
+today's date; the slug is an English kebab-case summary of the title, `[a-z0-9-]`, at most 40 characters. There is no
 transliteration: the model supplies the English words. `resolve-path` (`generate.md` Step 3)
 normalises the slug and, when the name is taken, appends `-2`, `-3`, … — NEVER overwrite an
 existing handoff. This differs on purpose from `templates/_shared/slugify.md`: a non-ASCII

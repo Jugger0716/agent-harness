@@ -51,9 +51,11 @@ candidates" (the script's list, before the negation judgement) against "candidat
 the three "directly under the aligned block" places defer to the one order paragraph; bare
 `§Non-Goals` and bare `Step N` cross-references name their file.
 
-The compression that followed removed no paragraph of rules; the reasons it cut out of rule
-sentences are in §Why-clauses dropped by the compression, and every rule sentence's new carrier is
-in §Rule map.
+The compression that followed deleted no rule. It merged two `SKILL.md` §Non-Goals bullets into
+other sentences (the Session Recovery bullet into the opening paragraph; the no-save-confirmation
+bullet into the dispatch row and `generate.md` Steps 3–4) and relocated the Progress Ledger rules
+to `templates/handoff/generate-ledger.md`; the reasons it cut out of rule sentences are in
+§Why-clauses dropped by the compression, and every rule sentence's new carrier is in §Rule map.
 
 ## §Tool blocks and the chaining test
 
@@ -240,8 +242,9 @@ unambiguous form, and cut the reasons attached to rule sentences. They are kept 
 
 ## §The generate load budget and the ledger split
 
-The budget (SPEC 3.3, plan decision D2): `skills/handoff/SKILL.md` plus `templates/handoff/generate.md`
-plus any template `generate` reads unconditionally must be at most 15,360 bytes (UTF-8, carriage returns
+The budget (`design/v9-subtraction/SPEC.md` 3.3: the body a `generate` call loads is at most
+15 KB, taken as 15,360 bytes): `skills/handoff/SKILL.md` plus `templates/handoff/generate.md` plus
+any template `generate` reads unconditionally must stay within it (UTF-8, carriage returns
 removed). The steps, measured on the files:
 
 | State | `SKILL.md` | `generate.md` | Sum |
@@ -249,14 +252,14 @@ removed). The steps, measured on the files:
 | before H15's diet (`6bc5d88`) | 8,309 | 20,649 | 28,958 |
 | rationale moved here (the first diet commit) | 7,794 | 18,779 | 26,573 |
 | every rule restated once, still one file (pure compression) | 6,287 | 12,443 | 18,730 |
-| after the ledger split (final) | 6,326 | 8,122 | 14,448 |
+| after the ledger split (final) | 6,350 | 8,222 | 14,572 |
 
 Pure compression left the load 3,370 bytes over, with every rule still present. So, as the plan's
 ruling allows and only after that attempt, the rules a single-task handoff never needs — the
 Progress Ledger (Step 1 item 5a–5g and its column contract) and the slice command convention of
-Next Steps step 1 — moved to `templates/handoff/generate-ledger.md` (4,789 bytes). `generate.md`
+Next Steps step 1 — moved to `templates/handoff/generate-ledger.md` (4,833 bytes). `generate.md`
 reads it only when the handoff is part of a multi-slice epic, and says so in one sentence (Step 1
-item 5); a handoff with a ledger loads 19,237 bytes. Nothing was deleted to meet the number;
+item 5); a handoff with a ledger loads 19,405 bytes. Nothing was deleted to meet the number;
 §Rule map shows where each rule went. The pointers that named the old place moved with it:
 `SKILL.md` §Non-Goals (the `slice_plan.md` bullet), `resume.md` Step 5 tier 1, and the
 `slice-command-format` comment in `scripts/verify_sync_markers.py`.
@@ -288,7 +291,7 @@ result, not its procedure. File names: `SKILL.md` = `skills/handoff/SKILL.md`; `
 | S14 | SKILL §Sub-command Dispatch rows 3-4 | resume / resume <path>: newest or given document, read resume.md verbatim | SKILL.md: "\| `resume`, `resume <path>` \| prime from the newest HANDOFF document, or from `<path>`: read `{CLAUDE_PLUGIN_ROOT}/templates/handoff/resume.md` and follow it verbatim \|" |  |
 | S15 | SKILL §Sub-command Dispatch row 5 | list: list documents newest first | SKILL.md: "\| `list` \| §Sub-command: list \|"<br>SKILL.md: "newest first" |  |
 | S16 | SKILL §Sub-command Dispatch row 6 | anything else: help in user_lang | SKILL.md: "\| anything else \| a help message in `user_lang` listing these commands \|" |  |
-| S17 | SKILL location convention | path docs/harness/handoff/YYYY-MM-DD-<slug>.md; today; English kebab-case [a-z0-9-], at most 40 | SKILL.md: "`docs/harness/handoff/YYYY-MM-DD-<slug>.md` — today's date; the slug is an English kebab-case summary of the title, `[a-z0-9-]`, at most 40 characters." |  |
+| S17 | SKILL location convention | path docs/harness/handoff/YYYY-MM-DD-<slug>.md; today; English kebab-case [a-z0-9-], at most 40 | SKILL.md: "**Location convention (single canonical path):** `docs/harness/handoff/YYYY-MM-DD-<slug>.md` — today's date; the slug is an English kebab-case summary of the title, `[a-z0-9-]`, at most 40 characters." |  |
 | S18 | SKILL location convention | no transliteration; the model supplies the English words | SKILL.md: "There is no transliteration: the model supplies the English words." |  |
 | S19 | SKILL location convention | resolve-path normalises and numbers a taken name; NEVER overwrite | SKILL.md: "`resolve-path` (`generate.md` Step 3) normalises the slug and, when the name is taken, appends `-2`, `-3`, … — NEVER overwrite an existing handoff." | script-owned numbering: resolve-path |
 | S20 | SKILL Base directory | session cwd = base of the handoff folder and last-resort root of a relative Reading Order path; repository of the document first | SKILL.md: "The session's current working directory is the base of `docs/harness/handoff/` (where `generate` writes and `resume`/`list` look) and the last-resort root of a relative Reading Order path: such a path resolves against the repository that holds the document (the folder with its `docs/` directory, or that folder's git top-level); only a document with neither uses the session directory (`resume.md` Step 4's `--root`)." | resolution itself script-owned: reading-plan |
@@ -316,13 +319,13 @@ result, not its procedure. File names: `SKILL.md` = `skills/handoff/SKILL.md`; `
 | S42 | SKILL §Non-Goals | resume keeps its Step 5 gate (guards starting work); do not "harmonize" | resume.md: "**The gate is asked on EVERY path, and asking means CALLING AskUserQuestion.**" | "do not harmonize" is editor guidance -> RATIONALE §No save confirmation on generate |
 | G1 | generate preamble | body of /handoff generate, loaded from SKILL.md §Sub-command Dispatch | generate.md: "Body of `/handoff generate`, loaded from `skills/handoff/SKILL.md` §Sub-command Dispatch" |  |
 | G2 | generate Step 1 | gather in this order | generate.md: "Gather, in this order:" |  |
-| G3 | generate Step 1 item 1 | run git-state; do not recall from memory | generate.md: "**Git state:** run `node "{HANDOFF_JS}" git-state --cwd "."` — never run git by hand or recall it from memory." |  |
+| G3 | generate Step 1 item 1 | run git-state; do not recall from memory | generate.md: "**Git state:** run `node "{HANDOFF_JS}" git-state --cwd "."` — never fall back to running git by hand or recall it from memory." |  |
 | G4 | generate Step 1 item 1 | "." is the session's cwd | SKILL.md: "`"."` as `--cwd` or `--root` is the session's current working directory." | stated once in SKILL.md **Helper script** |
 | G5 | generate Step 1 item 1 | {HANDOFF_JS}, root check, quotes | SKILL.md: "`{HANDOFF_JS}` is `${CLAUDE_PLUGIN_ROOT}/skills/handoff/scripts/handoff.mjs`."<br>generate.md: "**Helper script** rule (`{HANDOFF_JS}`, quoting, a non-zero exit) applies to every command here." | the "resume.md Step 4 states the same rule, and this file is read without that one" why-clause dropped: SKILL.md is in generate's load |
-| G6 | generate Step 1 item 1 | non-zero exit: stderr verbatim, stop; never fall back to git by hand | SKILL.md: "On a non-zero exit show its stderr verbatim and stop — never emulate a command by hand."<br>generate.md: "never run git by hand" |  |
+| G6 | generate Step 1 item 1 | non-zero exit: stderr verbatim, stop; never fall back to git by hand | SKILL.md: "On a non-zero exit show its stderr verbatim and stop — never emulate a command by hand."<br>generate.md: "never fall back to running git by hand" |  |
 | G7 | generate Step 1 item 1 | git-state output fields | generate.md: "It returns `isGit`, `toplevel`, `branch`, `head`, `subject`, `dirty` (a list of `{status, path}`) and `upstream` (`{ahead, behind}` or null)." | script-owned: git-state |
-| G8 | generate Step 1 item 1 | Branch = branch; n/a when not git; (detached) | generate.md: "`Branch` = `branch` (a detached HEAD is the script's `(detached)`)"<br>generate.md: "when `isGit` is false, `Branch` and `Worktree` are `n/a`" |  |
-| G9 | generate Step 1 item 1 | HEAD = full 40-char head + subject; n/a when head null | generate.md: "`HEAD` = the FULL 40-char `head` and `subject`, `n/a` when `head` is null" | why ("short shas go ambiguous") -> RATIONALE §Why-clauses dropped |
+| G8 | generate Step 1 item 1 | Branch = branch; n/a when not git; (detached) | generate.md: "`Branch` = `branch` (a detached HEAD is the script's `(detached)`)"<br>generate.md: "when `isGit` is false, `Branch` and `Worktree` are `n/a`" | the gloss "(not a git folder)" of `isGit` false dropped: script-owned: git-state |
+| G9 | generate Step 1 item 1 | HEAD = full 40-char head + subject; n/a when head null | generate.md: "`HEAD` = the FULL 40-char `head` and `subject`, `n/a` when `head` is null" | why ("short shas go ambiguous") -> RATIONALE §Why-clauses dropped; the gloss "(no repository, or no commit yet)" of a null `head` dropped: script-owned: git-state |
 | G10 | generate Step 1 item 1 | Worktree = toplevel or n/a | generate.md: "`Worktree` = `toplevel`" |  |
 | G11 | generate Step 1 item 1 | Dirty clean / N files; Dirty files line: first 40 joined by "; ", backticks for a name with "; ", +N more | generate.md: "`Dirty` = `clean` when `dirty` is empty, else `N files` (its length) plus the `Dirty files` line: the first 40 `path`s joined with `; ` (a path that contains `; ` goes in backticks), then `+N more`" |  |
 | G12 | generate Step 1 item 1 | Upstream ahead/behind or n/a | generate.md: "`Upstream` = `ahead A, behind B`, or `n/a` when null." |  |
@@ -340,21 +343,21 @@ result, not its procedure. File names: `SKILL.md` = `skills/handoff/SKILL.md`; `
 | G24 | generate Step 1 item 4 | Current State: only evidence-backed facts, fact — evidence, no beliefs | generate.md: "Current State (verified) — ONLY facts this session's evidence backs (command output, file read, test result), each bullet `fact — evidence`; no beliefs or intentions." |  |
 | G25 | generate Step 1 item 4 | In Progress; Blockers / Risks incl. unresolved questions | generate.md: "In Progress — what is mid-flight. Blockers / Risks — unresolved questions included." |  |
 | G26 | generate Step 1 item 4 | Next Steps ordered, first step concrete enough to start cold | generate.md: "Next Steps — ordered; step 1 concrete enough to start cold" |  |
-| G27 | generate Step 1 item 4 | slice command convention: Slice/Command format of harness-build §Step 3.5, named not restated | generate.md: "and with a Progress Ledger written to its slice command convention (item 5)."<br>generate-ledger.md: "When a ledger row applies and step 1 names that slice's command, write it in the `Slice`/`Command` format `skills/harness-build/SKILL.md` §Step 3.5: Slice Plan defines for `slice_plan.md` (named, not restated)." | moved with the ledger rules (R23 split) |
+| G27 | generate Step 1 item 4 | slice command convention: Slice/Command format of harness-build §Step 3.5, named not restated | generate.md: "and with a Progress Ledger written to its slice command convention (item 5) — read item 5's file before drafting this."<br>generate-ledger.md: "When a ledger row applies and step 1 names that slice's command, write it in the `Slice`/`Command` format `skills/harness-build/SKILL.md` §Step 3.5: Slice Plan defines for `slice_plan.md` (named, not restated)." | moved with the ledger rules (R23 split) |
 | G28 | generate Step 1 item 4 | no-command case: step 1 opens with the Slice label on its own line, English raw, Command omitted | generate-ledger.md: "When a row applies but the next step is not a single command (a slice implemented directly from an epic plan), step 1 still opens with the `Slice` half on its own line — label English raw, `Command` omitted" | R23 split |
 | G29 | generate Step 1 item 4 | never the just-finished slice | generate-ledger.md: "naming the next slice, never the one the ledger records as just finished:" | R23 split |
-| G30 | generate Step 1 item 4 | a mention in prose does not satisfy; resume reads the label first; without it Next falls back to item 1 | generate-ledger.md: "A mention in prose does not count: `resume`'s `Next :` derivation (`templates/handoff/resume.md` Step 5) reads this label first and never scans prose; without it a handoff written between slices has no `in-progress` row, and `Next :` falls back to step 1 verbatim." | R23 split; the 2026-08-28 measurement -> RATIONALE §The slice label (stage A) |
+| G30 | generate Step 1 item 4 | a mention in prose does not satisfy; resume reads the label first; without it Next falls back to item 1 | generate-ledger.md: "A mention in prose does not count: `resume`'s `Next :` derivation (`templates/handoff/resume.md` Step 5) reads this label first and never scans prose; without it a handoff written between slices has no `in-progress` row, and `Next :` falls back to step 1 verbatim." | R23 split; the 2026-08-28 measurement -> RATIONALE §The slice label (stage A); "without the label it depends on the in-progress rows (one names the slice, several are ambiguous) and the live task state" is resume.md Step 5 tiers 2-3, stated there |
 | G31 | generate Step 1 item 4 | Definition of Done | generate.md: "Definition of Done — how a future session knows the effort is finished." |  |
 | G32 | generate Step 1 item 4 | Reading Order: in order, one-line reason, preferred order | generate.md: "Reading Order — files to read, in order, each with a one-line reason (prefer: this handoff → key spec/plan docs → the 1–3 most central source files)." |  |
 | G33 | generate Step 1 item 4 | optional path:START-END and path §heading text | generate.md: "Inside a path's backticks, `path:START-END` reads only those lines and `path §heading text` only the first section whose heading contains that text." | reading itself script-owned: reading-plan |
 | G34 | generate Step 1 item 4 | Do NOT in full in every document, still-in-force included, reason in one clause | generate.md: "Do NOT — guardrails, each with its reason in one clause, written **in full in every document**, those still in force from earlier handoffs included" |  |
 | G35 | generate Step 1 item 4 (stage A) | source of the still-in-force items | generate.md: "take them from the previous handoff's `Do NOT` section as this session's resume briefing showed it, else from the first document `node "{HANDOFF_JS}" list --dir "docs/harness/handoff"` returns (that one document, that one section)." | added in stage A |
 | G36 | generate Step 1 item 4 | no pointer form; resume reads only this section | generate.md: ""Same as the previous handoff's Do NOT", a bare path or "the earlier items still apply" is not allowed, however worded: `resume` reads only this document's section." | why ("a pointer ... is lost") -> RATIONALE §Why-clauses dropped |
-| G37 | generate Step 1 item 5 | ledger only for a multi-slice epic; skip otherwise; never an empty table | generate.md: "**Progress Ledger** (epic continuity, optional): only when this handoff is part of a multi-slice epic — then read `{CLAUDE_PLUGIN_ROOT}/templates/handoff/generate-ledger.md` and follow it verbatim (items 5a–5g, the column contract, step 1's slice command convention). Otherwise skip it entirely: never an empty table." | the trigger that loads generate-ledger.md |
+| G37 | generate Step 1 item 5 | ledger only for a multi-slice epic; skip otherwise; never an empty table | generate.md: "**Progress Ledger** (epic continuity, optional): only when this handoff is part of a multi-slice epic — then read `{CLAUDE_PLUGIN_ROOT}/templates/handoff/generate-ledger.md` before drafting item 4's Next Steps and follow it verbatim (items 5a–5g, the column contract, step 1's slice command convention). Otherwise skip it entirely: never an empty table." | the trigger that loads generate-ledger.md, before the slice command convention is needed |
 | G38 | generate Step 1 item 5 | the Slice column feeds item 4's convention; a row makes it apply | generate-ledger.md: "Its rows are what make the slice command convention below apply." |  |
 | G39 | generate Step 1 item 5 | two commands read earlier documents; never open/scan/rank by hand; quoting/exit as item 1 | generate-ledger.md: "For the ledger only the two commands below read earlier documents: never open, scan or rank those documents by hand for it."<br>generate-ledger.md: "**Helper script** rule applies to both commands here." |  |
 | G40 | generate item 5a | run latest-epic | generate-ledger.md: "Run `node "{HANDOFF_JS}" latest-epic --dir "docs/harness/handoff"`" |  |
-| G41 | generate item 5a | output epic/doc; the last row that has one; 20 newest; null | generate-ledger.md: "`epic` (the `Epic` of the last row that has one, in the newest handoff document whose ledger has such a row) and `doc` (that document) — both `null` when none of the 20 newest handoff documents, which is all the script reads, has one." | script-owned: latest-epic |
+| G41 | generate item 5a | output epic/doc; the last row that has one; 20 newest; null | generate-ledger.md: "`epic` (the `Epic` of the last row that has one, in the newest handoff document whose ledger has such a row) and `doc` (that document) — both `null` when none of the 20 newest handoff documents, which is all the script reads, has one (a folder that does not exist yet included)." | script-owned: latest-epic |
 | G42 | generate item 5a | use epic as the proposal without asking | generate-ledger.md: "Use `epic` as the proposal, without asking" |  |
 | G43 | generate item 5a | no age limit; the id the work names wins | generate-ledger.md: "there is no age limit, so it may be months old."<br>generate-ledger.md: "or when this session's work names a different epic id — that id is then the Epic." |  |
 | G44 | generate item 5a | epic null -> docs_path slug, without asking | generate-ledger.md: "When `epic` is `null`, the Epic is item 2's `docs_path` slug (kebab-case; `relevant` true), without asking." |  |

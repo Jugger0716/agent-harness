@@ -10,7 +10,7 @@ documents by hand for it. Its rows are what make the slice command convention be
 a. **Epic.** Run `node "{HANDOFF_JS}" latest-epic --dir "docs/harness/handoff"` → `epic` (the
    `Epic` of the last row that has one, in the newest handoff document whose ledger has such a
    row) and `doc` (that document) — both `null` when none of the 20 newest handoff documents,
-   which is all the script reads, has one. Use `epic` as the proposal, without asking; there is
+   which is all the script reads, has one (a folder that does not exist yet included). Use `epic` as the proposal, without asking; there is
    no age limit, so it may be months old. When `epic` is `null`, the Epic is item 2's `docs_path`
    slug (kebab-case; `relevant` true), without asking. Ask the user only when `epic` is `null` and
    there is no such slug, or when this session's work names a different epic id — that id is then
