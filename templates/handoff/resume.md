@@ -8,14 +8,17 @@
 - Without: run
 
   ```
-  node "{HANDOFF_JS}" latest --dir "docs/harness/handoff" --branch "<current branch>" --cwd "."
+  node "{HANDOFF_JS}" latest --dir "docs/harness/handoff" --cwd "."
   ```
 
-  `<current branch>` is the `branch` of `node "{HANDOFF_JS}" git-state --cwd "."` (`n/a` when
-  `isGit` is false); `{HANDOFF_JS}`, the quoting and a non-zero exit are as in Step 4. The output
-  is one JSON object: `doc`, `candidates` (the newest day's handoff documents, newest first — only
-  those recording this branch when their commits diverged — each `{path, branch, head, title}`) and
-  `needsChoice`.
+  The script takes the current branch from git itself — the `branch` `git-state --cwd "."` reports,
+  `n/a` outside a git work tree — so no value is copied onto the command line; `{HANDOFF_JS}`, the
+  quoting and a non-zero exit are as in Step 4. The output is one JSON object: `doc`, `candidates`
+  (the newest day's handoff documents, newest first — only those recording this branch when their
+  commits diverged — each `{path, branch, head, title}`), `needsChoice` and `skippedNames`.
+  - `skippedNames.count` above 0 → say that many files were not read, with its `reason`: a file
+    whose name holds a character outside `A-Z a-z 0-9 . _ -` is never a candidate, so the document
+    found may not be the newest one in the folder.
   - `doc` set → that is the document. When `candidates` holds other documents of the same day,
     say which were left and why (this one is the latest, by recorded commit, of those recording the
     current branch).
@@ -91,12 +94,13 @@ matches reality. Ask the script first. It only READS `.harness/state.json`: "No 
 mutations" is a rule (SKILL.md §Non-Goals), **not** a side effect of `disallowed-tools`:
 
 ```
-node "{HANDOFF_JS}" harness-state --branch "<current branch>" --cwd "."
+node "{HANDOFF_JS}" harness-state --cwd "."
 ```
 
-`<current branch>` is the `branch` of `node "{HANDOFF_JS}" git-state --cwd "."` — the session's own
-folder, not `drift`'s `branch.current`, which is the recorded worktree's when `viaWorktree` is true —
-or `n/a` when `isGit` is false. `{HANDOFF_JS}`, the quoting and a non-zero exit are as in Step 4.
+The script compares with the current branch of `--cwd` as `git-state --cwd "."` reports it — the
+session's own folder, not `drift`'s `branch.current`, which is the recorded worktree's when
+`viaWorktree` is true — or `n/a` outside a git work tree. `{HANDOFF_JS}`, the quoting and a
+non-zero exit are as in Step 4.
 The output is one JSON object: `exists`, `relevant`, `reason` and `fields`. **`relevant` decides
 everything below.** It is true only when `.harness/state.json` exists, its `branch` equals the
 current branch and its `phase` is not `completed`. A state that is not relevant belongs to another

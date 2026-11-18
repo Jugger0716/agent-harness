@@ -39,6 +39,18 @@
 // SCAN_CAP of them — a file that is not a handoff document does not use up the cap. A folder that does
 // not exist holds no document (the first handoff of a project is written into a folder that is not
 // there yet); a path that is not a folder, or a document that cannot be read, is an InputError.
+//
+// Values that may end up on a command line. A contract tells the model to put a path from `list` or `latest` into a
+// double-quoted shell argument, and the shell expands `$(…)` there BEFORE the helper starts — so no check after the
+// fact helps; the value itself must be harmless. Two rules make it so:
+//   - a file whose NAME holds a character outside `A-Z a-z 0-9 . _ -` (SAFE_DOC_NAME; every name `resolve-path` makes
+//     is inside) is never read, listed or picked. It is counted instead — `skippedNames: { count, reason }` in the
+//     output of every command that scans the folder — because a silently skipped newest document would make `latest`
+//     pick an older one without a word. The names themselves are never printed;
+//   - an Epic is proposed only when it is an identifier (EPIC_ID: a letter or digit, then letters, digits, `.`, `_`
+//     or `-`, at most 80 characters). Any other Epic is not proposed (`epic` null with a `reason`, the value never
+//     echoed), and `ledger-carry` takes the proposal itself when no Epic is given, so the model never copies an
+//     Epic out of a document onto a command line.
 import fs from 'node:fs'
 import path from 'node:path'
 import { InputError } from './errors.mjs'
@@ -49,6 +61,9 @@ export const STATUSES = ['done', 'in-progress', 'blocked', 'planned', 'dropped']
 const FINISHED = new Set(['done', 'dropped'])
 export const KEEP_DONE = 5
 export const SCAN_CAP = 20
+export const SAFE_DOC_NAME = /^[A-Za-z0-9._-]+\.md$/i
+export const EPIC_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$/
+const NOT_AN_ID = 'the Epic the ledger proposes is not an identifier (a letter or digit, then letters, digits, ".", "_" or "-", at most 80 characters) — not proposed'
 
 export const isFinished = (status) => FINISHED.has(status)
 
@@ -85,10 +100,18 @@ export function epicOfRows(rows) {
 // A leading BOM is ignored, as parse.mjs ignores it.
 const stripBom = (text) => (text.charCodeAt(0) === 0xfeff ? text.slice(1) : text)
 
+// What a scan left out, for the output's `skippedNames`. `skips` is filled before the first document is handed out,
+// so a caller that stops early still reports every such name of the folder.
+export const newSkips = () => ({ names: 0 })
+export const skippedNamesOf = (skips) => ({
+  count: skips.names,
+  reason: skips.names ? `${skips.names} file name(s) in the folder hold a character outside A-Z a-z 0-9 . _ - — not read` : null,
+})
+
 // The handoff documents of `dir`, newest first, at most `cap` of them -> { name, file, text, mtimeMs } one at a time,
 // so a caller that finds what it wants stops reading. (`list` and `latest` use it too: `list` with no cap, `latest` until
-// the date changes.)
-export function* scanHandoffDocs(dir, cap = SCAN_CAP) {
+// the date changes.) A regular `.md` file whose name is outside SAFE_DOC_NAME is counted in `skips.names` and never read.
+export function* scanHandoffDocs(dir, cap = SCAN_CAP, skips = newSkips()) {
   let names
   try {
     names = fs.readdirSync(dir)
@@ -106,7 +129,9 @@ export function* scanHandoffDocs(dir, cap = SCAN_CAP) {
     } catch {
       continue
     }
-    if (st.isFile()) files.push({ name, file, mtimeMs: st.mtimeMs })
+    if (!st.isFile()) continue
+    if (SAFE_DOC_NAME.test(name)) files.push({ name, file, mtimeMs: st.mtimeMs })
+    else skips.names++
   }
   let seen = 0
   for (const d of orderDocs(files)) {
@@ -142,33 +167,71 @@ function hasEarlierRowsLine(text) {
   return false
 }
 
-// `latest-epic`: the Epic of the newest document that has a ledger with a row (its last row's Epic, normalised)
-// and that document's path -> { epic, doc }; both null when no document has one. A row with no Epic cell cannot
-// name an Epic, so the last row that has one is used; `next.mjs` and the corpus measurement take the literal last
-// row's Epic, and the two differ only when that cell is empty.
-export function latestEpic(dir) {
-  for (const d of scanHandoffDocs(dir)) {
-    const epic = epicOfRows(rowsOf(d.text))
-    if (epic !== null) return { epic, doc: d.file }
-  }
-  return { epic: null, doc: null }
+// The Epic a ledger proposes: its last row's that has one (epicOfRows), only when it is an identifier ->
+// { epic, reason }: `epic` null with `reason` null when no row names an Epic, with a reason when the Epic found is
+// refused. The refused value is never returned or echoed.
+function proposalOf(rows) {
+  const epic = epicOfRows(rows)
+  if (epic === null) return { epic: null, reason: null }
+  return EPIC_ID.test(epic) ? { epic, reason: null } : { epic: null, reason: NOT_AN_ID }
 }
 
-// `ledger-carry --doc`: the rows of one document -> { doc, rows, droppedDone, unknownStatusRows, unattributedRows, pointer, chained }
-// `pointer` is the document's own file name — the value of the `Earlier rows:` line a new document writes when
-// finished rows were left out or when this document is `chained`. It is never read from an `Earlier rows:` line the
-// document itself carries: the chain is "new document -> this document -> the one its own line names".
+// `latest-epic`: the Epic of the newest document that has a ledger with a row (its last row's Epic, normalised)
+// and that document's path -> { epic, doc, reason, skippedNames }; `epic` and `doc` null (and `reason` null) when no
+// document has one. An Epic that is not an identifier is not proposed: `epic` null, `doc` that document, `reason`
+// set — an older document's Epic never stands in for it. A row with no Epic cell cannot name an Epic, so the last
+// row that has one is used; `next.mjs` and the corpus measurement take the literal last row's Epic, and the two
+// differ only when that cell is empty.
+export function latestEpic(dir) {
+  const skips = newSkips()
+  let found = null
+  for (const d of scanHandoffDocs(dir, SCAN_CAP, skips)) {
+    const rows = rowsOf(d.text)
+    if (epicOfRows(rows) !== null) {
+      found = { ...proposalOf(rows), doc: d.file }
+      break
+    }
+  }
+  const skippedNames = skippedNamesOf(skips)
+  return found ? { epic: found.epic, doc: found.doc, reason: found.reason, skippedNames } : { epic: null, doc: null, reason: null, skippedNames }
+}
+
+const NO_SOURCE = { doc: null, rows: [], pointer: null, droppedDone: 0, unknownStatusRows: 0, unattributedRows: 0, chained: false }
+const NOTHING_PROPOSED = 'no Epic was given and none of the 20 newest handoff documents proposes one — nothing carried'
+
+// `ledger-carry --doc`: the rows of one document -> { epic, doc, rows, droppedDone, unknownStatusRows, unattributedRows,
+// pointer, chained, reason, skippedNames }. `epic` null (the caller gave none) carries the Epic this document's own
+// ledger proposes (proposalOf); when it proposes none, nothing is carried and `reason` says why. `pointer` is the
+// document's own file name — the value of the `Earlier rows:` line a new document writes when finished rows were left
+// out or when this document is `chained`. It is never read from an `Earlier rows:` line the document itself carries:
+// the chain is "new document -> this document -> the one its own line names". No folder is scanned: `skippedNames`
+// is 0.
 export function carryFromText(text, epic, file, opts) {
-  return { doc: path.resolve(file), ...carryLedger(rowsOf(text), epic, opts), pointer: path.basename(file), chained: hasEarlierRowsLine(text) }
+  const rows = rowsOf(text)
+  let want = epic === null ? null : stripEmphasis(epic)
+  let reason = null
+  if (want === null) ({ epic: want, reason } = proposalOf(rows))
+  if (want === null) reason ||= 'no Epic was given and the document proposes none — nothing carried'
+  const carried = want === null ? { rows: [], droppedDone: 0, unknownStatusRows: 0, unattributedRows: 0 } : carryLedger(rows, want, opts)
+  return { epic: want, doc: path.resolve(file), ...carried, pointer: path.basename(file), chained: hasEarlierRowsLine(text), reason, skippedNames: skippedNamesOf(newSkips()) }
 }
 
 // `ledger-carry --dir`: the newest document that has rows of this Epic, carried; no such document -> no rows and
-// `doc` null (a new ledger starts).
+// `doc` null (a new ledger starts). `epic` null (the caller gave none) carries the Epic `latest-epic` proposes; when it
+// proposes none, nothing is carried and `reason` says why.
 export function carryFromDir(dir, epic, opts) {
-  const want = stripEmphasis(epic)
-  for (const d of scanHandoffDocs(dir)) {
-    const rows = rowsOf(d.text)
-    if (rows.some((r) => r.epic === want)) return { doc: d.file, ...carryLedger(rows, want, opts), pointer: d.name, chained: hasEarlierRowsLine(d.text) }
+  let want = epic === null ? null : stripEmphasis(epic)
+  if (want === null) {
+    const p = latestEpic(dir)
+    if (p.epic === null) return { epic: null, ...NO_SOURCE, reason: p.reason || NOTHING_PROPOSED, skippedNames: p.skippedNames }
+    want = p.epic
   }
-  return { doc: null, rows: [], pointer: null, droppedDone: 0, unknownStatusRows: 0, unattributedRows: 0, chained: false }
+  const skips = newSkips()
+  for (const d of scanHandoffDocs(dir, SCAN_CAP, skips)) {
+    const rows = rowsOf(d.text)
+    if (rows.some((r) => r.epic === want)) {
+      return { epic: want, doc: d.file, ...carryLedger(rows, want, opts), pointer: d.name, chained: hasEarlierRowsLine(d.text), reason: null, skippedNames: skippedNamesOf(skips) }
+    }
+  }
+  return { epic: want, ...NO_SOURCE, reason: null, skippedNames: skippedNamesOf(skips) }
 }

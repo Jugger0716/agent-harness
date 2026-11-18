@@ -9,17 +9,25 @@ documents by hand for it. Its rows are what make the slice command convention be
 
 a. **Epic.** Run `node "{HANDOFF_JS}" latest-epic --dir "docs/harness/handoff"` → `epic` (the
    `Epic` of the last row that has one, in the newest handoff document whose ledger has such a
-   row) and `doc` (that document) — both `null` when none of the 20 newest handoff documents,
-   which is all the script reads, has one (a folder that does not exist yet included). Use `epic` as the proposal, without asking; there is
-   no age limit, so it may be months old. When `epic` is `null`, the Epic is item 2's `docs_path`
-   slug (kebab-case; `relevant` true), without asking. Ask the user only when `epic` is `null` and
-   there is no such slug, or when this session's work concretely names a different epic id — that id is then
-   the Epic.
-b. **Carry.** Run `node "{HANDOFF_JS}" ledger-carry --dir "docs/harness/handoff" --epic "<the
-   Epic>"` (`--doc "<path>"` in place of `--dir` names a known document; `doc` is then always
-   it). It picks the newest document whose ledger has rows of this Epic and returns `doc` (its
-   path, or `null`), `rows` (in document order), `pointer` (its file name), `droppedDone`,
-   `unknownStatusRows`, `unattributedRows` and `chained` (it carries an `Earlier rows:` line).
+   row), `doc` (that document) and `reason` — `epic` and `doc` are `null` when none of the 20
+   newest handoff documents, which is all the script reads, has one (a folder that does not exist
+   yet included); `epic` is also `null`, with `reason` saying why, when that value is not an
+   identifier. Use `epic` as the proposal, without asking; there is no age limit, so it may be
+   months old.
+   When `epic` is `null`, the Epic is item 2's `docs_path` slug (kebab-case; `relevant` true),
+   without asking; ask the user only when there is no such slug either. When this session's work
+   concretely names a different epic id, that id is the Epic and wins over all of these, without
+   asking.
+b. **Carry.** Run `node "{HANDOFF_JS}" ledger-carry --dir "docs/harness/handoff"`. Add
+   `--epic "<id>"` only when the Epic is an id this session's work names (a) — a value of this
+   session, never one copied from a document or from a script's output; without `--epic` the
+   script carries the Epic `latest-epic` proposes, and nothing when that is `null`.
+   (`--doc "<path>"` in place of `--dir` names a known document; `doc` is then always it, and
+   without `--epic` the Epic its own ledger proposes is carried.) It picks the newest document whose
+   ledger has rows of this Epic and returns `epic` (the Epic carried, or `null`), `doc` (its path,
+   or `null`), `rows` (in document order), `pointer` (its file name), `droppedDone`,
+   `unknownStatusRows`, `unattributedRows`, `chained` (it carries an `Earlier rows:` line),
+   `reason` (why nothing was carried) and `skippedNames`.
    Carried: **every unfinished row of this Epic** (`in-progress`, `blocked`, `planned`, and a
    `Status` outside the enum) **and only the most recent 5 finished ones** (`done`, `dropped`);
    `droppedDone` counts the finished rows left out. Rows of another Epic are never carried; a new
@@ -32,12 +40,14 @@ d. **The earlier rows.** When a source was found and `droppedDone` is greater th
    `pointer`, the source's file name. Never copy the source's own `Earlier rows:` line. With
    `droppedDone` 0 and `chained` false write no such line.
 e. **No source found** (`doc` is `null` — none of the 20 newest handoff documents has rows of this
-   Epic — or `rows` is empty, which with `--doc` means that document has none): start an empty
-   ledger. Not an error, but Step 4 must report it.
+   Epic, or no Epic was proposed — or `rows` is empty, which with `--doc` means that document has
+   none): start an empty ledger. Not an error, but Step 4 must report it.
 f. **`unknownStatusRows` above 0:** those rows were carried as unfinished; keep each `Status` as
    written, guess none, and name their `Slice` in Step 4's report.
 g. **`unattributedRows` above 0:** rows with an empty `Epic` cell were taken as this Epic's,
    `epic` filled in; name their `Slice` in Step 4's report.
+h. **`skippedNames.count` above 0** (either command): that many files of the folder were not
+   read, and the newest document may be among them; say so, with its `reason`, in Step 4's report.
 
 **Progress Ledger — column contract**
 

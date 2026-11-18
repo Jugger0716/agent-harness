@@ -2346,10 +2346,11 @@ const harnessStateCases = [
   {
     id: 'harness-state-usage-errors',
     run: async () => {
-      const noBranch = cli('harness-state', '--cwd', FIX)
-      assert.equal(noBranch.status, 2)
-      assert.equal(noBranch.stdout, '')
-      assert.match(noBranch.stderr, /--branch/)
+      // an empty --branch is a usage problem (no --branch at all is the current branch of --cwd: its own case)
+      const emptyBranch = cli('harness-state', '--branch', '', '--cwd', FIX)
+      assert.equal(emptyBranch.status, 2)
+      assert.equal(emptyBranch.stdout, '')
+      assert.match(emptyBranch.stderr, /--branch/)
       const gone = cli('harness-state', '--branch', 'main', '--cwd', path.join(FIX, 'no-such-folder'))
       assert.equal(gone.status, 1)
       assert.equal(gone.stdout, '')
@@ -3243,7 +3244,7 @@ const stateContractCases = [
       const text = readText('templates', 'handoff', 'generate.md')
       const step1 = between(text, '### Step 1', '### Step 2')
       assert.match(step1, /node "\{HANDOFF_JS\}" git-state --cwd /)
-      assert.match(step1, /node "\{HANDOFF_JS\}" harness-state --branch /)
+      assert.match(step1, /node "\{HANDOFF_JS\}" harness-state --cwd "\."/)
       // generate is read without resume.md: the script path and the exit rule are in its load (SKILL.md, always loaded,
       // states them once and generate.md defers to it); the no-fallback rule for git is generate's own
       const load = readText('skills', 'handoff', 'SKILL.md') + text
@@ -3319,7 +3320,8 @@ const stateContractCases = [
     run: async () => {
       const text = readText('templates', 'handoff', 'resume.md')
       const step35 = between(text, '### Step 3.5', '### Step 4')
-      assert.match(step35, /node "\{HANDOFF_JS\}" harness-state --branch "[^"]+" --cwd "\."/)
+      assert.match(step35, /node "\{HANDOFF_JS\}" harness-state --cwd "\."/)
+      assert.match(flatten(step35), /current branch of `--cwd`[\s\S]*?not `drift`'s `branch\.current`/)
       assert.ok(step35.includes('`relevant`'))
       // not relevant: no re-entry hint and no Docs tier
       assert.match(step35, /not relevant[^\n]*\n?[^\n]*(re-entry|`\/harness`)/i)
@@ -3732,13 +3734,15 @@ function cliOk(...args) {
 
 const carryDoc = (file, epic) => cliOk('ledger-carry', '--doc', file, '--epic', epic)
 const carryDir = (dir, epic) => cliOk('ledger-carry', '--dir', dir, '--epic', epic)
+const carryDocNoEpic = (file) => cliOk('ledger-carry', '--doc', file)
 const latestEpic = (dir) => cliOk('latest-epic', '--dir', dir)
+const NO_EPIC = { epic: null, doc: null, reason: null, skippedNames: { count: 0, reason: null } }
 
 // A handoff document whose Progress Ledger holds `rows` (the `row` helper above), plus any text after the table.
 const ledgerOf = (rows, after = '') => mk([['Next Steps', '1. Carry on.'], ['Progress Ledger', table(rows) + after]])
 const finished = (n, from = 1, epic) => Array.from({ length: n }, (_, i) => row(`d${from + i}`, 'done', epic))
 const sliceList = (out) => out.rows.map((r) => r.slice)
-const NOTHING = { doc: null, rows: [], pointer: null, droppedDone: 0, unknownStatusRows: 0, unattributedRows: 0, chained: false }
+const NOTHING = (epic) => ({ epic, doc: null, rows: [], pointer: null, droppedDone: 0, unknownStatusRows: 0, unattributedRows: 0, chained: false, reason: null, skippedNames: { count: 0, reason: null } })
 
 const ledgerCarryCases = [
   {
@@ -4091,11 +4095,12 @@ const ledgerCarryCases = [
           assert.equal(r.stdout, '')
           assert.ok(r.stderr.trim().length > 0)
         }
-        // a usage problem: exit 2 — both modes together, neither mode, no Epic, an empty Epic, a folder that is a file
+        // a usage problem: exit 2 — both modes together, neither mode, an empty Epic, a blank one
+        // (no --epic at all is not one: the script carries the Epic the document proposes)
+        assert.equal(carryDocNoEpic(f).epic, 'ep-a')
         const usage = [
           ['--doc', f, '--dir', dir, '--epic', 'ep-a'],
           ['--epic', 'ep-a'],
-          ['--doc', f],
           ['--doc', f, '--epic', ''],
           ['--dir', dir, '--epic', '  '],
         ]
@@ -4127,11 +4132,11 @@ const ledgerCarryCases = [
         assert.equal(path.basename(b.doc), '2026-03-03-other.md')
         same(sliceList(b), ['b1'])
         // an Epic no document holds, a folder with no document, a folder that does not exist: nothing, and no error
-        same(carryDir(dir, 'ep-z'), NOTHING)
+        same(carryDir(dir, 'ep-z'), NOTHING('ep-z'))
         const empty = path.join(dir, 'empty')
         fs.mkdirSync(empty)
-        same(carryDir(empty, 'ep-a'), NOTHING)
-        same(carryDir(path.join(dir, 'no-such-folder'), 'ep-a'), NOTHING)
+        same(carryDir(empty, 'ep-a'), NOTHING('ep-a'))
+        same(carryDir(path.join(dir, 'no-such-folder'), 'ep-a'), NOTHING('ep-a'))
         // `--doc` mode names the document it was given
         assert.equal(path.basename(carryDoc(path.join(dir, '2026-03-01-first.md'), 'ep-a').doc), '2026-03-01-first.md')
       })
@@ -4157,8 +4162,8 @@ const ledgerCarryCases = [
         const pad = (n) => String(n).padStart(2, '0')
         // 21 handoff documents: the 20 newest have no ledger, the oldest has one — it is out of reach
         for (let i = 1; i <= 21; i++) put(dir, `2026-01-${pad(i)}-d.md`, i === 1 ? ledgerOf([row('s1', 'in-progress', 'ep-old')]) : mk([['Next Steps', '1. x']]))
-        same(latestEpic(dir), { epic: null, doc: null })
-        same(carryDir(dir, 'ep-old'), NOTHING)
+        same(latestEpic(dir), NO_EPIC)
+        same(carryDir(dir, 'ep-old'), NOTHING('ep-old'))
         // other files do not use up the 20: 25 newer notes (first line is not `# HANDOFF —`), a folder named like a
         // document and a text file are all skipped, and the older handoff document is found
         const dir2 = path.join(dir, 'second')
@@ -4187,7 +4192,8 @@ const ledgerCarryCases = [
         const out = latestEpic(dir)
         assert.equal(out.epic, 'ep-b')
         assert.equal(out.doc, path.resolve(dir, '2026-04-02-second.md'))
-        assert.equal(Object.keys(out).sort().join(), 'doc,epic')
+        assert.equal(Object.keys(out).sort().join(), 'doc,epic,reason,skippedNames')
+        assert.equal(out.reason, null)
       })
     },
   },
@@ -4208,12 +4214,12 @@ const ledgerCarryCases = [
     run: async () => {
       await inTmp((dir) => {
         // no document, a folder that is not there (the first handoff of a project), documents without a ledger
-        same(latestEpic(dir), { epic: null, doc: null })
-        same(latestEpic(path.join(dir, 'no-such-folder')), { epic: null, doc: null })
+        same(latestEpic(dir), NO_EPIC)
+        same(latestEpic(path.join(dir, 'no-such-folder')), NO_EPIC)
         put(dir, '2026-04-01-single.md', mk([['Next Steps', '1. A task with no ledger.']]))
         put(dir, '2026-04-02-notes.md', '# Notes\n')
         put(dir, 'readme.txt', 'x')
-        same(latestEpic(dir), { epic: null, doc: null })
+        same(latestEpic(dir), NO_EPIC)
         // a folder that is a file is an input problem
         const r = cli('latest-epic', '--dir', path.join(dir, 'readme.txt'))
         assert.equal(r.status, 1)
@@ -4456,17 +4462,19 @@ const ledgerContractCases = [
       const flat = item5.replace(/\s+/g, ' ')
       // the model no longer reads, scans or ranks earlier documents: the two scripts do
       assert.match(item5, /node "\{HANDOFF_JS\}" latest-epic --dir "[^"]+"/)
-      assert.match(item5, /node "\{HANDOFF_JS\}" ledger-carry --dir "[^"]+" --epic "[^"]+"/)
+      assert.match(item5, /node "\{HANDOFF_JS\}" ledger-carry --dir "[^"]+"`/)
       assert.ok(!/newest-first/i.test(item5) && !/\b90 days\b/.test(item5) && !/capped at/i.test(item5), 'no scan instruction (newest-first, a cap, 90 days) is left for the model')
       assert.ok(!/Confirm the Epic identifier first|carry it forward unchanged from the source document/.test(flat), 'the circular Epic rule is gone')
       assert.match(flat, /never (open|read|scan)[^.]*(by hand|yourself)|not (open|read|scan)[^.]*by hand/i)
       // a script that fails is shown and stops the step: the ledger file runs under SKILL.md's Helper script rule, which says so
       assert.match(flat, /SKILL\.md`'s[ >]*\*\*Helper script\*\*[ >]*rule applies/)
       assert.match(flatten(readText('skills', 'handoff', 'SKILL.md')), /non-zero exit[^.]*stderr verbatim and stop/)
-      // the Epic is proposed from the previous ledger; the user is asked only when there is none or the session names another
+      // the Epic is proposed from the previous ledger; the user is asked only when there is none (and no slug), and an id
+      // the session names wins without a question
       const a = between(item5, 'a. **', 'b. **')
       assert.match(a, /proposal/i)
-      assert.match(a.replace(/\s+/g, ' '), /only when[^.]*`null`[^.]*(different|another)/i)
+      assert.match(a.replace(/\s+/g, ' '), /`null`[^.]*ask the user only when[^.]*no such slug/i)
+      assert.match(a.replace(/\s+/g, ' '), /(different|another) epic id[^.]*wins[^.]*without asking/i)
       // the script's reach is stated as a fact about the script, so a `null` is not read as "no document anywhere"
       assert.match(a.replace(/\s+/g, ' '), /none of the 20 newest handoff documents, which is all the script reads/)
     },
@@ -4481,7 +4489,8 @@ const ledgerContractCases = [
       assert.match(a, /last row that has one/)
       // no ledger to propose from: the task's `docs_path` slug is the new Epic (no question); only without one is the user asked
       assert.match(a, /`null`[^.]*`docs_path` slug[^.]*without asking/)
-      assert.match(a, /only when[^.]*(no `docs_path`|no such slug)[^.]*(different|another)/i)
+      assert.match(a, /only when[^.]*(no `docs_path`|no such slug)/i)
+      assert.match(a, /(different|another) epic id[^.]*wins[^.]*without asking/i)
       // the missing age limit is a stated risk, and what the user names wins
       assert.match(a, /no age limit/)
       assert.match(a, /(months|long ago)/)
@@ -4824,7 +4833,7 @@ const selectCases = [
         put(dir, '2026-11-19-x-2.md', selDoc({ title: 'X again' }), at(19, 9))
         put(dir, '2026-11-19-y.md', selDoc({ title: 'Y' }), at(19, 12))
         const out = listOut(dir)
-        same(Object.keys(out), ['docs'])
+        same(Object.keys(out), ['docs', 'skippedNames'])
         same(baseNames(out.docs), ['2026-11-19-x-2.md', '2026-11-19-x.md', '2026-11-19-y.md', '2026-11-18-older-day.md'])
         same(Object.keys(out.docs[0]).sort(), ['branch', 'date', 'head', 'mtimeMs', 'path', 'slug', 'title'])
         // the header values, the slug from the file name, the folder as given with `/`
@@ -4882,8 +4891,8 @@ const selectCases = [
     id: 'list-empty-and-missing-folder-and-errors',
     run: async () => {
       await inTmp((dir) => {
-        same(listOut(dir), { docs: [] })
-        same(listOut(path.join(dir, 'no-such-folder')), { docs: [] })
+        same(listOut(dir), { docs: [], skippedNames: { count: 0, reason: null } })
+        same(listOut(path.join(dir, 'no-such-folder')), { docs: [], skippedNames: { count: 0, reason: null } })
         const file = put(dir, 'readme.txt', 'x')
         const r = cli('list', '--dir', file)
         assert.equal(r.status, 1)
@@ -4906,7 +4915,7 @@ const selectCases = [
         put(dir, '2026-11-18-b.md', selDoc({ title: 'B', date: '2026-11-18' }), at(31))
         // nothing a git call could answer: the recorded commit is not in this clone, and the branch is not the current one
         const out = latestIn(r, dir, 'main', r.dir)
-        same(Object.keys(out).sort(), ['candidates', 'doc', 'needsChoice'])
+        same(Object.keys(out).sort(), ['candidates', 'doc', 'needsChoice', 'skippedNames'])
         assert.equal(out.needsChoice, false)
         assert.equal(out.doc, `${slashed(dir)}/2026-11-19-new.md`)
         same(out.candidates, [{ path: out.doc, branch: 'feature/z', head: 'c'.repeat(40), title: 'New' }])
@@ -4919,10 +4928,10 @@ const selectCases = [
       await withTemp(undefined, async (r) => {
         const dir = path.join(r.root, 'handoffs')
         fs.mkdirSync(dir)
-        same(latestIn(r, dir, 'main', r.dir), { doc: null, candidates: [], needsChoice: false })
-        same(latestIn(r, path.join(r.root, 'no-such-folder'), 'main', r.dir), { doc: null, candidates: [], needsChoice: false })
+        same(latestIn(r, dir, 'main', r.dir), { doc: null, candidates: [], needsChoice: false, skippedNames: { count: 0, reason: null } })
+        same(latestIn(r, path.join(r.root, 'no-such-folder'), 'main', r.dir), { doc: null, candidates: [], needsChoice: false, skippedNames: { count: 0, reason: null } })
         put(dir, '2026-11-19-notes.md', '# Notes\n')
-        same(latestIn(r, dir, 'main', r.dir), { doc: null, candidates: [], needsChoice: false })
+        same(latestIn(r, dir, 'main', r.dir), { doc: null, candidates: [], needsChoice: false, skippedNames: { count: 0, reason: null } })
       })
     },
   },
@@ -5178,8 +5187,10 @@ const selectCases = [
     id: 'latest-input-and-usage-errors',
     run: async () => {
       await inTmp((dir) => {
-        assert.equal(cli('latest', '--dir', dir).status, 2)
         assert.equal(cli('latest', '--branch', 'main').status, 2)
+        // no --branch is not a usage problem: outside a git work tree the current branch is `n/a`
+        const noBranch = cliEnv(noRepoAbove(dir), 'latest', '--dir', dir, '--cwd', dir)
+        assert.equal(noBranch.status, 0, noBranch.stderr)
         assert.equal(cli('latest', '--dir', dir, '--branch', '').status, 2)
         assert.equal(cli('latest', '--dir', '', '--branch', 'main').status, 2)
         const r = cli('latest', '--dir', dir, '--branch', 'main', '--cwd', path.join(dir, 'no-such-folder'))
@@ -5390,7 +5401,7 @@ const selectContractCases = [
       const text = readText('templates', 'handoff', 'resume.md')
       const step1 = between(text, '### Step 1', '### Step 2')
       const flat = flatten(step1)
-      assert.match(step1, /node "\{HANDOFF_JS\}" latest --dir "docs\/harness\/handoff" --branch "[^"]+" --cwd "\."/)
+      assert.match(step1, /node "\{HANDOFF_JS\}" latest --dir "docs\/harness\/handoff" --cwd "\."/)
       assert.ok(step1.includes('needsChoice'), 'the flag is named')
       assert.match(flat, /git-state/, 'the current branch comes from git-state')
       assert.match(flat, /candidates/)
@@ -5642,6 +5653,264 @@ const dietContractCases = [
   },
 ]
 
+// ---- F1: no value read from a document, a file name or git reaches a command line the contracts compose -----------------
+//
+// The shell expands `$(…)` inside double quotes BEFORE `node` starts, so a check inside the script after the fact cannot
+// help. These cases hold the script to the rules that keep such a value off the command line: an Epic is proposed only
+// when it is an identifier, `ledger-carry` and `harness-state`/`latest` take the Epic and the branch themselves, and a
+// file whose name holds a character outside `A-Z a-z 0-9 . _ -` is never listed (and is counted, never silently).
+
+const UNSAFE_EPIC = 'x$(echo pwned > m)'
+const UNSAFE_NAMES = ['2026-11-19-$(x).md', 'a b.md', 'a;b.md']
+const skippedNone = { count: 0, reason: null }
+
+const commandLineSafetyCases = [
+  {
+    id: 'latest-epic-refuses-an-epic-that-is-not-an-identifier',
+    run: async () => {
+      await inTmp((dir) => {
+        put(dir, '2026-04-01-old.md', ledgerOf([row('a1', 'in-progress', 'ep-a')]))
+        const f = put(dir, '2026-04-02-new.md', ledgerOf([row('b1', 'in-progress', UNSAFE_EPIC)]))
+        const r = cli('latest-epic', '--dir', dir)
+        assert.equal(r.status, 0, r.stderr)
+        const out = JSON.parse(r.stdout)
+        // the newest ledger's Epic is refused, not replaced by an older one, and the value is never echoed
+        assert.equal(out.epic, null)
+        assert.equal(path.basename(out.doc), path.basename(f))
+        assert.ok(typeof out.reason === 'string' && /identifier/.test(out.reason), `a reason: ${out.reason}`)
+        assert.ok(!r.stdout.includes('$(') && !r.stdout.includes('pwned'), 'the refused value is not in the output')
+        // what is an identifier: a letter or digit, then letters, digits, `.`, `_`, `-`; at most 80 characters
+        const verdict = (epic) => {
+          put(dir, '2026-04-02-new.md', ledgerOf([row('b1', 'in-progress', epic)]))
+          return latestEpic(dir).epic
+        }
+        for (const ok of ['ep-a', 'v9.1_x', 'A1', 'a'.repeat(80)]) assert.equal(verdict(ok), ok, ok)
+        for (const bad of ['a b', 'épique', 'a;b', '-lead', '.hidden', 'a'.repeat(81), 'a`b', 'a"b', "a'b", 'a$b', 'a\\|b', 'a&b']) {
+          assert.equal(verdict(bad), null, JSON.stringify(bad))
+        }
+        // a safe Epic has no reason
+        put(dir, '2026-04-02-new.md', ledgerOf([row('b1', 'in-progress', 'ep-b')]))
+        same(latestEpic(dir), { epic: 'ep-b', doc: latestEpic(dir).doc, reason: null, skippedNames: skippedNone })
+      })
+    },
+  },
+  {
+    id: 'ledger-carry-dir-without-epic-uses-the-latest-epic-proposal',
+    run: async () => {
+      await inTmp((dir) => {
+        put(dir, '2026-05-01-a.md', ledgerOf([row('a1', 'in-progress', 'ep-a'), row('a2', 'done', 'ep-a')]))
+        put(dir, '2026-05-02-b.md', ledgerOf([row('a1', 'done', 'ep-a'), row('b1', 'in-progress', 'ep-b'), row('b2', 'planned', 'ep-b')]))
+        // no --epic: the Epic `latest-epic` proposes is carried, exactly as if it had been given
+        const proposed = latestEpic(dir).epic
+        assert.equal(proposed, 'ep-b')
+        const implicit = cliOk('ledger-carry', '--dir', dir)
+        const explicit = carryDir(dir, 'ep-b')
+        same(implicit, explicit)
+        assert.equal(implicit.epic, 'ep-b')
+        assert.equal(implicit.reason, null)
+        same(sliceList(implicit), ['b1', 'b2'])
+        // a session's own Epic still wins when it is given, and is not checked against a pattern (a space or a
+        // non-ASCII id must not make generate stop: the value is the session's, not a document's)
+        assert.equal(carryDir(dir, 'ep-a').epic, 'ep-a')
+        for (const sessionEpic of ['my epic', '에픽-하나']) {
+          const out = carryDir(dir, sessionEpic)
+          assert.equal(out.epic, sessionEpic)
+          same(out.rows, [])
+        }
+        // --doc without --epic: the Epic that document's own ledger proposes (its last row's)
+        const doc = cliOk('ledger-carry', '--doc', path.join(dir, '2026-05-01-a.md'))
+        assert.equal(doc.epic, 'ep-a')
+        same(sliceList(doc), ['a1', 'a2'])
+        // nothing to propose: no rows, no Epic, and a reason
+        const empty = path.join(dir, 'empty')
+        fs.mkdirSync(empty)
+        put(empty, '2026-05-03-single.md', mk([['Next Steps', '1. A task with no ledger.']]))
+        const none = cliOk('ledger-carry', '--dir', empty)
+        assert.equal(none.epic, null)
+        assert.equal(none.doc, null)
+        same(none.rows, [])
+        assert.ok(typeof none.reason === 'string' && none.reason.length > 0)
+      })
+    },
+  },
+  {
+    id: 'ledger-carry-dir-with-an-unsafe-latest-epic-gives-no-rows-and-a-reason',
+    run: async () => {
+      await inTmp((dir) => {
+        put(dir, '2026-05-01-a.md', ledgerOf([row('a1', 'in-progress', 'ep-a')]))
+        const evil = put(dir, '2026-05-02-b.md', ledgerOf([row('b1', 'in-progress', UNSAFE_EPIC)]))
+        for (const args of [['--dir', dir], ['--doc', evil]]) {
+          const r = cli('ledger-carry', ...args)
+          assert.equal(r.status, 0, r.stderr)
+          const out = JSON.parse(r.stdout)
+          // the refused Epic is not replaced by an older one: nothing is carried, and the reason says why
+          assert.equal(out.epic, null, args[0])
+          same(out.rows, [])
+          assert.ok(typeof out.reason === 'string' && /identifier/.test(out.reason), `${args[0]}: ${out.reason}`)
+          assert.ok(!r.stdout.includes('$(') && !r.stdout.includes('pwned'), `${args[0]}: the refused value is not in the output`)
+        }
+        // the session can still name the Epic it works on
+        same(sliceList(carryDir(dir, 'ep-a')), ['a1'])
+      })
+    },
+  },
+  {
+    id: 'list-latest-and-latest-epic-report-a-skipped-file-name',
+    run: async () => {
+      await withTemp(undefined, async (r) => {
+        const dir = path.join(r.root, 'handoffs')
+        fs.mkdirSync(dir)
+        // an older safe document, and the newest day's ONLY documents are files with names outside the safe set
+        put(dir, '2026-11-18-old.md', ledgerOf([row('a1', 'in-progress', 'ep-a')]), at(18))
+        for (const name of UNSAFE_NAMES) put(dir, name, ledgerOf([row('n1', 'in-progress', 'ep-new')]).replace('2026-02-01', '2026-11-19'), at(19))
+        // a file that is not Markdown and a folder are not counted, whatever their names
+        put(dir, 'notes a b.txt', 'x')
+        fs.mkdirSync(path.join(dir, 'x y.md'))
+        const check = (out, what) => {
+          assert.equal(out.skippedNames.count, UNSAFE_NAMES.length, `${what}: the count`)
+          assert.ok(typeof out.skippedNames.reason === 'string' && out.skippedNames.reason.length > 0, `${what}: a reason`)
+          const text = JSON.stringify(out)
+          for (const bad of ['$(', 'a b', 'a;b']) assert.ok(!text.includes(bad), `${what}: no skipped name in the output (${bad})`)
+        }
+        const list = runIn(r, 'list', '--dir', dir)
+        same(baseNames(list.docs), ['2026-11-18-old.md'])
+        check(list, 'list')
+        // `latest` neither picks a skipped file nor stays silent about it
+        const latest = runIn(r, 'latest', '--dir', dir, '--cwd', r.dir)
+        assert.equal(latest.doc, `${slashed(dir)}/2026-11-18-old.md`)
+        check(latest, 'latest')
+        const epic = runIn(r, 'latest-epic', '--dir', dir)
+        assert.equal(epic.epic, 'ep-a')
+        check(epic, 'latest-epic')
+        const carry = runIn(r, 'ledger-carry', '--dir', dir)
+        assert.equal(path.basename(carry.doc), '2026-11-18-old.md')
+        check(carry, 'ledger-carry --dir')
+        // a folder without such a name reports none
+        for (const name of UNSAFE_NAMES) fs.rmSync(path.join(dir, name))
+        same(runIn(r, 'list', '--dir', dir).skippedNames, skippedNone)
+        same(runIn(r, 'latest', '--dir', dir, '--cwd', r.dir).skippedNames, skippedNone)
+        same(runIn(r, 'latest-epic', '--dir', dir).skippedNames, skippedNone)
+      })
+    },
+  },
+  {
+    id: 'harness-state-and-latest-default-the-branch-from-the-cwd',
+    run: async () => {
+      const state = (dir, s) => {
+        fs.mkdirSync(path.join(dir, '.harness'), { recursive: true })
+        fs.writeFileSync(path.join(dir, '.harness', 'state.json'), JSON.stringify(s))
+      }
+      // on a branch: the state of that branch is relevant without --branch, another branch's is not
+      await withTemp({ commits: [{ files: { 'a.txt': '1\n' } }, { files: { 'a.txt': '2\n' } }] }, async (r) => {
+        state(r.dir, { ...STATE, branch: 'main' })
+        const s = runIn(r, 'harness-state', '--cwd', r.dir)
+        assert.equal(s.relevant, true, s.reason)
+        same(s, runIn(r, 'harness-state', '--branch', 'main', '--cwd', r.dir))
+        state(r.dir, { ...STATE, branch: 'other' })
+        const o = runIn(r, 'harness-state', '--cwd', r.dir)
+        assert.equal(o.relevant, false)
+        assert.ok(o.reason.includes('main'), `the reason names the current branch: ${o.reason}`)
+        // latest: two same-day documents on the current branch, the later commit wins — as with --branch main
+        const dir = path.join(r.root, 'handoffs')
+        fs.mkdirSync(dir)
+        const [c1, c2] = r.shas
+        put(dir, '2026-11-19-a.md', selDoc({ title: 'A', branch: 'main', head: c2 }), at(19, 9))
+        put(dir, '2026-11-19-b.md', selDoc({ title: 'B', branch: 'main', head: c1 }), at(19, 12))
+        const implicit = runIn(r, 'latest', '--dir', dir, '--cwd', r.dir)
+        assert.equal(implicit.doc, `${slashed(dir)}/2026-11-19-a.md`)
+        same(implicit, runIn(r, 'latest', '--dir', dir, '--branch', 'main', '--cwd', r.dir))
+        // a given --branch is still honoured (tests and older callers)
+        assert.equal(runIn(r, 'latest', '--dir', dir, '--branch', 'other', '--cwd', r.dir).needsChoice, true)
+      })
+      // a detached HEAD is `(detached)`, which never matches a recorded branch
+      await withTemp({ detached: true }, async (r) => {
+        state(r.dir, { ...STATE, branch: 'main' })
+        const s = runIn(r, 'harness-state', '--cwd', r.dir)
+        assert.equal(s.relevant, false)
+        assert.ok(s.reason.includes('(detached)'), s.reason)
+      })
+      // outside a git work tree the branch is `n/a`
+      await withTemp(undefined, async (r) => {
+        state(r.dir, { ...STATE, branch: 'main' })
+        const s = runIn(r, 'harness-state', '--cwd', r.dir)
+        assert.equal(s.relevant, false)
+        assert.ok(s.reason.includes('n/a'), s.reason)
+        const dir = path.join(r.root, 'handoffs')
+        fs.mkdirSync(dir)
+        put(dir, '2026-11-19-a.md', selDoc({ title: 'A', branch: 'n/a' }), at(19, 9))
+        put(dir, '2026-11-19-b.md', selDoc({ title: 'B', branch: 'n/a' }), at(19, 12))
+        assert.equal(runIn(r, 'latest', '--dir', dir, '--cwd', r.dir).needsChoice, true)
+      }, true)
+    },
+  },
+  {
+    id: 'handoff-contracts-put-no-document-derived-value-on-a-command-line',
+    run: async () => {
+      // every helper command the four contract files compose, whitespace collapsed (a command may wrap)
+      const commands = []
+      for (const f of HANDOFF_CONTRACT_FILES) {
+        const flat = flatten(readText(...f))
+        for (const m of flat.matchAll(/node "\{HANDOFF_JS\}" [a-z-]+[^`]*/g)) commands.push({ file: f.join('/'), text: m[0].trim() })
+      }
+      assert.ok(commands.length >= 12, `the commands are found: ${commands.length}`)
+      // each value placeholder is a session value, a fixed literal or a value the script makes safe; nothing else
+      const allowed = new Map([
+        ['--doc "<that document>"', 'a resumed document or a `list` path: a fixed folder plus a safe-charset file name'],
+        ['--doc "<the document located in Step 1>"', 'the session\'s own <path> argument, or `latest`\'s path: a fixed folder plus a safe-charset name'],
+        ['--doc "<path>"', 'a document the session already knows (the resumed one)'],
+        ['--epic "<id>"', 'an epic id this session\'s work names'],
+        ['--slug "<slug>"', 'the model\'s own English summary of the title'],
+        ['--date "<today, YYYY-MM-DD>"', 'the session\'s date'],
+      ])
+      for (const c of commands) {
+        assert.ok(!/--branch\b/.test(c.text), `${c.file}: no command line carries --branch: ${c.text}`)
+        for (const m of c.text.matchAll(/(--[a-z-]+) "(<[^"]*>)"/g)) {
+          const key = `${m[1]} "${m[2]}"`
+          assert.ok(allowed.has(key), `${c.file}: an unclassified placeholder on a command line: ${key}`)
+        }
+        for (const m of c.text.matchAll(/(--[a-z-]+) "([^"<]*)"/g)) {
+          assert.ok(['--dir docs/harness/handoff', '--cwd .', '--root .'].includes(`${m[1]} ${m[2]}`), `${c.file}: a literal value: ${m[0]}`)
+        }
+      }
+      // the carry command passes no Epic of its own: the script takes the one latest-epic proposes
+      assert.ok(commands.some((c) => /^node "\{HANDOFF_JS\}" ledger-carry --dir "docs\/harness\/handoff"$/.test(c.text)), 'ledger-carry --dir without --epic')
+      assert.ok(commands.some((c) => /^node "\{HANDOFF_JS\}" harness-state --cwd "\."$/.test(c.text)), 'harness-state without --branch')
+      assert.ok(commands.some((c) => /^node "\{HANDOFF_JS\}" latest --dir "docs\/harness\/handoff" --cwd "\."$/.test(c.text)), 'latest without --branch')
+    },
+  },
+  {
+    id: 'ledger-contract-takes-the-carry-epic-from-the-session-only',
+    run: async () => {
+      const a = flatten(between(ledgerText(), 'a. **', 'b. **'))
+      const b = flatten(between(ledgerText(), 'b. **', 'c. **'))
+      // latest-epic's refusal is a state the contract knows: `reason` explains a `null`
+      assert.match(a, /`epic`[^.]*`null`[^.]*`reason`/)
+      assert.match(a, /identifier/)
+      // --epic is added only for an id this session's work names; a value from a document or a script's output is never put on it
+      assert.match(b, /`--epic "<id>"` only when[^.]*this session/)
+      assert.match(b, /never[^.]*(copied|copy)[^.]*(document|script's output)/)
+      assert.match(b, /without `--epic`[^.]*(proposes|proposal)/)
+      // the asked-or-not question has one answer: a different id the session names wins without asking
+      assert.match(a, /(names|named)[^.]*wins[^.]*without asking/)
+      assert.ok(!/— that id is then the Epic/.test(a), 'the ambiguous clause is gone')
+    },
+  },
+  {
+    id: 'list-and-resume-contracts-report-the-skipped-file-names',
+    run: async () => {
+      const list = flatten(between(readText('skills', 'handoff', 'SKILL.md'), '## Sub-command: list', '## Non-Goals'))
+      assert.match(list, /`skippedNames(\.count)?`/)
+      assert.match(list, /above 0|> 0/)
+      const step1 = flatten(between(readText('templates', 'handoff', 'resume.md'), '### Step 1', '### Step 2'))
+      assert.match(step1, /`skippedNames`/)
+      assert.match(step1, /above 0|> 0/)
+      assert.match(step1, /not (be )?the newest/)
+      const ledger = flatten(ledgerText())
+      assert.match(ledger, /`skippedNames`/)
+    },
+  },
+]
+
 // ---- the runner's own exit codes ----------------------------------------------------------------------------
 
 function runnerExit(casesSource) {
@@ -5726,5 +5995,6 @@ export const cases = [
   ...selectContractCases,
   ...latestDiffCases,
   ...dietContractCases,
+  ...commandLineSafetyCases,
   ...runnerCases,
 ]

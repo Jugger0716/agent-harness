@@ -81,13 +81,23 @@ function cmdGitState(opts) {
   return gitState(path.resolve(opts.cwd))
 }
 
+// The current branch of a folder, as `git-state` reports it: its `branch`, `n/a` outside a git work tree. `harness-state`
+// and `latest` take it themselves when --branch is not given, so a branch name never has to pass through a command line
+// the model composes (a branch name may hold `$(…)`, which a shell expands inside double quotes).
+function currentBranch(cwd) {
+  const s = gitState(cwd)
+  return s.isGit && s.branch ? s.branch : 'n/a'
+}
+
 // Whether the folder's `.harness/state.json` belongs to the session's current branch and is unfinished
-// (lib/git.mjs). Read-only. --cwd defaults to the folder the command runs in.
+// (lib/git.mjs). Read-only. --cwd defaults to the folder the command runs in; --branch (tests, older callers) defaults
+// to the current branch of --cwd.
 function cmdHarnessState(opts) {
   if (opts.branch === '') throw new UsageError('harness-state: --branch must not be empty')
   const cwd = opts.cwd === undefined ? process.cwd() : opts.cwd
   requireFolder(cwd, '--cwd')
-  return harnessState(path.resolve(cwd), opts.branch)
+  const dir = path.resolve(cwd)
+  return harnessState(dir, opts.branch ?? currentBranch(dir))
 }
 
 // How the git state of --cwd (or of the worktree the document recorded) compares with what the
@@ -100,15 +110,19 @@ function cmdDrift(opts) {
 
 // The rows of the Progress Ledger a new handoff starts from (lib/ledger.mjs): every unfinished row of one Epic
 // and the most recent five finished ones, from ONE document (--doc: one the caller already knows) or from the
-// newest document in a folder that holds rows of that Epic (--dir). Exactly one of the two is given; --epic is
-// read with one `**`/`__` pair and then one backtick pair removed, like the cells. The output also says which
-// document the rows came from (`doc`, null when none held the Epic), its file name (`pointer`), how many finished
-// rows were left out (`droppedDone`), how many carried rows had a Status outside the enum (`unknownStatusRows`) or an
-// empty Epic cell (`unattributedRows`), and whether that document itself carries an `Earlier rows:` line (`chained`).
+// newest document in a folder that holds rows of that Epic (--dir). Exactly one of the two is given. --epic is
+// optional: given, it is read with one `**`/`__` pair and then one backtick pair removed, like the cells, and not
+// checked against a pattern (it is the session's own value); left out, the script takes the Epic `latest-epic`
+// proposes (--dir) or the one the document's own ledger proposes (--doc) — an identifier only, else nothing is carried
+// and `reason` says why — so an Epic read from a document never has to be copied onto a command line. The output
+// also says which Epic was carried (`epic`), which document the rows came from (`doc`, null when none held the Epic),
+// its file name (`pointer`), how many finished rows were left out (`droppedDone`), how many carried rows had a Status
+// outside the enum (`unknownStatusRows`) or an empty Epic cell (`unattributedRows`), whether that document itself
+// carries an `Earlier rows:` line (`chained`), and how many file names the scan left out (`skippedNames`).
 function cmdLedgerCarry(opts) {
   const hasDoc = opts.doc !== undefined
   if (hasDoc === (opts.dir !== undefined)) throw new UsageError('ledger-carry: give exactly one of --doc and --dir')
-  const epic = stripEmphasis(opts.epic)
+  const epic = opts.epic === undefined ? null : stripEmphasis(opts.epic)
   if (epic === '') throw new UsageError('ledger-carry: --epic must not be empty')
   if (hasDoc) return carryFromText(readDoc(opts.doc), epic, opts.doc)
   if (opts.dir === '') throw new UsageError('ledger-carry: --dir must not be empty')
@@ -116,7 +130,8 @@ function cmdLedgerCarry(opts) {
 }
 
 // The Epic a new handoff proposes (lib/ledger.mjs): the Epic of the last ledger row of the newest handoff
-// document in a folder that has one, and that document's path; null and null when there is none.
+// document in a folder that has one, and that document's path; null and null when there is none. An Epic that is
+// not an identifier is not proposed: `epic` null and a `reason`.
 function cmdLatestEpic(opts) {
   if (opts.dir === '') throw new UsageError('latest-epic: --dir must not be empty')
   return latestEpic(opts.dir)
@@ -147,22 +162,25 @@ function cmdResolvePath(opts) {
   return { path: `${folder}/${nextDocName(opts.dir, opts.date, slug)}`, slug, normalized: slug !== opts.slug }
 }
 
-// Every handoff document of a folder, newest first (lib/select.mjs): path, header values and file-name slug.
+// Every handoff document of a folder, newest first (lib/select.mjs): path, header values and file-name slug; and how
+// many file names were left out (`skippedNames`).
 function cmdList(opts) {
   if (opts.dir === '') throw new UsageError('list: --dir must not be empty')
   return listDocs(opts.dir)
 }
 
 // The document a resume starts from (lib/select.mjs): the newest day's only document, or of its several the one furthest
-// along (by the commits they record) among those that record --branch (the session's current branch, as git-state reports
-// it) with a commit that is at or behind the HEAD of --cwd (default: the folder the command runs in); otherwise
-// `needsChoice` and the candidates. Reads only --dir and --cwd; a document never names a folder or a program.
+// along (by the commits they record) among those that record the session's current branch (--branch; left out, the
+// branch of --cwd as git-state reports it) with a commit that is at or behind the HEAD of --cwd (default: the folder the
+// command runs in); otherwise `needsChoice` and the candidates. Reads only --dir and --cwd; a document never names a
+// folder or a program.
 function cmdLatest(opts) {
   if (opts.dir === '') throw new UsageError('latest: --dir must not be empty')
   if (opts.branch === '') throw new UsageError('latest: --branch must not be empty')
   const cwd = opts.cwd === undefined ? process.cwd() : opts.cwd
   requireFolder(cwd, '--cwd')
-  return latestDoc(opts.dir, opts.branch, path.resolve(cwd))
+  const dir = path.resolve(cwd)
+  return latestDoc(opts.dir, opts.branch ?? currentBranch(dir), dir)
 }
 
 // name -> { options: every accepted --option, required: the ones that must be given, run }
@@ -171,13 +189,13 @@ const COMMANDS = {
   next: { options: ['doc', 'state-relevant'], required: ['doc'], run: cmdNext },
   'reading-plan': { options: ['doc', 'budget', 'root'], required: ['doc', 'budget'], run: cmdReadingPlan },
   'git-state': { options: ['cwd'], required: ['cwd'], run: cmdGitState },
-  'harness-state': { options: ['branch', 'cwd'], required: ['branch'], run: cmdHarnessState },
+  'harness-state': { options: ['branch', 'cwd'], required: [], run: cmdHarnessState },
   drift: { options: ['doc', 'cwd'], required: ['doc', 'cwd'], run: cmdDrift },
-  'ledger-carry': { options: ['doc', 'dir', 'epic'], required: ['epic'], run: cmdLedgerCarry },
+  'ledger-carry': { options: ['doc', 'dir', 'epic'], required: [], run: cmdLedgerCarry },
   'latest-epic': { options: ['dir'], required: ['dir'], run: cmdLatestEpic },
   'resolve-path': { options: ['slug', 'date', 'dir'], required: ['slug', 'date', 'dir'], run: cmdResolvePath },
   list: { options: ['dir'], required: ['dir'], run: cmdList },
-  latest: { options: ['dir', 'branch', 'cwd'], required: ['dir', 'branch'], run: cmdLatest },
+  latest: { options: ['dir', 'branch', 'cwd'], required: ['dir'], run: cmdLatest },
 }
 
 // ---- dispatch -----------------------------------------------------------------------------------------

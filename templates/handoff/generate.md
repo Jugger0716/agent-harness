@@ -16,9 +16,8 @@ Gather, in this order:
    (its length) plus the `Dirty files` line: the first 40 `path`s joined with `; ` (a path that
    contains `; ` goes in backticks), then `+N more` for the rest; `Upstream` = `ahead A, behind B`, or `n/a`
    when null.
-2. **Harness task state (READ-ONLY):** run
-   `node "{HANDOFF_JS}" harness-state --branch "<item 1's Branch>" --cwd "."` → `exists`,
-   `relevant`, `reason`, `fields` (`skill`, `task`, `phase`, `mode`, `docs_path`, as stored).
+2. **Harness task state (READ-ONLY):** run `node "{HANDOFF_JS}" harness-state --cwd "."` →
+   `exists`, `relevant`, `reason`, `fields` (`skill`, `task`, `phase`, `mode`, `docs_path`, as stored).
    `relevant` (the state file exists, its `branch` is the current branch, its `phase` is not
    `completed`) is the script's verdict — never judge it by hand. Under **In Progress**: when
    `relevant` is true, record `fields` in the **Fixed Label Record Format** (labels English raw —
