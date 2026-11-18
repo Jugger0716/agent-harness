@@ -3227,6 +3227,8 @@ const stateDiffCases = [
 // ---- the contract text: the sentences this change added ---------------------------------------------------------------------
 
 const readText = (...p) => fs.readFileSync(path.join(ROOT, ...p), 'utf8')
+// the Progress Ledger rules of generate (Step 1 item 5), read only when a ledger applies
+const ledgerText = () => readText('templates', 'handoff', 'generate-ledger.md')
 const between = (text, from, to) => {
   const a = text.indexOf(from)
   const b = to === null ? text.length : text.indexOf(to, a + from.length)
@@ -3242,9 +3244,12 @@ const stateContractCases = [
       const step1 = between(text, '### Step 1', '### Step 2')
       assert.match(step1, /node "\{HANDOFF_JS\}" git-state --cwd /)
       assert.match(step1, /node "\{HANDOFF_JS\}" harness-state --branch /)
-      // this file is read without resume.md: the script path, the exit rule and the no-fallback rule are here
-      assert.ok(step1.includes('${CLAUDE_PLUGIN_ROOT}/skills/handoff/scripts/handoff.mjs'))
-      assert.match(step1, /stderr verbatim/)
+      // generate is read without resume.md: the script path and the exit rule are in its load (SKILL.md, always loaded,
+      // states them once and generate.md defers to it); the no-fallback rule for git is generate's own
+      const load = readText('skills', 'handoff', 'SKILL.md') + text
+      assert.ok(load.includes('${CLAUDE_PLUGIN_ROOT}/skills/handoff/scripts/handoff.mjs'))
+      assert.match(flatten(load), /non-zero exit[^.]*stderr verbatim and stop/)
+      assert.match(flatten(between(text, '> Body of', '## Sub-command: generate')), /Helper script/)
       assert.match(step1, /never (fall back|run git by hand)/i)
       // the values a non-git folder and a detached HEAD record
       assert.match(step1, /`isGit`[^\n]{0,80}false[^\n]{0,80}`n\/a`/)
@@ -3273,13 +3278,21 @@ const stateContractCases = [
     run: async () => {
       const text = readText('templates', 'handoff', 'generate.md')
       const item4 = between(text, '4. **Conversation-derived content**', '5. **Progress Ledger')
+      // Next Steps defers to the slice command convention, which item 5's ledger file carries
+      assert.match(flatten(item4), /Next Steps[^.]*slice command convention \(item 5\)/)
+      const conv = between(ledgerText(), '## Slice command convention', null)
       for (const gone of ["ledger's LAST row", 'bare token', 'Status` normalization', 'normalization']) {
-        assert.ok(!item4.includes(gone), `the stale sentence part "${gone}" is gone`)
+        assert.ok(!conv.includes(gone), `the stale sentence part "${gone}" is gone`)
       }
       // it cites resume Step 5 by name, and says what the missing label costs in today's terms
-      assert.match(item4, /templates\/handoff\/resume\.md`? Step 5/)
-      assert.match(item4, /in-progress/)
-      assert.match(item4, /verbatim/)
+      assert.match(flatten(conv), /templates\/handoff\/resume\.md`? Step 5/)
+      assert.match(conv, /in-progress/)
+      assert.match(conv, /verbatim/)
+      assert.ok(conv.includes("Slice : <next slice's kebab-case identifier>"), 'the label line is written out')
+      // generate.md reads the ledger file only when a ledger applies, never unconditionally
+      const item5 = flatten(between(text, '5. **Progress Ledger', '### Step 2'))
+      assert.match(item5, /only when this handoff is part of a multi-slice epic — then read `\{CLAUDE_PLUGIN_ROOT\}\/templates\/handoff\/generate-ledger\.md`/)
+      assert.equal(text.split('generate-ledger.md').length - 1, 2, 'generate.md names the ledger file at the trigger and in Step 4 only')
     },
   },
   {
@@ -3349,7 +3362,7 @@ const stateContractCases = [
     run: async () => {
       const skill = readText('skills', 'handoff', 'SKILL.md')
       assert.ok(!skill.includes("entirely from THIS document's own recorded text"), 'the derivation is no longer all document text')
-      const goal = between(skill, '- `/handoff` does not read `slice_plan.md`', '- Not a replacement')
+      const goal = between(skill, '- `/handoff` does not read `slice_plan.md`', '- The Progress Ledger')
       assert.ok(goal.includes('`relevant`') || goal.includes('harness-state'))
       assert.match(goal, /recorded `Docs`/)
     },
@@ -3987,7 +4000,7 @@ const ledgerCarryCases = [
         assert.equal(out.droppedDone, 0)
         // so the contract's no-source condition (item 5e) and Step 4's broken-chain report both name the empty `rows`
         const text = readText('templates', 'handoff', 'generate.md')
-        const e = between(text, 'e. **No source found**', 'f. **').replace(/\s+/g, ' ')
+        const e = between(ledgerText(), 'e. **No source found**', 'f. **').replace(/\s+/g, ' ')
         assert.match(e, /`doc` is `null`[^)]*or `rows` is empty/)
         assert.match(between(text, '### Step 4', null).replace(/\s+/g, ' '), /returned `doc` `null` or no `rows`/)
       })
@@ -4439,7 +4452,7 @@ const ledgerContractCases = [
     id: 'generate-contract-reads-earlier-ledgers-through-the-scripts',
     run: async () => {
       const text = readText('templates', 'handoff', 'generate.md')
-      const item5 = between(text, '5. **Progress Ledger', '### Step 2')
+      const item5 = ledgerText()
       const flat = item5.replace(/\s+/g, ' ')
       // the model no longer reads, scans or ranks earlier documents: the two scripts do
       assert.match(item5, /node "\{HANDOFF_JS\}" latest-epic --dir "[^"]+"/)
@@ -4447,8 +4460,9 @@ const ledgerContractCases = [
       assert.ok(!/newest-first/i.test(item5) && !/\b90 days\b/.test(item5) && !/capped at/i.test(item5), 'no scan instruction (newest-first, a cap, 90 days) is left for the model')
       assert.ok(!/Confirm the Epic identifier first|carry it forward unchanged from the source document/.test(flat), 'the circular Epic rule is gone')
       assert.match(flat, /never (open|read|scan)[^.]*(by hand|yourself)|not (open|read|scan)[^.]*by hand/i)
-      // a script that fails is shown and stops the step, as in item 1
-      assert.match(flat, /non-zero exit[^.]*item 1|item 1[^.]*non-zero exit/i)
+      // a script that fails is shown and stops the step: the ledger file runs under SKILL.md's Helper script rule, which says so
+      assert.match(flat, /SKILL\.md`'s[ >]*\*\*Helper script\*\*[ >]*rule applies/)
+      assert.match(flatten(readText('skills', 'handoff', 'SKILL.md')), /non-zero exit[^.]*stderr verbatim and stop/)
       // the Epic is proposed from the previous ledger; the user is asked only when there is none or the session names another
       const a = between(item5, 'a. **', 'b. **')
       assert.match(a, /proposal/i)
@@ -4461,7 +4475,7 @@ const ledgerContractCases = [
     id: 'generate-contract-proposes-the-epic-the-way-the-script-reads-it',
     run: async () => {
       const text = readText('templates', 'handoff', 'generate.md')
-      const item5 = between(text, '5. **Progress Ledger', '### Step 2')
+      const item5 = ledgerText()
       const a = between(item5, 'a. **', 'b. **').replace(/\s+/g, ' ')
       // the Epic is the one of the last row that HAS one, like the script reads it
       assert.match(a, /last row that has one/)
@@ -4477,7 +4491,7 @@ const ledgerContractCases = [
     id: 'generate-contract-cells-are-bare-and-the-carried-rows-follow-the-same-rule',
     run: async () => {
       const text = readText('templates', 'handoff', 'generate.md')
-      const item5 = between(text, '5. **Progress Ledger', '### Step 2')
+      const item5 = ledgerText()
       const flat = item5.replace(/\s+/g, ' ')
       // one rule for every cell: never a wrapper around the WHOLE cell; free text in Notes keeps its own backticks
       assert.ok(!/into the new ledger as given/.test(flat), 'no instruction to copy a cell as it came back')
@@ -4490,7 +4504,7 @@ const ledgerContractCases = [
     id: 'generate-contract-reports-rows-that-named-no-epic',
     run: async () => {
       const text = readText('templates', 'handoff', 'generate.md')
-      const item5 = between(text, '5. **Progress Ledger', '### Step 2')
+      const item5 = ledgerText()
       const g = between(item5, 'g. **', '**Progress Ledger — column contract**').replace(/\s+/g, ' ')
       assert.ok(g.includes('`unattributedRows`') && /empty `Epic` cell/.test(g))
       assert.match(g, /taken as this Epic|this Epic's/)
@@ -4504,7 +4518,7 @@ const ledgerContractCases = [
     id: 'generate-contract-lists-every-field-and-tells-the-two-report-kinds-apart',
     run: async () => {
       const text = readText('templates', 'handoff', 'generate.md')
-      const item5 = between(text, '5. **Progress Ledger', '### Step 2')
+      const item5 = ledgerText()
       const b = between(item5, 'b. **', 'c. **').replace(/\s+/g, ' ')
       // every field the script returns is named where the output is described
       for (const field of ['`doc`', '`rows`', '`pointer`', '`droppedDone`', '`unknownStatusRows`', '`unattributedRows`', '`chained`']) assert.ok(b.includes(field), `5b names ${field}`)
@@ -4522,7 +4536,7 @@ const ledgerContractCases = [
     id: 'generate-contract-carries-only-unfinished-rows-and-points-at-the-earlier-ones',
     run: async () => {
       const text = readText('templates', 'handoff', 'generate.md')
-      const item5 = between(text, '5. **Progress Ledger', '### Step 2')
+      const item5 = ledgerText()
       const flat = item5.replace(/\s+/g, ' ')
       // the rule: every unfinished row (named), only the most recent five finished ones
       for (const s of ['in-progress', 'blocked', 'planned']) assert.ok(flat.includes(`\`${s}\``), `${s} is named as carried in full`)
@@ -4554,7 +4568,7 @@ const ledgerContractCases = [
     id: 'generate-contract-column-contract-has-planned-and-bare-cells',
     run: async () => {
       const text = readText('templates', 'handoff', 'generate.md')
-      const item5 = between(text, '5. **Progress Ledger', '### Step 2')
+      const item5 = ledgerText()
       const cells = item5.split('\n').map((l) => l.trim())
       const status = cells.find((l) => l.startsWith('| `Status`'))
       assert.ok(status, 'the Status row of the column contract')
@@ -5328,7 +5342,7 @@ const selectContractCases = [
       assert.match(sec, /node "\{HANDOFF_JS\}" list --dir "docs\/harness\/handoff"/)
       assert.match(flatten(sec), /non-zero exit/)
       assert.match(flatten(sec), /never scan the folder by hand/)
-      assert.ok(sec.includes('${CLAUDE_PLUGIN_ROOT}/skills/handoff/scripts/handoff.mjs'), 'this file is read without generate.md: it names the script itself')
+      assert.ok(text.includes('${CLAUDE_PLUGIN_ROOT}/skills/handoff/scripts/handoff.mjs'), 'SKILL.md is read without generate.md: it names the script itself')
       assert.ok(!/Scan `docs\/harness\/handoff\/\*\.md`/.test(sec), 'no scan instruction is left for the model')
     },
   },
@@ -5560,7 +5574,7 @@ const dietContractCases = [
       assert.match(item, /node "\{HANDOFF_JS\}" list --dir "docs\/harness\/handoff"/)
       assert.match(item, /one document/)
       // the "never open earlier documents by hand" rule is the ledger's
-      assert.match(flat, /never open, scan or rank those documents by hand for it/)
+      assert.match(flatten(ledgerText()), /For the ledger only the two commands below read earlier documents: never open, scan or rank those documents by hand for it/)
       // a concurrent run's new path goes everywhere Step 3 put the old one
       const step4 = flatten(between(text, '### Step 4', '> **gitignore note'))
       assert.match(step4, /run `resolve-path` again[^.]*`## Resume` line[^.]*Reading Order entry/)

@@ -272,7 +272,7 @@ render no row from the epic path alone:
 
 1. **The label.** A line of Next Steps item 1 that reads `Slice : <kebab-case identifier>` — the
    word `Slice`, a colon, then the identifier — which `generate` writes whenever a Progress Ledger
-   row applies (`templates/handoff/generate.md` Step 1 item 4). It may follow a list marker or sit
+   row applies (`templates/handoff/generate-ledger.md`). It may follow a list marker or sit
    inside bold or a backtick pair; a sentence that merely starts with the word `Slice` is not a
    label, because the colon must follow the word. The label beats everything below, with or
    without a ledger: it is the author's own statement of which slice comes next. `source` is

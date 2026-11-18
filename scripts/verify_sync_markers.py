@@ -339,9 +339,10 @@ SYNC_GROUPS = [
         # templates/handoff/generate.md, which carries no `Next cmd`, so the token check failed
         # there) to the skills/handoff/SKILL.md §Non-Goals bullet that names both pointers; that
         # file carries all three tokens. The floor did not change. COVERAGE LOSS, recorded: the
-        # generate.md Step 1 item 4 prose pointer itself (the slice command convention naming
-        # this format) now carries no marker, so deleting or rotting that pointer is NOT caught
-        # here -- only the SKILL.md bullet is.
+        # prose pointer itself (the slice command convention naming this format -- generate.md
+        # Step 1 item 4 until H15's diet moved it to templates/handoff/generate-ledger.md
+        # §Slice command convention) carries no marker, so deleting or rotting that pointer is
+        # NOT caught here -- only the SKILL.md bullet is.
         "min_sites": 2,                        # skills/harness-build/SKILL.md (self) + skills/handoff/SKILL.md
     },
     {
