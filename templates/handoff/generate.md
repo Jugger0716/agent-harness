@@ -6,15 +6,46 @@
 
 Gather, in this order:
 
-1. **Git state (run the commands, do not recall from memory):**
-   - `git rev-parse --abbrev-ref HEAD` → branch (skip git items entirely if not a repo)
-   - `git rev-parse HEAD` (record the FULL 40-char sha — short shas go ambiguous over time) + `git log -1 --format=%s` → HEAD sha + subject
-   - `git status --short` → dirty-file count (list up to 10 paths)
-   - Ahead/behind upstream if an upstream exists (`git status --short --branch` first line)
-2. **Harness task state (READ-ONLY, if present):** if `.harness/state.json` exists, read
-   `skill`, `task`, `phase`, `mode`, `docs_path`. Record them under **In Progress** using the
-   **Fixed Label Record Format** below — labels are English raw parse anchors that `resume`'s
-   Step 3.5 live cross-check compares against; values are recorded as stored:
+1. **Git state (run the script, do not recall from memory):**
+
+   ```
+   node "{HANDOFF_JS}" git-state --cwd "."
+   ```
+
+   `.` is the session's current working directory. `{HANDOFF_JS}` is
+   `${CLAUDE_PLUGIN_ROOT}/skills/handoff/scripts/handoff.mjs`: confirm `${CLAUDE_PLUGIN_ROOT}`
+   resolves to a non-empty value first (substitute the literal root when the shell leaves it unset)
+   and keep both paths in quotes — `templates/handoff/resume.md` Step 4 states the same rule, and
+   this file is read without that one. If the script exits non-zero, show its stderr verbatim and
+   stop — never fall back to running git by hand. The output is one JSON object: `isGit`, `toplevel`, `branch`, `head`, `subject`, `dirty`
+   (a list of `{status, path}`) and `upstream` (`{ahead, behind}` or null). Record, for the header
+   of Step 2:
+   - `Branch` — `branch`; when `isGit` is false (not a git folder) write `n/a`; a detached HEAD is
+     `(detached)`, which is what the script returns.
+   - `HEAD` — the FULL 40-char `head` (short shas go ambiguous over time) + `subject`; `n/a` when
+     `head` is null (no repository, or no commit yet).
+   - `Worktree` — `toplevel`, or `n/a` when `isGit` is false.
+   - `Dirty` — `clean` when `dirty` is empty, else `N files` (the length of `dirty`) and, only
+     then, the `Dirty files` line: the `path` of the first 40 entries joined with `; `, then
+     `+N more` for the rest.
+   - `Upstream` — `ahead A, behind B` from `upstream`, or `n/a` when it is null.
+2. **Harness task state (READ-ONLY):** run
+
+   ```
+   node "{HANDOFF_JS}" harness-state --branch "<the Branch value recorded in item 1>" --cwd "."
+   ```
+
+   (`{HANDOFF_JS}`, the quoting and a non-zero exit as in item 1.) The output is one JSON object:
+   `exists`, `relevant`, `reason` and `fields` (`skill`, `task`, `phase`, `mode`, `docs_path`, as
+   stored). `relevant` is true only when `.harness/state.json` exists, its `branch` equals the
+   current branch and its `phase` is not `completed` — the script decides; never judge it by hand.
+   Under **In Progress**:
+   - `relevant` is true → record `fields` using the **Fixed Label Record Format** below — labels
+     are English raw parse anchors that `resume`'s Step 3.5 live cross-check compares against;
+     values are recorded as stored.
+   - otherwise → write ONE line instead, `Harness : none (<reason>)`, with the script's `reason`,
+     and no five-line record: a state file that belongs to another branch, or to a finished task,
+     is not what this session was doing, and a record of it would send the next session there.
 
    **Fixed Label Record Format** (canonical — referenced by `skills/harness/SKILL.md` §Session
    Boundary "`/handoff generate` field contract"):
@@ -27,8 +58,9 @@ Gather, in this order:
    Docs : <docs_path>
    ```
    NEVER write to or delete `.harness/` from this skill.
-3. **Task artifacts:** if a `docs_path` was found in 2, list its files (names only) as
-   Reading Order candidates.
+3. **Task artifacts:** only when item 2 returned `relevant` true and `fields.docs_path` is set,
+   list that folder's files (names only) as Reading Order candidates. A state that is not
+   relevant contributes none: its folder belongs to another task.
 4. **Conversation-derived content** (draft each section from the current session):
    - Goal — what this effort is trying to achieve (1–3 sentences)
    - Current State (verified) — ONLY facts you can back with evidence from this session
@@ -50,14 +82,14 @@ Gather, in this order:
          Slice : <next slice's kebab-case identifier>
 
      The value must not be the identifier the ledger records as just finished. **A mention in
-     prose does not satisfy this**; the label is the whole point, because `resume` Step 5's
-     `Next :` derivation reads the labelled value and is forbidden from scanning prose for a bare
-     token (cited by name, not restated here). Without the label that derivation falls back to
-     the ledger's LAST row, which in a between-slices handoff is by construction the slice that
-     just SHIPPED. Measured 2026-08-28 over all 31 ledger-bearing handoffs in
-     `docs/harness/handoff/`: 17 have no `in-progress` row (18 to a reader that skips `resume`
-     Step 5's `Status` normalization), none of them carries this label yet, and a bare-token
-     heuristic tried in its place matched 3 of the 17 with 2 of those 3 wrong.
+     prose does not satisfy this**; the label is the whole point, because `resume`'s `Next :`
+     derivation (`templates/handoff/resume.md` Step 5 — cited by name, not restated here) reads
+     the labelled value first and never scans prose for a slice name. Without the label it
+     depends on the ledger's `in-progress` rows (one names the slice, several are ambiguous) and
+     on the live task state; a handoff written between slices has no `in-progress` row, so
+     `Next :` ends as item 1 printed verbatim. Measured 2026-08-28 over all 31 ledger-bearing
+     handoffs in `docs/harness/handoff/`: 17 have no `in-progress` row, and none of them
+     carried this label yet.
    - Definition of Done — how a future session knows the effort is finished
    - Reading Order — files a fresh session should read, in order, each with a 1-line reason
      (prefer: this handoff → key spec/plan docs → the 1–3 most central source files).
@@ -112,8 +144,10 @@ Fill the canonical template (English headings raw; content in `user_lang`):
 # HANDOFF — <title>
 
 **Date:** YYYY-MM-DD  **Project:** <repo or directory name>
-**Branch:** <branch>  **HEAD:** <full-sha> <subject>
-**Dirty:** <clean | N files (list)>  **Upstream:** <ahead/behind or n/a>
+**Branch:** <branch | (detached) | n/a>  **HEAD:** <full-sha> <subject>
+**Worktree:** <git top-level path | n/a>
+**Dirty:** <clean | N files>  **Upstream:** <ahead/behind or n/a>
+**Dirty files:** <p1; p2; … (up to 40, then "+N more")>
 
 ## Goal
 ## Current State (verified)
@@ -136,6 +170,11 @@ Run: `/handoff resume docs/harness/handoff/<this-file>.md`
 `## Progress Ledger` is a parse-anchor heading (English raw, like the other section headings);
 omit the whole section (heading + table) when Step 1 item 5 did not apply — never emit an
 empty table with no rows just to keep the section present.
+
+The `**Dirty files:**` line is written only when the tree is dirty (Step 1 item 1); every other
+header line is always written, with `n/a` where the folder has no value for it. Under **In
+Progress** write either the five-line record or the one `Harness : none (<reason>)` line, never
+both and never neither (Step 1 item 2).
 
 ### Step 3 — Resolve the final path (no gate — the write is unconditional)
 

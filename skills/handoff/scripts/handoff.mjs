@@ -19,6 +19,7 @@ import { parseHandoff } from './lib/parse.mjs'
 import { deriveNext } from './lib/next.mjs'
 import { allowedRoots } from './lib/paths.mjs'
 import { planReading } from './lib/reading.mjs'
+import { drift, gitState, harnessState, requireFolder } from './lib/git.mjs'
 
 class UsageError extends Error {}
 
@@ -37,28 +38,57 @@ function cmdParse(opts) {
 }
 
 // How a resume reads the document's Reading Order (lib/reading.mjs): per entry a status, the range to
-// read and the bytes, within --budget bytes. The allowed roots come from where the document lives.
+// read and the bytes, within --budget bytes. The allowed roots come from where the document lives;
+// --root (the session's folder) is a root only for a document that has none of its own.
 function cmdReadingPlan(opts) {
   if (!/^[1-9]\d{0,14}$/.test(opts.budget)) throw new UsageError('reading-plan: --budget must be a positive whole number of bytes')
+  if (opts.root === '') throw new UsageError('reading-plan: --root must not be empty')
   const docPath = path.resolve(opts.doc)
   const parsed = parseHandoff(readDoc(docPath))
-  return planReading(parsed.readingOrder, allowedRoots(docPath), Number(opts.budget), docPath)
+  return planReading(parsed.readingOrder, allowedRoots(docPath, opts.root), Number(opts.budget), docPath)
 }
 
 // What a resume briefing prints on its `Next :` row and which slash-command tokens item 1 offers
-// (lib/next.mjs). --state-relevant is `true` only when the live task state was found at resume time,
-// which is what lets the recorded `Docs` value name the next slice; left out it is `false`.
+// (lib/next.mjs). --state-relevant is `true` only when `harness-state` reported the live task state
+// `relevant` at resume time, which is what lets the recorded `Docs` value name the next slice; left
+// out it is `false`.
 function cmdNext(opts) {
   const flag = opts['state-relevant']
   if (flag !== undefined && flag !== 'true' && flag !== 'false') throw new UsageError('next: --state-relevant must be true or false')
   return deriveNext(parseHandoff(readDoc(opts.doc)), { stateRelevant: flag === 'true' })
 }
 
+// The git facts of a folder (lib/git.mjs): branch, HEAD, every dirty path, the upstream distance.
+function cmdGitState(opts) {
+  requireFolder(opts.cwd, '--cwd')
+  return gitState(path.resolve(opts.cwd))
+}
+
+// Whether the folder's `.harness/state.json` belongs to the session's current branch and is unfinished
+// (lib/git.mjs). Read-only. --cwd defaults to the folder the command runs in.
+function cmdHarnessState(opts) {
+  if (opts.branch === '') throw new UsageError('harness-state: --branch must not be empty')
+  const cwd = opts.cwd === undefined ? process.cwd() : opts.cwd
+  requireFolder(cwd, '--cwd')
+  return harnessState(path.resolve(cwd), opts.branch)
+}
+
+// How the git state of --cwd (or of the worktree the document recorded) compares with what the
+// document recorded: branch, HEAD relationship, and the fate of the paths it listed as dirty.
+function cmdDrift(opts) {
+  const parsed = parseHandoff(readDoc(opts.doc))
+  requireFolder(opts.cwd, '--cwd')
+  return drift(parsed, path.resolve(opts.cwd))
+}
+
 // name -> { options: every accepted --option, required: the ones that must be given, run }
 const COMMANDS = {
   parse: { options: ['doc'], required: ['doc'], run: cmdParse },
   next: { options: ['doc', 'state-relevant'], required: ['doc'], run: cmdNext },
-  'reading-plan': { options: ['doc', 'budget'], required: ['doc', 'budget'], run: cmdReadingPlan },
+  'reading-plan': { options: ['doc', 'budget', 'root'], required: ['doc', 'budget'], run: cmdReadingPlan },
+  'git-state': { options: ['cwd'], required: ['cwd'], run: cmdGitState },
+  'harness-state': { options: ['branch', 'cwd'], required: ['branch'], run: cmdHarnessState },
+  drift: { options: ['doc', 'cwd'], required: ['doc', 'cwd'], run: cmdDrift },
 }
 
 // ---- dispatch -----------------------------------------------------------------------------------------

@@ -44,6 +44,13 @@ Parse the argument immediately after `/handoff`:
 transliterate non-ASCII to ASCII, non-word chars removed, max 40 chars). If the exact filename
 already exists, append `-2`, `-3`, … — NEVER overwrite an existing handoff.
 
+**Base directory.** The session's current working directory is the base for `docs/harness/handoff/`
+(where `generate` writes and `resume` and `list` look) and the last-resort root of a relative Reading
+Order path: such a path is resolved against the repository that holds the document (the folder with
+its `docs/` directory, or that folder's git top-level), and only a document with neither is read
+against the session directory (`resume` Step 4's `--root`). The header's `Worktree` is never a base —
+it only says where `resume` evaluates git state (Step 3).
+
 ---
 
 ## Sub-command: list
@@ -85,7 +92,9 @@ Scan `docs/harness/handoff/*.md` (only files whose first line starts with `# HAN
 - `/handoff` does not read `slice_plan.md` — the slice command convention (generate Step 1
   item 4) names its format by pointing at `skills/harness-build/SKILL.md` §Step 3.5: Slice Plan, it
   never opens that file itself; the `Next :`/`Next cmd:` derivation (resume Step 5) is built
-  the same way, entirely from THIS document's own recorded text.
+  the same way, from THIS document's own recorded text — plus one live fact: whether
+  `.harness/state.json` is `relevant` to the current branch (`harness-state`), which alone
+  decides whether the recorded `Docs` value may name the next slice.
   <!-- SYNC-WITH: skills/harness-build/SKILL.md §Step 3.5: Slice Plan -->
 - Not a replacement for `/harness` Session Recovery; when `.harness/state.json` exists, the
   handoff POINTS at it (read-only) rather than duplicating its phase machine.

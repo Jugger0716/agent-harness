@@ -21,7 +21,8 @@
 //
 // The allowed roots of a document are the folder that holds its `docs/` directory (the nearest
 // `docs` folder above the document, its parent) and that folder's git top-level (a document can live
-// in a sub-folder of its repository, and its entries are then relative to the top-level).
+// in a sub-folder of its repository, and its entries are then relative to the top-level). A document
+// with neither takes the session's folder (the caller's `--root`) as its one root.
 import path from 'node:path'
 import { execFileSync } from 'node:child_process'
 
@@ -95,11 +96,15 @@ export function gitTopLevel(dir) {
 
 // The folders a document's entries may be resolved against, in the order they are tried:
 // the derived root, then the git top-level of the folder git is asked about (the derived root, else
-// the document's own folder). Duplicates and missing roots are dropped.
-export function allowedRoots(docPath) {
+// the document's own folder). Duplicates and missing roots are dropped. `fallbackRoot` — the
+// session's folder, passed as `--root` — is a root ONLY when the two above do not exist: a document
+// that lives outside every `docs/` folder and every repository would otherwise read nothing, and a
+// document that has a root of its own never reads from anywhere else.
+export function allowedRoots(docPath, fallbackRoot = null) {
   const derived = deriveRepoRoot(docPath)
   const top = gitTopLevel(derived || path.dirname(path.resolve(docPath)))
   const roots = []
   for (const r of [derived, top]) if (r && !roots.includes(path.resolve(r))) roots.push(path.resolve(r))
+  if (roots.length === 0 && fallbackRoot) roots.push(path.resolve(fallbackRoot))
   return roots
 }

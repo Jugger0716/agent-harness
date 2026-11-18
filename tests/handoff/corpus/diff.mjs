@@ -23,6 +23,17 @@
 //                  how many documents are ambiguous, what became of the last-row documents, and the
 //                  same classes when the task state is NOT relevant (the Docs tier unused).
 //                  Prints document ids and counts only.
+//   state          what the task-state relevance rule (skills/handoff/scripts/lib/git.mjs `harnessState`:
+//                  `.harness/state.json` exists, is for the current branch and its phase is not
+//                  `completed`) means for the recorded task state: how many documents carry the
+//                  fixed-label record (all five labels, or only some), how many of those record Phase
+//                  `completed`, how many carry no record at all (the new "no record" briefing wording)
+//                  or a `Harness : none` line, and how many carry a stale/unrelated warning marker
+//                  (a documented word list, STALE_MARKERS) in `## In Progress` and anywhere. Relevance
+//                  is a fact about a LIVE `.harness/`, which a snapshot does not have, so it is NOT
+//                  evaluated per document: the one thing a document's own record decides is the phase
+//                  test (a recorded `completed` is never relevant); the report says so. Also the
+//                  `Docs` values under docs/harness/ that the handoff path check accepts.
 //   extract-agree  the Reading Order entries the shipped parser (skills/handoff/scripts/lib/
 //                  parse.mjs) reads from each copy, against what the manifest recorded when the
 //                  snapshot was taken: same item count, and the same kind and raw text entry by
@@ -46,7 +57,7 @@ import { pathToFileURL } from 'node:url'
 import { loadCorpus, computeMetrics, median, percentile } from './measure.mjs'
 import { InputError, exitOnError, stripHint } from './snapshot.mjs'
 import { deriveLegacyNext, legacyTiers } from './legacy_next.mjs'
-import { parseRange, stripEmphasis } from '../../../skills/handoff/scripts/lib/parse.mjs'
+import { FIXED_LABELS, parseRange, stripEmphasis } from '../../../skills/handoff/scripts/lib/parse.mjs'
 import { deriveNext } from '../../../skills/handoff/scripts/lib/next.mjs'
 import { validateHandoffPath } from '../../../skills/handoff/scripts/lib/paths.mjs'
 import { HEAD_LINES, OUTLINE_HEADING_BYTES, OUTLINE_MAX_ENTRIES, WHOLE_FILE_MAX_LINES, isMarkdownPath } from '../../../skills/handoff/scripts/lib/reading.mjs'
@@ -79,13 +90,18 @@ export const NEXT_CLASSES = ['unchanged', 'normalisation-only', 'became-label', 
 // must not hide among the unchanged ones, and it has to stay empty.
 export function classifyNextChange(legacy, now, { legacyLiveRows = 0, labelDiffers = false, hasLedger = true } = {}) {
   if (now.slice === null) return legacy.source === 'in-progress' && legacyLiveRows >= 2 ? 'became-ambiguous' : 'other'
-  if (legacy.source === 'last-row' && now.slice === legacy.slice) return 'kept-finished-slice'
+  if (legacy.source === 'last-row' && sameSlice(now.slice, legacy.slice)) return 'kept-finished-slice'
   if (now.slice === legacy.slice) return 'unchanged'
   if (now.source === 'label' && legacy.source !== 'label' && (labelDiffers || !hasLedger)) return 'became-label'
   if (legacy.source === 'last-row' && (now.source === 'docs' || now.source === 'step-one')) return 'became-docs-or-step-one'
   if (now.source === legacy.source && now.slice === stripEmphasis(legacy.slice)) return 'normalisation-only'
   return 'other'
 }
+
+// The same slice, read the same way: 9.0.1 printed a `**s2**` cell with its bold (it removed a backtick
+// pair only) and the new rule prints `s2`, so a value is compared with one `**…**` / `__…__` pair and
+// then one backtick pair removed on BOTH sides. null (an ambiguity) is never the same slice.
+const sameSlice = (a, b) => a !== null && b !== null && stripEmphasis(a) === stripEmphasis(b)
 
 // In-progress rows in the Epic of the last ledger row; `key` is the Epic cell as 9.0.1 read it
 // (`epicRaw`) or as the new rule reads it (`epic`).
@@ -169,8 +185,8 @@ function nextChange(docs) {
   const last = per.filter((x) => x.legacy.source === 'last-row')
   const lastRow = {
     documents: last.length,
-    valueChanged: last.filter((x) => x.relevant.slice !== x.legacy.slice).length,
-    valueKept: last.filter((x) => x.relevant.slice === x.legacy.slice).length,
+    valueChanged: last.filter((x) => !sameSlice(x.relevant.slice, x.legacy.slice)).length,
+    valueKept: last.filter((x) => sameSlice(x.relevant.slice, x.legacy.slice)).length,
     nowDocs: last.filter((x) => x.relevant.source === 'docs').length,
     nowStepOne: last.filter((x) => x.relevant.source === 'step-one').length,
   }
@@ -194,6 +210,92 @@ function nextChange(docs) {
     `task state NOT relevant: ${stateNotRelevant.valueChanges} documents print another value than above (the Docs tier is unused); classes: ${NEXT_CLASSES.map((c) => `${c} ${apart.classes[c]}`).join(', ')}${apart.ids.other.length ? `; other: ${apart.ids.other.join(' ')}` : ''}`,
   )
   const data = { documents: n, stateRelevant: true, classes: main.classes, ids: main.ids, labelCheck, noLabelOneInProgress, ambiguous, lastRow, stateNotRelevant }
+  return { data, lines }
+}
+
+// ---- state: the relevance rule against the recorded task state ---------------------------------------------
+
+// Words that mark a recorded task state as stale or unrelated to the work that follows. A plain list on
+// purpose — a documented sample marker, not a classifier: it only finds documents whose prose says so.
+// It is read at three scopes, narrowest first: on one of the five fixed-label lines (`Task : (<other
+// task>, 무관)` — the shape of the audit's stale-label sample), anywhere in `## In Progress`, and anywhere
+// in the document. The wider two over-count: the words are common in prose that has nothing to do with the
+// record (a stale cache, a change that is unrelated to a test), so only the first scope names the sample.
+export const STALE_MARKERS = [/stale/i, /unrelated/i, /irrelevant/i, /not relevant/i, /no longer relevant/i, /outdated/i, /무관/, /관련\s*없/, /오래된/, /만료/]
+
+const hasMarker = (text) => STALE_MARKERS.some((re) => re.test(text))
+const LABEL_LINE = new RegExp(`^\\s*[-*]?\\s*\`?(${FIXED_LABELS.join('|')})\\s*:`)
+const onLabelLine = (text) => text.split('\n').some((l) => LABEL_LINE.test(l) && hasMarker(l))
+const recordsCompleted = (labels) => labels.Phase !== null && /^`?completed\b/i.test(labels.Phase.trim())
+const unticked = (v) => String(v ?? '').trim().replace(/^`+|`+$/g, '').trim()
+
+// A SIMULATION, not a measurement: what each rule would do if the live `.harness/state.json` at resume
+// time were the very state the document recorded, on the branch the harness gives such a task
+// (`harness/<last segment of Docs>`, §Step 1 item 8), with the session on the branch the document's
+// header names. The 9.0.1 rule printed the re-entry hint whenever the live skill was `harness` and the
+// phase was not `completed`; the new one also needs the state's branch to be the current branch.
+function simulateHint(d) {
+  const l = d.parsed.fixedLabels
+  const completed = recordsCompleted(l)
+  const slug = unticked(l.Docs).replace(/\/+$/, '').split('/').pop()
+  const open = /^harness$/i.test(unticked(l.Skill)) && !completed
+  return { old: open, now: open && slug !== '' && unticked(d.parsed.header.branch) === `harness/${slug}` }
+}
+
+export function stateComparison(docs) {
+  const parsed = docs.filter((d) => d.parsed)
+  const withRecord = parsed.filter((d) => d.parsed.fixedLabels)
+  const five = withRecord.filter((d) => FIXED_LABELS.every((k) => d.parsed.fixedLabels[k] !== null))
+  const completed = withRecord.filter((d) => recordsCompleted(d.parsed.fixedLabels))
+  const none = parsed.filter((d) => d.parsed.harness === 'none')
+  const absent = parsed.filter((d) => d.parsed.harness === 'absent')
+  const ipText = (d) => d.parsed.sections['In Progress'] ?? ''
+  const onLabels = withRecord.filter((d) => onLabelLine(ipText(d)))
+  const markedInProgress = parsed.filter((d) => hasMarker(ipText(d)))
+  const markedRecords = markedInProgress.filter((d) => d.parsed.fixedLabels)
+  const split = (set) => {
+    const done = set.filter((d) => recordsCompleted(d.parsed.fixedLabels)).length
+    return { recordedCompleted: done, recordedOpen: set.length - done }
+  }
+  const sim = five.map((d) => ({ d, ...simulateHint(d) }))
+  const sample = sim.filter((x) => onLabels.includes(x.d))
+  const rules = pathRuleChecks(docs)
+  const data = {
+    documents: docs.length,
+    method:
+      "there is no live .harness/ per document, so relevance is not evaluated per document: a record whose Phase is completed is counted as not relevant (the rule's phase test), every other record as relevant only if a live state.json for the current branch says so at resume time; the marker counts use the word list in staleMarker.markers; the `simulation` block is an estimate under its stated assumption, not a measurement",
+    record: { any: withRecord.length, five: five.length, partial: withRecord.length - five.length },
+    recordedCompleted: completed.length,
+    harnessNone: none.length,
+    noRecord: absent.length,
+    staleMarker: {
+      markers: STALE_MARKERS.map((re) => re.source),
+      onLabelLine: { documents: onLabels.length, ...split(onLabels) },
+      inProgress: { documents: markedInProgress.length, withRecord: markedRecords.length, ...split(markedRecords) },
+      anywhere: parsed.filter((d) => hasMarker(d.text)).length,
+    },
+    newRule: { notRelevantByRecordedPhase: completed.length, relevantIfLiveStateMatches: withRecord.length - completed.length },
+    simulation: {
+      assumption: "the live state.json is the state the document recorded, on branch harness/<last Docs segment>, and the session is on the document's Branch header",
+      records: five.length,
+      oldRuleHint: sim.filter((x) => x.old).length,
+      newRuleHint: sim.filter((x) => x.now).length,
+      staleSample: { documents: sample.length, oldRuleHint: sample.filter((x) => x.old).length, newRuleHint: sample.filter((x) => x.now).length },
+    },
+    pathRule: { docsUnderHarness: rules.docsUnderHarness, accepted: rules.docsUnderHarnessPass },
+  }
+  const m = data.staleMarker
+  const s = data.simulation
+  const lines = [
+    `state: ${docs.length} documents, the task-state relevance rule against the recorded task state`,
+    `method: ${data.method}`,
+    `records: ${data.record.any} documents carry fixed labels (${data.record.five} all five, ${data.record.partial} only some); ${data.recordedCompleted} of them record Phase completed`,
+    `no record (neither the fixed labels nor a Harness : line): ${data.noRecord} documents, which resume now briefs as "no record — task state is not a verification target"; Harness : none: ${data.harnessNone}, briefed as "no harness task"`,
+    `stale/unrelated marker, by scope — on a fixed-label line: ${m.onLabelLine.documents} documents (${m.onLabelLine.recordedCompleted} record Phase completed, ${m.onLabelLine.recordedOpen} another phase); anywhere in the In Progress section: ${m.inProgress.documents} (${m.inProgress.withRecord} with a record); anywhere in the document: ${m.anywhere}`,
+    `new rule: ${data.newRule.notRelevantByRecordedPhase} recorded states are not relevant by their phase alone; for the other ${data.newRule.relevantIfLiveStateMatches} relevance depends on a live state.json that no document carries — resume prints the /harness re-entry hint and uses the Docs tier only when harness-state says relevant, whatever a document's own record says`,
+    `simulation (an estimate; assumes ${s.assumption}): of ${s.records} five-label records the 9.0.1 rule would print the re-entry hint for ${s.oldRuleHint} and the new rule for ${s.newRuleHint}; in the ${s.staleSample.documents} documents with a marker on a label line, ${s.staleSample.oldRuleHint} and ${s.staleSample.newRuleHint}`,
+    `path check: ${data.pathRule.accepted} of ${data.pathRule.docsUnderHarness} recorded Docs values under docs/harness/ pass the handoff path rule`,
+  ]
   return { data, lines }
 }
 
@@ -412,7 +514,7 @@ function reading(docs) {
   return { data, lines }
 }
 
-export const WHAT = { 'next-legacy': nextLegacy, next: nextChange, 'extract-agree': extractAgree, reading }
+export const WHAT = { 'next-legacy': nextLegacy, next: nextChange, state: stateComparison, 'extract-agree': extractAgree, reading }
 
 // ---- CLI -------------------------------------------------------------------------------------------------
 

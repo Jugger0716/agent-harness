@@ -177,10 +177,9 @@ const headerCases = [
         project: 'sample-service',
         branch: 'feature/sample-parser',
         head: '0123456789abcdef0123456789abcdef01234567',
-        headSubject: 'Add the sample parser',
         headRaw: '0123456789abcdef0123456789abcdef01234567 Add the sample parser',
         dirtyRaw: '2 files (src/a.js, src/b.js)',
-        dirtyPaths: [],
+        dirtyPaths: ['src/a.js', 'src/b.js'], // the legacy `Dirty:` line lists them
         worktree: null,
         upstream: 'origin/feature/sample-parser (ahead 1)',
       })
@@ -189,12 +188,74 @@ const headerCases = [
   {
     id: 'parse-legacy-has-no-new-fields',
     run: async () => {
+      // A document written before the `Worktree` / `Dirty files` / `Harness :` lines existed still reads:
+      // no worktree, the paths come from the legacy `Dirty:` line when it lists them, and a document
+      // with neither the five-label record nor a `Harness :` line is "absent" (never "none").
       for (const name of ['legacy-no-labels', 'label-and-inprogress-differ']) {
         const p = parseFixture(name)
         assert.equal(p.header.worktree, null, name)
-        same(p.header.dirtyPaths, [], name)
         assert.equal(p.harness, 'absent', name)
       }
+      same(parseFixture('legacy-no-labels').header.dirtyPaths, [])
+      same(parseFixture('label-and-inprogress-differ').header.dirtyPaths, ['src/a.js', 'src/b.js'])
+      assert.equal(parseFixture('no-ledger-with-docs-label').harness, 'record')
+    },
+  },
+  {
+    id: 'parse-new-header-fields',
+    run: async () => {
+      const text = [
+        '# HANDOFF — New header',
+        '',
+        '**Date:** 2026-02-01  **Project:** sample-service',
+        '**Branch:** feature/x  **HEAD:** 0123456789abcdef0123456789abcdef01234567 Subject',
+        '**Worktree:** C:\\work\\sample wt',
+        '**Dirty:** 4 files  **Upstream:** n/a',
+        '**Dirty files:** a.txt; `sub/b c.txt`; Makefile; +1 more',
+        '',
+        '## In Progress',
+        'Harness : none (no .harness/state.json)',
+        '',
+      ].join('\n')
+      const p = await parseText(text)
+      assert.equal(p.header.worktree, 'C:\\work\\sample wt')
+      // the paths of the new line, wrapping backticks dropped, the `+N more` marker not a path
+      same(p.header.dirtyPaths, ['a.txt', 'sub/b c.txt', 'Makefile'])
+      assert.equal(p.header.dirtyRaw, '4 files')
+      assert.equal(p.harness, 'none')
+      // `n/a` is no worktree; a clean tree lists nothing
+      const q = await parseText('# HANDOFF — T\n\n**Worktree:** n/a\n**Dirty:** clean\n**Dirty files:** none\n\n## Goal\nx\n')
+      assert.equal(q.header.worktree, null)
+      same(q.header.dirtyPaths, [])
+    },
+  },
+  {
+    id: 'parse-dirty-paths-legacy-line-lists-only-paths',
+    run: async () => {
+      const paths = async (dirty) => (await parseText(`# HANDOFF — T\n\n**Dirty:** ${dirty}  **Upstream:** n/a\n\n## Goal\nx\n`)).header.dirtyPaths
+      same(await paths('3 files (src/a.js, `docs/b.md`, notes.txt)'), ['src/a.js', 'docs/b.md', 'notes.txt'])
+      same(await paths('2 files (src/a.js; src/b.js) — **unrelated work**'), ['src/a.js', 'src/b.js'])
+      // prose or a count with no list is not a list of paths: a wrong path would raise a false "lost" alarm
+      same(await paths('clean'), [])
+      same(await paths('4 files, mostly docs'), [])
+      same(await paths('3 files (mostly docs, a few tests)'), [])
+      // the new line wins over the legacy one
+      const both = await parseText('# HANDOFF — T\n\n**Dirty:** 1 file (old.txt)\n**Dirty files:** new.txt\n\n## Goal\nx\n')
+      same(both.header.dirtyPaths, ['new.txt'])
+    },
+  },
+  {
+    id: 'parse-harness-record-none-or-absent',
+    run: async () => {
+      const kind = async (inProgress) => (await parseText(mk([['In Progress', inProgress]]))).harness
+      assert.equal(await kind('Skill : harness\nTask : t\nPhase : generate_done\nMode : single\nDocs : docs/harness/t/'), 'record')
+      assert.equal(await kind('Harness : none (state.json is for another branch)'), 'none')
+      assert.equal(await kind('- `Harness : none (completed)`'), 'none')
+      assert.equal(await kind('Working on the parser.'), 'absent')
+      // the word alone is not the line, and a record beats a `none` line when a document has both
+      assert.equal(await kind('Harness : none of the tasks apply, see below'), 'absent')
+      assert.equal(await kind('Harness : none (x)\nSkill : harness\nTask : t'), 'record')
+      assert.equal((await parseText('# HANDOFF — T\n\n## Goal\nx\n')).harness, 'absent')
     },
   },
   {
@@ -203,9 +264,11 @@ const headerCases = [
       const p = await parseText('# HANDOFF — Bare\n\n**Date:** 2026-03-03\n\n## Goal\nx\n')
       assert.equal(p.header.title, 'Bare')
       assert.equal(p.header.date, '2026-03-03')
-      for (const k of ['project', 'branch', 'head', 'headSubject', 'headRaw', 'dirtyRaw', 'upstream']) {
+      for (const k of ['project', 'branch', 'head', 'headRaw', 'dirtyRaw', 'worktree', 'upstream']) {
         assert.equal(p.header[k], null, k)
       }
+      same(p.header.dirtyPaths, [])
+      assert.ok(!('headSubject' in p.header), 'headSubject had no consumer and is gone')
     },
   },
   {
@@ -214,13 +277,12 @@ const headerCases = [
       const head = (v) => `# HANDOFF — T\n\n**Branch:** main  **HEAD:** ${v}\n\n## Goal\nx\n`
       const a = (await parseText(head('`abc1234` Short sha'))).header
       assert.equal(a.head, 'abc1234')
-      assert.equal(a.headSubject, 'Short sha')
+      assert.equal(a.headRaw, '`abc1234` Short sha')
       const b = (await parseText(head('n/a'))).header
       assert.equal(b.head, null)
       assert.equal(b.headRaw, 'n/a')
       const c = (await parseText(head('0123456789abcdef0123456789abcdef01234567'))).header
       assert.equal(c.head, '0123456789abcdef0123456789abcdef01234567')
-      assert.equal(c.headSubject, null)
     },
   },
   {
@@ -1963,6 +2025,863 @@ const readingPlanCases = [
   },
 ]
 
+// ---- git-state, harness-state and drift: the live facts a resume checks a document against ---------------------------
+//
+// These cases build throw-away repositories (tests/handoff/mkrepo.mjs) under the OS temp folder with the machine's
+// git configuration replaced, write a handoff document next to the repository (never inside it, so the repository
+// stays as the case made it) and run the real command line with the same environment. Paths are compared through
+// their real paths: git prints the long form of a temp folder that the OS may spell with a short name.
+
+const mkrepoLib = () => lib('tests/handoff/mkrepo.mjs')
+const real = (p) => fs.realpathSync.native(p)
+const sha40 = /^[0-9a-f]{40}$/
+
+async function withTemp(options, fn, plain = false) {
+  const { makeRepo, makePlainDir } = await mkrepoLib()
+  const r = plain ? makePlainDir() : makeRepo(options)
+  try {
+    return await fn(r)
+  } finally {
+    r.cleanup()
+  }
+}
+
+// the command line inside a temp repository's environment; exit 0 and an empty stderr, one JSON object
+function runIn(r, ...args) {
+  const res = spawnSync(process.execPath, [HANDOFF_JS, ...args], { encoding: 'utf8', env: r.env })
+  assert.equal(res.status, 0, `exit ${res.status}: ${res.stderr}`)
+  assert.equal(res.stderr, '')
+  return JSON.parse(res.stdout)
+}
+const gitStateIn = (r, cwd = r.dir) => runIn(r, 'git-state', '--cwd', cwd)
+
+// A handoff document with the header lines a drift check reads. `worktree` null leaves the line out.
+function driftDoc({ branch = 'main', head = null, worktree = null, dirtyFiles = [] } = {}) {
+  const lines = [
+    '# HANDOFF — Drift sample',
+    '',
+    '**Date:** 2026-02-01  **Project:** sample-service',
+    `**Branch:** ${branch}  **HEAD:** ${head === null ? 'n/a' : `${head} Sample subject`}`,
+  ]
+  if (worktree !== null) lines.push(`**Worktree:** ${worktree}`)
+  lines.push(`**Dirty:** ${dirtyFiles.length ? `${dirtyFiles.length} files` : 'clean'}  **Upstream:** n/a`)
+  if (dirtyFiles.length) lines.push(`**Dirty files:** ${dirtyFiles.join('; ')}`)
+  lines.push('', '## Goal', 'x', '')
+  return lines.join('\n')
+}
+
+function driftIn(r, docText, cwd = r.dir) {
+  const doc = path.join(r.root, 'doc.md')
+  fs.writeFileSync(doc, docText)
+  return runIn(r, 'drift', '--doc', doc, '--cwd', cwd)
+}
+
+const NO_DIRTY = { currentCount: 0, lost: [], committedSince: [], stillDirty: [] }
+
+const gitStateCases = [
+  {
+    id: 'git-state-clean',
+    run: async () => {
+      await withTemp({ commits: [{ message: 'Add the sample file', files: { 'a.txt': 'one\n' } }] }, (r) => {
+        const s = gitStateIn(r)
+        same(Object.keys(s).sort(), ['branch', 'dirty', 'head', 'isGit', 'subject', 'toplevel', 'upstream'])
+        assert.equal(s.isGit, true)
+        assert.equal(real(s.toplevel), real(r.dir))
+        assert.equal(s.branch, 'main')
+        assert.match(s.head, sha40)
+        assert.equal(s.head, r.shas[0])
+        assert.equal(s.subject, 'Add the sample file')
+        same(s.dirty, [])
+        assert.equal(s.upstream, null)
+      })
+    },
+  },
+  {
+    id: 'git-state-dirty-lists-every-path',
+    run: async () => {
+      const files = { 'a.txt': 'one\n', 'b.txt': 'two\n', 'c.txt': 'three\n' }
+      const dirty = { 'a.txt': 'changed\n', 'b.txt': null, 'sub/new file.txt': 'x\n', '한글.txt': 'y\n' }
+      for (let i = 1; i <= 12; i++) dirty[`many/f${String(i).padStart(2, '0')}.txt`] = 'z\n'
+      await withTemp({ commits: [{ files }], dirty }, (r) => {
+        r.write('staged.txt', 's\n')
+        r.git('add', 'staged.txt')
+        r.git('mv', 'c.txt', 'renamed.txt')
+        const s = gitStateIn(r)
+        const byPath = Object.fromEntries(s.dirty.map((d) => [d.path, d.status]))
+        // every path, no cap: 4 + 12 + the staged add and the rename; a rename is ONE entry under its new name
+        assert.equal(s.dirty.length, 4 + 12 + 2)
+        assert.equal(byPath['a.txt'], ' M')
+        assert.equal(byPath['b.txt'], ' D')
+        assert.equal(byPath['sub/new file.txt'], '??')
+        assert.equal(byPath['한글.txt'], '??')
+        assert.equal(byPath['staged.txt'], 'A ')
+        assert.equal(byPath['renamed.txt'], 'R ')
+        assert.ok(!('c.txt' in byPath), 'the old name of a rename is not a second entry')
+        // untracked files are listed one by one, never as their folder
+        assert.ok(!('many/' in byPath) && !('sub/' in byPath))
+        assert.equal(byPath['many/f12.txt'], '??')
+      })
+    },
+  },
+  {
+    id: 'git-state-detached',
+    run: async () => {
+      await withTemp({ commits: [{ message: 'one' }, { message: 'two' }], detached: true }, (r) => {
+        const s = gitStateIn(r)
+        assert.equal(s.isGit, true)
+        assert.equal(s.branch, '(detached)')
+        assert.equal(s.head, r.shas[1])
+        assert.equal(s.subject, 'two')
+      })
+    },
+  },
+  {
+    id: 'git-state-not-a-repo',
+    run: async () => {
+      await withTemp(null, (r) => {
+        const s = gitStateIn(r)
+        assert.equal(s.isGit, false)
+        for (const k of ['toplevel', 'branch', 'head', 'subject', 'upstream']) assert.equal(s[k], null, k)
+        same(s.dirty, [])
+      }, true)
+    },
+  },
+  {
+    id: 'git-state-from-a-subfolder-reports-the-top-level-and-top-relative-paths',
+    run: async () => {
+      await withTemp({ commits: [{ files: { 'sub/x.txt': 'one\n' } }], dirty: { 'sub/x.txt': 'two\n', 'top.txt': 't\n' } }, (r) => {
+        const s = gitStateIn(r, path.join(r.dir, 'sub'))
+        assert.equal(real(s.toplevel), real(r.dir))
+        same(s.dirty.map((d) => d.path).sort(), ['sub/x.txt', 'top.txt'])
+      })
+    },
+  },
+  {
+    id: 'git-state-before-the-first-commit',
+    run: async () => {
+      await withTemp({ commits: [], dirty: { 'new.txt': 'n\n' } }, (r) => {
+        const s = gitStateIn(r)
+        assert.equal(s.isGit, true)
+        assert.equal(s.branch, 'main')
+        assert.equal(s.head, null)
+        assert.equal(s.subject, null)
+        same(s.dirty.map((d) => d.path), ['new.txt'])
+      })
+    },
+  },
+  {
+    id: 'git-state-upstream-ahead-and-behind',
+    run: async () => {
+      await withTemp({ commits: [{ message: 'one' }, { message: 'two' }] }, (r) => {
+        const remote = path.join(r.root, 'origin.git')
+        r.gitIn(r.root, 'init', '-q', '--bare', '-b', 'main', remote)
+        r.git('remote', 'add', 'origin', remote)
+        r.git('push', '-q', '-u', 'origin', 'main')
+        same(gitStateIn(r).upstream, { ahead: 0, behind: 0 })
+        r.git('commit', '-q', '--allow-empty', '-m', 'three')
+        same(gitStateIn(r).upstream, { ahead: 1, behind: 0 })
+        r.git('reset', '-q', '--hard', 'HEAD~2')
+        same(gitStateIn(r).upstream, { ahead: 0, behind: 1 })
+      })
+    },
+  },
+  {
+    id: 'git-state-and-drift-leave-the-repository-alone',
+    run: async () => {
+      // `git status` normally rewrites the index to refresh its stat data; the helper must not.
+      await withTemp({ commits: [{ files: { 'a.txt': 'one\n' } }] }, (r) => {
+        const abs = path.join(r.dir, 'a.txt')
+        fs.writeFileSync(abs, 'one\n') // the same content, a new modification time: a stale stat entry
+        const later = new Date(Date.now() + 5000)
+        fs.utimesSync(abs, later, later)
+        const index = path.join(r.dir, '.git', 'index')
+        const before = fs.readFileSync(index)
+        gitStateIn(r)
+        driftIn(r, driftDoc({ head: r.shas[0], dirtyFiles: ['a.txt'] }))
+        assert.ok(before.equals(fs.readFileSync(index)), 'the index file is byte for byte the same')
+      })
+    },
+  },
+  {
+    id: 'git-state-usage-and-input-errors',
+    run: async () => {
+      const none = cli('git-state')
+      assert.equal(none.status, 2)
+      assert.equal(none.stdout, '')
+      assert.match(none.stderr, /--cwd/)
+      const missing = cli('git-state', '--cwd', path.join(FIX, 'no-such-folder'))
+      assert.equal(missing.status, 1)
+      assert.equal(missing.stdout, '')
+      assert.ok(missing.stderr.trim().length > 0)
+    },
+  },
+]
+
+// ---- harness-state ---------------------------------------------------------------------------------------------
+
+function withStateDir(state, fn) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'handoff-state-'))
+  try {
+    if (state !== null) {
+      fs.mkdirSync(path.join(dir, '.harness'))
+      fs.writeFileSync(path.join(dir, '.harness', 'state.json'), typeof state === 'string' ? state : JSON.stringify(state))
+    }
+    return fn(dir)
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true })
+  }
+}
+
+function harnessState(dir, branch) {
+  const r = cli('harness-state', '--branch', branch, '--cwd', dir)
+  assert.equal(r.status, 0, `exit ${r.status}: ${r.stderr}`)
+  assert.equal(r.stderr, '')
+  return JSON.parse(r.stdout)
+}
+
+const STATE = { version: '3.0', skill: 'harness', task: 'Add the parser', mode: 'single', phase: 'generate_done', branch: 'harness/add-parser', docs_path: 'docs/harness/add-parser/' }
+
+const harnessStateCases = [
+  {
+    id: 'harness-state-absent',
+    run: async () => {
+      withStateDir(null, (dir) => {
+        const s = harnessState(dir, 'main')
+        assert.equal(s.exists, false)
+        assert.equal(s.relevant, false)
+        assert.match(s.reason, /state\.json/)
+        assert.equal(s.fields, null)
+        same(Object.keys(s).sort(), ['exists', 'fields', 'reason', 'relevant'])
+      })
+    },
+  },
+  {
+    id: 'harness-state-other-branch',
+    run: async () => {
+      withStateDir(STATE, (dir) => {
+        const s = harnessState(dir, 'main')
+        assert.equal(s.exists, true)
+        assert.equal(s.relevant, false)
+        assert.ok(s.reason.includes('harness/add-parser') && s.reason.includes('main'), `the reason names both branches: ${s.reason}`)
+      })
+    },
+  },
+  {
+    id: 'harness-state-completed',
+    run: async () => {
+      withStateDir({ ...STATE, phase: 'completed' }, (dir) => {
+        const s = harnessState(dir, 'harness/add-parser')
+        assert.equal(s.exists, true)
+        assert.equal(s.relevant, false)
+        assert.match(s.reason, /completed/)
+      })
+    },
+  },
+  {
+    id: 'harness-state-match',
+    run: async () => {
+      withStateDir(STATE, (dir) => {
+        const s = harnessState(dir, 'harness/add-parser')
+        assert.equal(s.exists, true)
+        assert.equal(s.relevant, true)
+        assert.ok(typeof s.reason === 'string' && s.reason.length > 0)
+        same(s.fields, { skill: 'harness', task: 'Add the parser', phase: 'generate_done', mode: 'single', docs_path: 'docs/harness/add-parser/' })
+      })
+    },
+  },
+  {
+    id: 'harness-state-detached-and-non-git-values-never-match-a-branch',
+    run: async () => {
+      withStateDir(STATE, (dir) => {
+        assert.equal(harnessState(dir, '(detached)').relevant, false)
+        assert.equal(harnessState(dir, 'n/a').relevant, false)
+      })
+      // a task started without git records no branch: with no branch to equal the current one it is not relevant
+      const { branch, ...noBranch } = STATE
+      withStateDir({ ...noBranch, has_git: false }, (dir) => {
+        const s = harnessState(dir, 'n/a')
+        assert.equal(s.exists, true)
+        assert.equal(s.relevant, false)
+        assert.match(s.reason, /branch/)
+      })
+    },
+  },
+  {
+    id: 'harness-state-unreadable-file-is-a-reason-not-a-crash',
+    run: async () => {
+      for (const bad of ['{ not json', '[]', '"text"', '']) {
+        withStateDir(bad, (dir) => {
+          const s = harnessState(dir, 'main')
+          assert.equal(s.exists, true, JSON.stringify(bad))
+          assert.equal(s.relevant, false, JSON.stringify(bad))
+          assert.equal(s.fields, null, JSON.stringify(bad))
+          assert.match(s.reason, /state\.json/)
+        })
+      }
+    },
+  },
+  {
+    id: 'harness-state-reads-and-never-writes',
+    run: async () => {
+      withStateDir(STATE, (dir) => {
+        const file = path.join(dir, '.harness', 'state.json')
+        const before = fs.readFileSync(file)
+        const mtime = fs.statSync(file).mtimeMs
+        harnessState(dir, 'harness/add-parser')
+        assert.ok(before.equals(fs.readFileSync(file)))
+        assert.equal(fs.statSync(file).mtimeMs, mtime)
+        same(fs.readdirSync(path.join(dir, '.harness')), ['state.json'])
+      })
+    },
+  },
+  {
+    id: 'harness-state-usage-errors',
+    run: async () => {
+      const noBranch = cli('harness-state', '--cwd', FIX)
+      assert.equal(noBranch.status, 2)
+      assert.equal(noBranch.stdout, '')
+      assert.match(noBranch.stderr, /--branch/)
+      const gone = cli('harness-state', '--branch', 'main', '--cwd', path.join(FIX, 'no-such-folder'))
+      assert.equal(gone.status, 1)
+      assert.equal(gone.stdout, '')
+    },
+  },
+]
+
+// ---- drift -------------------------------------------------------------------------------------------------------
+
+const driftCases = [
+  {
+    id: 'drift-same',
+    run: async () => {
+      await withTemp({ commits: [{ files: { 'a.txt': 'one\n' } }] }, (r) => {
+        const d = driftIn(r, driftDoc({ head: r.shas[0] }))
+        same(Object.keys(d).sort(), ['branch', 'dirty', 'head', 'skipped'])
+        same(d.branch, { recorded: 'main', current: 'main', same: true, viaWorktree: false })
+        same(d.head, { relation: 'same', ahead: [], more: 0 })
+        same(d.dirty, NO_DIRTY)
+        same(d.skipped, [])
+        // an abbreviated recorded sha is the same commit
+        same(driftIn(r, driftDoc({ head: r.shas[0].slice(0, 12) })).head, { relation: 'same', ahead: [], more: 0 })
+      })
+    },
+  },
+  {
+    id: 'drift-forward',
+    run: async () => {
+      await withTemp({ commits: [{ message: 'one' }, { message: 'two' }, { message: 'three' }] }, (r) => {
+        const d = driftIn(r, driftDoc({ head: r.shas[0] }))
+        assert.equal(d.head.relation, 'forward')
+        same(d.head.ahead, [{ sha: r.shas[2], subject: 'three' }, { sha: r.shas[1], subject: 'two' }])
+        assert.equal(d.head.more, 0)
+      })
+    },
+  },
+  {
+    id: 'drift-forward-caps-the-list-at-twenty',
+    run: async () => {
+      const commits = Array.from({ length: 26 }, (_, i) => ({ message: `c${i + 1}` }))
+      await withTemp({ commits }, (r) => {
+        const d = driftIn(r, driftDoc({ head: r.shas[0] }))
+        assert.equal(d.head.relation, 'forward')
+        assert.equal(d.head.ahead.length, 20)
+        assert.equal(d.head.more, 5)
+        same(d.head.ahead[0], { sha: r.shas[25], subject: 'c26' })
+      })
+    },
+  },
+  {
+    id: 'drift-backward',
+    run: async () => {
+      await withTemp({ commits: [{ message: 'one' }, { message: 'two' }, { message: 'three' }] }, (r) => {
+        const recorded = r.shas[2]
+        r.git('reset', '-q', '--hard', 'HEAD~2')
+        const d = driftIn(r, driftDoc({ head: recorded }))
+        assert.equal(d.head.relation, 'backward')
+        same(d.head.ahead, [])
+        assert.equal(d.head.more, 0)
+      })
+    },
+  },
+  {
+    id: 'drift-diverged',
+    run: async () => {
+      await withTemp({ commits: [{ message: 'one' }, { message: 'two' }] }, (r) => {
+        const recorded = r.shas[1]
+        r.git('commit', '-q', '--amend', '--allow-empty', '-m', 'two, reworded')
+        assert.notEqual(r.git('rev-parse', 'HEAD'), recorded)
+        const d = driftIn(r, driftDoc({ head: recorded }))
+        assert.equal(d.head.relation, 'diverged')
+        same(d.head.ahead, [])
+      })
+    },
+  },
+  {
+    id: 'drift-unknown-commit-is-not-checked-and-raises-no-lost-work-alarm',
+    run: async () => {
+      await withTemp({ commits: [{ files: { 'a.txt': 'one\n' } }], dirty: { 'a.txt': 'two\n', 'b.txt': 'b\n' } }, (r) => {
+        const d = driftIn(r, driftDoc({ head: '1234567890abcdef1234567890abcdef12345678', dirtyFiles: ['a.txt', 'gone.txt', 'b.txt'] }))
+        assert.equal(d.head.relation, 'unknown')
+        assert.ok(d.skipped.some((s) => /not found/.test(s)), `a reason: ${d.skipped}`)
+        // without the recorded commit "committed since" cannot be told from "lost": nothing is called lost
+        same(d.dirty.lost, [])
+        same(d.dirty.committedSince, [])
+        same(d.dirty.stillDirty, ['a.txt', 'b.txt'])
+        assert.equal(d.dirty.currentCount, 2)
+        // the branch is still compared
+        assert.equal(d.branch.same, true)
+      })
+    },
+  },
+  {
+    id: 'drift-branch-differs',
+    run: async () => {
+      await withTemp({}, (r) => {
+        const d = driftIn(r, driftDoc({ branch: 'feature/other', head: r.shas[0] }))
+        same(d.branch, { recorded: 'feature/other', current: 'main', same: false, viaWorktree: false })
+        assert.equal(d.head.relation, 'same')
+      })
+    },
+  },
+  {
+    id: 'drift-dirty-lost',
+    run: async () => {
+      await withTemp({ commits: [{ files: { 'a.txt': 'one\n' } }], dirty: { 'a.txt': 'two\n' } }, (r) => {
+        const doc = driftDoc({ head: r.shas[0], dirtyFiles: gitStateIn(r).dirty.map((d) => d.path) })
+        same(driftIn(r, doc).dirty, { currentCount: 1, lost: [], committedSince: [], stillDirty: ['a.txt'] })
+        r.git('checkout', '--', 'a.txt') // the edit is thrown away (this is a test: the contract never runs it)
+        const d = driftIn(r, doc)
+        same(d.dirty, { currentCount: 0, lost: ['a.txt'], committedSince: [], stillDirty: [] })
+        assert.equal(d.head.relation, 'same')
+      })
+    },
+  },
+  {
+    id: 'drift-dirty-committed-since',
+    run: async () => {
+      await withTemp({ commits: [{ files: { 'a.txt': 'one\n' } }], dirty: { 'a.txt': 'two\n' } }, (r) => {
+        const doc = driftDoc({ head: r.shas[0], dirtyFiles: ['a.txt'] })
+        r.git('commit', '-q', '-a', '-m', 'save the edit')
+        const d = driftIn(r, doc)
+        same(d.dirty, { currentCount: 0, lost: [], committedSince: ['a.txt'], stillDirty: [] })
+        assert.equal(d.head.relation, 'forward')
+      })
+    },
+  },
+  {
+    id: 'drift-dirty-classifies-each-recorded-path',
+    run: async () => {
+      const files = { 'a.txt': '1\n', 'b.txt': '2\n', 'c.txt': '3\n' }
+      await withTemp({ commits: [{ files }], dirty: { 'a.txt': 'x\n', 'b.txt': 'x\n', 'c.txt': 'x\n', 'd.txt': 'x\n', 'dir/e.txt': 'x\n' } }, (r) => {
+        const doc = driftDoc({ head: r.shas[0], dirtyFiles: ['a.txt', 'b.txt', 'c.txt', 'd.txt', 'dir/e.txt'] })
+        r.git('checkout', '--', 'a.txt') // reverted: lost
+        r.git('add', 'b.txt')
+        r.git('commit', '-q', '-m', 'save b') // committed since
+        // c.txt stays dirty; d.txt is an untracked file that was deleted: lost; dir/e.txt is an untracked file that stays
+        fs.rmSync(path.join(r.dir, 'd.txt'))
+        r.write('unrelated.txt', 'u\n') // dirty now, never recorded
+        const d = driftIn(r, doc)
+        same(d.dirty.lost, ['a.txt', 'd.txt'])
+        same(d.dirty.committedSince, ['b.txt'])
+        same(d.dirty.stillDirty, ['c.txt', 'dir/e.txt'])
+        assert.equal(d.dirty.currentCount, 3) // c.txt, dir/e.txt, unrelated.txt
+      })
+    },
+  },
+  {
+    id: 'drift-dirty-path-after-a-directory-entry-and-literal-names',
+    run: async () => {
+      await withTemp({ commits: [{ files: { 'a.txt': '1\n' } }], dirty: { 'newdir/f.txt': 'x\n', 'weird[1].txt': 'x\n' } }, (r) => {
+        // a legacy document may list an untracked folder as `newdir/`; a name with glob characters is a name
+        const d = driftIn(r, driftDoc({ head: r.shas[0], dirtyFiles: ['newdir/', 'weird[1].txt', ':(top)a.txt', '*.txt'] }))
+        same(d.dirty.stillDirty, ['newdir/', 'weird[1].txt'])
+        same(d.dirty.lost, [':(top)a.txt', '*.txt'])
+      })
+    },
+  },
+  {
+    id: 'drift-from-a-subfolder',
+    run: async () => {
+      await withTemp({ commits: [{ files: { 'sub/x.txt': 'one\n' } }], dirty: { 'sub/x.txt': 'two\n' } }, (r) => {
+        const doc = driftDoc({ head: r.shas[0], dirtyFiles: ['sub/x.txt'] })
+        r.git('checkout', '--', 'sub/x.txt')
+        const d = driftIn(r, doc, path.join(r.dir, 'sub'))
+        same(d.dirty.lost, ['sub/x.txt'])
+        assert.equal(d.head.relation, 'same')
+      })
+    },
+  },
+  {
+    id: 'drift-worktree-from-main',
+    run: async () => {
+      await withTemp({ commits: [{ message: 'one' }], worktree: { branch: 'feature' } }, (r) => {
+        fs.writeFileSync(path.join(r.worktreeDir, 'w.txt'), 'work\n') // dirty in the linked worktree only
+        const text = driftDoc({ branch: 'feature', head: r.shas[0], worktree: r.worktreeDir, dirtyFiles: ['w.txt'] })
+        // resumed from the main tree: the branch the document recorded is the worktree's, so it is NOT "different"
+        const d = driftIn(r, text, r.dir)
+        same(d.branch, { recorded: 'feature', current: 'feature', same: true, viaWorktree: true })
+        assert.equal(d.head.relation, 'same')
+        same(d.dirty, { currentCount: 1, lost: [], committedSince: [], stillDirty: ['w.txt'] })
+        same(d.skipped, [])
+        // the control: the same document without the worktree line IS compared with the main tree
+        const plain = driftIn(r, driftDoc({ branch: 'feature', head: r.shas[0], dirtyFiles: ['w.txt'] }), r.dir)
+        same(plain.branch, { recorded: 'feature', current: 'main', same: false, viaWorktree: false })
+        same(plain.dirty.lost, ['w.txt'])
+        // resumed inside the worktree itself nothing is "via" anything
+        const inside = driftIn(r, text, r.worktreeDir)
+        same(inside.branch, { recorded: 'feature', current: 'feature', same: true, viaWorktree: false })
+      })
+    },
+  },
+  {
+    id: 'drift-worktree-gone',
+    run: async () => {
+      await withTemp({ commits: [{ files: { 'a.txt': 'one\n' } }] }, (r) => {
+        const gone = path.join(r.root, 'removed-worktree')
+        const d = driftIn(r, driftDoc({ branch: 'feature', head: r.shas[0], worktree: gone, dirtyFiles: ['a.txt'] }))
+        assert.ok(d.skipped.length >= 1 && d.skipped.some((s) => s.includes(gone)), `a reason naming the folder: ${d.skipped}`)
+        // no alarm: nothing was compared, so nothing is "different", "lost" or "diverged"
+        assert.equal(d.branch.same, null)
+        assert.equal(d.branch.viaWorktree, false)
+        assert.equal(d.head.relation, 'unknown')
+        same(d.dirty, NO_DIRTY)
+      })
+    },
+  },
+  {
+    id: 'drift-worktree-folder-that-is-no-longer-a-work-tree',
+    run: async () => {
+      await withTemp({ commits: [{ message: 'one' }] }, (r) => {
+        const folder = path.join(r.root, 'left-behind')
+        fs.mkdirSync(folder)
+        const d = driftIn(r, driftDoc({ head: r.shas[0], worktree: folder }))
+        assert.ok(d.skipped.length >= 1)
+        assert.equal(d.branch.same, null)
+        same(d.dirty, NO_DIRTY)
+      })
+    },
+  },
+  {
+    id: 'drift-in-a-folder-that-is-not-a-repository',
+    run: async () => {
+      await withTemp(null, (r) => {
+        const d = driftIn(r, driftDoc({ head: '1234567890abcdef1234567890abcdef12345678', dirtyFiles: ['a.txt'] }), r.dir)
+        assert.ok(d.skipped.length >= 1 && d.skipped.some((s) => /git/.test(s)), `a reason: ${d.skipped}`)
+        assert.equal(d.branch.current, null)
+        assert.equal(d.branch.same, null)
+        assert.equal(d.head.relation, 'unknown')
+        same(d.dirty, NO_DIRTY)
+      }, true)
+    },
+  },
+  {
+    id: 'drift-document-written-outside-git',
+    run: async () => {
+      await withTemp({}, (r) => {
+        // `Branch: n/a` and `HEAD: n/a`: the document knows no branch and no commit to compare
+        const d = driftIn(r, driftDoc({ branch: 'n/a', head: null }))
+        assert.equal(d.branch.recorded, 'n/a')
+        assert.equal(d.branch.current, 'main')
+        assert.equal(d.branch.same, null)
+        assert.equal(d.head.relation, 'unknown')
+        assert.ok(d.skipped.length >= 1)
+      })
+    },
+  },
+  {
+    id: 'drift-usage-and-input-errors',
+    run: async () => {
+      const doc = path.join(FIX, 'legacy-no-labels.md')
+      assert.equal(cli('drift', '--cwd', FIX).status, 2)
+      assert.equal(cli('drift', '--doc', doc).status, 2)
+      const missing = cli('drift', '--doc', path.join(FIX, 'does-not-exist.md'), '--cwd', FIX)
+      assert.equal(missing.status, 1)
+      assert.equal(missing.stdout, '')
+      const foreign = cli('drift', '--doc', path.join(FIX, 'non-handoff.md'), '--cwd', FIX)
+      assert.equal(foreign.status, 1)
+      assert.match(foreign.stderr, /# HANDOFF —/)
+      const gone = cli('drift', '--doc', doc, '--cwd', path.join(FIX, 'no-such-folder'))
+      assert.equal(gone.status, 1)
+      assert.equal(gone.stdout, '')
+    },
+  },
+]
+
+// ---- reading-plan --root: the session folder as a last-resort root -----------------------------------------------
+
+const rootFallbackCases = [
+  {
+    id: 'reading-plan-root-fallback',
+    run: async () => {
+      // A document outside any docs/ folder and any repository has no root of its own; the session's folder
+      // (--root) is then the one root. It is ONLY that: a document that has a root never reads from --root.
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'handoff-rootarg-'))
+      try {
+        const session = path.join(dir, 'session')
+        const elsewhere = path.join(dir, 'elsewhere')
+        fs.mkdirSync(path.join(session, 'src'), { recursive: true })
+        fs.mkdirSync(elsewhere)
+        fs.writeFileSync(path.join(session, 'src', 'a.md'), 'from the session folder\n')
+        fs.writeFileSync(path.join(elsewhere, 'b.md'), 'not reachable\n')
+        const doc = path.join(dir, 'loose', 'doc.md')
+        fs.mkdirSync(path.dirname(doc))
+        fs.writeFileSync(doc, mk([['Reading Order', '1. `src/a.md` — in the session folder\n2. `../elsewhere/b.md` — outside it\n3. `src/none.md` — missing']]))
+        const without = cli('reading-plan', '--doc', doc, '--budget', '1000000')
+        assert.equal(without.status, 0, without.stderr)
+        assert.equal(JSON.parse(without.stdout).entries[0].status, 'skipped-invalid')
+        const r = cli('reading-plan', '--doc', doc, '--budget', '1000000', '--root', session)
+        assert.equal(r.status, 0, r.stderr)
+        const [a, b, none] = JSON.parse(r.stdout).entries
+        assert.equal(a.status, 'read')
+        assert.equal(real(a.file), real(path.join(session, 'src', 'a.md')))
+        assert.equal(b.status, 'skipped-invalid') // the `..` rule still holds under the fallback root
+        assert.equal(none.status, 'skipped-missing')
+        // a document that has its own root ignores --root
+        const repoDoc = path.join(dir, 'repo', 'docs', 'harness', 'handoff', 'doc.md')
+        fs.mkdirSync(path.dirname(repoDoc), { recursive: true })
+        fs.writeFileSync(path.join(dir, 'repo', 'own.md'), 'own\n')
+        fs.writeFileSync(repoDoc, mk([['Reading Order', '1. `own.md` — in the document repository\n2. `src/a.md` — only under --root']]))
+        const own = cli('reading-plan', '--doc', repoDoc, '--budget', '1000000', '--root', session)
+        assert.equal(own.status, 0, own.stderr)
+        const [x, y] = JSON.parse(own.stdout).entries
+        assert.equal(x.status, 'read')
+        assert.equal(y.status, 'skipped-missing')
+      } finally {
+        fs.rmSync(dir, { recursive: true, force: true })
+      }
+    },
+  },
+  {
+    id: 'reading-plan-root-needs-a-value',
+    run: async () => {
+      const doc = path.join(FIX, 'reading-order-forms.md')
+      const r = cli('reading-plan', '--doc', doc, '--budget', '100', '--root')
+      assert.equal(r.status, 2)
+      assert.match(r.stderr, /--root/)
+      const empty = cli('reading-plan', '--doc', doc, '--budget', '100', '--root', '')
+      assert.equal(empty.status, 2)
+      assert.match(empty.stderr, /--root/)
+    },
+  },
+]
+
+// ---- diff.mjs --what state: what the relevance rule does to the recorded task state ---------------------------------------
+
+const rec = (phase, docs = 'docs/harness/sample-task/', task = 'Sample') => `Skill : harness\nTask : ${task}\nPhase : ${phase}\nMode : single\nDocs : ${docs}`
+
+const stateDiffCases = [
+  {
+    id: 'corpus-diff-state-counts-records-phases-and-stale-markers',
+    run: async () => {
+      const onHarnessBranch = HEAD.replace('**Branch:** main', '**Branch:** harness/sample-task')
+      const docs = {
+        'a-open-record': mk([['In Progress', rec('verify_done')]]),
+        'b-completed-record': mk([['In Progress', rec('completed')]]),
+        // the marker sits on a label line: the shape of the audit's stale-label sample
+        'c-open-record-marked-on-a-label': mk([['In Progress', `${rec('generate_done', undefined, 'other-track (stale)')}\nThis task is unrelated to the next work.`]]),
+        // the marker is prose in the same section, not on a label line
+        'd-completed-record-marked-in-prose': mk([['In Progress', `${rec('completed')}\n오래된 기록이라 무관하다.`]]),
+        'e-none': mk([['In Progress', 'Harness : none (state.json is for another branch)']]),
+        'f-no-record': mk([['In Progress', 'Working on the parser.'], ['Goal', 'A stale cache is mentioned here, outside In Progress.']]),
+        'g-partial-record': mk([['In Progress', 'Docs : docs/harness/partial-task/']]),
+        // the session was on the branch the harness gives the task: the one record the new rule keeps relevant
+        'h-on-the-harness-branch': mk([['In Progress', rec('verify_done')]], onHarnessBranch),
+      }
+      withSnapshotOfDocs(docs, (snap) => {
+        const d = node('diff.mjs', '--corpus', snap, '--what', 'state', '--json')
+        assert.equal(d.status, 0, d.stderr)
+        const out = JSON.parse(d.stdout)
+        assert.equal(out.what, 'state')
+        assert.equal(out.documents, 8)
+        same(out.record, { any: 6, five: 5, partial: 1 })
+        assert.equal(out.recordedCompleted, 2)
+        assert.equal(out.harnessNone, 1)
+        assert.equal(out.noRecord, 1)
+        // the marker list is part of the output; three scopes, the narrowest being the audit's sample
+        assert.ok(Array.isArray(out.staleMarker.markers) && out.staleMarker.markers.length >= 4)
+        same(out.staleMarker.onLabelLine, { documents: 1, recordedCompleted: 0, recordedOpen: 1 })
+        same(out.staleMarker.inProgress, { documents: 2, withRecord: 2, recordedCompleted: 1, recordedOpen: 1 })
+        assert.equal(out.staleMarker.anywhere, 3)
+        // the method is stated, and it never claims a per-document live check
+        assert.match(out.method, /no live/i)
+        same(out.newRule, { notRelevantByRecordedPhase: 2, relevantIfLiveStateMatches: 4 })
+        // the simulation states its assumption: only the document that sits on its harness branch keeps a hint
+        assert.match(out.simulation.assumption, /harness\//)
+        same({ ...out.simulation, assumption: null }, { assumption: null, records: 5, oldRuleHint: 3, newRuleHint: 1, staleSample: { documents: 1, oldRuleHint: 1, newRuleHint: 0 } })
+        same(out.pathRule, { docsUnderHarness: 5, accepted: 5 })
+        const h = node('diff.mjs', '--corpus', snap, '--what', 'state')
+        assert.equal(h.status, 0, h.stderr)
+        assert.match(h.stdout, /^state: 8 documents/m)
+        assert.match(h.stdout, /no record/)
+        assert.match(h.stdout, /simulation \(an estimate/)
+        assert.ok(!h.stdout.includes('sample-task') && !h.stdout.includes('parser') && !h.stdout.includes('other-track'), 'no document text in the report')
+      })
+    },
+  },
+  {
+    id: 'corpus-diff-next-normalises-before-calling-a-finished-slice-kept',
+    run: async () => {
+      const { classifyNextChange } = await diffLib()
+      const now = (slice, source) => ({ slice, source, ambiguous: [], commandCandidates: [] })
+      // 9.0.1 printed `**s2**` (it strips a backtick pair only); the new rule prints `s2`: still the finished slice
+      assert.equal(classifyNextChange({ slice: '**s2**', source: 'last-row' }, now('s2', 'docs')), 'kept-finished-slice')
+      assert.equal(classifyNextChange({ slice: '__s2__', source: 'last-row' }, now('s2', 'docs')), 'kept-finished-slice')
+      assert.equal(classifyNextChange({ slice: 's2', source: 'last-row' }, now('s3', 'docs')), 'became-docs-or-step-one')
+      // end to end: a `blocked` last row with a bold slice that Docs names keeps its value
+      const docs = { 'a-bold-blocked': epicDoc({ docs: 'docs/harness/s2-store/', rows: [row('s1-load', 'done'), row('**s2-store**', 'blocked')] }) }
+      withSnapshotOfDocs(docs, (snap) => {
+        const out = JSON.parse(node('diff.mjs', '--corpus', snap, '--what', 'next', '--json').stdout)
+        same(out.ids['kept-finished-slice'], ['d001'])
+        same(out.ids['became-docs-or-step-one'], [])
+        assert.equal(out.lastRow.valueKept, 1)
+        assert.equal(out.lastRow.valueChanged, 0)
+      })
+    },
+  },
+]
+
+// ---- the contract text: the sentences this change added ---------------------------------------------------------------------
+
+const readText = (...p) => fs.readFileSync(path.join(ROOT, ...p), 'utf8')
+const between = (text, from, to) => {
+  const a = text.indexOf(from)
+  const b = to === null ? text.length : text.indexOf(to, a + from.length)
+  assert.ok(a >= 0 && b > a, `the text between ${JSON.stringify(from)} and ${JSON.stringify(to)} exists`)
+  return text.slice(a, b)
+}
+
+const stateContractCases = [
+  {
+    id: 'generate-contract-collects-git-and-task-state-through-the-scripts',
+    run: async () => {
+      const text = readText('templates', 'handoff', 'generate.md')
+      const step1 = between(text, '### Step 1', '### Step 2')
+      assert.match(step1, /node "\{HANDOFF_JS\}" git-state --cwd /)
+      assert.match(step1, /node "\{HANDOFF_JS\}" harness-state --branch /)
+      // this file is read without resume.md: the script path, the exit rule and the no-fallback rule are here
+      assert.ok(step1.includes('${CLAUDE_PLUGIN_ROOT}/skills/handoff/scripts/handoff.mjs'))
+      assert.match(step1, /stderr verbatim/)
+      assert.match(step1, /never (fall back|run git by hand)/i)
+      // the values a non-git folder and a detached HEAD record
+      assert.match(step1, /`isGit`[^\n]{0,80}false[^\n]{0,80}`n\/a`/)
+      assert.ok(step1.includes('`(detached)`'))
+      // the record is written only for a relevant state; otherwise ONE `Harness : none (<reason>)` line
+      const item2 = between(step1, '2. **Harness task state', '3. **Task artifacts')
+      assert.ok(item2.includes('`relevant`'))
+      assert.ok(item2.includes('Harness : none (<reason>)'))
+      assert.match(item2, /(one|1) line/i)
+      assert.match(item2, /not by hand|never judge/i)
+      // the task's files become Reading Order candidates only when the state is relevant
+      const item3 = between(step1, '3. **Task artifacts', '4. **Conversation')
+      assert.ok(item3.includes('`relevant`'))
+      // the header template carries both new lines, and the dirty paths are listed once
+      const header = between(text, '```markdown\n# HANDOFF', '## Goal')
+      assert.ok(header.includes('**Worktree:**'))
+      assert.ok(header.includes('**Dirty files:**'))
+      assert.match(step1, /40/)
+      assert.match(step1, /\+N more/)
+      // the five-line format keeps its marker and tokens (the SYNC group's own lint guards the count)
+      assert.ok(text.includes('<!-- SYNC-WITH: templates/handoff/generate.md §Fixed Label Record Format -->'))
+    },
+  },
+  {
+    id: 'generate-contract-item-4-matches-the-current-next-rule',
+    run: async () => {
+      const text = readText('templates', 'handoff', 'generate.md')
+      const item4 = between(text, '4. **Conversation-derived content**', '5. **Progress Ledger')
+      for (const gone of ["ledger's LAST row", 'bare token', 'Status` normalization', 'normalization']) {
+        assert.ok(!item4.includes(gone), `the stale sentence part "${gone}" is gone`)
+      }
+      // it cites resume Step 5 by name, and says what the missing label costs in today's terms
+      assert.match(item4, /templates\/handoff\/resume\.md`? Step 5/)
+      assert.match(item4, /in-progress/)
+      assert.match(item4, /verbatim/)
+    },
+  },
+  {
+    id: 'resume-contract-checks-drift-through-the-script',
+    run: async () => {
+      const text = readText('templates', 'handoff', 'resume.md')
+      const step3 = between(text, '### Step 3 —', '### Step 3.5')
+      assert.match(step3, /node "\{HANDOFF_JS\}" drift --doc "[^"]+" --cwd "\."/)
+      for (const hand of ['git cat-file', 'git merge-base', 'git status', 'git log']) assert.ok(!step3.includes(hand), `${hand} is the script's, not a step to run by hand`)
+      assert.ok(step3.includes('`dirty.lost`'))
+      assert.ok(step3.includes('was dirty when recorded, now gone'))
+      assert.ok(step3.includes('`viaWorktree`'))
+      assert.ok(step3.includes('`skipped`'))
+      for (const rel of ['same', 'forward', 'backward', 'diverged', 'unknown']) assert.ok(step3.includes(`\`${rel}\``), `the ${rel} relationship is reported`)
+      assert.match(step3, /never (checks out|mutates)|NEVER mutate/i)
+      // a script that fails is shown and stops the step; the contract never falls back to prose
+      assert.match(text, /stderr\s+verbatim/)
+    },
+  },
+  {
+    id: 'resume-contract-judges-the-task-state-through-the-script',
+    run: async () => {
+      const text = readText('templates', 'handoff', 'resume.md')
+      const step35 = between(text, '### Step 3.5', '### Step 4')
+      assert.match(step35, /node "\{HANDOFF_JS\}" harness-state --branch "[^"]+" --cwd "\."/)
+      assert.ok(step35.includes('`relevant`'))
+      // not relevant: no re-entry hint and no Docs tier
+      assert.match(step35, /not relevant[^\n]*\n?[^\n]*(re-entry|`\/harness`)/i)
+      assert.match(step35, /`Docs` tier/)
+      // the three states of a document, in the words the briefing prints
+      assert.ok(step35.includes('no record — task state is not a verification target'))
+      assert.ok(step35.includes('no harness task'))
+      assert.ok(!/legacy/i.test(step35), 'a document without a record is not called "legacy"')
+      // the recorded Docs value: conditions 1-3 are applied by hand, 4 is the script's, and it only checks existence
+      assert.match(step35, /conditions? 1[–-]3/)
+      assert.ok(!/four path\s+conditions/.test(step35), 'the Docs check no longer claims all four conditions by hand')
+      // the Task row of the briefing
+      const task = text.split('\n').find((l) => /^ {2}Task {4}:/.test(l))
+      assert.ok(task, 'the briefing has a Task row')
+      assert.ok(!/legacy/i.test(task), 'the Task row never says legacy')
+      assert.ok(task.includes('no record — task state is not a verification target') && task.includes('no harness task'))
+      // Step 5 passes the script's verdict to `next`
+      const step5 = between(text, '### Step 5', '**`Next :` derivation')
+      assert.ok(step5.includes('harness-state') && step5.includes('`relevant`'))
+      assert.ok(!/full cross-check found/.test(step5), 'the old trigger (the file was found) is gone')
+      assert.match(text, /node "\{HANDOFF_JS\}" next --doc "[^"]+" --state-relevant <true\|false>/)
+    },
+  },
+  {
+    id: 'resume-contract-passes-the-session-folder-to-the-reading-plan',
+    run: async () => {
+      const text = readText('templates', 'handoff', 'resume.md')
+      assert.match(text, /reading-plan --doc "[^"]+" --budget \d+ --root "\."/)
+      const skill = readText('skills', 'handoff', 'SKILL.md')
+      // the base directory rule, once, in the dispatcher: the session folder, never the header's Worktree
+      assert.equal(skill.split('**Base directory').length - 1, 1, 'the base directory rule is written once')
+      const rule = between(skill, '**Base directory', '---')
+      assert.match(rule, /current working directory/)
+      assert.match(rule, /`docs\/harness\/handoff\/`/)
+      assert.match(rule, /`Worktree`[^.]*(never|not)/)
+    },
+  },
+  {
+    id: 'skill-contract-non-goals-name-the-live-fact-next-depends-on',
+    run: async () => {
+      const skill = readText('skills', 'handoff', 'SKILL.md')
+      assert.ok(!skill.includes("entirely from THIS document's own recorded text"), 'the derivation is no longer all document text')
+      const goal = between(skill, '- `/handoff` does not read `slice_plan.md`', '- Not a replacement')
+      assert.ok(goal.includes('`relevant`') || goal.includes('harness-state'))
+      assert.match(goal, /recorded `Docs`/)
+    },
+  },
+  {
+    id: 'session-boundary-says-when-generate-writes-the-record',
+    run: async () => {
+      const text = readText('templates', '_shared', 'session_boundary.md')
+      const sentences = text.split(/(?<=\.)\s+/).filter((s) => s.includes('Harness : none (<reason>)'))
+      assert.equal(sentences.length, 1, 'one sentence names the `none` line')
+      const s = sentences[0]
+      assert.ok(s.includes('`branch`') && s.includes('`phase`') && s.includes('`completed`'))
+      for (const token of ['Skill :', 'Task :', 'Phase :', 'Mode :', 'Docs :']) assert.ok(text.includes(token), token)
+      assert.equal(text.split('<!-- SYNC-WITH:').length - 1, 1, 'no new SYNC marker')
+    },
+  },
+]
+
 // ---- paths.mjs: the handoff's own path rule ------------------------------------------------------------------
 
 const pathCases = [
@@ -2261,7 +3180,13 @@ export const cases = [
   ...nextDiffCases,
   ...readingPlanCases,
   ...pathCases,
+  ...gitStateCases,
+  ...harnessStateCases,
+  ...driftCases,
+  ...rootFallbackCases,
+  ...stateDiffCases,
   ...readingSimCases,
   ...contractCases,
+  ...stateContractCases,
   ...runnerCases,
 ]

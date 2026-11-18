@@ -17,106 +17,146 @@ the parse anchors).
 
 ### Step 3 — Drift verification (report, NEVER mutate)
 
-Run and compare — every mismatch is REPORTED to the user; this skill never checks out,
-resets, or cleans anything:
+Run the script and report what it returns — every mismatch is REPORTED to the user; this skill
+never checks out, resets, or cleans anything, and the script only reads git:
 
-1. Current branch vs recorded branch → if different, say so explicitly.
-2. `git cat-file -e <recorded-sha>` → if the sha is unknown in this clone (gc / different
-   clone), report "cannot verify — recorded commit not found here" and skip step 3. Existence
-   alone proves nothing about rewrites (rebased-away commits survive in the object store for
-   weeks) — step 3 is the real detector.
-3. **Relationship check (primary drift detector):**
-   - `HEAD == recorded` → drift: none.
-   - `git merge-base --is-ancestor <recorded> HEAD` succeeds → FORWARD: list
-     `git log <recorded>..HEAD --oneline` (cap 20, then "+N more") — the delta the handoff
-     does not know about.
-   - `git merge-base --is-ancestor HEAD <recorded>` succeeds → **BACKWARD**: the branch now
-     points BEHIND the handoff (reset / checkout of an older commit) — warn explicitly; the
-     handoff's "Current State (verified)" is ahead of reality.
-   - Neither → **DIVERGED**: history rewritten (rebase/amend) or a different line of work —
+```
+node "{HANDOFF_JS}" drift --doc "<the document located in Step 1>" --cwd "."
+```
+
+`{HANDOFF_JS}`, the quoting and a non-zero exit are stated once, in Step 4 below: show the
+script's stderr verbatim and stop. `.` is the session's current working directory. The output is
+one JSON object: `branch`, `head`, `dirty` and `skipped`. When the document's `Worktree` header
+names a folder that still is a git work tree, the script reads branch, HEAD and working tree THERE
+(`viaWorktree` in `branch` is true when that is another work tree than the session's), so a
+document written in a linked worktree and resumed from the main tree is not a branch mismatch.
+Report, in this order:
+
+1. **Branch.** `branch.same` is false → say so explicitly (`branch.recorded` vs `branch.current`);
+   null → not compared, the reason is in `skipped`. When `viaWorktree` is true, say the
+   comparison was made in the recorded worktree.
+2. **HEAD relationship** (`head.relation`, the primary drift detector):
+   - `same` → drift: none.
+   - `forward` → list `head.ahead` (short sha and subject, newest first), then "+N more" with
+     `head.more` when it is above 0 — the delta the handoff does not know about.
+   - `backward` → **BACKWARD**: the branch now points BEHIND the handoff (reset / checkout of an
+     older commit) — warn explicitly; the handoff's "Current State (verified)" is ahead of reality.
+   - `diverged` → **DIVERGED**: history rewritten (rebase/amend) or a different line of work —
      warn explicitly.
-4. `git status --short` → note a dirty working tree.
+   - `unknown` → "cannot verify", with the reason from `skipped` (the recorded commit is not in
+     this clone, the document recorded none, the repository has no commit). Existence of the
+     commit alone would prove nothing about rewrites (rebased-away commits survive in the object
+     store for weeks); the relationship above is the real detector.
+3. **Uncommitted work.** `dirty.currentCount` above 0 → note a dirty working tree. Then the
+   paths the document recorded as dirty:
+   - `dirty.lost` → **was dirty when recorded, now gone**: clean now, and no commit since the
+     recorded HEAD touched them, so the uncommitted work vanished (it may have been set aside,
+     for instance in a stash). Name every path, and say that nothing here restores it — the
+     human decides.
+   - `dirty.committedSince` → was dirty when recorded, committed since (information only).
+   - `dirty.stillDirty` → still dirty.
+4. **`skipped`** — print every reason as it is (a worktree that is gone, a folder that is not a
+   git work tree, a commit that cannot be compared); a skipped comparison raises no warning of
+   its own.
 
-### Step 3.5 — Live task-state cross-check (NEW, P0-4 — report-only, read-only)
+### Step 3.5 — Live task-state cross-check (report-only, read-only)
 
-In addition to git drift (Step 3), check whether the document's recorded harness task state —
-the **Fixed Label Record Format** lines (`Skill`/`Task`/`Phase`/`Mode`/`Docs`) that `generate`
-Step 1 item 2 wrote under **In Progress** — still matches reality. This is distinct from the
-free-text "In Progress" prose drafted in `templates/handoff/generate.md` Step 1 item 4; only the
-fixed-label lines are machine-comparable. This is also a **new** read of `.harness/state.json`
-for `resume`
-(`generate` already read it; `resume` never did before this) — it stays strictly report-only,
-in keeping with the Non-Goals no-mutation principle: `/handoff` still never writes to, deletes,
-or otherwise touches `.harness/`. That guarantee is a rule of this step, **not** a side effect
-of `disallowed-tools` — `Task`/`Agent`/`Workflow` were removed from that frontmatter (see
-§Non-Goals), and it never covered `.harness/` writes in the first place.
+In addition to git drift (Step 3), check whether the document's recorded harness task state still
+matches reality. Ask the script first. It only READS `.harness/state.json`, and `/handoff` never
+writes to, deletes, or otherwise touches `.harness/` — a rule of this step, **not** a side effect
+of `disallowed-tools` (`Task`/`Agent`/`Workflow` were removed from that frontmatter, see
+§Non-Goals, and it never covered `.harness/` writes in the first place):
 
-**If the document HAS recorded fixed-label lines**, run the full cross-check (items 1-4 below).
+```
+node "{HANDOFF_JS}" harness-state --branch "<current branch>" --cwd "."
+```
 
-**If the document has NO recorded `Skill`/`Task`/`Phase`/`Mode`/`Docs` fixed-label lines**
-(a handoff written before P0-4) — do NOT skip this step entirely. Run a **reduced check**
-instead (this closes the spec.md:407 edge case: a dead `docs_path` recorded only in prose must
-still be reported as an explicit mismatch, never silently passed over). Items 1-3 below (which
-depend on a recorded `Phase`/`Docs` value to compare against) are skipped; perform these two
-checks instead:
-  (a) **`.harness/state.json` existence** — always reported, independent of fixed-label
-      presence. If it exists, show its live `skill`/`phase` values as INFORMATION only (there
-      is nothing recorded in the document to compare them against — no match/mismatch verdict).
-  (b) **Prose-recorded path check** — scan the document's `## In Progress` and `## Reading
-      Order` section bodies for `docs/harness/<slug>/`-shaped paths. Apply the four path
-      conditions Step 4 below states (they are this file's) first — a failing path is dropped
-      with a warning and never checked. For each surviving candidate,
-      check directory existence only; list every missing one as `missing (path recorded in
-      prose, no longer exists)` (cap 10, then "+N more").
-  The reduced check is still report-only and read-only, exactly like the full check below —
-  that likeness is about being report-only and read-only, not about reading the same things.
-  Its own reads are `.harness/state.json` and the existence of the paths (b) collected; it
-  writes nothing to `.harness/` or to the document.
+`<current branch>` is the `branch` of `node "{HANDOFF_JS}" git-state --cwd "."` — the session's own
+folder, not `drift`'s `branch.current`, which is the recorded worktree's when `viaWorktree` is true —
+or `n/a` when `isGit` is false. `{HANDOFF_JS}`, the quoting and a non-zero exit are as in Step 4.
+The output is one JSON object: `exists`, `relevant`, `reason` and `fields`. **`relevant` decides
+everything below.** It is true only when `.harness/state.json` exists, its `branch` equals the
+current branch and its `phase` is not `completed`; a state that is not relevant belongs to another
+branch or to a finished task. For it there is no phase comparison, no `/harness` re-entry hint, and
+the `Docs` tier of Step 5's `Next :` derivation is off.
 
-1. **`.harness/state.json` existence**: if the document recorded task state but
-   `.harness/state.json` no longer exists at resume time, report: "recorded task state — file
-   no longer exists (cleaned up, or a different task started since)." **This absence alone is
-   not a red flag** — it is also the normal signature of an epic boundary: `/harness-build`
-   §Step 3.5: Slice Plan writes `{docs_path}slice_plan.md` and hands control to
-   §Step 3.6: Epic Exit (both by name); that section confirms the file — it never writes it —
-   and deletes `.harness/` only after that confirmation succeeds. So a missing state.json next to a
-   `Docs` directory that now contains `slice_plan.md` reads as "the epic advanced to its next
-   slice," not as an abandoned task — mention this reading in the report whenever
-   `slice_plan.md` is among the entry names item 3 below collects. Item 3's directory read
-   supplies those names — run it before deciding whether to add this mention.
-2. **Phase match**: if `.harness/state.json` exists, compare its live `phase` field to the
-   document's recorded `Phase` label. Report `match` / `mismatch: recorded <X>, now <Y>`.
-3. **`docs_path` existence**: apply the four path conditions Step 4 below states (they are
-   this file's, stated there once and not restated here) to the recorded `Docs` value first —
-   the same check the reduced check (b) above runs on the `docs/harness/<slug>/`-shaped paths
-   it collects, and Step 4 runs on the Reading Order paths. A failing value is dropped with a
-   warning and never checked. Then check whether that directory still exists.
-   Report `exists` / `missing (evidence path no longer readable)`. When it exists, also read its
-   entry names one level deep — names only, no file is opened and nothing is recursed into, so
-   §Non-Goals' "does not read `slice_plan.md`" line still holds. Those names are the data
-   item 1's `slice_plan.md` condition is evaluated against; item 4's reporting rule below covers
-   this item's `exists` / `missing` verdict, not the names themselves.
-4. **Never auto-correct or act on this.** All of the above are REPORTED alongside git drift in
-   the Step 5 briefing; the human decides what to do next. If the live `skill` is `"harness"`
-   and its `phase` is not `completed`, note (informational only, never an instruction to
-   invoke it) that `/harness` (no args) is the likely re-entry command — see
-   `skills/harness/SKILL.md` §Session Boundary "`/handoff generate` field contract".
+What the document records about a harness task is one of three things, read from its `## In Progress`
+section:
+
+- **the fixed-label lines** (any of `Skill`/`Task`/`Phase`/`Mode`/`Docs`; `generate` Step 1 item 2
+  wrote all five, in the **Fixed Label Record Format**) → run the full cross-check, items 1-4
+  below. This is distinct from the free-text "In Progress" prose
+  drafted in `templates/handoff/generate.md` Step 1 item 4; only the fixed-label lines are
+  machine-comparable;
+- **`Harness : none (<reason>)`** → the Task row says "no harness task";
+- **neither** (a handoff written before either existed) → the Task row says
+  "no record — task state is not a verification target".
+
+For the second and third, items 1-3 below (they need a recorded `Phase` or `Docs` value to compare
+against) are skipped and these two checks run instead — a dead `docs_path` recorded only in prose must
+still be reported, never silently passed over:
+  (a) **`.harness/state.json` existence** — always reported. If `exists`, show `fields.skill` and
+      `fields.phase` as INFORMATION only (there is nothing recorded in the document to compare them
+      against — no match/mismatch verdict, and no re-entry hint); `fields` is null when the file
+      could not be read, and `reason` then says so.
+  (b) **Prose-recorded path check** — scan the document's `## In Progress` and `## Reading Order`
+      section bodies for `docs/harness/<slug>/`-shaped paths. Apply conditions 1–3 of the path rule
+      Step 4 below states (they are this file's) first — a failing path is dropped with a warning and
+      never checked; condition 4 (links and junctions) is the script's and cannot be applied by hand.
+      For each surviving candidate, check directory existence only; list every missing one as
+      `missing (path recorded in prose, no longer exists)` (cap 10, then "+N more").
+  Both checks are report-only and read-only, like the full check below: their reads are the
+  `harness-state` output and the existence of the paths (b) collected; they write nothing to
+  `.harness/` or to the document.
+
+1. **`.harness/state.json` existence**: if the document recorded task state but `exists` is false,
+   report: "recorded task state — file no longer exists (cleaned up, or a different task started
+   since)." **This absence alone is not a red flag** — it is also the normal signature of an epic
+   boundary: `/harness-build` §Step 3.5: Slice Plan writes `{docs_path}slice_plan.md` and hands
+   control to §Step 3.6: Epic Exit (both by name); that section confirms the file — it never writes
+   it — and deletes `.harness/` only after that confirmation succeeds. So a missing state.json next
+   to a `Docs` directory that now contains `slice_plan.md` reads as "the epic advanced to its next
+   slice," not as an abandoned task — mention this reading in the report whenever `slice_plan.md`
+   is among the entry names item 3 below collects. Item 3's directory read supplies those names —
+   run it before deciding whether to add this mention.
+2. **Relevance and phase match**: if `exists` and `relevant` is false, report "recorded task state —
+   the live state.json is not relevant: <reason>" with the script's `reason`, and compare nothing
+   against it. If `relevant` is true, compare `fields.phase` to the document's recorded `Phase`
+   label and report `match` / `mismatch: recorded <X>, now <Y>`.
+3. **`docs_path` existence**: apply conditions 1–3 of the path rule Step 4 below states (they are
+   this file's, stated there once and not restated here) to the recorded `Docs` value first — the
+   same conditions check (b) above applies to the `docs/harness/<slug>/`-shaped paths it collects,
+   and Step 4 to the Reading Order paths; condition 4 is the script's, and this item only checks
+   existence. A failing value is dropped with a warning and never checked. Then check whether that
+   directory still exists. Report `exists` / `missing (evidence path no longer readable)`. When it
+   exists, also read its entry names one level deep — names only, no file is opened and nothing is
+   recursed into, so §Non-Goals' "does not read `slice_plan.md`" line still holds. Those names are
+   the data item 1's `slice_plan.md` condition is evaluated against; item 4's reporting rule below
+   covers this item's `exists` / `missing` verdict, not the names themselves.
+4. **Never auto-correct or act on this.** All of the above are REPORTED alongside git drift in the
+   Step 5 briefing; the human decides what to do next. If `relevant` is true and `fields.skill` is
+   `"harness"` (a relevant state's `phase` is by definition not `completed`), note (informational
+   only, never an instruction to invoke it) that `/harness` (no args) is the likely re-entry
+   command — see `skills/harness/SKILL.md` §Session Boundary "`/handoff generate` field contract".
+   With `relevant` false there is no such note.
 
 ### Step 4 — Read the Reading Order
 
 Do not read the Reading Order by hand. Run the plan and read exactly what it says:
 
 ```
-node "{HANDOFF_JS}" reading-plan --doc "<the document located in Step 1>" --budget 131072
+node "{HANDOFF_JS}" reading-plan --doc "<the document located in Step 1>" --budget 131072 --root "."
 ```
 
 `{HANDOFF_JS}` is `${CLAUDE_PLUGIN_ROOT}/skills/handoff/scripts/handoff.mjs`. Confirm
 `${CLAUDE_PLUGIN_ROOT}` resolves to a non-empty value first, as `templates/_shared/segment_launch.md`
 Procedure step 0 requires of a launch — substitute the literal root when the shell leaves it unset —
 and keep both paths in quotes, since a path with a space splits otherwise. `--budget` is the most
-this step reads, in bytes. The output is one JSON object: `entries`, one per Reading Order item in
-document order, each with `status`, `file` (the absolute path to read), `range`, `reason`, `bytes`
-and, for a partial read, `outline` (level 1–3 headings of a Markdown file with line numbers, at most
+this step reads, in bytes; `--root` is the session's current working directory, the one root of a
+document that has neither a `docs/` folder above it nor a git repository (SKILL.md "Base
+directory"). The output is one JSON object: `entries`, one per Reading Order item in document
+order, each with `status`, `file` (the absolute path to read), `range`, `reason`, `bytes` and, for
+a partial read, `outline` (level 1–3 headings of a Markdown file with line numbers, at most
 200; `truncated` is true when the file has more); `totalBytes` is what is charged against the budget,
 each entry's `bytes` plus its outline's cost. Act on each entry by its `status`:
 
@@ -137,8 +177,8 @@ skipped ones, as a short list directly under the aligned block — never as a ne
 
 The script checks each path BEFORE any read, and the four conditions are this file's, not
 /harness's path validator: (1) the path is relative, or absolute and inside the repository (the
-folder that holds the document's `docs/` directory, or that folder's git top-level); (2) no
-segment is `..`; (3) no segment is `.git` and none holds a `:` (an NTFS stream name such as
+folder that holds the document's `docs/` directory, or that folder's git top-level — for a
+document with neither, the `--root` folder); (2) no segment is `..`; (3) no segment is `.git` and none holds a `:` (an NTFS stream name such as
 `.git::$INDEX_ALLOCATION` reaches `.git` under another spelling); (4) the file it names, with links
 and junctions followed, still lies inside that folder. `docs/harness/…` is allowed. A path that
 fails comes back `skipped-invalid`.
@@ -158,8 +198,9 @@ node "{HANDOFF_JS}" next --doc "<the document located in Step 1>" --state-releva
 ```
 
 `{HANDOFF_JS}`, the quoting and a non-zero exit are as in Step 4: show the script's stderr
-verbatim and stop. Pass `true` only when Step 3.5's full cross-check found `.harness/state.json`;
-with the reduced check, or when no state file exists, pass `false`. The output is one JSON object:
+verbatim and stop. Pass `true` only when Step 3.5's `harness-state` call returned `relevant` true;
+in every other case (a state that is not relevant, no state file, a document with no record) pass
+`false`. The output is one JSON object:
 `slice`, `source` (`label`, `in-progress`, `docs` or `step-one`), `ambiguous` (a list) and
 `commandCandidates` (a list). The two derivations below say what each field means for the
 briefing.
@@ -169,8 +210,8 @@ Print (in `user_lang`):
 ```
 [handoff] Resume briefing — <title> (<date>)
   Goal    : <1-line goal>
-  State   : <verified-state summary> + drift: <none | N commits since | BACKWARD | DIVERGED | branch differs | dirty tree | cannot verify>
-  Task    : <Step 3.5 cross-check summary — full check: "phase match (generate_done); docs_path exists" | "phase mismatch: recorded generate_done, now verify_done"; reduced check (legacy document, no fixed-label lines): "legacy handoff — task state not machine-verifiable" | "legacy handoff — task state not machine-verifiable; N recorded path(s) missing">
+  State   : <verified-state summary> + drift: <none | N commits since | BACKWARD | DIVERGED | branch differs | dirty tree | uncommitted work gone | cannot verify>
+  Task    : <Step 3.5 summary — fixed-label record: "phase match (generate_done); docs_path exists" | "phase mismatch: recorded generate_done, now verify_done" | "state not relevant: <reason>"; Harness : none: "no harness task"; neither: "no record — task state is not a verification target"; for either of the last two add "; N recorded path(s) missing" when check (b) found any>
   Blockers: <summary or "none">
   Next    : <see "Next :" derivation below>
   Next cmd: <see "Next cmd:" derivation below>

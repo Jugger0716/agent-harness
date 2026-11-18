@@ -4,14 +4,16 @@
 // Reading Order entry is read) live in the commands built on top of it.
 //
 //   parseHandoff(text) -> {
-//     header:   { title, date, project, branch, head, headSubject, headRaw, dirtyRaw, dirtyPaths[],
-//                 worktree, upstream }               (a label the document lacks reads as null;
-//                                                     dirtyPaths and worktree are not parsed yet)
+//     header:   { title, date, project, branch, head, headRaw, dirtyRaw, dirtyPaths[], worktree,
+//                 upstream }                         (a label the document lacks reads as null;
+//                                                     see "Header lines" for worktree and dirtyPaths)
 //     sections: { <name>: <body text> }               (level-2 headings outside code fences, in
 //                                                     document order; see "Section names"; a
 //                                                     null-prototype object, so any title is a key)
 //     fixedLabels: { Skill, Task, Phase, Mode, Docs } | null   (from "## In Progress")
-//     harness:  "absent"                              (the `Harness :` line is not parsed yet)
+//     harness:  "record" | "none" | "absent"          (what `## In Progress` says about a harness task:
+//                                                     the fixed-label record, a `Harness : none (…)`
+//                                                     line, or neither — see "Harness record")
 //     ledger:   { rows: [{ epic, epicRaw, slice, status, evidence, notes }] } | null
 //     stepOne:  { text, candidates[], sliceLabel }    (Next Steps item 1)
 //     readingOrder: [{ raw, path, range, isFile, self }]
@@ -30,6 +32,14 @@
 //     `status` and `epic` are read with one `**…**`/`__…__` pair and then one backtick pair
 //     removed; `epicRaw` is the Epic cell as written, and `slice`, `evidence` and `notes` are
 //     the cells as written (only trimmed).
+//   - Header lines: `**Worktree:**` is the git top-level the document was written in (`n/a` reads as
+//     null). `dirtyPaths` comes from `**Dirty files:**` (paths joined with `; `, a trailing `+N more`
+//     is not a path); a document without that line is read from the legacy `**Dirty:**` value —
+//     only a parenthesised list whose every item looks like a path (`3 files (a.js, b.js)`), because
+//     a wrong path would raise a false "lost work" alarm; prose or a bare count gives [].
+//   - Harness record: "record" when any of the five fixed labels is present (it wins when a
+//     document carries both); else "none" for a `Harness : none` or `Harness : none (<reason>)`
+//     line; else "absent" — a document written before either existed.
 //   - Unknown fields are null, never absent.
 //
 // Everything exported besides `parseHandoff` is a building block that the corpus tools share.
@@ -136,25 +146,47 @@ function readHeader(lines, flags, firstSection) {
   const get = (k) => (Object.hasOwn(raw, k) ? raw[k] : null)
   const headRaw = get('head')
   let head = null
-  let headSubject = null
   const hm = headRaw === null ? null : /^`?([0-9a-f]{7,40})`?(?:\s+(.*))?$/.exec(headRaw)
-  if (hm) {
-    head = hm[1]
-    headSubject = hm[2] ? hm[2].trim() || null : null
-  }
+  if (hm) head = hm[1]
+  const dirtyRaw = get('dirty')
+  const worktree = get('worktree')
+  const dirtyFiles = get('dirty files')
   return {
     title: lines[0].slice(HANDOFF_PREFIX.length).trim(),
     date: get('date'),
     project: get('project'),
     branch: get('branch'),
     head,
-    headSubject,
     headRaw,
-    dirtyRaw: get('dirty'),
-    dirtyPaths: [], // Task 7 (the `Dirty files` line)
-    worktree: null, // Task 7 (the `Worktree` line)
+    dirtyRaw,
+    dirtyPaths: dirtyFiles !== null ? pathsOfDirtyFiles(dirtyFiles) : pathsOfLegacyDirty(dirtyRaw),
+    worktree: worktree === null || /^(n\/a|none|-)?$/i.test(worktree) ? null : stripTicks(worktree),
     upstream: get('upstream'),
   }
+}
+
+const stripTicks = (v) => v.replace(/^`+|`+$/g, '').trim()
+
+// `a; b c; +2 more` -> the paths. Items are split at a semicolon followed by white space (so a path
+// that holds a bare `;` stays whole), wrapping backticks are dropped, and `+N more` / `none` /
+// `clean` / `n/a` are markers, not paths.
+function pathsOfDirtyFiles(value) {
+  return value
+    .split(/\s*;\s+/)
+    .map(stripTicks)
+    .filter((p) => p !== '' && !/^\+\d+ more$/i.test(p) && !/^(none|clean|n\/a|-)$/i.test(p))
+}
+
+// `3 files (src/a.js, `docs/b.md`)` -> the paths, when the value has a parenthesised list and EVERY
+// item looks like a path; otherwise [].
+function pathsOfLegacyDirty(value) {
+  const m = value === null ? null : /\(([^()]*)\)/.exec(value)
+  if (!m) return []
+  const items = m[1]
+    .split(/\s*[,;]\s*/)
+    .map(stripTicks)
+    .filter((p) => p !== '' && !/^(\+\d+ more|…|\.\.\.)$/i.test(p))
+  return items.length > 0 && items.every(looksLikePath) ? items : []
 }
 
 // ---- fixed labels ------------------------------------------------------------------------------------------
@@ -182,6 +214,18 @@ function readFixedLabels(body) {
     }
   }
   return any ? out : null
+}
+
+// ---- Harness record -----------------------------------------------------------------------------------------
+
+// `Harness : none` or `Harness : none (<reason>)`, alone on its line (a list marker or one backtick
+// pair around it is allowed). A sentence that merely starts with those words is not the line.
+const HARNESS_NONE = /^\s*[-*]?\s*`?Harness\s*:\s*none\s*(\([^\n]*\))?\s*`?\s*$/i
+
+function readHarness(body, fixedLabels) {
+  if (fixedLabels) return 'record'
+  if (body && body.lines.some((l) => HARNESS_NONE.test(l))) return 'none'
+  return 'absent'
 }
 
 // ---- Progress Ledger --------------------------------------------------------------------------------------------
@@ -386,12 +430,13 @@ export function parseHandoff(text) {
     if (!Object.hasOwn(sections, s.name)) sections[s.name] = trimBlankEdges(lines.slice(s.start + 1, s.end)).join('\n')
   }
   const body = (name) => bodyOf(secs, lines, flags, name)
+  const fixedLabels = readFixedLabels(body('In Progress'))
 
   return {
     header: readHeader(lines, flags, secs.length ? secs[0].start : lines.length),
     sections,
-    fixedLabels: readFixedLabels(body('In Progress')),
-    harness: 'absent', // Task 7 (the `Harness :` line)
+    fixedLabels,
+    harness: readHarness(body('In Progress'), fixedLabels),
     ledger: readLedger(body('Progress Ledger')),
     stepOne: readStepOne(body('Next Steps')),
     readingOrder: readingOrderEntries(body('Reading Order')),
