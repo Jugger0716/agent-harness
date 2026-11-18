@@ -2847,13 +2847,14 @@ const driftIdentityCases = [
     id: 'drift-skipped-reasons-hold-no-control-characters-and-stay-short',
     run: async () => {
       await withTemp({ commits: [{ message: 'one' }] }, (r) => {
-        const esc = String.fromCharCode(27)
-        const bel = String.fromCharCode(7)
-        const d = driftIn(r, driftDoc({ head: r.shas[0], worktree: `relative${esc}[31mred${bel}${'x'.repeat(600)}` }))
+        // controls (ESC, BEL) and the invisible kinds a terminal or a reader is misled by: line and paragraph
+        // separators, a right-to-left override, a zero-width space, a byte order mark
+        const odd = [27, 7, 0x2028, 0x2029, 0x202e, 0x200b, 0xfeff].map((c) => String.fromCharCode(c)).join('')
+        const d = driftIn(r, driftDoc({ head: r.shas[0], worktree: `relative${odd}[31mred${'x'.repeat(600)}` }))
         const reason = d.skipped[0]
         assert.ok(reason.includes('relative'), 'the value is still named')
-        const control = new RegExp(`[${String.fromCharCode(0)}-${String.fromCharCode(31)}${String.fromCharCode(127)}-${String.fromCharCode(159)}]`)
-        for (const s of d.skipped) assert.ok(!control.test(s), `no control character: ${JSON.stringify(s.slice(0, 60))}`)
+        const invisible = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u
+        for (const s of d.skipped) assert.ok(!invisible.test(s), `no control or format character: ${JSON.stringify(s.slice(0, 60))}`)
         assert.ok(reason.length < 500, `a short reason: ${reason.length} characters`)
       })
     },
@@ -2915,6 +2916,129 @@ const driftIdentityCases = [
       assert.ok(!/uncommitted work gone/.test(text), 'the old, stronger token is gone')
       const step3 = between(text, '### Step 3 —', '### Step 3.5').replace(/\s+/g, ' ')
       assert.ok(step3.includes(`\`${phrase}\``), 'the bullet that reports `dirty.lost` names the same token')
+    },
+  },
+]
+
+// ---- drift: the registered work tree's git directory must be the repository's own -------------------------------------------------
+
+const fwd = (p) => p.replace(/\\/g, '/')
+
+// A linked work tree whose `.git` file now names a git directory H outside the repository. H carries a
+// `commondir` file that names the REAL common directory, so toplevel (the folder) and common dir (the real
+// one) both look right; only H itself is hostile: a forged HEAD, and a per-work-tree config that defines a
+// clean filter. `worktreeConfig` switches on the extension that makes git read that config (`git
+// sparse-checkout` turns it on, so the premise is common).
+function forgeLinkedWorktree(r, { worktreeConfig }) {
+  const W = r.worktreeDir
+  if (worktreeConfig) r.git('config', 'extensions.worktreeConfig', 'true')
+  const H = path.join(r.root, 'forged-admin')
+  fs.cpSync(path.join(r.dir, '.git', 'worktrees', path.basename(W)), H, { recursive: true })
+  fs.writeFileSync(path.join(H, 'commondir'), `${fwd(path.join(r.dir, '.git'))}\n`)
+  fs.writeFileSync(path.join(H, 'HEAD'), 'ref: refs/heads/spoofed\n')
+  const marker = path.join(r.root, 'PWNED_WORKTREE_CONFIG')
+  if (worktreeConfig) fs.writeFileSync(path.join(H, 'config.worktree'), `[filter "evil"]\n\tclean = touch "${fwd(marker)}" && cat\n`)
+  fs.writeFileSync(path.join(W, '.gitattributes'), '* filter=evil\n')
+  const gitfile = path.join(W, '.git')
+  fs.rmSync(gitfile, { force: true }) // git marks it read-only on Windows
+  fs.writeFileSync(gitfile, `gitdir: ${fwd(H)}\n`)
+  const restat = (secs) => {
+    const when = new Date(Date.now() + secs * 1000)
+    fs.utimesSync(path.join(W, 'a.txt'), when, when)
+  }
+  return { W, marker, restat }
+}
+
+const driftGitDirCases = [
+  {
+    id: 'drift-registered-worktree-with-a-forged-git-dir-and-the-real-common-dir-is-never-opened',
+    run: async () => {
+      await withTemp({ commits: [{ files: { 'a.txt': 'one\n' } }], worktree: { branch: 'feature' } }, (r) => {
+        const { W, marker, restat } = forgeLinkedWorktree(r, { worktreeConfig: true })
+        // precondition: a plain `status` in the forged work tree runs the filter from the forged config
+        restat(30)
+        r.gitIn(W, 'status', '--porcelain')
+        assert.ok(fs.existsSync(marker), 'precondition: git status in the forged work tree runs the hostile filter')
+        fs.rmSync(marker)
+        restat(60)
+        const d = driftIn(r, driftDoc({ branch: 'feature', head: r.shas[0], worktree: W, dirtyFiles: ['a.txt'] }))
+        assert.ok(!fs.existsSync(marker), 'no program of the forged git directory ran')
+        assert.ok(d.skipped.some((s) => /does not belong to this repository/.test(s)), `a reason: ${d.skipped}`)
+        assert.equal(d.branch.viaWorktree, false)
+        assert.equal(d.branch.same, null)
+        same(d.dirty, NO_DIRTY)
+      })
+    },
+  },
+  {
+    id: 'drift-registered-worktree-with-a-forged-git-dir-reports-no-forged-branch',
+    run: async () => {
+      // no extension, no filter: the forged HEAD alone would be reported as this work tree's branch
+      await withTemp({ commits: [{ files: { 'a.txt': 'one\n' } }], worktree: { branch: 'feature' } }, (r) => {
+        const { W } = forgeLinkedWorktree(r, { worktreeConfig: false })
+        const d = driftIn(r, driftDoc({ branch: 'feature', head: r.shas[0], worktree: W, dirtyFiles: ['a.txt'] }))
+        assert.notEqual(d.branch.current, 'spoofed', 'the forged HEAD is not reported')
+        assert.equal(d.branch.current, null)
+        assert.equal(d.branch.same, null)
+        assert.equal(d.branch.viaWorktree, false)
+        assert.ok(d.skipped.some((s) => /does not belong to this repository/.test(s)), `a reason: ${d.skipped}`)
+        same(d.dirty, NO_DIRTY)
+      })
+    },
+  },
+  {
+    id: 'drift-registered-worktrees-that-are-the-repositorys-own-still-evaluate',
+    run: async () => {
+      const { execFileSync } = await import('node:child_process')
+      await withTemp({ commits: [{ files: { 'a.txt': 'one\n' } }], worktree: { branch: 'feature' } }, (r) => {
+        const sha = r.shas[0]
+        // an ordinary linked work tree, and a detached one
+        const det = path.join(r.root, 'detached-wt')
+        r.git('worktree', 'add', '-q', '--detach', det)
+        same(driftIn(r, driftDoc({ branch: 'feature', head: sha, worktree: r.worktreeDir })).branch, { recorded: 'feature', current: 'feature', same: true, viaWorktree: true })
+        same(driftIn(r, driftDoc({ branch: '(detached)', head: sha, worktree: det })).branch, { recorded: '(detached)', current: '(detached)', same: true, viaWorktree: true })
+        // a main tree whose git directory lives elsewhere (`--separate-git-dir`) with a linked work tree (git itself lists that
+        // main tree under its git directory, so a document written IN it is not found: a known, safe-side skip)
+        const sep = path.join(r.root, 'sep')
+        const sepGit = path.join(r.root, 'sep.gitdir')
+        execFileSync('git', ['init', '-q', '-b', 'main', '--separate-git-dir', sepGit, sep], { env: r.env })
+        const sg = (...a) => r.gitIn(sep, ...a)
+        sg('config', 'user.name', 'Sample Tester')
+        sg('config', 'user.email', 'tester@example.invalid')
+        sg('config', 'core.autocrlf', 'false')
+        fs.writeFileSync(path.join(sep, 'b.txt'), '1\n')
+        sg('add', '-A')
+        sg('commit', '-q', '-m', 'one')
+        const sepSha = sg('rev-parse', 'HEAD')
+        const sepWt = path.join(r.root, 'sep-wt')
+        sg('worktree', 'add', '-q', '-b', 'sepbranch', sepWt)
+        same(driftIn(r, driftDoc({ branch: 'sepbranch', head: sepSha, worktree: sepWt }), sep).branch, { recorded: 'sepbranch', current: 'sepbranch', same: true, viaWorktree: true })
+        // a bare main repository with linked work trees
+        const bare = path.join(r.root, 'bare.git')
+        execFileSync('git', ['clone', '-q', '--bare', r.dir, bare], { env: r.env })
+        const a = path.join(r.root, 'bare-a')
+        const b = path.join(r.root, 'bare-b')
+        r.gitIn(bare, 'worktree', 'add', '-q', '-b', 'ba', a)
+        r.gitIn(bare, 'worktree', 'add', '-q', '-b', 'bb', b)
+        same(driftIn(r, driftDoc({ branch: 'bb', head: sha, worktree: b }), a).branch, { recorded: 'bb', current: 'bb', same: true, viaWorktree: true })
+        same(driftIn(r, driftDoc({ branch: 'ba', head: sha, worktree: a }), a).skipped, [])
+      })
+    },
+  },
+  {
+    id: 'drift-document-values-in-the-report-hold-no-format-characters',
+    run: async () => {
+      await withTemp({ commits: [{ message: 'one' }] }, (r) => {
+        const odd = [27, 7, 0x2028, 0x202e, 0x200b, 0xfeff].map((c) => String.fromCharCode(c)).join('')
+        const d = driftIn(r, driftDoc({ branch: `feat${odd}ure/${'y'.repeat(300)}`, head: r.shas[0] }))
+        const invisible = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u
+        assert.ok(!invisible.test(d.branch.recorded), 'the recorded branch is printed without control or format characters')
+        assert.ok(d.branch.recorded.startsWith('feat') && d.branch.recorded.length <= 201, `short: ${d.branch.recorded.length}`)
+        // the comparison is made on what the document wrote, not on what is printed
+        assert.equal(d.branch.same, false)
+        // a plain value is untouched
+        assert.equal(driftIn(r, driftDoc({ branch: 'main', head: r.shas[0] })).branch.recorded, 'main')
+      })
     },
   },
 ]
@@ -3625,6 +3749,7 @@ export const cases = [
   ...driftCases,
   ...driftSafetyCases,
   ...driftIdentityCases,
+  ...driftGitDirCases,
   ...gitEnvCases,
   ...rootFallbackCases,
   ...stateDiffCases,

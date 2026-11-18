@@ -261,25 +261,35 @@ const isUncOrDevice = (p) => /^[\\/]{2}/.test(p)
 // the same test the reading path rule uses, `..` with trailing spaces included).
 const leavesRepository = (p) => p.includes('\0') || p.startsWith('/') || /^[A-Za-z]:/.test(p) || p.split('/').some(isParentSegment)
 
-// A document value named in a reason is printed as it is by resume: no control characters, at most 200.
-const CONTROL = /[\x00-\x1f\x7f-\x9f]/g
+// A document value printed as it is by resume (a reason, the recorded branch): no control characters, none of
+// the invisible format kinds (a right-to-left override, a zero-width space, a byte order mark) and no line or
+// paragraph separator; at most 200 characters.
+const INVISIBLE = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/gu
 function shown(value) {
-  const chars = Array.from(String(value).replace(CONTROL, ''))
+  const chars = Array.from(String(value).replace(INVISIBLE, ''))
   return chars.length > 200 ? `${chars.slice(0, 200).join('')}…` : chars.join('')
 }
 
-// -> { top, common } (absolute real folders as git names them) | null. `rev-parse --show-toplevel
-// --git-common-dir` is the one command run in a folder that has not been vouched for yet: it reads the
-// repository's layout and configuration and runs no filter driver, hook or fsmonitor.
+// -> { top, gitDir, common } (absolute folders as git names them) | null. `rev-parse --show-toplevel
+// --git-dir --git-common-dir` is the one command run in a folder that has not been vouched for yet: it reads
+// the repository's layout and configuration and runs no filter driver, hook or fsmonitor.
 function repoIdentity(dir) {
-  let r = git(dir, ['rev-parse', '--path-format=absolute', '--show-toplevel', '--git-common-dir'])
-  if (!r.ok) r = git(dir, ['rev-parse', '--show-toplevel', '--git-common-dir']) // a git without --path-format
+  let r = git(dir, ['rev-parse', '--path-format=absolute', '--show-toplevel', '--git-dir', '--git-common-dir'])
+  if (!r.ok) r = git(dir, ['rev-parse', '--show-toplevel', '--git-dir', '--git-common-dir']) // a git without --path-format
   if (!r.ok) return null
-  // an old git echoes the unknown option it was given; what is left must be exactly the two answers
+  // an old git echoes the unknown option it was given; what is left must be exactly the three answers
   const lines = r.out.split('\n').map((l) => l.replace(/\r$/, '')).filter((l) => l !== '' && !l.startsWith('--path-format'))
-  if (lines.length !== 2) return null
-  return { top: path.resolve(dir, lines[0]), common: path.resolve(dir, lines[1]) }
+  if (lines.length !== 3) return null
+  return { top: path.resolve(dir, lines[0]), gitDir: path.resolve(dir, lines[1]), common: path.resolve(dir, lines[2]) }
 }
+
+// Is the git directory of a work tree where git puts it? For the main tree it IS the common directory; for a
+// linked one `git worktree add` makes `<common>/worktrees/<id>`, directly under it. Anything else — a `.git`
+// file naming a directory elsewhere, whatever the `commondir` file in it says — is a forged layout: the HEAD
+// and the per-work-tree config (`config.worktree`, read once `extensions.worktreeConfig` is on, which
+// `git sparse-checkout` does) in that directory are the forger's to write, and `status` would run the
+// filters the config names. (Assumes the `worktrees/<id>` layout git has always used.)
+const isOwnGitDir = ({ gitDir, common }) => sameFolder(gitDir, common) || sameFolder(path.dirname(gitDir), path.join(common, 'worktrees'))
 
 // The work trees of the repository `top` belongs to, as git lists them (the main tree included).
 // [] when git cannot say, so nothing counts as verified.
@@ -321,7 +331,8 @@ export function drift(parsed, cwd, { git = runGit } = {}) {
   const skipped = []
   const recordedBranch = h.branch === null ? null : unwrap(h.branch) || null
   const result = {
-    branch: { recorded: recordedBranch, current: null, same: null, viaWorktree: false },
+    // printed through shown(); the comparison below uses what the document wrote
+    branch: { recorded: recordedBranch === null ? null : shown(recordedBranch) || null, current: null, same: null, viaWorktree: false },
     head: { relation: 'unknown', ahead: [], more: 0 },
     dirty: { currentCount: 0, lost: [], committedSince: [], stillDirty: [] },
     skipped,
@@ -361,10 +372,11 @@ export function drift(parsed, cwd, { git = runGit } = {}) {
     }
     // The list vouches for a PATH. What stands there now may be another repository, an empty folder inside
     // one, or a work tree whose `.git` file was changed: it must still be this repository's work tree before
-    // any command that can run a program (`status`) is given to it.
+    // any command that can run a program (`status`) is given to it — the folder is its own top level, the
+    // common git directory is this repository's, and the git directory is where git puts it (isOwnGitDir).
     const mine = repoIdentity(state.toplevel)
     const found = repoIdentity(listed)
-    if (!mine || !found || !sameFolder(found.top, listed) || !sameFolder(found.common, mine.common)) {
+    if (!mine || !found || !sameFolder(found.top, listed) || !sameFolder(found.common, mine.common) || !isOwnGitDir(found)) {
       return skip(`the folder registered as the worktree the document recorded (${named}) does not belong to this repository — it is no longer its work tree, not opened further, git state not compared`)
     }
     const there = readGitState(listed)
