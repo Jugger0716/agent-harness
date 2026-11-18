@@ -28,6 +28,16 @@ docs/superpowers/specs/2026-06-05-ultracode-phase1-engine-spike.md SPIKE-F1/F2/F
   5. defensive-args-parse (SPIKE-F1): `args` reaches the script as a JSON
      STRING, not an object. Every script must contain the canonical guard
      `typeof args === 'string'` before reading fields.
+  6. internal-description: `meta.description` starts with `INTERNAL — launched by /`.
+     Claude Code lists every segment beside the skills, with its description; a
+     segment is launched by its skill with arguments the skill builds, never picked
+     from that listing, and the description has to say so.
+  7. required-args call: the script calls `requireArgs('<meta.name>', A, [...])` --
+     the helper of its wf-prelude block (scripts/verify_block_sync.py compares the
+     block itself) -- and the call precedes the first `phase(...)` statement, so a
+     run without its payload stops before any agent is dispatched. The lint checks
+     that the call exists, names this script and comes first; it does not judge
+     whether the listed keys are the right ones (tests/segment_stubs/ does).
 
 Exit codes:
   0  all scripts pass
@@ -60,6 +70,9 @@ BANNED_NONDET = [r"\bDate\.now\b", r"\bnew\s+Date\b", r"\bMath\.random\b"]
 # green baseline. Keep this hyphen/tag-targeted.
 BANNED_GATE = ["AskUserQuestion", "HARD-GATE", "Apply patch"]
 ARGS_GUARD = re.compile(r"typeof\s+args\s*===\s*['\"]string['\"]")
+INTERNAL_PREFIX = "INTERNAL — launched by /"
+META_NAME = re.compile(r"\bname\s*:\s*'([^']+)'")
+FIRST_PHASE = re.compile(r"^\s*phase\(", re.MULTILINE)
 
 
 def first_statement(src: str) -> str:
@@ -156,6 +169,29 @@ def check_module_syntax(src: str) -> list[str]:
     return errs
 
 
+def check_internal(src: str) -> list[str]:
+    """Checks 6 and 7: the internal-only description and the required-args call."""
+    errs: list[str] = []
+    body = extract_meta(src)
+    if body is None:
+        return errs  # check_meta already reported the unparseable literal
+    if not re.search(r"\bdescription\s*:\s*'" + re.escape(INTERNAL_PREFIX), body):
+        errs.append("meta.description does not start with '%s' "
+                    "(a segment is launched by its skill, never from the listing)" % INTERNAL_PREFIX)
+    name = META_NAME.search(body)
+    if name is None:
+        return errs  # check_meta already reported the missing name
+    call = "requireArgs('%s', A, [" % name.group(1)
+    at = src.find(call)
+    first_phase = FIRST_PHASE.search(src)
+    if at < 0:
+        errs.append("missing required-args call: %s...])" % call)
+    elif first_phase is not None and first_phase.start() < at:
+        errs.append("the required-args call comes after the first phase(...) statement "
+                    "-- it must refuse the run before anything is dispatched")
+    return errs
+
+
 def check(path: Path) -> list[str]:
     errs: list[str] = []
     src = path.read_text(encoding="utf-8")
@@ -168,6 +204,7 @@ def check(path: Path) -> list[str]:
         if token in src:
             errs.append(f"HARD-GATE leak token present: '{token}' "
                         "(gates live in the orchestrator only)")
+    errs += check_internal(src)
     if not ARGS_GUARD.search(src):
         errs.append("missing defensive args parse -- args arrives as a JSON "
                     "string (SPIKE-F1); guard with: "

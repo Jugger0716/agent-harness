@@ -23,19 +23,15 @@ Write all output in **{user_lang}**.
    - For each file, verify it matches the scope pattern: `{scope}`
    - If any file falls outside scope, adjust your plan before writing any code.
 
-3. **Parallel execution** — if a parallel execution skill was found above, use it to break the implementation into independent sub-tasks.
-
-4. **TDD** — if a TDD skill was found above, follow it: write a failing test for each change, then implement the minimal code to make it pass. Run tests after each change.
-
-5. **If this is Round 2 or later:**
+3. **If this is Round 2 or later:**
    - Review the QA feedback above carefully.
    - **Only fix items marked FAIL** in the QA report.
    - **Do not touch items already marked PASS** — leave them exactly as they are.
    - Surgical, minimal changes only.
 
-6. **Stay within scope.** Do not modify files outside the declared scope. Do not exceed {max_files} files total.
+4. **Stay within scope.** Do not modify files outside the declared scope. Do not exceed {max_files} files total.
 
-7. **After implementation, write `changes.md`** to `{changes_path}` with the following format:
+5. **After implementation, write `changes.md`** to `{changes_path}` with the following format:
 
    ```
    ## Round {round_num} Changes

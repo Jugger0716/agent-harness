@@ -20,8 +20,8 @@ export const meta = {
 // <!-- SYNC-WITH: workflows/harness.critic.workflow.js §contract -->
 // (skills/harness/SKILL.md), dispatched through templates/harness/plan_critic_dispatch.md.
 // Until v9 it carried another name and a second caller, a spec-writing skill v9 removed.
-// Keep args 1:1 with the caller — a missing field is not an exception, it silently
-// renders as '' via render()'s v==null fallback below:
+// Keep args 1:1 with the caller. specContent and criticFindingsPath are required — the
+// requireArgs() call below refuses a run without them; any other missing field renders as '':
 //   { task, userLang, specContent, qaNotes, criticFindingsPath, models: {advisor, evaluator} }
 // criticFindingsPath is a caller-specified value, not a literal owned by this file:
 // /harness passes `{docs_path}plan_critic_findings.md`.
@@ -30,14 +30,36 @@ const LANG = A.userLang || 'the language of the task description'
 const MODELS = A.models || {}
 const mopt = (m) => (m ? { model: m } : {})
 
-// Substitution order = vars insertion order. Keep STRUCTURAL keys first and
-// user-influenced payload keys LAST: a payload substituted early could otherwise
-// hijack later {placeholders} with injected literals.
+// <!-- BLOCK-START:wf-prelude v1 — shared by the five segment scripts; edit every copy in one commit and bump the version -->
+// Single-pass substitution: the template is split on its {snake_case} tokens once, so a value
+// that itself contains a {placeholder} is never scanned again. A token with no entry in `vars`
+// is left as written.
 const render = (tpl, vars) =>
-  Object.entries(vars).reduce(
-    (t, [k, v]) => t.split('{' + k + '}').join(v == null ? '' : String(v)),
-    tpl,
-  )
+  String(tpl)
+    .split(/(\{[a-z][a-z0-9_]*\})/)
+    .map((seg, i) => {
+      if (i % 2 === 0) return seg
+      const k = seg.slice(1, -1)
+      if (!Object.hasOwn(vars, k)) return seg
+      return vars[k] == null ? '' : String(vars[k])
+    })
+    .join('')
+// Refuse to run without the payload the segment exists to process.
+const requireArgs = (segment, a, keys) => {
+  for (const k of keys) {
+    const v = a[k]
+    if (v == null || (typeof v === 'string' && v.trim() === '')) {
+      throw new Error(`${segment}: missing required argument "${k}"`)
+    }
+  }
+}
+// A single agent() resolves to null when the user skips it or it ends in a terminal API error.
+const must = (segment, label, result) => {
+  if (!result) throw new Error(`${segment}: ${label} returned null`)
+  return result
+}
+// <!-- BLOCK-END:wf-prelude v1 -->
+requireArgs('harness.critic', A, ['specContent', 'criticFindingsPath'])
 
 // ---- schema (inlined per C1; canonical: workflows/_reference/schemas.md) ----
 const CriticReportSchema = {
@@ -168,8 +190,7 @@ After writing the findings file, return a structured CriticReport object (the di
 // ---- Phase 1: cold critique ---------------------------------------------------
 phase('Critique')
 
-// Structural keys first; user-influenced payloads last (spec content carries the most
-// model/user-shaped text, so it substitutes last along with the task).
+// render() is single-pass (wf-prelude block above), so the order of these keys carries no meaning.
 const report = await agent(
   render(TPL_CRITIC, {
     critic_findings_path: A.criticFindingsPath,
@@ -180,6 +201,7 @@ const report = await agent(
   }),
   { schema: CriticReportSchema, label: 'critic', phase: 'Critique', ...mopt(MODELS.evaluator || MODELS.advisor) },
 )
+must('harness.critic', 'critic', report)
 
 // Normalize counts from items[] — items are the ground truth the Critic Gate displays.
 // A disagreeing tally is corrected here so the orchestrator can branch on counts directly.
@@ -194,6 +216,9 @@ if (c.critical !== tally.critical || c.major !== tally.major || c.minor !== tall
   log(`Critique: counts normalized from items (reported C=${c.critical} M=${c.major} m=${c.minor} -> tallied C=${tally.critical} M=${tally.major} m=${tally.minor})`)
   report.counts = tally
 }
+// The summary is what the caller prints, so it is always rebuilt from the tallied counts —
+// never the model's own line, which can disagree with the items it was written beside.
+report.summary = `Critical=${report.counts.critical}, Major=${report.counts.major}, Minor=${report.counts.minor}`
 log(`Critique: C=${report.counts.critical} M=${report.counts.major} m=${report.counts.minor}`)
 
 // The orchestrator branches the Critic Gate on report.counts; critic_findings.md was

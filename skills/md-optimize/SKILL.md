@@ -17,11 +17,15 @@ Detect the user's language from their **most recent message**. Store as `user_la
 
 ## Exclusion List
 
-Never modify: `.git/`, `.harness/`, `node_modules/`, `vendor/`, `dist/`, `build/`, `__pycache__/`, `.venv/`, `*.lock`, `.next/`, `.nuxt/`, `coverage/`, `.turbo/`, `.cache/`, `CHANGELOG.md`, `LICENSE.md`, `LICENSE`.
+Never modify: `.git/`, `.harness/`, `.md-optimize/`, `node_modules/`, `vendor/`, `dist/`, `build/`, `__pycache__/`, `.venv/`, `*.lock`, `.next/`, `.nuxt/`, `coverage/`, `.turbo/`, `.cache/`, `CHANGELOG.md`, `LICENSE.md`, `LICENSE`.
+
+The list bounds what this skill optimizes. `.md-optimize/` is on it because nothing in it is input: it is the run backup this skill itself writes (§Step 3.0), and writing that backup is not a modification under this rule.
 
 ## Phase 1: Analysis
 
 ### 1a. Safety & Environment Check
+
+This skill works on the current working directory. It takes no target-directory argument.
 
 1. Run `git status` in CWD. If not a git repo, ask the user using AskUserQuestion (in `user_lang`):
      header: "Git Warning"
@@ -38,15 +42,14 @@ Never modify: `.git/`, `.harness/`, `node_modules/`, `vendor/`, `dist/`, `build/
        - label: "Abort" / description: "Stop and commit/stash first"
    On "Abort": halt. On "Continue": proceed.
 3. Search all `.md` files for the idempotency marker `<!-- managed by md-optimize -->`. If CLAUDE.md contains this marker, inform user: "This project was previously optimized. Re-running will refresh the optimization." Proceed normally (marker ensures idempotency).
-4. **Leftover backup.** If `.harness/md-optimize/` exists, an earlier run did not finish, did not restore, or could not delete its backup, and that backup holds the only pre-run copy of the files it edited. First print what a restore would touch, one path per line (in `user_lang`): the paths it would OVERWRITE with their backed-up bytes — every `modified` path in `.harness/md-optimize/manifest.txt` — and the paths it would DELETE — every `created` path in the manifest. A file under `.harness/md-optimize/backup/` that the manifest does not list is not restored: Step 3.0 copies and records a file before anything is written, so that run never edited it, and the copy goes with the directory. If the manifest lists nothing, delete `.harness/md-optimize/` without asking and continue. Otherwise ask the user using AskUserQuestion (in `user_lang`):
+4. **Leftover backup.** The run backup lives in `.md-optimize/` (§Step 3.0); a 9.0.0 run kept it in `.harness/md-optimize/` instead. Check `.md-optimize/` first and the 9.0.0 location second, and apply this item to each one that exists, at its own path — *the backup directory* below. If one exists, an earlier run did not finish, did not restore, or could not delete its backup, and that backup holds the only pre-run copy of the files it edited. First print what a restore would touch, one path per line (in `user_lang`): the paths it would OVERWRITE with their backed-up bytes — every `modified` path in the backup directory's `manifest.txt` — and the paths it would DELETE — every `created` path in the manifest that exists now (§Step 3.0 records a file before creating it, so a recorded path may never have been written). A file under the backup directory's `backup/` that the manifest does not list is not restored: Step 3.0 copies and records a file before anything is written, so that run never edited it, and the copy goes with the directory. If the manifest lists nothing, delete the backup directory without asking and continue. Otherwise ask the user using AskUserQuestion (in `user_lang`):
      header: "Backup"
      question: "An earlier md-optimize run left a backup of the files listed above. Restore them to their state before that run? Anything changed in them since — that run's own edits and yours — would be overwritten."
      options:
        - label: "Restore" / description: "Overwrite the listed files with their backed-up copies and delete the files that run created, then continue. Edits made to them since that run are lost"
        - label: "Discard" / description: "Keep the files as they are now and delete the old backup"
        - label: "Abort" / description: "Stop; change nothing"
-   On "Restore": restore exactly the paths printed above, as §Phase 3 describes for a failed step — if the restore itself fails, keep the directory, print its path and halt — then delete `.harness/md-optimize/` and continue. On "Discard": delete `.harness/md-optimize/`, continue. On "Abort": halt. Phase 3 never starts on top of a leftover `.harness/md-optimize/`.
-5. **Open `/harness` session.** If `.harness/state.json` exists, halt and say (in `user_lang`) that a `/harness` session is open in this directory, that its cleanup deletes `.harness/` — where this run's backup would be kept — and that the session has to be finished or stopped before `/md-optimize` is run again. Change nothing.
+   On "Restore": restore exactly the paths printed above, as §Phase 3 describes for a failed step — if the restore itself fails, keep the directory, print its path and halt — then delete the backup directory and continue. On "Discard": delete the backup directory, continue. On "Abort": halt. Phase 3 never starts on top of a leftover backup. When the directory just deleted was the 9.0.0 one and `.harness/` is left empty, delete `.harness/` as well.
 
 ### 1b. Smart Routing & Markdown Inventory
 
@@ -121,15 +124,16 @@ Only "Proceed" advances to Phase 3.
 
 ## Phase 3: Execution (Sequential with Completion Check)
 
-Execute in strict order. After each step, verify the output file exists and is non-empty. If any step fails, stop and restore from the Step 3.0 backup by its manifest — copy every `modified` path back from `.harness/md-optimize/backup/`, delete every `created` path — then print the restored paths and "Step N failed — files restored to their pre-run state." Delete `.harness/md-optimize/` once the restore has succeeded; if the restore itself fails, keep it and print its path.
+Execute in strict order. After each step, verify the output file exists and is non-empty. If any step fails, stop and restore from the Step 3.0 backup by its manifest — copy every `modified` path back from `.md-optimize/backup/`, delete every `created` path that exists — then print the restored paths and "Step N failed — files restored to their pre-run state." Delete `.md-optimize/` once the restore has succeeded; if the restore itself fails, keep it and print its path.
 
 ### Step 3.0: Backup
 
 Before any write, and with or without git — no `git` command is involved, so untracked and uncommitted files are covered:
-- For each file Phase 3 will edit or delete, copy its current bytes to `.harness/md-optimize/backup/<path>` and append `modified <path>` to `.harness/md-optimize/manifest.txt`.
-- Each time a later step creates a file that did not exist, append `created <path>` to the manifest.
-- Phase 4d fixes follow the same two rules: back up a file before its first edit, record a file when it is created.
-- Never overwrite a backup copy. A path that already has a copy under `.harness/md-optimize/backup/` keeps that first copy, and a path already in the manifest is not appended again — the first copy is the pre-run state; a later one would be a half-edited file.
+- Create `.md-optimize/` and, before anything else goes into it, write `.md-optimize/.gitignore` holding the single line `*` — the backup then never shows up as untracked work and is never committed.
+- For each file Phase 3 will edit or delete, copy its current bytes to `.md-optimize/backup/<path>` and append `modified <path>` to `.md-optimize/manifest.txt`.
+- Before a later step creates a file that does not exist yet, append `created <path>` to the manifest — record first, create second. A run cut off between the two then leaves a recorded path that was never written, which a restore skips, instead of a new file nothing recorded.
+- Phase 4d fixes follow the same two rules: back up a file before its first edit, record a file before it is created.
+- Never overwrite a backup copy. A path that already has a copy under `.md-optimize/backup/` keeps that first copy, and a path already in the manifest is not appended again — the first copy is the pre-run state; a later one would be a half-edited file.
 
 ### Step 3a: Create/Update Split Files
 
@@ -162,6 +166,7 @@ Apply token-efficient writing: short imperative sentences, tables over prose, re
 For files whose content was fully migrated to CLAUDE.md Inline Zone or merged into another file:
 - Delete only if 100% of content is preserved elsewhere
 - Never delete files that contain non-migrated content
+- Before deleting an original, look for references to it outside Markdown: search every non-`.md` file (same exclusions as the inventory) for the file's repo-relative path and for its file name — in a git repository `git grep -n -F -e <path> -e <name> -- . ':!*.md'`, otherwise a content search over the same files. Any hit → do not delete: keep the file and note it, with the referencing locations, for the Phase 5 report. This skill never edits a non-markdown file, so it cannot repair such a reference.
 
 ### Step 3d: Report Duplicates
 
@@ -179,7 +184,7 @@ Launch an isolated sub-agent with the following brief:
 
 The sub-agent receives:
 - The optimized CLAUDE.md and all modified/created .md files
-- The git diff of all changes (before vs after), and the pre-run bytes of every edited or deleted file under `.harness/md-optimize/backup/` — the diff does not show untracked files
+- The git diff of all changes (before vs after), and the pre-run bytes of every edited or deleted file under `.md-optimize/backup/` — the diff does not show untracked files
 - Full read access to the project files
 - No Phase 1 analysis results, no optimizer reasoning
 
@@ -189,7 +194,7 @@ The sub-agent checks each criterion and scores PASS / ISSUE:
 
 | Criterion | Check | Method |
 |-----------|-------|--------|
-| **Content preservation** | No semantic information was lost during optimization | Compare each file under `.harness/md-optimize/backup/` with its current state (the git diff alone misses untracked files) — every removed line's meaning must exist in the new structure |
+| **Content preservation** | No semantic information was lost during optimization | Compare each file under `.md-optimize/backup/` with its current state (the git diff alone misses untracked files) — every removed line's meaning must exist in the new structure |
 | **Zone correctness** | Inline items are truly must-know rules; Index items are truly reference material | Review each Inline item for constraint keywords; review each Index item for reference nature |
 | **Path integrity** | Every path in Reference Index exists and is readable | Verify each path |
 | **Gitignore safety** | No path in Reference Index or relative `.md`/directory reference inside the Inline Zone is gitignored | Sub-agent runs `git rev-parse --is-inside-work-tree` itself (preserving the isolation contract — no Phase 1 results passed in), then for each path runs `git check-ignore --quiet <path>`, interpreting the result per the gitignore exit-code semantics in the Phase 1b section (0=ignored, 1=not-ignored, 128=fatal): ignored → ISSUE; not-ignored → OK; fatal → surface error. See Phase 1b sub-step for command alternatives. Non-git repo → N/A → PASS |
@@ -239,6 +244,7 @@ Print final report (in `user_lang`):
   Files scanned    : N
   Files modified   : N
   Files deleted    : N (fully migrated originals)
+  Files kept       : N (referenced from non-markdown files)
   Duplicates       : N group(s) reported, none deleted
   Inline rules     : N items
   Index references : N entries
@@ -246,7 +252,7 @@ Print final report (in `user_lang`):
   Token estimate   : before → after (−X%)
 ```
 
-If any evaluation criterion has unresolved issues, append warnings. List the duplicate groups Step 3d collected. Then delete `.harness/md-optimize/` — the backup lasts for the run only. One exception: if the evaluator reported issues and any was left unfixed (Phase 4d "Skip", or a selective fix that left some), keep it and print (in `user_lang`) its path, that it holds the pre-run copy of every file this run edited or deleted, and that the next `/md-optimize` asks whether to restore or discard it (§1a item 4).
+If any evaluation criterion has unresolved issues, append warnings. List the duplicate groups Step 3d collected, and under `Kept — referenced from non-markdown files` each original Step 3c kept with the locations that reference it. Then delete `.md-optimize/` — the backup lasts for the run only. One exception: if the evaluator reported issues and any was left unfixed (Phase 4d "Skip", or a selective fix that left some), keep it and print (in `user_lang`) its path, that it holds the pre-run copy of every file this run edited or deleted, and that the next `/md-optimize` asks whether to restore or discard it (§1a item 4).
 
 ## Safety Rules
 

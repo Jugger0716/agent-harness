@@ -122,9 +122,12 @@ frontmatter is the plugin's exposure contract, so treat it as part of the skill'
 - Name a whole prompt `TPL_*` and a reusable fragment spliced into several prompts `FRAG_*`.
   Declare schemas per script — each script is self-contained (C1): no shared imports, no runtime
   template reads.
-- Substitute with `split`/`join`, never `String.replace` — a payload containing a `$` substitution
-  pattern would corrupt the result. Substitute structural keys first, user-influenced payload
-  (`task`, `task_description`) last.
+- Substitute only through `render()`, the single-pass implementation in the `wf-prelude` block
+  every script carries: it splits the template on its `{snake_case}` tokens once, so a value that
+  contains a placeholder is never scanned again and key order carries no meaning. Never write a
+  substitution of your own, and never `String.replace` — a payload containing a `$` substitution
+  pattern would corrupt the result. The same block holds `requireArgs()` and `must()`; edit all
+  five copies in one commit and bump the block version.
 - Never use `Date.now`, `new Date`, or `Math.random`; they break cached-prefix resume.
 - Never write `AskUserQuestion`, `HARD-GATE`, or the apply-patch option label into a script. Gates
   belong to SKILL.md only.
@@ -176,12 +179,19 @@ are the only behavioural one, and they cover the Workflow segments only):
   zero slack**, so adding a marker site means raising the floor in the same change, and removing
   one fails immediately.
 - `verify_meta_literal.py` — `meta` literal purity, module-syntax ban, nondeterministic-API ban,
-  gate-token tripwire, and the defensive-args guard.
+  gate-token tripwire, the defensive-args guard, a `meta.description` that starts
+  `INTERNAL — launched by /` (segments are listed beside the skills but are never picked from
+  that listing), and a `requireArgs('<meta.name>', A, [...])` call placed before the first
+  `phase(...)` statement. It checks that the call exists and comes first, not that its keys are
+  the right ones — the stub tests do that.
 - `verify_block_sync.py` — SHA256 comparison of BLOCK-delimited content. `GROUPS` declares
   `(tag, version, files, shared_source)`. The v8.14 prompt diet cut the `hx-*` groups from 16 to
   4 by PROMOTING the rest to `templates/_shared/` single sources — one copy, nothing to compare,
   which is strictly stronger than byte-identity. A promotion is also the one sanctioned reason a
   `min_sites` floor in `verify_sync_markers.py` may be LOWERED; two were, in that change.
+  A seventh group, `wf-prelude`, covers the five `workflows/*.workflow.js` scripts instead of
+  Markdown: its markers sit inside a JS line comment, and it has no shared source because a
+  script may not import one (C1).
 - `verify_manifest_sync.py` — `.claude-plugin/plugin.json` and `marketplace.json`: the plugin
   description, the keywords set, and the version string at all three key paths.
   `metadata.description` and `owner` are marketplace-only, and `author` is carried by both files
@@ -189,8 +199,10 @@ are the only behavioural one, and they cover the Workflow segments only):
   cannot carry a comment.
 - `verify_description_budget.py` — per-skill description caps, per-skill and total ceilings
   (a ratchet: lowering is free, raising needs an explicit ceiling raise in the same commit),
-  lower bounds for the descriptions the v8.12 batch shortened, required/forbidden token lists,
-  frontmatter structure, and a third-person check with a zero-slack allowlist. The measurement
+  lower bounds (a length guard only; the current entries and their reasons are in the script's
+  comments — the v8.12 batch's bounds were deleted in v9 together with their skills),
+  required/forbidden token lists (the mechanism remains but both are empty since v9, because the
+  only skill that had entries was deleted), frontmatter structure, and a third-person check with a zero-slack allowlist. The measurement
   basis is fixed in its docstring before any total: quotes removed, `\r` excluded, UTF-8
   characters. It exists because Claude Code caps the skill listing at a share of the context
   window and, when that overflows, drops the descriptions of least-used skills while keeping
@@ -199,9 +211,11 @@ are the only behavioural one, and they cover the Workflow segments only):
   `git stash` (bare, `push`, `drop`), `reset … --hard` and `clean -f` / `--force` in `skills/`,
   `templates/` and `workflows/`: text a model follows must not tell it to
   discard or move uncommitted work. It reads text, not intent, so a sentence that only warns about
-  one of them goes in its zero-slack `ALLOW` table with the reason. Two destructive forms pass
-  it (`git checkout <ref> -- <path>`, `git restore --staged --worktree <path>`); its docstring
-  says why.
+  one of them goes in its zero-slack `ALLOW` table with the reason. Two destructive forms passed
+  it in 9.0.0 (`git checkout <ref> -- <path>`, `git restore --staged --worktree <path>`), and so
+  did any of these commands with `-C <path>` between `git` and the subcommand. Since 9.0.1 all
+  of them are matched, together with a forced `checkout` / `switch` (`-f`, `--force`,
+  `--discard-changes`); the docstring keeps the correction beside the old claim.
 - `verify_cited_paths.py` — every `skills/…`, `templates/…`, `workflows/…` or `scripts/…` file path
   cited from `skills/`, `templates/`, `workflows/`, `CLAUDE.md` or `README.md` must exist. It was
   added with the v9 removal of thirteen skills. Placeholder paths (`templates/<skill>/…`), directory

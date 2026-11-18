@@ -14,16 +14,23 @@ Fixed here BEFORE any total was written down, because the sum differs by basis:
       REMOVED;
   (b) a CRLF carriage return is excluded (this repository is edited on Windows with
       core.autocrlf=true, so ``re.M`` leaves a trailing ``\\r`` before ``$``);
-  (c) length is a count of UTF-8 CHARACTERS via ``len()``, never bytes. Eleven of the
-      seventeen skills contain typographic characters, so bytes and characters differ.
+  (c) length is a count of UTF-8 CHARACTERS via ``len()``, never bytes. Descriptions
+      may contain typographic characters (em dashes, arrows), so bytes and characters
+      differ.
 
-The raw total is exactly 6 characters larger than the unquoted total, and those 6
-characters are the outer double quotes of the three deprecation stubs (2 chars x 3);
-no other skill quotes its description. Measured pairs, each tagged with the commit
-they were taken at -- a bare total without a SHA goes stale silently:
+Invariant: raw minus unquoted is exactly 2 characters per skill whose description
+unquote() strips (the rows marked q), so the OK line's delta is 2 x the number of q rows.
+The live source for the current skill count, total, raw
+and delta is the OK line this script prints. At e047218 the only quoted description is
+harness-gate (its value contains ' #', see the check in main()), hence delta 2; the
+quoting was introduced at bc1371d (v9 stage 1). The delta 6 of the first two pairs below
+was the outer quotes of the three deprecation stubs (code-review, memory, workflow);
+those stubs were deleted by the v9 deletion commit 2fa74bb. Measured pairs, each tagged
+with the commit they were taken at -- a bare total without a SHA goes stale silently:
 
     a4bfc5e   7,660 unquoted / 7,666 raw
     4295156   7,709 unquoted / 7,715 raw
+    e047218   2,880 unquoted / 2,882 raw
 
 FIGURE PROVENANCE -- four classes, each with its own required annotation
 -----------------------------------------------------------------------
@@ -63,8 +70,8 @@ Lowering any description is free. RAISING one past its recorded ceiling requires
 raising that ceiling explicitly in the same commit. This is the same direction as
 ``min_sites`` in verify_sync_markers.py, but it is NOT the same guarantee: a single
 total is fungible across skills, so per-skill ceilings are recorded alongside it.
-Lower bounds exist for the descriptions this slice shortens, because a total ceiling
-alone approves unlimited shrinkage -- and over-shrinking is this slice's actual risk.
+Lower bounds are recorded per description where over-shrinking is a real risk (see
+LOWER_BOUND), because a total ceiling alone approves unlimited shrinkage.
 
 EXIT CODES
 ----------
@@ -89,14 +96,14 @@ PER_SKILL_CAP = 1024
 # using its own end-of-commit measurement. Nothing outside this block is re-fixed.
 # --------------------------------------------------------------------------------
 
-# Repository measurement at this commit (C2) -- a ceiling re-fixed in the commit that
-# creates it cannot cite its own SHA, so it is annotated this way rather than left bare.
-# Was 7709 at 4295156, before this slice trimmed four descriptions.
+# Current value measured at 00a8fd9 (v9 stage 1; see the inline note). The C2 re-fix had
+# no SHA to cite for itself, because a ceiling re-fixed in the commit that creates it
+# cannot, so it was annotated "at this commit" rather than left bare.
+# Was 7709 at 4295156, before the C2 re-fix trimmed four descriptions.
 TOTAL_CEILING = 2880  # v9 stage 1: the six kept skills, measured, zero slack. Was 7793 over 19 skills (harness-converge S2).
 
-# Per-skill ceilings (unquoted basis). Untouched skills keep their 4295156 measurement;
-# the five this commit edits are re-fixed at this commit. The three stub ceilings are the
-# lengths of the target wordings the epic plan fixed, not a projection.
+# Per-skill ceilings (unquoted basis). An entry with no inline note is its 4295156
+# measurement; an entry re-fixed later carries its history in the inline note on its line.
 PER_SKILL_CEILING = {
     "deep-review": 668,
     "handoff": 617,
@@ -106,11 +113,12 @@ PER_SKILL_CEILING = {
     "md-optimize": 194,
 }
 
-# Lower bounds for the descriptions this slice shortens, set from the landed text at this
-# commit (C2) with deliberate slack below it. A total ceiling alone approves unlimited
-# shrinkage, and over-shrinking -- a skill that silently stops being selected -- is this
-# slice's actual risk. The required-token lists below already pin the content; these bounds
-# are the backstop for a future edit that guts a description while keeping its tokens.
+# Lower bounds, set from the landed text with deliberate slack below it; each entry's
+# inline note records its landed length and reason. A total ceiling alone approves
+# unlimited shrinkage, and over-shrinking -- a skill that silently stops being selected --
+# is a real risk. A bound guards length only; it does not pin content (see the
+# REQUIRED_TOKENS note below). A description with no entry here can be shortened to any
+# non-empty length without failing this lint.
 LOWER_BOUND = {
     "harness": 400,      # landed 555 at C5-c; the entry point must keep naming the pipeline it fronts
 }
@@ -123,6 +131,9 @@ LOWER_BOUND = {
 # the machine form of the plan's preserve/remove classification; without them a trim
 # that satisfies the character target while deleting the discriminating tokens passes
 # every other check.
+# The mechanism remains, but both dicts have been empty since v9 (the only skill that had
+# entries was deleted), so nothing currently pins description content. Adding an entry
+# makes the check active again.
 REQUIRED_TOKENS = {
 }
 
@@ -134,8 +145,8 @@ FORBIDDEN_TOKENS = {
 # (best-practices, Writing effective descriptions, fetched 2026-08-31).
 POV_RE = re.compile(r"(?<![\w/-])(I|we|our|us|you|your|my|me)(?![\w/-])", re.I)
 
-# Skills whose descriptions violate the third-person rule today. Both are outside this
-# slice's scope. The allowlist is zero-slack in both directions: an entry that stops
+# Skills whose descriptions violate the third-person rule today. Each entry is outside the
+# scope of the slice that recorded it. The allowlist is zero-slack in both directions: an entry that stops
 # violating is itself an error, so a fixed description cannot leave a stale entry behind.
 POV_ALLOWLIST = {
     "handoff": "pre-existing 'you' in the resume-gate sentence; outside this slice's scope",
@@ -151,8 +162,8 @@ def repo_root() -> Path:
 def split_frontmatter(text: str, skill: str, problems: list) -> str:
     """Return the frontmatter body delimited by the FIRST TWO bare '---' lines.
 
-    Counting '---' lines in the whole file is wrong: five skills use horizontal rules
-    in their body, one of them sixteen times.
+    Counting '---' lines in the whole file is wrong: SKILL.md bodies may use bare '---'
+    horizontal rules, so only the first two delimiter lines bound the frontmatter.
     """
     lines = text.replace("\r\n", "\n").split("\n")
     marks = [i for i, line in enumerate(lines) if line.strip() == "---"]

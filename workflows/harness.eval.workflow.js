@@ -23,7 +23,7 @@
 // already exists in this same file.
 export const meta = {
   name: 'harness.eval',
-  description: '/harness Eval segment: runs build/test/lint/typecheck mechanically (Layer 1), then an isolated evaluator review (Layer 2+3). Writes verify/QA reports; does not modify source.',
+  description: 'INTERNAL — launched by /harness-build only. Eval segment: Layer 1 commands, an isolated Layer 2+3 evaluation and an optional cold review; modifies no source file.',
   phases: [
     { title: 'Verify L1', detail: 'mechanical build/test/lint/typecheck' },
     { title: 'Evaluate', detail: 'Layer 2 structural + Layer 3 judgment' },
@@ -54,14 +54,43 @@ const LANG = A.userLang || 'the language of the task description'
 const MODELS = A.models || {}
 const mopt = (m) => (m ? { model: m } : {})
 
-// Substitution order = vars insertion order. Keep STRUCTURAL keys first and
-// user-influenced payload keys LAST: a payload substituted early could otherwise
-// hijack later {placeholders} with injected literals.
+// <!-- BLOCK-START:wf-prelude v1 — shared by the five segment scripts; edit every copy in one commit and bump the version -->
+// Single-pass substitution: the template is split on its {snake_case} tokens once, so a value
+// that itself contains a {placeholder} is never scanned again. A token with no entry in `vars`
+// is left as written.
 const render = (tpl, vars) =>
-  Object.entries(vars).reduce(
-    (t, [k, v]) => t.split('{' + k + '}').join(v == null ? '' : String(v)),
-    tpl,
-  )
+  String(tpl)
+    .split(/(\{[a-z][a-z0-9_]*\})/)
+    .map((seg, i) => {
+      if (i % 2 === 0) return seg
+      const k = seg.slice(1, -1)
+      if (!Object.hasOwn(vars, k)) return seg
+      return vars[k] == null ? '' : String(vars[k])
+    })
+    .join('')
+// Refuse to run without the payload the segment exists to process.
+const requireArgs = (segment, a, keys) => {
+  for (const k of keys) {
+    const v = a[k]
+    if (v == null || (typeof v === 'string' && v.trim() === '')) {
+      throw new Error(`${segment}: missing required argument "${k}"`)
+    }
+  }
+}
+// A single agent() resolves to null when the user skips it or it ends in a terminal API error.
+const must = (segment, label, result) => {
+  if (!result) throw new Error(`${segment}: ${label} returned null`)
+  return result
+}
+// <!-- BLOCK-END:wf-prelude v1 -->
+requireArgs('harness.eval', A, ['specContent', 'verifyReportPath', 'qaReportPath'])
+
+// A command the project declared may carry a literal {scope} — the detection table's
+// `pylint {scope}` is one. Resolve it before it reaches a prompt: the session's scope when it
+// is a path, '.' when the session has none (the stored value is then "(no limit)", or empty).
+const scopeArg =
+  typeof A.scope === 'string' && A.scope.trim() !== '' && !A.scope.trim().startsWith('(') ? A.scope.trim() : '.'
+const cmd = (c) => (c ? render(String(c), { scope: scopeArg }) : c)
 
 // ---- schema (inlined per C1; canonical: workflows/_reference/schemas.md) ----
 const VerifyVerdictSchema = {
@@ -95,6 +124,13 @@ const VerifyVerdictSchema = {
     },
     summary: { type: 'string', description: `one-line, render in ${LANG}` },
   },
+}
+
+// The evaluator never reports Layer 1: the same shape with `layer` limited to the two layers it
+// runs. The script does not rely on the engine enforcing this — see the normalization below.
+const EvaluatorVerdictSchema = {
+  ...VerifyVerdictSchema,
+  properties: { ...VerifyVerdictSchema.properties, layer: { enum: ['L2', 'L3'] } },
 }
 
 // ---- cold-review schema (C1/AC-2: PHYSICALLY SEPARATE from VerifyVerdictSchema above --
@@ -498,10 +534,10 @@ if (!A.skipL1) {
   phase('Verify L1')
   l1 = await agent(
     render(TPL_VERIFY_LAYER1, {
-      build_cmd: A.buildCmd || 'SKIP',
-      test_cmd: A.testCmd || 'SKIP',
-      lint_cmd: A.lintCmd || 'SKIP',
-      type_check_cmd: A.typeCheckCmd || 'SKIP',
+      build_cmd: cmd(A.buildCmd) || 'SKIP',
+      test_cmd: cmd(A.testCmd) || 'SKIP',
+      lint_cmd: cmd(A.lintCmd) || 'SKIP',
+      type_check_cmd: cmd(A.typeCheckCmd) || 'SKIP',
       changes_md_path: A.changesMdPath,
       verify_report_path: A.verifyReportPath,
       todo_blocking: A.todoBlocking ? 'true' : 'false',
@@ -509,6 +545,10 @@ if (!A.skipL1) {
     }),
     { schema: VerifyVerdictSchema, label: 'verify_l1', phase: 'Verify L1', ...mopt(MODELS.verifier || 'haiku') },
   )
+  must('harness.eval', 'verify_l1', l1)
+  // The caller branches on (layer, verdict); a Layer 1 result is Layer 1 whatever label the
+  // model attached to it.
+  l1.layer = 'L1'
   log(`Verify L1: ${l1.verdict}${l1.summary ? ' — ' + l1.summary : ''}`)
   // L1 fail -> orchestrator handles the retry loop / HARD GATE #2; post-auto-fix
   // re-verify (onlyL1) returns here too.
@@ -526,8 +566,8 @@ const verifyContext = A.skipL1
 const verdict = await agent(
   render(TPL_EVALUATOR, {
     test_available: A.testAvailable ? 'true' : 'false',
-    build_cmd: A.buildCmd || '',
-    test_cmd: A.testCmd || '',
+    build_cmd: cmd(A.buildCmd) || '',
+    test_cmd: cmd(A.testCmd) || '',
     round_num: A.roundNum,
     scope: A.scope,
     user_lang: A.userLang,
@@ -536,8 +576,52 @@ const verdict = await agent(
     changed_files_list: A.changedFilesList,
     spec_content: A.specContent,
   }),
-  { schema: VerifyVerdictSchema, label: 'evaluator', phase: 'Evaluate', ...mopt(MODELS.evaluator) },
+  { schema: EvaluatorVerdictSchema, label: 'evaluator', phase: 'Evaluate', ...mopt(MODELS.evaluator) },
 )
+must('harness.eval', 'evaluator', verdict)
+// Normalize what the caller branches on; neither enum is assumed to have been enforced by the
+// engine. Every rule fails closed — towards FAIL_L3, the failure that is put in front of the
+// user (a Layer 2 failure is retried without asking):
+//   - `failures` that is one bare object counts as a one-element list; anything else that is
+//     not a list and not empty cannot be read, so a PASS beside it is not taken on trust;
+//   - `verdict` is matched without regard to case, and one still off the enum is FAIL_L3;
+//   - a PASS that lists a critical or major failure contradicts itself.
+// `layer` then follows the verdict and is never taken from the model's label.
+const notes = []
+let unreadable = false
+if (!Array.isArray(verdict.failures)) {
+  const raw = verdict.failures
+  if (raw && typeof raw === 'object') {
+    verdict.failures = [raw]
+  } else {
+    if (raw != null && raw !== '') {
+      unreadable = true
+      notes.push(`failures was ${JSON.stringify(raw)}, not a list`)
+    }
+    verdict.failures = []
+  }
+}
+const VERDICTS = ['PASS', 'FAIL_L2', 'FAIL_L3']
+const folded = String(verdict.verdict).toUpperCase()
+let settled = folded
+if (!VERDICTS.includes(folded)) {
+  notes.push(`verdict ${JSON.stringify(verdict.verdict)} is not one of ${VERDICTS.join(' / ')}`)
+  settled = 'FAIL_L3'
+}
+const blocking = verdict.failures.filter(
+  (f) => f && ['critical', 'major'].includes(String(f.severity).toLowerCase()),
+).length
+if (settled === 'PASS' && blocking > 0) {
+  notes.push(`PASS with ${blocking} blocking failure(s)`)
+  settled = 'FAIL_L3'
+}
+if (settled === 'PASS' && unreadable) settled = 'FAIL_L3'
+if (notes.length) {
+  log(`Evaluate: verdict normalized — ${notes.join('; ')} -> ${settled}`)
+  verdict.summary = `verdict normalized: ${notes.join('; ')} -> ${settled}. ${verdict.summary || ''}`.trim()
+}
+verdict.verdict = settled
+verdict.layer = settled === 'FAIL_L2' ? 'L2' : 'L3'
 log(`Evaluate: ${verdict.verdict}${verdict.summary ? ' — ' + verdict.summary : ''}`)
 
 // ---- Phase 3: Cold review (conditional -- 3rd meta.phase, gated at runtime; see the L1

@@ -9,7 +9,7 @@
 // (top-level body, args JSON-string guard, inlined schemas/templates, no agentType).
 export const meta = {
   name: 'harness.build',
-  description: '/harness Build segment: implementation plan, advisory review, then implementation that edits source files in this repo. Spawns 2-4 sub-agents.',
+  description: 'INTERNAL — launched by /harness-build only. Build segment: implementation plan, advisory review, then one implementation pass that edits source files.',
   phases: [
     { title: 'Plan', detail: 'lead developer implementation plan' },
     { title: 'Advise', detail: 'advisory plan review (parallel in multi mode)' },
@@ -26,14 +26,36 @@ const LANG = A.userLang || 'the language of the task description'
 const MODELS = A.models || {}
 const mopt = (m) => (m ? { model: m } : {})
 
-// Substitution order = vars insertion order. Keep STRUCTURAL keys first and
-// user-influenced payload keys LAST: a payload substituted early could otherwise
-// hijack later {placeholders} with injected literals.
+// <!-- BLOCK-START:wf-prelude v1 — shared by the five segment scripts; edit every copy in one commit and bump the version -->
+// Single-pass substitution: the template is split on its {snake_case} tokens once, so a value
+// that itself contains a {placeholder} is never scanned again. A token with no entry in `vars`
+// is left as written.
 const render = (tpl, vars) =>
-  Object.entries(vars).reduce(
-    (t, [k, v]) => t.split('{' + k + '}').join(v == null ? '' : String(v)),
-    tpl,
-  )
+  String(tpl)
+    .split(/(\{[a-z][a-z0-9_]*\})/)
+    .map((seg, i) => {
+      if (i % 2 === 0) return seg
+      const k = seg.slice(1, -1)
+      if (!Object.hasOwn(vars, k)) return seg
+      return vars[k] == null ? '' : String(vars[k])
+    })
+    .join('')
+// Refuse to run without the payload the segment exists to process.
+const requireArgs = (segment, a, keys) => {
+  for (const k of keys) {
+    const v = a[k]
+    if (v == null || (typeof v === 'string' && v.trim() === '')) {
+      throw new Error(`${segment}: missing required argument "${k}"`)
+    }
+  }
+}
+// A single agent() resolves to null when the user skips it or it ends in a terminal API error.
+const must = (segment, label, result) => {
+  if (!result) throw new Error(`${segment}: ${label} returned null`)
+  return result
+}
+// <!-- BLOCK-END:wf-prelude v1 -->
+requireArgs('harness.build', A, ['specContent'])
 
 // ---- schemas (inlined per C1; canonical: workflows/_reference/schemas.md) ----
 const AnalysisResultSchema = {
@@ -318,9 +340,7 @@ Write all output in **{user_lang}**.
 
 3. **Implement** — follow the plan, incorporating accepted advisor feedback.
 
-4. **TDD** — if a TDD skill was found above, follow it: write a failing test, then implement, then verify. Run tests after each change.
-
-5. **If this is Round 2 or later:**
+4. **If this is Round 2 or later:**
    - Review the QA feedback above carefully.
    - **Only fix items marked FAIL** in the QA report.
    - **Do not touch items already marked PASS.**
@@ -382,9 +402,7 @@ Write all output in **{user_lang}**.
 
 3. **Implement** — follow the plan, incorporating accepted advisor feedback.
 
-4. **TDD** — if a TDD skill was found above, follow it: write a failing test, then implement, then verify. Run tests after each change.
-
-5. **If this is Round 2 or later:**
+4. **If this is Round 2 or later:**
    - Review the QA feedback above carefully.
    - **Only fix items marked FAIL** in the QA report.
    - **Do not touch items already marked PASS.**
@@ -450,7 +468,7 @@ if (!A.retry) {
       'do not re-run broad codebase discovery to locate them):\n' +
       planFiles.map((p) => `- ${p}`).join('\n')
   }
-  log('Plan: implementation plan ready')
+  log(implPlan ? 'Plan: implementation plan ready' : 'Plan: implementation plan unavailable — implementing from the spec alone')
 
   phase('Advise')
   const advisorDefs =
@@ -487,7 +505,7 @@ if (!A.retry) {
 
 // ---- Phase 3: implementation -------------------------------------------------
 phase('Implement')
-// Structural keys first; model-output digests then user-influenced spec content LAST.
+// render() is single-pass (wf-prelude block above), so the order of these keys carries no meaning.
 const implVars = {
   repo_path: A.repoPath,
   lang: A.lang,
@@ -522,7 +540,8 @@ const changes =
 
 // The implementation agent edits source files BEFORE it returns. A null here (skipped, or a
 // terminal API error) can therefore leave a half-edited tree, so it must not look like an
-// ordinary script error: the orchestrator keys its partial-edit check on this message.
+// ordinary script error. The orchestrator asks about partial edits after ANY error of this
+// segment; this message tells the user which case it was.
 if (!changes) throw new Error('harness.build: implementation returned null — partial edits possible')
 
 log(`Implement: ${(changes.modifiedFiles || []).length} modified, ${(changes.createdFiles || []).length} created`)

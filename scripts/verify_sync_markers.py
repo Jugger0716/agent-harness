@@ -4,9 +4,11 @@ Verify SYNC-WITH marker integrity across skill/template/workflow docs.
 
 A `<!-- SYNC-WITH: <target_file> §<section> -->` HTML comment marks a doc site
 whose declared values must stay consistent with a canonical section elsewhere.
-This fulfills the lint promise in skills/spec/SKILL.md §Step 1.5 conventions
-field contract ("a CI lint pass can grep the marker and verify all sites declare
-the same enum"), which previously had no implementation.
+This fulfills the lint promise in the conventions field contract ("a CI lint pass
+can grep the marker and verify all sites declare the same enum"), which previously
+had no implementation. Correction (v9.0.1): this sentence named the spec skill's
+SKILL.md §Step 1.5 as the home of that contract until then; v9 removed that skill,
+and the contract's single source is skills/harness/SKILL.md §Step 1.5.
 
 For each known sync group:
   1. referential integrity -- the target file exists and contains the group's
@@ -533,8 +535,9 @@ STEP_CITE_RE = re.compile(r"§Step" + _SEP + r"(\d+(?:\.\d+)?)")
 SUBPATH_CITE_RE = re.compile(
     r"§Step" + _SEP + r"(\d+(?:\.\d+)?)[ \t]*—[ \t]*(INLINE|WORKFLOW) path"
 )
-# `skills/spec/SKILL.md §Step 1.5` inside harness is a pointer at ANOTHER file; without
+# `skills/harness-build/SKILL.md §Step 5` inside harness is a pointer at ANOTHER file; without
 # this it would be checked against harness's own Step ids and pass for the wrong reason.
+# (Correction, v9.0.1: the example here was a citation of the spec skill, which v9 removed.)
 PATH_ANCHOR_RE = re.compile(
     r"(?:\{CLAUDE_PLUGIN_ROOT\}/)?"
     r"((?:skills|templates|workflows)/[A-Za-z0-9_.\-/]+\.(?:md|js))`?[ \t\n]*§Step"
@@ -814,6 +817,10 @@ def _check_harness_steps(entry: dict) -> int:
     #       too -- and would turn it red the day harness stops doing so. That is the
     #       silent wrong-attribution layer 4's PATH_ANCHOR_RE already guards against, so
     #       this layer takes the same rule rather than the opposite one.
+    #       Correction (v9.0.1): v9 removed both of the skills (b) names, so no file outside
+    #       the three targets owns such a heading today. The rule stays -- a skill added
+    #       later could own one -- but (b) describes the tree as it was when this layer
+    #       was written, not as it is.
     # In scope: citations inside the target itself, plus citations elsewhere that carry
     # the target's own path anchor.
     subpath_anchor_re = re.compile(

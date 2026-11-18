@@ -16,7 +16,7 @@ prevented — §Entry below refuses an inline session without a matching approva
 and redirects a missing session.
 
 Your role is:
-1. Manage phase transitions via `state.json` from `plan_done` (§Entry) to `completed`
+1. Manage phase transitions via `state.json` from `plan_done` (§Entry) to `finalizing`, and end the session in §Step 8
 2. Resolve the execution path per §Mode Gate — **INLINE** (dispatch sub-agents directly) or **WORKFLOW** (run plugin-shipped native Workflow segment scripts)
 3. On the WORKFLOW path: invoke `Workflow {scriptPath}` and receive **schema-validated objects** — no text parsing
 4. On the INLINE path: dispatch sub-agents with minimal context and parse 1-line returns (legacy contract, inline only)
@@ -50,7 +50,7 @@ When rendering a `Print:` directive: translate natural-language portions to `use
 
 Parse phase is English raw (keyword extraction for state transitions); display phase forces `user_lang` on the free-text summary after the first ` — `, idempotently. Split failure → the `confidence: Unknown` fallback. On the WORKFLOW path, display the object's `summary` as returned — no parsing, no translation pass. Full rules: `templates/_shared/output_language.md`.
 
-<!-- BLOCK-START:hx-mode-gate v2 — shared by /harness, /harness-build; edit every copy in one commit and bump the version -->
+<!-- BLOCK-START:hx-mode-gate v3 — shared by /harness, /harness-build; edit every copy in one commit and bump the version -->
 ## Mode Gate — path & mode resolution (single source: `templates/_shared/mode_gate.md`)
 
 Apply the shared opt-in convention in `templates/_shared/mode_gate.md`. The mode-selection roundtrip is removed EXCEPT §Ambiguity Prompt, which fires only when opt-in is absent:
@@ -75,8 +75,8 @@ Apply the shared opt-in convention in `templates/_shared/mode_gate.md`. The mode
 
 ## Standard Status Format
 
-Block shape, label rules and the harness phase labels (`plan_ready` → "Plan — ready" … `completed` → "Completed"): `templates/_shared/status_format.md`. Mode enum `<single | standard | multi>`; extra row `Path : <inline | workflow>  (<reason>)`.
-<!-- BLOCK-END:hx-mode-gate v2 -->
+Block shape, label rules and the harness phase labels (`setup` → "Setup — in progress" … `completed` → "Completed"): `templates/_shared/status_format.md`. Mode enum `<single | standard | multi>`; extra row `Path : <inline | workflow>  (<reason>)`.
+<!-- BLOCK-END:hx-mode-gate v3 -->
 
 ## Entry (how a `/harness-build` invocation starts)
 
@@ -109,7 +109,7 @@ re-validation; this skill's own phase jump table picks up from there:
 
 
 
-     - `plan_ready` / `planning` → **owned by `/harness`** — print `[harness-build] Planning is
+     - `setup` / `plan_ready` / `planning` → **owned by `/harness`** — print `[harness-build] Planning is
        not finished (phase: {phase}) — run /harness` and halt. Nothing is written.
      - `plan_done` → §Entry above (this skill's gate-crossing write, or §Step 3.5 with `--epic`).
      - `generate_ready` → Step 4 (Generate)
@@ -123,8 +123,14 @@ re-validation; this skill's own phase jump table picks up from there:
        - if `autofix.applied` is `"stopped"` or `"rejected"` → Step 5 "1st HARD-GATE" (Auto-fix HIDE per I2; `layer1_retries` unchanged — I4 clamp applies to "stopped")
      - `evaluate_ready` → Step 6 (Evaluate)
      - `evaluating` / `evaluate_done` → Step 7 (Verdict)
+     - `finalizing` → Step 8 (Cleanup & Finalize). The verdict is settled and recorded, so nothing is
+       re-evaluated and no question of Step 7 is asked again: Step 8 starts over from its
+       slice-session decision and its commit question. This is where a session whose commit
+       failed, or that was cut off between the verdict and the commit question, comes back.
      - `completed` → no active session — print `[harness-build] No active session — run
-       /harness "<task>" to start one` and halt.
+       /harness "<task>" to start one` and halt. A state.json written before `finalizing`
+       existed can be `completed` with Step 8 unfinished (a commit that failed): this skill
+       cannot resume it — commit by hand, or run `/harness`, which clears it and starts again.
 
 If `.harness/state.json` does not exist, proceed to this skill's §Fresh Start.
 
@@ -263,16 +269,16 @@ written by `skills/harness-build/SKILL.md` §Step 5 (WORKFLOW) / `skills/harness
 
 ---
 
-<!-- BLOCK-START:hx-state-machine v3 — shared by /harness, /harness-build; edit every copy in one commit and bump the version -->
+<!-- BLOCK-START:hx-state-machine v4 — shared by /harness, /harness-build; edit every copy in one commit and bump the version -->
 ## State Machine
 
 ### State Transition Diagram
 
 ```
-plan_ready → planning → plan_done → [User Gate] → generate_ready
+setup → plan_ready → planning → plan_done → [User Gate] → generate_ready
   → generating → generate_done → verify_ready → verifying → verify_done
   → evaluate_ready → evaluating → evaluate_done → [Verdict Gate]
-  → completed
+  → finalizing → (Step 8 ends the session and deletes .harness/)
 
 plan_done → completed (epic exit only — skills/harness-build/SKILL.md §Step 3.6; Steps 4–8 not executed)
 
@@ -289,9 +295,11 @@ On the WORKFLOW path the same machine applies; `harness.eval` covers verifying�
 - `*ing` → `*_done`: sub-agent / segment completion
 - `*_done` → next `*_ready`: auto mode = automatic / phase mode = next session
 - Phase mode can end a session at `plan_done`, `generate_done`, `verify_done`, `evaluate_done`
+- `setup` is the value `skills/harness/SKILL.md` §Step 1 item 7's checkpoint writes; item 11 replaces it with `plan_ready`. A session found at `setup` was interrupted inside Setup, and `skills/harness/SKILL.md` §Session Recovery re-enters Setup at item 8.
+- `finalizing` is written at the Verdict Gate (`skills/harness-build/SKILL.md` §Step 7) once the verdict is settled and only `skills/harness-build/SKILL.md` §Step 8 — the commit question and the cleanup — remains. A Step 8 that succeeds deletes `.harness/`, so no phase follows it; a session found at `finalizing` re-enters Step 8. `completed` is written by the epic exit alone — a state.json written before `finalizing` existed can still carry it from Step 7.
 - `plan_done` → `completed` directly is the one epic-exit exception, taken only via `skills/harness-build/SKILL.md` §Step 3.6 (by name); no other transition skips a state.
 - `[User Gate]` is HARD GATE #1, rendered where the session's gate mode puts it: `skills/harness/SKILL.md` §Approval Gate in an inline session (the default, `--fast` included), which records an approval bound to `spec_stamp` that `skills/harness-build/SKILL.md` §Entry checks before it performs the `generate_ready` write; `/harness-gate` in a separate session, where the human typing `/harness-build` is the proof.
-<!-- BLOCK-END:hx-state-machine v3 -->
+<!-- BLOCK-END:hx-state-machine v4 -->
 
 ### Auto-fix State Transition Table
 
@@ -675,8 +683,8 @@ Print: `[harness] Phase: Generate`
 6. Print per OLC: `  ✓ Code: {changes.summary}`. When `stats.planOk == false`, also print per OLC `  ⚠ Plan: unavailable — implemented without an implementation plan`.
 7. Verify `changes.md` exists (orchestrator-written).
 8. Update phase → `"generate_done"`, `updated_at → now`.
-9. **On Workflow error**: graceful fallback → re-run this step on the INLINE path (generator_single) — with one exception.
-   **If the error message contains `implementation returned null`**, the implementation agent may have edited files before it died, so do not fall back onto that tree unseen. When `has_git == true`, run `git status --porcelain` and print the changed paths, saying with the list that it is everything git reports — changes that were there before this session and the session's own files under `{docs_path}` are in it too, so not every path is the agent's; when it is `false`, say that the tree cannot be inspected. Then ask via AskUserQuestion (in `user_lang`) — header: "Partial edits" / question: "The implementation agent returned nothing, and the working tree may be partly edited. How should we proceed?" / options: "Continue inline" (re-run this step on the INLINE path on top of the current tree — with §Mode Gate's graceful-fallback writes, `path_resolved → "inline"` and `mode → "single"` — appending to `{qa_feedback}` the line `An earlier implementation attempt may have partly edited some of these paths: <paths>. The list is everything git reports, so a path this task does not concern may predate the session — leave those as they are. Inspect the rest first, then finish the work this prompt describes.` — and otherwise passing what the failed call was dispatched with. **A first pass** (`retry: false`, a new round's pass included) stays a first pass: leave `{verify_failure}` empty — a non-empty value puts `generator_single` in fix-only mode, and in round 1 it points at a verify report that does not exist yet. **A retry** (`retry: true`) stays that retry: dispatch per "Retry entries" below with the same `{verify_failure}` and `{verify_report_path}` the failed call carried, the Layer 2 and cold-feedback overrides included — the report exists and still says what to fix, and dropping it would turn a fix into a re-implementation) / "Stop" (keep `.harness/` and the tree as they are and print the path list. After a first pass, set `phase → "generate_ready"` so the next run starts Generate again instead of resuming at Verify, and print, in `user_lang`, `[harness-build] Stopped before Generate finished. Review the paths above and revert only what the agent changed, then run /harness-build — it runs Generate again from the start on the tree as it then stands.` After a retry, write nothing — `phase` stays `"generating"` and no retry counter is reset or incremented again, so §Session Recovery's `generating` row decides the next run: Verify on the tree as it stands, entered as §Step 5's Retry re-entry, or, for a cold feedback retry, that row's AC-20a exception, which dispatches the retry again — and print, in `user_lang`, `[harness-build] Stopped during a retry. Review the paths above and revert only what the agent changed, then run /harness-build — it verifies the tree as it then stands (after a cold-review retry it dispatches that retry again first).` Then end the turn). In a non-interactive session take "Stop". This question is not one of the three HARD-GATEs; it exists only on this failure, where it takes precedence over §Mode Gate's graceful-fallback rule (that rule alone would continue inline without asking).
+9. **On Workflow error**: this is the one segment whose agents edit source files, so an error from it never falls back onto the tree unseen.
+   **Every error of this segment's `Workflow` call is handled the same way** — `implementation returned null`, a script error, a schema-invalid result, an engine error part-way through: the implementation agent may have edited files before the run ended. An error raised before any agent ran (a launch that failed, a missing required argument) is asked about too — nothing in an error tells the two cases apart reliably, and one unnecessary question costs less than a half-edited tree nobody looked at. A permission denial is not an error of this kind: it goes to `templates/_shared/mode_gate.md` rule 3's denial branch, as everywhere else. When `has_git == true`, run `git status --porcelain` and print the changed paths, saying with the list that it is everything git reports — changes that were there before this session and the session's own files under `{docs_path}` are in it too, so not every path is the agent's; when it is `false`, say that the tree cannot be inspected. Then ask via AskUserQuestion (in `user_lang`) — header: "Partial edits" / question: "The build segment failed ({error}), and the working tree may be partly edited. How should we proceed?" / options: "Continue inline" (re-run this step on the INLINE path on top of the current tree — with §Mode Gate's graceful-fallback writes, `path_resolved → "inline"` and `mode → "single"` — appending to `{qa_feedback}` the line `An earlier implementation attempt may have partly edited some of these paths: <paths>. The list is everything git reports, so a path this task does not concern may predate the session — leave those as they are. Inspect the rest first, then finish the work this prompt describes.` — and otherwise passing what the failed call was dispatched with. **A first pass** (`retry: false`, a new round's pass included) stays a first pass: leave `{verify_failure}` empty — a non-empty value puts `generator_single` in fix-only mode, and in round 1 it points at a verify report that does not exist yet. **A retry** (`retry: true`) stays that retry: dispatch per "Retry entries" below with the same `{verify_failure}` and `{verify_report_path}` the failed call carried, the Layer 2 and cold-feedback overrides included — the report exists and still says what to fix, and dropping it would turn a fix into a re-implementation) / "Stop" (keep `.harness/` and the tree as they are and print the path list. After a first pass, set `phase → "generate_ready"` so the next run starts Generate again instead of resuming at Verify, and print, in `user_lang`, `[harness-build] Stopped before Generate finished. Review the paths above and revert only what the agent changed, then run /harness-build — it runs Generate again from the start on the tree as it then stands.` After a retry, write nothing — `phase` stays `"generating"` and no retry counter is reset or incremented again, so §Session Recovery's `generating` row decides the next run: Verify on the tree as it stands, entered as §Step 5's Retry re-entry, or, for a cold feedback retry, that row's AC-20a exception, which dispatches the retry again — and print, in `user_lang`, `[harness-build] Stopped during a retry. Review the paths above and revert only what the agent changed, then run /harness-build — it verifies the tree as it then stands (after a cold-review retry it dispatches that retry again first).` Then end the turn). In a non-interactive session take "Stop". This question is not one of the three HARD-GATEs; it exists only on a build-segment failure, where it takes precedence over §Mode Gate's graceful-fallback rule (that rule alone would continue inline without asking).
 
 **Retry entries (from Step 5/7 failure loops)** — regardless of path, a retry NEVER re-plans or re-reviews:
 - INLINE: re-dispatch the single implementation sub-agent with `{verify_failure}` + `{verify_report_path}` (current behavior).
@@ -810,7 +818,7 @@ Auto-fix re-verify call; `true` at the L1-max-fail "Continue" call; from
    `workflows/harness.eval.workflow.js`). Branch on **(layer, verdict)** — never verdict alone:
    - `layer == "L1"` and `verdict == "PASS"` → unreachable (segment continues to evaluate) — treat as L2/L3 verdict below.
    - `layer == "L1"` and `verdict != "PASS"` → **Layer 1 FAIL**: `verify.layer1_result → "FAIL"`, phase → `"verify_done"`, go to the L1 FAIL branch below. (Cold review never ran this call — no `verify.cold_*` write here.)
-   - `layer == "L2" | "L3"` → Layer 1 passed inside the segment. **Single read-modify-write** — write ALL of the following together, once: `verify.layer1_result → "PASS"`, `verify.verdict → verdict.verdict` (`PASS` / `FAIL_L2` / `FAIL_L3`), `verify.layer2_result → "FAIL"` iff `verdict.verdict == "FAIL_L2"` else `"PASS"`, `phase → "evaluate_done"`, AND the cold-review recording below:
+   - `layer == "L2" | "L3"` → the segment reached the evaluator: Layer 1 passed inside it, or the call skipped it. **Single read-modify-write** — write ALL of the following together, once: `verify.layer1_result → "PASS"` — except on a `skipL1: true` call ("Continue to Evaluator"), where Layer 1 did not run inside the segment: write `verify.layer1_result → "FAIL"` instead, the value the INLINE path is left with, so a slice that never passed Layer 1 cannot read as a clean end to §Epic Slice Chain — `verify.verdict → verdict.verdict` (`PASS` / `FAIL_L2` / `FAIL_L3`), `verify.layer2_result → "FAIL"` iff `verdict.verdict == "FAIL_L2"` else `"PASS"`, `phase → "evaluate_done"`, AND the cold-review recording below:
      - If `coldStatus` is present (`"clean"` / `"findings"` / `"failed"`): `verify.cold_round →
        round`, `verify.cold_counts → coldCounts` (if `coldStatus == "failed"` and `coldCounts`
        is undefined — the segment's `catch` branch returns no counts — write
@@ -852,7 +860,9 @@ Auto-fix re-verify call; `true` at the L1-max-fail "Continue" call; from
        undefined (a segment that returned no cold fields at all) leave `verify.cold_*`
        untouched.
      Record the verdict for Step 7 (skip Steps 5-PASS print and 6 — already evaluated). Print
-     per OLC: `  ✓ Verify (Layer 1): PASS → Evaluate: {verdict.verdict}` and go to **Step 7**
+     per OLC: `  ✓ Verify (Layer 1): PASS → Evaluate: {verdict.verdict}` — on a `skipL1: true` call, where
+     Layer 1 did not pass, `  ⚠ Verify (Layer 1): FAIL (skipped — Continue to Evaluator) → Evaluate:
+     {verdict.verdict}` instead — and go to **Step 7**
      with this verdict.
 5. **On Workflow error**: graceful fallback → run Step 5 INLINE, then continue the inline route (Step 6 inline evaluate).
 
@@ -949,7 +959,7 @@ After 2nd HARD-GATE decision, set `verify.autofix_attempted = true` in state.jso
 1. **Pre-apply path validation**: parse all `--- a/<path>` and `+++ b/<path>` headers from `auto_fix_patch.md` (metadata only — the `--- a/` / `+++ b/` pair is 2 header lines per file, not per hunk; hunk bodies are not parsed). Apply `validate_path(path, kind=diff_target)` to each path.
    - Print to user: `[harness] Applying patch to: <path list>`
    - If any path fails validation: reject Apply, print `[harness] ✗ Diff path validation failed: <path>`, return to HARD-GATE (Auto-fix hidden).
-2. **Snapshot the validated paths as byte copies** — the same procedure with and without git; no `git` command is involved, so uncommitted work is never moved out of the working tree. For each path item 1 validated, copy the file's current bytes to `.harness/autofix_pre_apply/<path>` and append one line to `.harness/autofix_pre_apply/manifest.txt`: `existing <path>`, or `absent <path>` when the file does not exist yet (the patch creates it; there is nothing to copy). If the manifest already exists — the interrupted Apply the gate announced — do not snapshot again: a second copy would be a partly patched file. Restore from the existing snapshot by its manifest first, exactly as item 3 restores, so the patch is applied to the pre-apply bytes.
+2. **Snapshot the validated paths as byte copies** — the same procedure with and without git; no `git` command is involved, so uncommitted work is never moved out of the working tree. For each path item 1 validated, copy the file's current bytes to `.harness/autofix_pre_apply/<path>` and append one line to `.harness/autofix_pre_apply/manifest.txt`: `existing <path>`, or `absent <path>` when the file does not exist yet (the patch creates it; there is nothing to copy). If the manifest already exists — the interrupted Apply the gate announced — a path it already lists is NOT snapshotted again: a second copy would be a partly patched file. A validated path the manifest does not list is snapshotted now: the interruption then fell inside this snapshot loop, which finishes before item 3 edits anything, so that file still holds its pre-apply bytes — skipping it would leave a path the patch touches with no copy to restore from. Then restore the listed paths from the snapshot by its manifest, exactly as item 3 restores, so the patch is applied to the pre-apply bytes.
 3. Apply unified diff from `.harness/generator/auto_fix_patch.md` using Edit tool.
    - If any hunk fails to apply: restore from the snapshot by its manifest — copy each `existing` path back over the working file, delete each `absent` path the patch created — then delete `.harness/autofix_pre_apply/` (a snapshot left behind would read as an interrupted Apply at the next resume; if the restore itself fails, keep it and print its path instead), warn user "Apply failed — reverted to pre-apply state.", return to HARD-GATE (retries >= 3, Auto-fix hidden).
 4. Update state.json: `autofix.applied → "applied"`. Reset `verify.layer1_result → null`.
@@ -958,7 +968,7 @@ After 2nd HARD-GATE decision, set `verify.autofix_attempted = true` in state.jso
    - **L1 FAIL** (`layer == "L1"`) → update state.json: `autofix.applied → "stopped"`, `layer1_retries = min(layer1_retries, 3)` (clamp — see §State Machine I4). Return to FAIL retries >= 3 HARD-GATE (Auto-fix option hidden since `verify.autofix_attempted == true`). The patch stays applied; print `[harness] Pre-apply copies: .harness/autofix_pre_apply/ (manifest.txt lists them)` so it can be undone by hand. The copies live until Step 8 deletes `.harness/`.
 
 **If "Reject":**
-1. If `.harness/autofix_pre_apply/manifest.txt` exists (the interrupted Apply the gate announced), restore from the snapshot by its manifest, exactly as item 3 of "Apply patch" restores, delete `.harness/autofix_pre_apply/`, and print the restored paths — a rejected proposal leaves none of its patch in the tree.
+1. If `.harness/autofix_pre_apply/manifest.txt` exists (the interrupted Apply the gate announced), restore from the snapshot by its manifest, exactly as item 3 of "Apply patch" restores. **Restore succeeded** → delete `.harness/autofix_pre_apply/` and print the restored paths — a rejected proposal leaves none of its patch in the tree. **Restore failed** → delete nothing: print the snapshot's path and that part of the rejected patch is still in the working tree, skip items 2–3 — `autofix.applied` stays `"proposed"`, so the next `/harness-build` returns to this gate and announces the interrupted Apply again — and end the turn.
 2. Update state.json: `autofix.applied → "rejected"`.
 3. Return to FAIL retries >= 3 HARD-GATE (Auto-fix option hidden).
 
@@ -1040,7 +1050,7 @@ It sits HERE, in Tier 1's preamble rather than inside `#### If PASS:`, precisely
 
 #### If PASS:
 
-**Cold review feedback branch (Tier 2 — evaluated BEFORE `phase → "completed"` is written, AC-19 (f)).** `cold_ran_this_round` (single definition, cited by name elsewhere — never restated): `verify.cold_round == round AND verify.cold_result ∈ {clean, findings, retried_unverified}`. Branch condition (single definition): `verdict == PASS AND cold_ran_this_round AND (cold_counts.Critical + cold_counts.Major) >= 1 AND verify.cold_retries == 0` — cold never reads or writes `verify.layer2_result`.
+**Cold review feedback branch (Tier 2 — evaluated BEFORE `phase → "finalizing"` is written, AC-19 (f)).** `cold_ran_this_round` (single definition, cited by name elsewhere — never restated): `verify.cold_round == round AND verify.cold_result ∈ {clean, findings, retried_unverified}`. Branch condition (single definition): `verdict == PASS AND cold_ran_this_round AND (cold_counts.Critical + cold_counts.Major) >= 1 AND verify.cold_retries == 0` — cold never reads or writes `verify.layer2_result`.
 
 **Why `cold_round` alone, and no freshness latch (AC-21).** `skills/harness/SKILL.md` §Step 2.6's latch confirms `plan_critic_findings.md` exists after that section deleted it pre-dispatch, so existence alone proves this pass wrote it. Cold review's counterpart baseline, `qa_report.md`, is rewritten by the Evaluator on every L1 retry, every L2 auto-retry and every cold feedback pass, and no section deletes it first — so neither that existence rule nor the mtime comparison this latch used before would carry any freshness meaning there, and the latch is deliberately NOT ported; file existence is used only to confirm a successful write (absent → `failed` + banner). **Correction, recorded rather than rewritten away**: this sentence used to state the latch compares mtimes and that the comparison is sound "because `spec.md` is written once per plan". The mechanism changed; the conclusion — not ported — did not, and it now rests on `qa_report.md` having no pre-dispatch delete rather than on a per-plan single write. **Cost of the non-deterministic `skipped` re-evaluation**: its two reasons (git command failure / empty input) do not write `cold_round`, so re-entering §Step 5 or §Step 6 inside the SAME round can charge one additional cold pass — for those two the ceiling is entry count, not round count.
 
@@ -1092,7 +1102,7 @@ lives in the vocabulary table above, not restated here), disclose: "되먹임 �
 to `retried_unverified` before Step 7 is reached again, so most resumes never see this branch
 fire for this value — disclosed here rather than asserted as a guaranteed-reachable path.
 
-Update state.json: `phase → "completed"`, `updated_at → now`.
+Update state.json: `phase → "finalizing"`, `updated_at → now`.
 Print: `[harness] ✓ QA PASS — task complete.`
 Proceed to Step 8.
 
@@ -1128,7 +1138,7 @@ Ask via AskUserQuestion (in `user_lang`):
   - "Accept as-is" / "Finish without fixing"
 
 If "Fix": same as Layer 3 Fix below.
-If "Accept as-is": phase → `"completed"`, proceed to Step 8.
+If "Accept as-is": phase → `"finalizing"`, proceed to Step 8.
 
 #### If FAIL — Layer 3 (verify.layer2_result == "PASS") and rounds remaining (round < max_rounds):
 
@@ -1145,12 +1155,12 @@ If "Fix":
 - Go to Step 4 (Generate) — a NEW round is a full pass: INLINE normal dispatch with `{qa_feedback}`; WORKFLOW `harness.build {retry: false}` with `qaFeedback` = qa_report.md content (fresh plan + advise + implement).
 
 If "Accept as-is":
-- Update phase → `"completed"`, `updated_at → now`.
+- Update phase → `"finalizing"`, `updated_at → now`.
 - Proceed to Step 8.
 
 #### If FAIL and max rounds reached:
 
-Update phase → `"completed"`, `updated_at → now`.
+Update phase → `"finalizing"`, `updated_at → now`.
 Print: `[harness] Max rounds reached. Remaining issues in qa_report.md.`
 Proceed to Step 8.
 
@@ -1219,7 +1229,7 @@ Actions (apply Safety Guard before each delete):
      silent-skip rule above (which applies only when the source file itself does not exist).
 
      **(s4) Per-file staging failure handling**: if `git add <file>` fails for a specific artifact file (permission, `.gitignore` conflict, etc.), warn the user (in `user_lang`): "Failed to stage `<file>`: <error>. Artifact may not be in git history — it remains on disk at `{docs_path}` regardless (this path never deletes `{docs_path}`)." Continue with remaining files — do NOT abort the whole sequence on a single staging failure. The code commit (step 3) is more critical than any individual artifact preservation. Because `{docs_path}` is never deleted here, a staging failure can never strand a file — it stays on disk even when `git add` failed for it (e.g. `docs/` is `.gitignore`d, the common case in this repo itself — `.gitignore:7`).
-  3. **Commit** the staged code changes plus artifacts, then **confirm the commit succeeded** (git exit 0 / a new commit object exists). **If the commit FAILS** (pre-commit hook rejection, signing failure, locked index, disk error, nothing-to-commit): **STOP without deleting anything** — `.harness/` and `{docs_path}` stay intact so the session is resumable and all artifacts recoverable. Surface the git error (in `user_lang`) and tell the user to resolve it and re-run, or commit manually. Do NOT proceed to step 4. **This sub-path does not end the session** — do NOT print the §Session Boundary block here. The one exception is §Epic Slice Chain's automatic commit, whose failure (and whose step 1 ABORT) is a boundary stop: still nothing deleted, but the Type B block prints with the commit-failure rows.
+  3. **Commit** the staged code changes plus artifacts, then **confirm the commit succeeded** (git exit 0 / a new commit object exists). **If the commit FAILS** (pre-commit hook rejection, signing failure, locked index, disk error, nothing-to-commit): **STOP without deleting anything** — `.harness/` and `{docs_path}` stay intact so the session is resumable and all artifacts recoverable. Surface the git error (in `user_lang`) and tell the user to resolve it and run `/harness-build` again — the session is at `finalizing`, so §Session Recovery brings it back to this step's commit question — or to commit manually. Do NOT proceed to step 4. **This sub-path does not end the session** — do NOT print the §Session Boundary block here. The one exception is §Epic Slice Chain's automatic commit, whose failure (and whose step 1 ABORT) is a boundary stop: still nothing deleted, but the Type B block prints with the commit-failure rows.
   4. **Delete `.harness/`** — only after a confirmed-successful commit (the Safety Guard already validated the parent context). `{docs_path}` is **never deleted** on this path.
 
   **(m2) commit-first, no-delete-of-docs_path ordering note**: the commit (step 3) precedes the only delete in this sequence (`.harness/`, step 4), so artifacts physically exist on disk at commit time and are captured normally when staging succeeds. `{docs_path}` itself is never deleted by this branch (P0-2 removes the prior "delete `{docs_path}` working-directory contents" step), so `spec.md` / `qa_report.md` remain on disk even when `docs/` is `.gitignore`d and staging silently fails per (s4). Because nothing is deleted until the commit is confirmed, a commit failure can never strand the session: `state.json` (`.harness/`) and `{docs_path}` survive for resume/manual recovery. (This supersedes the prior stage→delete→commit order, in which a final-step commit failure left state and docs already deleted.)
@@ -1299,4 +1309,4 @@ Call sites: `--output-dir` parsing (`skills/harness/SKILL.md` §Step 1 item 2, `
 - **Orchestrator reads no intermediate files.** See §Architecture Principles for this skill's subset and `skills/harness/SKILL.md` §Architecture Principles for the registry.
 - **1-line return parsing (INLINE path only).** Only first line of an inline sub-agent return is used for state decisions. WORKFLOW path branches on schema-validated objects.
 - **Workflow args are a JSON object;** segment scripts defensively parse (`args` may arrive as a JSON string — engine behavior). Never put user-gate decisions into args.
-- **Graceful engine fallback.** Any Workflow failure degrades to the inline single path with a notice — never a hard error.
+- **Graceful engine fallback.** Any Workflow failure degrades to the inline single path with a notice — never a hard error. One step asks first: after an error of the build segment, §Step 4's "Partial edits" question decides whether the inline run starts on the tree as it stands.

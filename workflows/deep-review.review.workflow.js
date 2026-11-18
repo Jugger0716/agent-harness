@@ -13,7 +13,7 @@
 //   no agentType (SPIKE-F3), no Date/random (resume), schemas/templates inlined (C1).
 export const meta = {
   name: 'deep-review.review',
-  description: '/deep-review review segment: parallel specialist reviews (2 in deep mode, 3 in thorough), adversarial cross-verification in thorough mode, then synthesis into one deduplicated FindingSet. Read-only — no source files are modified, no files are written.',
+  description: 'INTERNAL — launched by /deep-review only. Review segment: parallel specialist reviews, cross-verification in thorough mode, then synthesis into one FindingSet; modifies no file.',
   phases: [
     { title: 'Review', detail: 'independent specialist reviews (parallel, anchor-free)' },
     { title: 'Cross-verify', detail: 'adversarial verification of the other reviewers (thorough)' },
@@ -22,8 +22,8 @@ export const meta = {
 }
 
 // ---- args (SPIKE-F1: defensive parse) -------------------------------------
-// contract — keep 1:1 with skills/deep-review/SKILL.md Step 4 WORKFLOW dispatch (a field
-// missing on either side silently renders as ''):
+// contract — keep 1:1 with skills/deep-review/SKILL.md Step 4 WORKFLOW dispatch. diffContent is
+// required — the requireArgs() call below refuses a blank one; any other missing field renders as '':
 //   { mode: 'deep'|'thorough', diffContent, fileList, userLang,
 //     models: { executor, advisor, evaluator } }
 const A = typeof args === 'string' ? JSON.parse(args) : (args || {})
@@ -31,15 +31,36 @@ const LANG = A.userLang || 'the language of the review request'
 const MODELS = A.models || {}
 const mopt = (m) => (m ? { model: m } : {}) // null/undefined -> inherit parent model
 
-// Substitution order = vars insertion order. Keep STRUCTURAL keys first and
-// user-influenced payload keys LAST (diff content last of all — it is the
-// quintessential user-shaped payload): a payload substituted early could otherwise
-// hijack later {placeholders}.
+// <!-- BLOCK-START:wf-prelude v1 — shared by the five segment scripts; edit every copy in one commit and bump the version -->
+// Single-pass substitution: the template is split on its {snake_case} tokens once, so a value
+// that itself contains a {placeholder} is never scanned again. A token with no entry in `vars`
+// is left as written.
 const render = (tpl, vars) =>
-  Object.entries(vars).reduce(
-    (t, [k, v]) => t.split('{' + k + '}').join(v == null ? '' : String(v)),
-    tpl,
-  )
+  String(tpl)
+    .split(/(\{[a-z][a-z0-9_]*\})/)
+    .map((seg, i) => {
+      if (i % 2 === 0) return seg
+      const k = seg.slice(1, -1)
+      if (!Object.hasOwn(vars, k)) return seg
+      return vars[k] == null ? '' : String(vars[k])
+    })
+    .join('')
+// Refuse to run without the payload the segment exists to process.
+const requireArgs = (segment, a, keys) => {
+  for (const k of keys) {
+    const v = a[k]
+    if (v == null || (typeof v === 'string' && v.trim() === '')) {
+      throw new Error(`${segment}: missing required argument "${k}"`)
+    }
+  }
+}
+// A single agent() resolves to null when the user skips it or it ends in a terminal API error.
+const must = (segment, label, result) => {
+  if (!result) throw new Error(`${segment}: ${label} returned null`)
+  return result
+}
+// <!-- BLOCK-END:wf-prelude v1 -->
+requireArgs('deep-review.review', A, ['diffContent'])
 
 // ---- schemas (inlined per C1; canonical: workflows/_reference/schemas.md) ----
 // filesReviewed is REQUIRED — the report's "Files Reviewed" table (incl. no-issue
@@ -537,7 +558,7 @@ const ROSTER =
         { id: 'architecture_maintainability_reviewer', tpl: TPL_ARCH_MAINTAINABILITY },
       ]
 
-// Structural keys first; user-influenced payloads last (diff content last of all).
+// render() is single-pass (wf-prelude block above), so the order of these keys carries no meaning.
 const rawReviews = await parallel(
   ROSTER.map((r) => () =>
     agent(
@@ -634,6 +655,7 @@ const merged = await agent(
   }),
   { schema: FindingSetSchema, label: 'synthesis', phase: 'Synthesize', ...mopt(MODELS.advisor) },
 )
+must('deep-review.review', 'synthesis', merged)
 
 // Normalize counts from findings[] — findings are the ground truth the report displays
 // (harness.critic tally precedent).
@@ -645,6 +667,8 @@ const c = merged.counts || {}
 if (c.critical !== tally.critical || c.major !== tally.major || c.minor !== tally.minor || c.suggestion !== tally.suggestion) {
   log(`Synthesize: counts normalized from findings (reported c=${c.critical} M=${c.major} m=${c.minor} s=${c.suggestion} -> tallied c=${tally.critical} M=${tally.major} m=${tally.minor} s=${tally.suggestion})`)
   merged.counts = tally
+  // A summary written beside the wrong counts repeats them; replace it with the tally.
+  merged.summary = `Critical=${tally.critical}, Major=${tally.major}, Minor=${tally.minor}, Suggestion=${tally.suggestion}`
 }
 
 // Fill a missing/short filesReviewed from the union of the reviewers' lists — the

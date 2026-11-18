@@ -75,11 +75,11 @@ const repCases = Object.keys(REP).map((script) => ({
 // Three shapes, because a guard that only rejects `undefined` would still run on `{}` or on
 // arguments that lack the one payload the script exists to process.
 const REQUIRED = {
-  'harness.plan': 'task',
-  'harness.build': 'specContent',
-  'harness.eval': 'specContent',
-  'harness.critic': 'specContent',
-  'deep-review.review': 'diffContent',
+  'harness.plan': ['task'],
+  'harness.build': ['specContent'],
+  'harness.eval': ['specContent', 'verifyReportPath', 'qaReportPath'],
+  'harness.critic': ['specContent', 'criticFindingsPath'],
+  'deep-review.review': ['diffContent'],
 }
 const without = (obj, key) => Object.fromEntries(Object.entries(obj).filter(([k]) => k !== key))
 const refusal = (r, mustName) => {
@@ -102,15 +102,32 @@ const emptyArgsCases = Object.keys(REP).flatMap((script) => [
     script,
     check: async (e) => refusal(await e.run(script, {}, (p, o) => e.minimal(o.schema))),
   },
-  {
-    // The error has to name the missing argument, so the caller can tell which one it was.
-    id: `missing-${REQUIRED[script]}-${script}`,
+  // The error has to name the missing argument, so the caller can tell which one it was.
+  ...REQUIRED[script].map((key) => ({
+    id: `missing-${key}-${script}`,
     defect: 'W6',
     script,
-    check: async (e) =>
-      refusal(await e.run(script, without(REP[script], REQUIRED[script]), (p, o) => e.minimal(o.schema)), REQUIRED[script]),
-  },
+    check: async (e) => refusal(await e.run(script, without(REP[script], key), (p, o) => e.minimal(o.schema)), key),
+  })),
 ])
+const argShapeCases = [
+  {
+    // Whitespace is not a payload: a reviewer run over a blank diff reports a clean result.
+    id: 'blank-diffContent-deep-review.review',
+    defect: 'W6',
+    script: 'deep-review.review',
+    check: async (e) =>
+      refusal(await e.run('deep-review.review', { ...REP['deep-review.review'], diffContent: '  \n' }, (p, o) => e.minimal(o.schema)), 'diffContent'),
+  },
+  {
+    // Arguments may arrive as a JSON string; the guard has to run on the parsed object.
+    id: 'string-args-harness.build',
+    defect: 'W6',
+    script: 'harness.build',
+    check: async (e) =>
+      refusal(await e.run('harness.build', JSON.stringify(without(REP['harness.build'], 'specContent')), (p, o) => e.minimal(o.schema)), 'specContent'),
+  },
+]
 
 const defectCases = [
   {
@@ -222,6 +239,22 @@ const defectCases = [
       return { ok: namesAgent(r.error, 'synthesis'), detail: r.error ? r.error : `returned ${JSON.stringify(r.result).slice(0, 80)} although synthesis returned null` }
     },
   },
+  // The same rule for every other single agent() a script cannot go on without: the error has
+  // to say which agent came back empty, not die on a null read.
+  ...[
+    ['eval-null-l1', 'harness.eval', 'verify_l1'],
+    ['eval-null-evaluator', 'harness.eval', 'evaluator'],
+    ['critic-null', 'harness.critic', 'critic'],
+    ['review-null-synthesis', 'deep-review.review', 'synthesis'],
+  ].map(([id, script, label]) => ({
+    id,
+    defect: 'W9',
+    script,
+    async check(e) {
+      const r = await e.run(script, REP[script], (p, o) => (o.label === label ? null : e.minimal(o.schema)))
+      return { ok: namesAgent(r.error, label), detail: r.error ? r.error : `returned a result although the ${label} agent returned null` }
+    },
+  })),
   {
     id: 'eval-scope-placeholder',
     defect: 'W15',
@@ -229,8 +262,35 @@ const defectCases = [
     async check(e) {
       const args = { ...REP['harness.eval'], lintCmd: 'pylint {scope}', scope: 'src' }
       const r = await e.run('harness.eval', args, (p, o) => e.minimal(o.schema))
-      const left = promptOf(r, 'verify_l1').includes('{scope}')
-      return { ok: !left, detail: left ? 'the Layer 1 prompt still carries the literal {scope}' : 'no {scope} left in the Layer 1 prompt' }
+      // Not merely "no {scope} left": the command has to arrive resolved, or Layer 1 runs
+      // something other than what the project declared.
+      const prompt = promptOf(r, 'verify_l1')
+      const ok = !prompt.includes('{scope}') && prompt.includes('pylint src')
+      return { ok, detail: ok ? 'the Layer 1 prompt carries `pylint src`' : 'the Layer 1 prompt does not carry `pylint src`' }
+    },
+  },
+  {
+    // A session without a scope stores "(no limit)"; a command cannot run on that.
+    id: 'eval-scope-default',
+    defect: 'W15',
+    script: 'harness.eval',
+    async check(e) {
+      const args = { ...REP['harness.eval'], lintCmd: 'pylint {scope}', scope: '(no limit)' }
+      const r = await e.run('harness.eval', args, (p, o) => e.minimal(o.schema))
+      const prompt = promptOf(r, 'verify_l1')
+      const ok = !prompt.includes('{scope}') && prompt.includes('pylint .')
+      return { ok, detail: ok ? 'the Layer 1 prompt carries `pylint .`' : 'the Layer 1 prompt does not carry `pylint .`' }
+    },
+  },
+  {
+    id: 'eval-scope-evaluator',
+    defect: 'W15',
+    script: 'harness.eval',
+    async check(e) {
+      const args = { ...REP['harness.eval'], testCmd: 'pytest {scope}', scope: 'src' }
+      const r = await e.run('harness.eval', args, (p, o) => e.minimal(o.schema))
+      const ok = promptOf(r, 'evaluator').includes('pytest src')
+      return { ok, detail: ok ? 'the evaluator prompt carries `pytest src`' : 'the evaluator prompt does not carry `pytest src`' }
     },
   },
   {
@@ -249,6 +309,138 @@ const defectCases = [
       return { ok: !contradictory, detail: `verdict=${res.verdict} layer=${res.layer} failures=${(res.failures || []).length}` }
     },
   },
+  // The caller branches on (layer, verdict). `layer` is a label the model attaches, so the
+  // script has to set it from where the result came from, not trust it.
+  {
+    id: 'eval-fail-l2-mislabelled',
+    defect: 'W16',
+    script: 'harness.eval',
+    async check(e) {
+      const r = await e.run('harness.eval', REP['harness.eval'], (p, o) => {
+        if (o.label === 'verify_l1') return { verdict: 'PASS', layer: 'L1', failures: [] }
+        if (o.label === 'evaluator') return { verdict: 'FAIL_L2', layer: 'L1', failures: [] }
+        return null
+      })
+      const res = resultOf(r)
+      return { ok: res.layer === 'L2', detail: `verdict=${res.verdict} layer=${res.layer} (an evaluator FAIL_L2 must read as layer L2)` }
+    },
+  },
+  {
+    id: 'eval-l1-mislabelled',
+    defect: 'W16',
+    script: 'harness.eval',
+    async check(e) {
+      const r = await e.run('harness.eval', REP['harness.eval'], (p, o) =>
+        o.label === 'verify_l1' ? { verdict: 'FAIL_L2', layer: 'L3', failures: [] } : e.minimal(o.schema))
+      const res = resultOf(r)
+      return { ok: res.layer === 'L1' && r.calls.length === 1, detail: `layer=${res.layer} after ${r.calls.length} agent call(s) (a Layer 1 failure must read as layer L1)` }
+    },
+  },
+  {
+    id: 'eval-pass-with-major',
+    defect: 'W16',
+    script: 'harness.eval',
+    async check(e) {
+      const r = await e.run('harness.eval', REP['harness.eval'], (p, o) => {
+        if (o.label === 'verify_l1') return { verdict: 'PASS', layer: 'L1', failures: [] }
+        if (o.label === 'evaluator') return { verdict: 'PASS', layer: 'L3', failures: [{ file: 'a.ts', severity: 'major', fix: 'f' }] }
+        return null
+      })
+      const res = resultOf(r)
+      return { ok: res.verdict === 'FAIL_L3' && res.layer === 'L3', detail: `verdict=${res.verdict} layer=${res.layer} with one major failure listed` }
+    },
+  },
+  // Neither enum is assumed to have been enforced: case is folded, anything else fails closed.
+  {
+    id: 'eval-verdict-lowercase',
+    defect: 'W16',
+    script: 'harness.eval',
+    async check(e) {
+      const r = await e.run('harness.eval', REP['harness.eval'], (p, o) => {
+        if (o.label === 'verify_l1') return { verdict: 'PASS', layer: 'L1', failures: [] }
+        if (o.label === 'evaluator') return { verdict: 'pass', layer: 'L3', failures: [{ file: 'a.ts', severity: 'Critical', fix: 'f' }] }
+        return null
+      })
+      const res = resultOf(r)
+      return { ok: res.verdict === 'FAIL_L3', detail: `verdict=${JSON.stringify(res.verdict)} layer=${res.layer} from an evaluator "pass" with one Critical failure` }
+    },
+  },
+  {
+    id: 'eval-verdict-off-enum',
+    defect: 'W16',
+    script: 'harness.eval',
+    async check(e) {
+      const r = await e.run('harness.eval', REP['harness.eval'], (p, o) => {
+        if (o.label === 'verify_l1') return { verdict: 'PASS', layer: 'L1', failures: [] }
+        if (o.label === 'evaluator') return { verdict: 'FAIL', layer: 'L3', failures: [] }
+        return null
+      })
+      const res = resultOf(r)
+      return { ok: res.verdict === 'FAIL_L3' && res.layer === 'L3', detail: `verdict=${JSON.stringify(res.verdict)} layer=${res.layer} from an evaluator "FAIL"` }
+    },
+  },
+  {
+    id: 'eval-failures-not-array',
+    defect: 'W16',
+    script: 'harness.eval',
+    async check(e) {
+      const r = await e.run('harness.eval', REP['harness.eval'], (p, o) => {
+        if (o.label === 'verify_l1') return { verdict: 'PASS', layer: 'L1', failures: [] }
+        if (o.label === 'evaluator') return { verdict: 'PASS', layer: 'L3', failures: 'none' }
+        return e.minimal(o.schema)
+      })
+      if (r.error) return { ok: false, detail: r.error }
+      // A `failures` that cannot be read as a list says nothing about what failed, so a PASS
+      // beside it is not taken on trust.
+      return { ok: Array.isArray(r.result.failures) && r.result.verdict === 'FAIL_L3', detail: `verdict=${r.result.verdict} failures=${JSON.stringify(r.result.failures)}` }
+    },
+  },
+  {
+    // One failure returned as a bare object instead of a one-element list must still count.
+    id: 'eval-failures-object',
+    defect: 'W16',
+    script: 'harness.eval',
+    async check(e) {
+      const r = await e.run('harness.eval', REP['harness.eval'], (p, o) => {
+        if (o.label === 'verify_l1') return { verdict: 'PASS', layer: 'L1', failures: [] }
+        if (o.label === 'evaluator') return { verdict: 'PASS', layer: 'L3', failures: { file: 'a.ts', severity: 'critical', fix: 'f' } }
+        return e.minimal(o.schema)
+      })
+      if (r.error) return { ok: false, detail: r.error }
+      return { ok: r.result.verdict === 'FAIL_L3' && r.result.failures.length === 1, detail: `verdict=${r.result.verdict} failures=${JSON.stringify(r.result.failures)}` }
+    },
+  },
+  {
+    // Folding has to land on the right member, not merely away from PASS: a Layer 2 failure
+    // is retried without asking, a Layer 3 failure is shown to the user.
+    id: 'eval-verdict-folded',
+    defect: 'W16',
+    script: 'harness.eval',
+    async check(e) {
+      const r = await e.run('harness.eval', REP['harness.eval'], (p, o) => {
+        if (o.label === 'verify_l1') return { verdict: 'PASS', layer: 'L1', failures: [] }
+        if (o.label === 'evaluator') return { verdict: 'fail_l2', layer: 'L3', failures: [] }
+        return null
+      })
+      const res = resultOf(r)
+      return { ok: res.verdict === 'FAIL_L2' && res.layer === 'L2', detail: `verdict=${JSON.stringify(res.verdict)} layer=${res.layer} from an evaluator "fail_l2"` }
+    },
+  },
+  {
+    // The other side of the rule: a minor note under PASS is not a contradiction.
+    id: 'eval-pass-with-minor',
+    defect: 'W16',
+    script: 'harness.eval',
+    async check(e) {
+      const r = await e.run('harness.eval', REP['harness.eval'], (p, o) => {
+        if (o.label === 'verify_l1') return { verdict: 'PASS', layer: 'L1', failures: [] }
+        if (o.label === 'evaluator') return { verdict: 'PASS', layer: 'L3', failures: [{ file: 'a.ts', severity: 'minor', fix: 'f' }] }
+        return e.minimal(o.schema)
+      })
+      const res = resultOf(r)
+      return { ok: res.verdict === 'PASS', detail: `verdict=${res.verdict} layer=${res.layer} with one minor failure listed` }
+    },
+  },
   {
     id: 'critic-summary',
     defect: 'W17',
@@ -263,6 +455,23 @@ const defectCases = [
       return { ok: String(res.summary).includes('Critical=1'), detail: `counts=${JSON.stringify(res.counts)} summary=${JSON.stringify(res.summary)}` }
     },
   },
+  {
+    id: 'review-summary',
+    defect: 'W17',
+    script: 'deep-review.review',
+    async check(e) {
+      const r = await e.run('deep-review.review', REP['deep-review.review'], (p, o) => {
+        if (o.label !== 'synthesis') return e.minimal(o.schema)
+        return {
+          findings: [{ file: 'x', line: 1, severity: 'minor', category: 'Maintainability', title: 't', detail: 'd' }],
+          counts: { critical: 5, major: 0, minor: 0, suggestion: 0 }, filesReviewed: ['x'], summary: 'critical=5',
+        }
+      })
+      const set = resultOf(r).findingSet
+      const s = String(set.summary)
+      return { ok: s.includes('Critical=0') && s.includes('Minor=1'), detail: `counts=${JSON.stringify(set.counts)} summary=${JSON.stringify(set.summary)}` }
+    },
+  },
 ]
 
-export const cases = [...repCases, ...emptyArgsCases, ...defectCases]
+export const cases = [...repCases, ...emptyArgsCases, ...argShapeCases, ...defectCases]

@@ -38,6 +38,7 @@
 | `verify.cold_result`, `verify.cold_round`, `verify.cold_counts` (`{Critical, Major, Minor}`, uppercase — `CriticReport.items[].severity`), `verify.cold_review_path` | `null` | `skills/harness-build/SKILL.md` §Step 5 and the Steps 6–7 cold-review branches there |
 | `verify.cold_retries` | `0` | same |
 | `verify.verdict` (`"PASS"` / `"FAIL_L2"` / `"FAIL_L3"`) | `null` | `skills/harness-build/SKILL.md` §Step 6 item 5 (INLINE, from the 1-line return's leading token) / §Step 5 item 4 (WORKFLOW, from `VerifyVerdict`); reset to `null` on round increment. §Step 7 reads it on both paths and treats `null` as `FAIL_L3` |
+| `setup_args` (`{mode, model_config, lint_cmd, type_check_cmd}` — each the value its flag was given, or `null`) | absent — a checkpoint written before the field existed; §Session Recovery's `setup` row then reads the four from the resuming invocation | §Step 1 item 7 (the Setup checkpoint only; item 11 may drop it) |
 | `cli_flags.epic` (tri-state) | `null` | §Step 1 item 2 |
 | `cli_flags.cold_pass` | `true` | §Step 1 item 2 (`--no-cold-pass`, `--fast`) |
 | `cli_flags.cold_pass_source` (`"flag"` / `"fast"` / `"default:<source>"` / `null`) | `null` | §Step 1 item 2, in the same write as `cli_flags.cold_pass` |

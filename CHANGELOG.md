@@ -8,6 +8,89 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
 
 ## [Unreleased]
 
+## [9.0.1] — 2026-11-18
+
+v9 "subtraction", stage 2 (`design/v9-subtraction/SPEC.md` §5, plan
+`design/v9-subtraction/STAGE2.md`): correctness fixes in the five Workflow segment scripts and
+at the edges of the `/harness` state machine. No skill is added or removed. Letters and numbers
+are the defect ids of SPEC appendix A; `m` / `r` / `p` ids are items of
+`design/v9-subtraction/BASELINE.md`.
+
+### Fixed
+
+- **Prompt substitution (W2).** The scripts substituted one key after another over the whole
+  prompt, so a value inserted early — a proposal, QA feedback, a reviewer digest — that quoted a
+  later placeholder had the later payload spliced into it: the task text five times in a
+  synthesis prompt, a 1000-line diff as 5000 lines in a cross-verification prompt. Substitution
+  is now single-pass, in one block the five scripts share byte for byte.
+- **Empty arguments (W6).** With no arguments every segment still dispatched its whole fan-out
+  on empty prompts — `harness.build` ran an implementation agent, with edit permission, against
+  an empty spec. Each script now refuses before its first phase and names the missing argument;
+  a whitespace-only payload counts as missing.
+- **Empty agent results (W9).** A single agent that came back empty (skipped, or a terminal API
+  error) either passed through as a success (`harness.plan` returned `{ plan: null }`) or died
+  on a null read that did not say which agent it was. The error now names the agent.
+- **`{scope}` in commands (W15).** A detected `pylint {scope}` reached Layer 1 with the token
+  unresolved. Setup stores commands with `{scope}` resolved, and `harness.eval` resolves it
+  again in every prompt it builds.
+- **Evaluator verdict and layer (W16).** `/harness-build` branches on `(layer, verdict)`, and
+  `layer` was whatever label the model attached: an evaluator PASS labelled L1 read as a full
+  pass. The script now sets `layer` from where the result came from and fails closed towards
+  `FAIL_L3`: on a PASS that lists a critical or major failure, on a verdict off the enum, and
+  on a `failures` value it cannot read as a list.
+- **Summary beside corrected counts (W17).** The plan critic's counts were corrected from its
+  items but its summary line was not, so `/harness` printed `Critical=5` beside one item.
+- **Plan critic model (W18).** The inline plan critic ran on the advisor role while the
+  workflow path used the evaluator role; both use the evaluator role now.
+- **A failed commit can be resumed (K2).** Step 7 wrote `phase: "completed"` before Step 8 ran,
+  so after a commit that failed (a pre-commit hook, say) `/harness-build` answered "No active
+  session". Step 7 now writes `finalizing`, and `/harness-build` returns to the commit question.
+- **An interrupted Setup can be resumed (K3).** The Setup checkpoint carried no `phase`, and
+  the resume table had no row for it. It now carries `phase: "setup"`, `run_style` and the
+  flags no other field holds (`setup_args`), and `/harness` re-enters Setup at the branch step.
+- **Build-segment errors (p9).** Only one error message led to the "Partial edits" question;
+  any other error of the build segment fell back to an inline re-run on a tree the
+  implementation agent might already have edited. Every error of that segment asks now.
+- **A skipped Layer 1 stays failed.** On the workflow path, "Continue to Evaluator" after three
+  Layer 1 failures recorded Layer 1 as PASS, so in an epic a slice that never passed it could
+  count as a clean end and be committed without the commit question.
+- **Interrupted auto-fix.** When an earlier "Apply patch" was cut off while it was still taking
+  its snapshot, the paths it had not reached were patched with no copy to restore from. They
+  are snapshotted first. "Reject" keeps the snapshot, and the proposal, when its restore fails.
+- **md-optimize (m9, r9).** A file is recorded in the manifest before it is created, not after;
+  an original referenced from a non-markdown file is kept instead of deleted.
+- **Generator templates (r7).** Two steps conditioned on a skill lookup that 9.0.0 removed are
+  gone.
+
+### Changed
+
+- **md-optimize keeps its run backup in `.md-optimize/`**, not `.harness/md-optimize/`. The
+  directory ignores itself (a one-line `.gitignore`) and is on the Exclusion List.
+  `/md-optimize` no longer stops when a `/harness` session is open in the same directory.
+- **Segment descriptions are internal one-liners** (`INTERNAL — launched by /<skill> only. …`).
+  Segments are listed beside the skills but are never meant to be picked from that listing.
+- **state.json** gains two `phase` values, `setup` and `finalizing`, and one additive field,
+  `setup_args`. `version` stays `"3.0"`. `completed` is now written by the epic exit only.
+- **Lints.** `verify_git_safety.py` also matches `git checkout <ref> -- <path>`, a worktree
+  restore behind `--staged`, a forced `checkout` / `switch`, and all of its commands with
+  `-C <path>` in front of the subcommand (p4). `verify_meta_literal.py` checks the internal
+  description and the required-arguments call. `verify_block_sync.py` gains the group
+  `wf-prelude` over the five scripts; `hx-state-machine` is at v4 and `hx-mode-gate` at v3.
+
+### Upgrade notes
+
+- **A backup left by 9.0.0's md-optimize** stays in `.harness/md-optimize/`. `/harness` still
+  refuses to start beside it, and the next `/md-optimize` finds it there and asks whether to
+  restore or discard it.
+- **A session whose commit failed under 9.0.0** is at `phase: "completed"` and is not
+  resumable under 9.0.1 either: commit by hand, or run `/harness`, which clears it.
+- **A Setup interrupted under 9.0.0** resumes at the branch step, but that checkpoint did not
+  store `--mode`, `--model-config`, `--lint-cmd` or `--type-check-cmd`. To give them again,
+  choose Restart instead of Resume.
+- **A state.json written by 9.0.0 that holds a literal `{scope}`** in a command still hands it
+  to Layer 1 when the session is resumed on the inline path. Restart the session, or start it
+  with `--lint-cmd`.
+
 ## [9.0.0] — 2026-11-17
 
 **Breaking.** v9 "subtraction", stage 1 (`design/v9-subtraction/SPEC.md` §5, plan

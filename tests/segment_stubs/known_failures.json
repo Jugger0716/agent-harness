@@ -1,25 +1,3 @@
 {
-  "empty-args-harness.plan": "W6",
-  "empty-object-harness.plan": "W6",
-  "missing-task-harness.plan": "W6",
-  "empty-args-harness.build": "W6",
-  "empty-object-harness.build": "W6",
-  "missing-specContent-harness.build": "W6",
-  "empty-args-harness.eval": "W6",
-  "empty-object-harness.eval": "W6",
-  "missing-specContent-harness.eval": "W6",
-  "empty-args-harness.critic": "W6",
-  "empty-object-harness.critic": "W6",
-  "missing-specContent-harness.critic": "W6",
-  "empty-args-deep-review.review": "W6",
-  "empty-object-deep-review.review": "W6",
-  "missing-diffContent-deep-review.review": "W6",
-  "plan-resubstitution": "W2",
-  "build-resubstitution": "W2",
-  "review-resubstitution": "W2",
-  "review-dropped-findings": "W7",
-  "plan-null-synthesis": "W9",
-  "eval-scope-placeholder": "W15",
-  "eval-pass-with-critical": "W16",
-  "critic-summary": "W17"
+  "review-dropped-findings": "W7"
 }
