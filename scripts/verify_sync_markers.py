@@ -314,7 +314,8 @@ SYNC_GROUPS = [
     },
     {
         # harness-handoff-coldreview-epic-slice slice-f, group (a): /handoff's slice-command
-        # convention (generate Step 1 item 4) and its Next :/Next cmd: derivation (resume Step 5)
+        # convention (generate Step 1 item 4 then; templates/handoff/generate-ledger.md §Slice
+        # command convention since the H15 diet) and its Next :/Next cmd: derivation (resume Step 5)
         # both point at skills/harness/SKILL.md §Step 3.5: Slice Plan as their format SSOT --
         # this group fails when a marker is removed outright; it does NOT catch a pointer whose
         # prose rots while its marker stays (see the HONEST COVERAGE NOTE below -- effective
@@ -342,7 +343,9 @@ SYNC_GROUPS = [
         # prose pointer itself (the slice command convention naming this format -- generate.md
         # Step 1 item 4 until H15's diet moved it to templates/handoff/generate-ledger.md
         # §Slice command convention) carries no marker, so deleting or rotting that pointer is
-        # NOT caught here -- only the SKILL.md bullet is.
+        # NOT caught here -- only the SKILL.md bullet is. The resume Step 5 derivation pointer
+        # (templates/handoff/resume.md) never carried a marker of its own either, so its rot is
+        # not caught.
         "min_sites": 2,                        # skills/harness-build/SKILL.md (self) + skills/handoff/SKILL.md
     },
     {

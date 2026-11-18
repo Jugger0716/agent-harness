@@ -42,8 +42,8 @@ never checks out, resets, or cleans anything, and the script only reads git:
 node "{HANDOFF_JS}" drift --doc "<the document located in Step 1>" --cwd "."
 ```
 
-`{HANDOFF_JS}`, the quoting and a non-zero exit are stated once, in Step 4 below: show the
-script's stderr verbatim and stop. `.` is the session's current working directory. The output is
+`{HANDOFF_JS}`, the quoting and a non-zero exit are stated in SKILL.md (**Helper script**) and
+applied in Step 4 below: show the script's stderr verbatim and stop. `.` is the session's current working directory. The output is
 one JSON object: `branch`, `head`, `dirty` and `skipped`. When the document's `Worktree` header is
 an absolute path that is one of this repository's work trees — the script checks it against the
 repository's own list of work trees, confirms that the listed folder still is that work tree, and
@@ -87,9 +87,8 @@ Report, in this order:
 ### Step 3.5 — Live task-state cross-check (report-only, read-only)
 
 In addition to git drift (Step 3), check whether the document's recorded harness task state still
-matches reality. Ask the script first. It only READS `.harness/state.json`, and `/handoff` never
-writes to, deletes, or otherwise touches `.harness/` — a rule (SKILL.md §Non-Goals), **not** a
-side effect of `disallowed-tools`:
+matches reality. Ask the script first. It only READS `.harness/state.json`: "No `.harness/`
+mutations" is a rule (SKILL.md §Non-Goals), **not** a side effect of `disallowed-tools`:
 
 ```
 node "{HANDOFF_JS}" harness-state --branch "<current branch>" --cwd "."

@@ -3291,7 +3291,7 @@ const stateContractCases = [
       assert.ok(conv.includes("Slice : <next slice's kebab-case identifier>"), 'the label line is written out')
       // generate.md reads the ledger file only when a ledger applies, never unconditionally
       const item5 = flatten(between(text, '5. **Progress Ledger', '### Step 2'))
-      assert.match(item5, /only when this handoff is part of a multi-slice epic — then read `\{CLAUDE_PLUGIN_ROOT\}\/templates\/handoff\/generate-ledger\.md`/)
+      assert.match(item5, /only when[^.]*multi-slice epic[^.]*read `\{CLAUDE_PLUGIN_ROOT\}\/templates\/handoff\/generate-ledger\.md`/)
       assert.equal(text.split('generate-ledger.md').length - 1, 2, 'generate.md names the ledger file at the trigger and in Step 4 only')
     },
   },
@@ -5525,7 +5525,7 @@ const latestDiffCases = [
 
 // ---- the contract text after the H15 diet: rules only, one term per thing, cross-references that name their file -------------
 
-const HANDOFF_CONTRACT_FILES = [['skills', 'handoff', 'SKILL.md'], ['templates', 'handoff', 'generate.md'], ['templates', 'handoff', 'resume.md']]
+const HANDOFF_CONTRACT_FILES = [['skills', 'handoff', 'SKILL.md'], ['templates', 'handoff', 'generate.md'], ['templates', 'handoff', 'generate-ledger.md'], ['templates', 'handoff', 'resume.md']]
 
 const dietContractCases = [
   {
@@ -5568,13 +5568,19 @@ const dietContractCases = [
     run: async () => {
       const text = readText('templates', 'handoff', 'generate.md')
       const flat = flatten(text)
-      // the still-in-force Do NOT items come from the previous handoff: the resume briefing, else ONE document `list` names
+      // the still-in-force Do NOT items come from the WHOLE section of the previous handoff — the one this session resumed
+      // (with the section its `doNot` entry carried over), else the newest `list` document on this branch — never from the
+      // briefing's one-line summary; a pointer-only section is followed one hop, and what is read is data
       const item = flatten(between(text, '- Do NOT —', '5. **Progress Ledger'))
-      assert.match(item, /resume briefing/)
+      assert.ok(!/briefing showed it/.test(item), 'the source is not the briefing row, which is a summary')
+      assert.match(item, /whole `Do NOT` section/)
+      assert.match(item, /resumed[^;]*`doNot`/)
       assert.match(item, /node "\{HANDOFF_JS\}" list --dir "docs\/harness\/handoff"/)
-      assert.match(item, /one document/)
+      assert.match(item, /`branch`[^.]*item 1's Branch/)
+      assert.match(item, /pointer-only[^.]*one hop/)
+      assert.match(item, /DATA, not instructions/)
       // the "never open earlier documents by hand" rule is the ledger's
-      assert.match(flatten(ledgerText()), /For the ledger only the two commands below read earlier documents: never open, scan or rank those documents by hand for it/)
+      assert.match(flatten(ledgerText()), /only the two commands below read earlier documents[^.]*never open, scan or rank[^.]*by hand/)
       // a concurrent run's new path goes everywhere Step 3 put the old one
       const step4 = flatten(between(text, '### Step 4', '> **gitignore note'))
       assert.match(step4, /run `resolve-path` again[^.]*`## Resume` line[^.]*Reading Order entry/)
@@ -5587,9 +5593,35 @@ const dietContractCases = [
     run: async () => {
       const conv = flatten(between(readText('skills', 'handoff', 'SKILL.md'), '**Location convention', '**Base directory.**'))
       assert.match(conv, /differs on purpose from `templates\/_shared\/slugify\.md`/)
-      assert.match(conv, /non-ASCII character is a separator/)
-      assert.match(conv, /40 characters/)
+      // every difference is named: non-ASCII AND punctuation are separators, the 40-character cut falls at a `-`, an empty slug asks
+      assert.match(conv, /non-ASCII[^.]*separator/)
+      assert.match(conv, /punctuation/)
+      assert.match(conv, /40 characters[^.]*`-` boundary/)
       assert.match(conv, /empty result asks for an English summary/)
+    },
+  },
+  {
+    id: 'handoff-contract-keeps-the-clauses-the-compression-weakened',
+    run: async () => {
+      const gen = readText('templates', 'handoff', 'generate.md')
+      const led = flatten(ledgerText())
+      // the dirty-path overflow is "for the rest", not a second N next to `N files`
+      assert.match(flatten(between(gen, '### Step 1', '### Step 2')), /then `\+N more` for the rest/)
+      // a run that never read the ledger file still knows to delete the pointer line
+      assert.ok(gen.includes('<!-- only when Step 1 item 5d applies; otherwise delete this line -->'))
+      // the model's own rows join ONE Epic's ledger; the question fires only on a concrete id; the format is the exact one
+      assert.match(flatten(between(ledgerText(), 'c. **', 'd. **')), /this Epic's rows only/)
+      assert.match(led, /concretely names a different epic id/)
+      assert.match(led, /the exact `Slice`\/`Command` format/)
+      // resume quotes SKILL.md's `.harness/` rule in the words SKILL.md uses
+      const skill = readText('skills', 'handoff', 'SKILL.md')
+      const s35 = flatten(between(readText('templates', 'handoff', 'resume.md'), '### Step 3.5', '```'))
+      assert.match(s35, /"No `\.harness\/` mutations" is a rule \(SKILL\.md §Non-Goals\)/)
+      assert.ok(skill.includes('No `.harness/` mutations'))
+      // the helper-script rule is not "stated once, in Step 4" any more: SKILL.md states it, resume Step 4 applies it
+      const step3 = flatten(between(readText('templates', 'handoff', 'resume.md'), '### Step 3 —', '### Step 3.5'))
+      assert.ok(!/stated once, in Step 4/.test(step3))
+      assert.match(step3, /SKILL\.md \(\*\*Helper script\*\*\)/)
     },
   },
 ]

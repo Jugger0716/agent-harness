@@ -13,7 +13,7 @@ a. **Epic.** Run `node "{HANDOFF_JS}" latest-epic --dir "docs/harness/handoff"` 
    which is all the script reads, has one (a folder that does not exist yet included). Use `epic` as the proposal, without asking; there is
    no age limit, so it may be months old. When `epic` is `null`, the Epic is item 2's `docs_path`
    slug (kebab-case; `relevant` true), without asking. Ask the user only when `epic` is `null` and
-   there is no such slug, or when this session's work names a different epic id — that id is then
+   there is no such slug, or when this session's work concretely names a different epic id — that id is then
    the Epic.
 b. **Carry.** Run `node "{HANDOFF_JS}" ledger-carry --dir "docs/harness/handoff" --epic "<the
    Epic>"` (`--doc "<path>"` in place of `--dir` names a known document; `doc` is then always
@@ -24,9 +24,9 @@ b. **Carry.** Run `node "{HANDOFF_JS}" ledger-carry --dir "docs/harness/handoff"
    `Status` outside the enum) **and only the most recent 5 finished ones** (`done`, `dropped`);
    `droppedDone` counts the finished rows left out. Rows of another Epic are never carried; a new
    Epic carries nothing.
-c. **Write.** Put `rows` into the new ledger, then add or update this session's own rows: a
-   carried slice is updated in place (`Slice` is unique within its Epic), never added twice. Only
-   the new document changes; the source is never touched.
+c. **Write.** Put `rows` into the new ledger, then add or update this session's own rows — this
+   Epic's rows only: a carried slice is updated in place (`Slice` is unique within its Epic), never
+   added twice. Only the new document changes; the source is never touched.
 d. **The earlier rows.** When a source was found and `droppedDone` is greater than 0 or `chained`
    is true, write `Earlier rows: <pointer>` under the table after a blank line — the script's
    `pointer`, the source's file name. Never copy the source's own `Earlier rows:` line. With
@@ -54,9 +54,9 @@ stay); a carried row follows the same rule.
 
 ## Slice command convention (Next Steps, step 1)
 
-When a ledger row applies and step 1 names that slice's command, write it in the `Slice`/`Command`
-format `skills/harness-build/SKILL.md` §Step 3.5: Slice Plan defines for `slice_plan.md` (named,
-not restated). When a row applies but the next step is not a single command (a slice implemented
+When a ledger row applies and step 1 names that slice's command, write it in the exact
+`Slice`/`Command` format `skills/harness-build/SKILL.md` §Step 3.5: Slice Plan defines for
+`slice_plan.md` (named, not restated). When a row applies but the next step is not a single command (a slice implemented
 directly from an epic plan), step 1 still opens with the `Slice` half on its own line — label
 English raw, `Command` omitted — naming the next slice, never the one the ledger records as just
 finished:

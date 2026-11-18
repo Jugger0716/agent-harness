@@ -32,9 +32,9 @@ headings stay English raw (parse anchors) and their content is in `user_lang`.
 today's date; the slug is an English kebab-case summary of the title, `[a-z0-9-]`, at most 40 characters. There is no
 transliteration: the model supplies the English words. `resolve-path` (`generate.md` Step 3)
 normalises the slug and, when the name is taken, appends `-2`, `-3`, … — NEVER overwrite an
-existing handoff. This differs on purpose from `templates/_shared/slugify.md`: a non-ASCII
-character is a separator, the cap is 40 characters, and an empty result asks for an English
-summary.
+existing handoff. This differs on purpose from `templates/_shared/slugify.md`: every non-ASCII
+or punctuation character is a separator, the cap is 40 characters cut at a `-` boundary where
+there is one, and an empty result asks for an English summary.
 
 **Base directory.** The session's current working directory is the base of `docs/harness/handoff/`
 (where `generate` writes and `resume`/`list` look) and the last-resort root of a relative Reading
