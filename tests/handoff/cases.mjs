@@ -944,6 +944,29 @@ const nextCases = [
     },
   },
   {
+    id: 'next-docs-names-a-done-slice',
+    run: async () => {
+      // The recorded Docs folder is the slice that has just finished: that tier has no value, item 1 answers.
+      const t = epicDoc({ docs: 'docs/harness/s2-store/', rows: [row('s1-load', 'done'), row('s2-store', 'done')] })
+      same(core(await nextOf(t, true)), { slice: 'Carry on.', source: 'step-one', ambiguous: [] })
+      // the Slice cell is compared with its wrapper removed, and the Docs value with its own
+      const wrapped = epicDoc({ docs: '`docs/harness/s2-store/`', rows: [row('s1-load', 'done'), row('**s2-store**', 'done')] })
+      same(core(await nextOf(wrapped, true)), { slice: 'Carry on.', source: 'step-one', ambiguous: [] })
+      // a done slice of ANOTHER Epic does not count, nor does a Docs folder that is not a done slice
+      const other = epicDoc({ docs: 'docs/harness/s9-other/', rows: [row('s9-other', 'done', 'ep-b'), row('s1-load', 'done')] })
+      same(core(await nextOf(other, true)), { slice: 's9-other', source: 'docs', ambiguous: [] })
+      const live = epicDoc({ docs: 'docs/harness/x-task/', rows: [row('s1-load', 'done'), row('s2-store', 'done')] })
+      same(core(await nextOf(live, true)), { slice: 'x-task', source: 'docs', ambiguous: [] })
+    },
+  },
+  {
+    id: 'next-docs-value-in-backticks-is-unwrapped',
+    run: async () => {
+      same(core(await nextOf(epicDoc({ docs: '`docs/harness/x-task/`' }), true)), { slice: 'x-task', source: 'docs', ambiguous: [] })
+      same(core(await nextOf(epicDoc({ docs: '`docs/harness/x-task`' }), true)), { slice: 'x-task', source: 'docs', ambiguous: [] })
+    },
+  },
+  {
     id: 'next-slice-cells-lose-one-wrapper-pair',
     run: async () => {
       const cell = async (slice) => (await nextOf(epicDoc({ rows: [row(slice, 'in-progress')] }))).slice
@@ -986,8 +1009,32 @@ const nextCases = [
       same(core(await nextOf(epicDoc({ rows, header, step: '1. Slice : s-lbl' }))), { slice: 's-lbl', source: 'label', ambiguous: [] })
       // An empty Slice cell is the same: one in-progress row with no value is not an ambiguity.
       same(core(await nextOf(epicDoc({ rows: [row('', 'in-progress')] }))), { slice: 'Carry on.', source: 'step-one', ambiguous: [] })
-      // Two in-progress rows stay ambiguous when one has no value; the list keeps the gap.
-      same(core(await nextOf(epicDoc({ rows: [row('s-a', 'in-progress'), row('', 'in-progress')] }))), { slice: null, source: 'step-one', ambiguous: ['s-a', ''] })
+    },
+  },
+  {
+    id: 'next-all-valueless-in-progress-rows-fall-through',
+    run: async () => {
+      // Two in-progress rows that cannot name a slice are no ambiguity: the tier has no value, the next one answers.
+      const header = '| Epic | Status |\n|---|---|'
+      const rows = [['ep-a', 'in-progress'], ['ep-a', 'in-progress']]
+      same(core(await nextOf(epicDoc({ rows, header }))), { slice: 'Carry on.', source: 'step-one', ambiguous: [] })
+      same(core(await nextOf(epicDoc({ rows, header, docs: 'docs/harness/x-task/' }), true)), { slice: 'x-task', source: 'docs', ambiguous: [] })
+      same(core(await nextOf(epicDoc({ rows: [row('', 'in-progress'), row('', 'in-progress')] }))), { slice: 'Carry on.', source: 'step-one', ambiguous: [] })
+    },
+  },
+  {
+    id: 'next-mixed-valueless-in-progress-rows-are-ambiguous',
+    run: async () => {
+      // One row with a slice and one without are still two in-progress rows: ambiguous (D6). `ambiguous`
+      // lists the slice that exists; `inProgressRows` is the count the briefing prints, blanks included.
+      const t = epicDoc({ rows: [row('s-a', 'in-progress'), row('', 'in-progress')] })
+      const r = await nextOf(t)
+      same(core(r), { slice: null, source: 'step-one', ambiguous: ['s-a'] })
+      assert.equal(r.inProgressRows, 2)
+      // a plain ambiguity counts its rows too, and a result that is not one still carries the count
+      assert.equal((await nextOf(epicDoc({ rows: [row('s-a', 'in-progress'), row('s-b', 'in-progress'), row('s-c', 'in-progress')] }))).inProgressRows, 3)
+      assert.equal((await nextOf(epicDoc({ rows: [row('s-a', 'in-progress')] }))).inProgressRows, 1)
+      assert.equal((await nextOf(epicDoc({}))).inProgressRows, 0)
     },
   },
   {
@@ -1005,7 +1052,7 @@ const nextCases = [
       assert.equal(ok.status, 0, ok.stderr)
       assert.equal(ok.stderr, '')
       assert.ok(ok.stdout.endsWith('\n') && !ok.stdout.slice(0, -1).includes('\n'), 'one line of JSON')
-      same(Object.keys(JSON.parse(ok.stdout)).sort(), ['ambiguous', 'commandCandidates', 'slice', 'source'])
+      same(Object.keys(JSON.parse(ok.stdout)).sort(), ['ambiguous', 'commandCandidates', 'inProgressRows', 'slice', 'source'])
       // exactly `true` or `false`; anything else is a usage error
       for (const bad of ['maybe', '1', 'TRUE', '']) {
         const r = cli('next', '--doc', doc, '--state-relevant', bad)
@@ -1051,8 +1098,18 @@ const nextCases = [
     id: 'cmd-two-candidates-both-listed',
     run: async () => {
       same(nextFixture('two-command-tokens').commandCandidates, ['/harness-gate', '/harness-build --epic'])
-      // order is the order in the text, and an identical token written twice is listed twice
-      same((await nextOf(epicDoc({ step: '1. Run `/ship`, and if it stops run `/ship` again.' }))).commandCandidates, ['/ship', '/ship'])
+      // order is the order of first appearance
+      same((await nextOf(epicDoc({ step: '1. Run `/harness-gate`, then `/ship`.' }))).commandCandidates, ['/harness-gate', '/ship'])
+    },
+  },
+  {
+    id: 'cmd-identical-tokens-count-once',
+    run: async () => {
+      // A token that is byte-identical to an earlier one is the same candidate, not another one.
+      same((await nextOf(epicDoc({ step: '1. Run `/ship`, and if it stops run `/ship` again.' }))).commandCandidates, ['/ship'])
+      same((await nextOf(epicDoc({ step: '1. `/a-cmd x`, `/b-cmd`, `/a-cmd x`, `/b-cmd`.' }))).commandCandidates, ['/a-cmd x', '/b-cmd'])
+      // a token that differs by a single byte is another one
+      same((await nextOf(epicDoc({ step: '1. `/ship`, then `/ship now`.' }))).commandCandidates, ['/ship', '/ship now'])
     },
   },
   {
@@ -1265,7 +1322,7 @@ const nextDiffCases = [
         assert.equal(d.status, 0, d.stderr)
         const out = JSON.parse(d.stdout)
         assert.equal(out.documents, FIXTURES.length)
-        same(out.classes, { unchanged: 10, 'normalisation-only': 0, 'became-label': 1, 'became-ambiguous': 1, 'became-docs-or-step-one': 1, other: 0 })
+        same(out.classes, { unchanged: 10, 'normalisation-only': 0, 'became-label': 1, 'became-ambiguous': 1, 'became-docs-or-step-one': 1, 'kept-finished-slice': 0, other: 0 })
         same(out.ids.other, [])
         assert.equal(out.ids['became-label'].length, 1)
         same(out.labelCheck, { withLabelAndInProgress: 1, valuesDiffered: 1, newIsLabel: 1 })
@@ -1289,12 +1346,17 @@ const nextDiffCases = [
         'a-bold-cell': epicDoc({ rows: [row('**s-bold**', 'in-progress')] }),
         'b-empty-cell': epicDoc({ rows: [row('', 'in-progress')] }),
         'c-plain': epicDoc({ rows: [row('s-plain', 'in-progress')] }),
+        // The Docs guard covers a `done` row only: a last row that is `blocked` and named by Docs keeps
+        // the 9.0.1 value, and the report has to count it rather than call it unchanged.
+        'd-blocked-row': epicDoc({ docs: 'docs/harness/s2-store/', rows: [row('s1-load', 'done'), row('s2-store', 'blocked')] }),
       }
       withSnapshotOfDocs(docs, (snap) => {
         const out = JSON.parse(node('diff.mjs', '--corpus', snap, '--what', 'next', '--json').stdout)
-        same(out.classes, { unchanged: 1, 'normalisation-only': 1, 'became-label': 0, 'became-ambiguous': 0, 'became-docs-or-step-one': 0, other: 1 })
+        same(out.classes, { unchanged: 1, 'normalisation-only': 1, 'became-label': 0, 'became-ambiguous': 0, 'became-docs-or-step-one': 0, 'kept-finished-slice': 1, other: 1 })
         same(out.ids['normalisation-only'], ['d001'])
         same(out.ids.other, ['d002'])
+        same(out.ids['kept-finished-slice'], ['d004'])
+        assert.equal(out.lastRow.valueKept, 1)
         // check (b) counts the same documents: one in-progress row, no label
         same(out.noLabelOneInProgress, { documents: 3, unchanged: 1, normalisationOnly: 1, other: 1 })
       })
@@ -1311,9 +1373,19 @@ const nextDiffCases = [
       assert.equal(classifyNextChange({ slice: 's2', source: 'in-progress' }, ambiguous, { legacyLiveRows: 1 }), 'other')
       assert.equal(classifyNextChange({ slice: 's2', source: 'last-row' }, ambiguous, { legacyLiveRows: 0 }), 'other')
       assert.equal(classifyNextChange({ slice: 's2', source: 'docs' }, ambiguous), 'other')
+      // a last-row document whose value is STILL the finished slice is its own class, not `unchanged`
+      assert.equal(classifyNextChange({ slice: 's2', source: 'last-row' }, now('s2', 'docs')), 'kept-finished-slice')
+      assert.equal(classifyNextChange({ slice: 's2', source: 'last-row' }, now('s2', 'step-one')), 'kept-finished-slice')
+      assert.equal(classifyNextChange({ slice: 's2', source: 'in-progress' }, now('s2', 'in-progress')), 'unchanged')
+      // a label takes over only where the facts explain it: a label that differed from the in-progress
+      // row under 9.0.1, or a document with no ledger
+      const differed = { labelDiffers: true, hasLedger: true }
+      assert.equal(classifyNextChange({ slice: 's2', source: 'in-progress' }, now('s3', 'label'), differed), 'became-label')
+      assert.equal(classifyNextChange({ slice: 'x', source: 'docs' }, now('s3', 'label'), { labelDiffers: false, hasLedger: false }), 'became-label')
+      assert.equal(classifyNextChange({ slice: 's2', source: 'in-progress' }, now('s3', 'label'), { labelDiffers: false, hasLedger: true }), 'other')
+      assert.equal(classifyNextChange({ slice: 's2', source: 'in-progress' }, now('s3', 'label')), 'other')
       // the other classes
       assert.equal(classifyNextChange({ slice: 's2', source: 'in-progress' }, now('s2', 'label')), 'unchanged')
-      assert.equal(classifyNextChange({ slice: 's2', source: 'in-progress' }, now('s3', 'label')), 'became-label')
       assert.equal(classifyNextChange({ slice: 's2', source: 'last-row' }, now('Do it.', 'step-one')), 'became-docs-or-step-one')
       assert.equal(classifyNextChange({ slice: '**s2**', source: 'in-progress' }, now('s2', 'in-progress')), 'normalisation-only')
       assert.equal(classifyNextChange({ slice: 's2', source: 'in-progress' }, now('s9', 'in-progress')), 'other')
@@ -2079,6 +2151,17 @@ const contractCases = [
       assert.ok(at.every((i) => i >= 0) && at.every((i, k) => k === 0 || i > at[k - 1]), `the four tiers appear in order: ${at}`)
       // rules only: no dated observation or measurement in the derivation
       assert.ok(!/\b(observed|measured)\b[^\n]{0,60}\d{4}-\d{2}-\d{2}/i.test(rules), 'no dated narrative in the derivation')
+      // the ambiguous example is a whole block: the literal sits under a `Do NOT` row, not under `Next cmd:`
+      assert.match(text, /^ {2}Do NOT {2}: [^\n]+\n\(Next : ambiguous — 2 in-progress rows; Next Steps item 1 follows\)$/m)
+      // the count in the literal is the script's `inProgressRows`, and a value-less row still counts
+      assert.ok(rules.includes('`inProgressRows`'), 'the literal counts in-progress rows, blanks included')
+      // the Docs tier never answers with the slice that has just finished
+      assert.match(rules, /equals the `Slice` of one\s+of that Epic's `done` rows/)
+      assert.ok(rules.includes('listed once'), 'a repeated identical token is listed once')
+      // everything printed under the aligned block has one order
+      assert.ok(rules.includes('**Under the aligned block**, print what applies in this order'), 'the render order under the block is stated')
+      // lines of the new text stay near the file's width (the briefing template rows are the only long ones)
+      for (const l of rules.split('\n')) assert.ok([...l].length <= 100, `a line of ${[...l].length} characters: ${l.slice(0, 40)}`)
       // self-contained: the label line's shape is defined here, not by a pointer into generate.md
       assert.ok(rules.includes('`Slice : <kebab-case identifier>`'), 'the label line shape is written out')
       // a reference to generate's step names the file, because this file is read without it
@@ -2087,7 +2170,10 @@ const contractCases = [
       const forms = text.slice(text.indexOf("**The first option's forms.**"), text.indexOf('**NEVER start executing work'))
       assert.ok(forms.length > 100, "the first option's forms section exists")
       assert.match(forms, /two or more candidates/i)
-      assert.ok(forms.includes('When `Next :` is ambiguous, that identifier is `Next Steps item 1`.'), 'the work form says what the identifier is when ambiguous')
+      // both forms' descriptions carry the `Next :` identifier, which is item 1 itself when `Next :` is ambiguous
+      assert.ok(forms.includes('or `Next Steps item 1` when `Next :` is ambiguous'), 'the identifier in the first option is defined for an ambiguous Next :')
+      assert.ok(forms.includes('rules 2–5'), 'a picked candidate is executed under rules 2-5, not rule 2 alone')
+      assert.match(forms, /not all of\s+`commandCandidates`/, 'the numbered list holds the candidates left after rule 1, not every shape match')
       assert.match(forms, /numbered/)
       assert.match(forms, /Adjust plan/)
       // rule 2's second conjunct cannot compare a picked candidate with a row that printed the literal

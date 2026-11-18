@@ -66,17 +66,22 @@ function nextLegacy(docs) {
 
 // ---- next: the label-first rule against 9.0.1 -----------------------------------------------------------
 
-export const NEXT_CLASSES = ['unchanged', 'normalisation-only', 'became-label', 'became-ambiguous', 'became-docs-or-step-one', 'other']
+export const NEXT_CLASSES = ['unchanged', 'normalisation-only', 'became-label', 'became-ambiguous', 'became-docs-or-step-one', 'kept-finished-slice', 'other']
 
 // One document's change. `legacy` is { slice, source } from legacy_next.mjs, `now` the result of
-// deriveNext (slice null = ambiguous), `legacyLiveRows` the number of in-progress rows in the
-// Epic of the last row as 9.0.1 read it. A change that is none of the named ones is `other` — in
-// particular an ambiguity counts as `became-ambiguous` only where 9.0.1 took the last of two or
-// more in-progress rows; any other document that turns ambiguous is something unexplained.
-export function classifyNextChange(legacy, now, { legacyLiveRows = 0 } = {}) {
+// deriveNext (slice null = ambiguous). The facts (all about the 9.0.1 reading of the document) are
+// `legacyLiveRows`, the number of in-progress rows in the Epic of the last row; `labelDiffers`, a
+// label and an in-progress row both existed and named other slices; `hasLedger`. A change that is
+// none of the named ones is `other` — in particular an ambiguity counts as `became-ambiguous` only
+// where 9.0.1 took the last of two or more in-progress rows, and a label takes over only where it
+// differed from the in-progress row or there was no ledger to read it in.
+// `kept-finished-slice` is a document whose 9.0.1 value was the ledger's last row and still is: it
+// must not hide among the unchanged ones, and it has to stay empty.
+export function classifyNextChange(legacy, now, { legacyLiveRows = 0, labelDiffers = false, hasLedger = true } = {}) {
   if (now.slice === null) return legacy.source === 'in-progress' && legacyLiveRows >= 2 ? 'became-ambiguous' : 'other'
+  if (legacy.source === 'last-row' && now.slice === legacy.slice) return 'kept-finished-slice'
   if (now.slice === legacy.slice) return 'unchanged'
-  if (now.source === 'label' && legacy.source !== 'label') return 'became-label'
+  if (now.source === 'label' && legacy.source !== 'label' && (labelDiffers || !hasLedger)) return 'became-label'
   if (legacy.source === 'last-row' && (now.source === 'docs' || now.source === 'step-one')) return 'became-docs-or-step-one'
   if (now.source === legacy.source && now.slice === stripEmphasis(legacy.slice)) return 'normalisation-only'
   return 'other'
@@ -91,23 +96,47 @@ function liveRowCount(parsed, key) {
   return rows.filter((r) => r[key] === epic && r.status === 'in-progress').length
 }
 
+// An independent read of a document's `Slice :` label, for check (a): the first such line of the Next
+// Steps section of the raw text, with every leading and trailing `*`, `_` or backtick removed. It
+// shares nothing with parse.mjs or its stripEmphasis, so the check cannot agree with the code by
+// construction. null when the section has no label line.
+function labelByRegex(text) {
+  let inSection = false
+  for (const line of text.replace(/^\uFEFF/, '').split(/\r?\n/)) {
+    if (/^## /.test(line)) {
+      inSection = /^## Next Steps\b/i.test(line)
+    } else if (inSection) {
+      const m = /^\s*(?:(?:\d+[.)]|[-*])\s+)?[*_`]*\s*Slice\s*:\s*(.*)$/.exec(line)
+      const v = m ? m[1].replace(/^[\s*_`]+|[\s*_`]+$/g, '') : ''
+      if (v) return v
+    }
+  }
+  return null
+}
+
 function nextChange(docs) {
-  const per = docs.map((d) => ({
-    id: d.id,
-    legacy: deriveLegacyNext(d.parsed),
-    legacyLiveRows: liveRowCount(d.parsed, 'epicRaw'),
-    liveRows: liveRowCount(d.parsed, 'epic'),
-    hasLabel: d.parsed.stepOne.sliceLabel !== null,
-    tiers: legacyTiers(d.parsed),
-    label: stripEmphasis(d.parsed.stepOne.sliceLabel),
-    relevant: deriveNext(d.parsed, { stateRelevant: true }),
-    notRelevant: deriveNext(d.parsed, { stateRelevant: false }),
-  }))
+  const per = docs.map((d) => {
+    const tiers = legacyTiers(d.parsed)
+    return {
+      id: d.id,
+      legacy: deriveLegacyNext(d.parsed),
+      legacyLiveRows: liveRowCount(d.parsed, 'epicRaw'),
+      liveRows: liveRowCount(d.parsed, 'epic'),
+      hasLabel: d.parsed.stepOne.sliceLabel !== null,
+      hasLedger: tiers.ledger,
+      labelDiffers: tiers.label !== null && tiers.ledger && tiers.inProgress !== null && tiers.label !== tiers.inProgress,
+      tiers,
+      label: labelByRegex(d.text),
+      relevant: deriveNext(d.parsed, { stateRelevant: true }),
+      notRelevant: deriveNext(d.parsed, { stateRelevant: false }),
+    }
+  })
+  const factsOf = (x) => ({ legacyLiveRows: x.legacyLiveRows, labelDiffers: x.labelDiffers, hasLedger: x.hasLedger })
   const tally = (pick) => {
     const classes = Object.fromEntries(NEXT_CLASSES.map((c) => [c, 0]))
     const ids = Object.fromEntries(NEXT_CLASSES.filter((c) => c !== 'unchanged').map((c) => [c, []]))
     for (const x of per) {
-      const c = classifyNextChange(x.legacy, x[pick], { legacyLiveRows: x.legacyLiveRows })
+      const c = classifyNextChange(x.legacy, x[pick], factsOf(x))
       classes[c]++
       if (c !== 'unchanged') ids[c].push(x.id)
     }
@@ -126,7 +155,7 @@ function nextChange(docs) {
   }
 
   // (b) the documents with no label and exactly one in-progress row keep their value
-  const single = per.filter((x) => !x.hasLabel && x.liveRows === 1).map((x) => classifyNextChange(x.legacy, x.relevant, { legacyLiveRows: x.legacyLiveRows }))
+  const single = per.filter((x) => !x.hasLabel && x.liveRows === 1).map((x) => classifyNextChange(x.legacy, x.relevant, factsOf(x)))
   const noLabelOneInProgress = {
     documents: single.length,
     unchanged: single.filter((c) => c === 'unchanged').length,
