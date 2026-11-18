@@ -34,6 +34,7 @@ const FIXTURES = [
 const lib = (rel) => import(pathToFileURL(path.join(ROOT, rel)).href)
 const parseLib = () => lib('skills/handoff/scripts/lib/parse.mjs')
 const legacyLib = () => lib('tests/handoff/corpus/legacy_next.mjs')
+const nextLib = () => lib('skills/handoff/scripts/lib/next.mjs')
 const snapshotLib = () => lib('tests/handoff/corpus/snapshot.mjs')
 const measureLib = () => lib('tests/handoff/corpus/measure.mjs')
 const readingLib = () => lib('skills/handoff/scripts/lib/reading.mjs')
@@ -818,6 +819,257 @@ const legacyCases = [
       })
     },
   },
+  {
+    id: 'legacy-next-a-ledger-without-a-slice-column-is-no-value-not-a-crash',
+    run: async () => {
+      // The Slice column is missing, so every row's slice is null: that is "no value" (a TypeError
+      // here was a deferred defect). The row cannot name a slice, so the derivation moves on.
+      const header = '| Epic | Status |\n|---|---|'
+      const rows = [['ep-a', 'done'], ['ep-a', 'in-progress']]
+      const bare = mk([['Next Steps', '1. Carry on.'], ['Progress Ledger', table(rows, header)]])
+      same(await legacyOf(bare), { slice: 'Carry on.', source: 'step-one' })
+      const labelled = mk([['Next Steps', '1. Slice : s-lbl'], ['Progress Ledger', table(rows, header)]])
+      same(await legacyOf(labelled), { slice: 's-lbl', source: 'label' })
+      const docs = mk([['In Progress', 'Docs : docs/harness/x-task/'], ['Next Steps', '1. Carry on.'], ['Progress Ledger', table(rows, header)]])
+      same(await legacyOf(docs), { slice: 'x-task', source: 'docs' })
+    },
+  },
+]
+
+// ---- the new Next derivation and the command candidates (lib/next.mjs) --------------------------------------
+//
+// `next` reads the PARSED document. Most cases build the document in memory (mk/table) and call the
+// library; the cases that assert what a skill would read go through the command line on a fixture.
+
+const row = (slice, status, epic = 'ep-a') => [epic, slice, status, 'n/a', '']
+
+// An epic-style document: Next Steps item 1, optional ledger rows, optional recorded Docs value.
+function epicDoc({ step = '1. Carry on.', rows = null, docs = null, header } = {}) {
+  const pairs = []
+  if (docs !== null) pairs.push(['In Progress', `Docs : ${docs}`])
+  pairs.push(['Next Steps', step])
+  if (rows !== null) pairs.push(['Progress Ledger', table(rows, header)])
+  return mk(pairs)
+}
+
+async function nextOf(text, stateRelevant) {
+  const { parseHandoff } = await parseLib()
+  const { deriveNext } = await nextLib()
+  return viaJson(deriveNext(parseHandoff(text), stateRelevant === undefined ? undefined : { stateRelevant }))
+}
+
+// `next` through the command line, as JSON; an undefined `stateRelevant` leaves the flag out.
+function nextFixture(name, stateRelevant) {
+  const args = ['next', '--doc', path.join(FIX, `${name}.md`)]
+  if (stateRelevant !== undefined) args.push('--state-relevant', String(stateRelevant))
+  const r = cli(...args)
+  assert.equal(r.status, 0, `exit ${r.status}: ${r.stderr}`)
+  assert.equal(r.stderr, '')
+  return JSON.parse(r.stdout)
+}
+
+// The derivation's answer without the command candidates (those have their own cases).
+const core = ({ slice, source, ambiguous }) => ({ slice, source, ambiguous })
+
+const nextCases = [
+  {
+    id: 'next-label-wins',
+    run: async () => {
+      // The label names X while two rows are in progress (Y, Z): the label is the answer, not a tie-break.
+      const t = epicDoc({ step: '1. Slice : s-x\n   Then carry on.', rows: [row('s-w', 'done'), row('s-y', 'in-progress'), row('s-z', 'in-progress')] })
+      same(core(await nextOf(t)), { slice: 's-x', source: 'label', ambiguous: [] })
+      // the fixture whose single in-progress row names another slice, read as a skill reads it
+      same(core(nextFixture('label-and-inprogress-differ')), { slice: 's3-render', source: 'label', ambiguous: [] })
+      // the label is read without a ledger too
+      same(core(await nextOf(epicDoc({ step: '1. Slice : s-orphan\n   Then more.' }))), { slice: 's-orphan', source: 'label', ambiguous: [] })
+    },
+  },
+  {
+    id: 'next-single-in-progress',
+    run: async () => {
+      const last = epicDoc({ rows: [row('s-a', 'done'), row('s-b', 'in-progress')] })
+      same(core(await nextOf(last)), { slice: 's-b', source: 'in-progress', ambiguous: [] })
+      // the live row need not be the last one
+      const middle = epicDoc({ rows: [row('s-a', 'in-progress'), row('s-b', 'done')] })
+      same(core(await nextOf(middle)), { slice: 's-a', source: 'in-progress', ambiguous: [] })
+      same(core(nextFixture('ledger-two-tables')), { slice: 's2-second', source: 'in-progress', ambiguous: [] })
+    },
+  },
+  {
+    id: 'next-two-in-progress-no-label',
+    run: async () => {
+      // No row is picked: the result is the ambiguity, its source is Next Steps item 1, `slice` is null.
+      same(core(nextFixture('no-label-two-inprogress')), { slice: null, source: 'step-one', ambiguous: ['s2-validate', 's3-export'] })
+      // the Docs tier does not settle it either, however relevant the task state is
+      const t = epicDoc({ docs: 'docs/harness/x-task/', rows: [row('s-a', 'in-progress'), row('s-b', 'in-progress')] })
+      same(core(await nextOf(t, true)), { slice: null, source: 'step-one', ambiguous: ['s-a', 's-b'] })
+    },
+  },
+  {
+    id: 'next-done-only',
+    run: async () => {
+      // The last row is the slice that just finished; it must not come back as the next one.
+      const r = nextFixture('done-only-last-row')
+      assert.notEqual(r.slice, 's2-store')
+      same(core(r), { slice: 'Start the next slice with `/harness --output-dir docs/harness/next-slice "next-slice"`.', source: 'step-one', ambiguous: [] })
+      // with a recorded Docs value and a relevant task state the Docs tier comes before item 1
+      const t = epicDoc({ docs: 'docs/harness/x-task/', rows: [row('s1', 'done'), row('s2', 'done')] })
+      same(core(await nextOf(t, true)), { slice: 'x-task', source: 'docs', ambiguous: [] })
+      same(core(await nextOf(t, false)), { slice: 'Carry on.', source: 'step-one', ambiguous: [] })
+    },
+  },
+  {
+    id: 'next-bold-status',
+    run: async () => {
+      same(core(nextFixture('bold-wrapped-status')), { slice: 's3-publish', source: 'in-progress', ambiguous: [] })
+      // emphasis and backticks around a Status cell are removed once each, whichever the status
+      const t = epicDoc({ rows: [row('s-a', '**done**'), row('s-b', '__`in-progress`__')] })
+      same(core(await nextOf(t)), { slice: 's-b', source: 'in-progress', ambiguous: [] })
+    },
+  },
+  {
+    id: 'next-docs-tier-needs-relevance',
+    run: async () => {
+      same(core(nextFixture('no-ledger-with-docs-label', true)), { slice: 'sample-single-task', source: 'docs', ambiguous: [] })
+      // not relevant, or the flag left out: the Docs value is not used
+      for (const flag of [false, undefined]) {
+        const want = { slice: 'Re-run the verify step, then review the result.', source: 'step-one', ambiguous: [] }
+        same(core(nextFixture('no-ledger-with-docs-label', flag)), want, String(flag))
+      }
+      // one trailing slash is dropped first; a value with no segment is no value
+      for (const [docs, want] of [['docs/harness/x-task', 'x-task'], ['docs/harness/x-task/', 'x-task'], ['x-task', 'x-task']]) {
+        same(core(await nextOf(epicDoc({ docs }), true)), { slice: want, source: 'docs', ambiguous: [] }, docs)
+      }
+      same(core(await nextOf(epicDoc({ docs: '/' }), true)), { slice: 'Carry on.', source: 'step-one', ambiguous: [] })
+    },
+  },
+  {
+    id: 'next-slice-cells-lose-one-wrapper-pair',
+    run: async () => {
+      const cell = async (slice) => (await nextOf(epicDoc({ rows: [row(slice, 'in-progress')] }))).slice
+      assert.equal(await cell('`s-a`'), 's-a')
+      assert.equal(await cell('**s-b**'), 's-b')
+      assert.equal(await cell('__s-c__'), 's-c')
+      assert.equal(await cell('**`s-d`**'), 's-d')
+      assert.equal(await cell('``s-e``'), '`s-e`') // exactly one backtick pair
+      assert.equal(await cell('`s-f'), '`s-f') // unbalanced: verbatim
+      // the label value is read the same way
+      const label = async (v) => nextOf(epicDoc({ step: `1. Slice : ${v}` }))
+      assert.equal((await label('**s-g**')).slice, 's-g')
+      assert.equal((await label('`s-h`')).slice, 's-h')
+      assert.equal((await label('s-i')).slice, 's-i')
+      // a label that is nothing but a wrapper has no value, so the derivation moves on
+      const bare = await label('``')
+      assert.equal(bare.source, 'step-one')
+      assert.equal(bare.slice, 'Slice : ``')
+    },
+  },
+  {
+    id: 'next-epic-of-the-last-row-selects-the-rows',
+    run: async () => {
+      // rows of another Epic do not count
+      const other = epicDoc({ rows: [row('a1', 'in-progress', 'ep-a'), row('b1', 'done', 'ep-b')] })
+      same(core(await nextOf(other)), { slice: 'Carry on.', source: 'step-one', ambiguous: [] })
+      // the Epic cell is read with its emphasis removed: `**ep-a**` and `ep-a` are one Epic
+      const wrapped = epicDoc({ rows: [row('a1', 'in-progress', '**ep-a**'), row('a2', 'done', 'ep-a')] })
+      same(core(await nextOf(wrapped)), { slice: 'a1', source: 'in-progress', ambiguous: [] })
+    },
+  },
+  {
+    id: 'next-missing-or-empty-slice-is-no-value',
+    run: async () => {
+      // No Slice column at all: no crash, and the row cannot name a slice.
+      const header = '| Epic | Status |\n|---|---|'
+      const rows = [['ep-a', 'in-progress']]
+      same(core(await nextOf(epicDoc({ rows, header }))), { slice: 'Carry on.', source: 'step-one', ambiguous: [] })
+      same(core(await nextOf(epicDoc({ rows, header, docs: 'docs/harness/x-task/' }), true)), { slice: 'x-task', source: 'docs', ambiguous: [] })
+      same(core(await nextOf(epicDoc({ rows, header, step: '1. Slice : s-lbl' }))), { slice: 's-lbl', source: 'label', ambiguous: [] })
+      // An empty Slice cell is the same: one in-progress row with no value is not an ambiguity.
+      same(core(await nextOf(epicDoc({ rows: [row('', 'in-progress')] }))), { slice: 'Carry on.', source: 'step-one', ambiguous: [] })
+      // Two in-progress rows stay ambiguous when one has no value; the list keeps the gap.
+      same(core(await nextOf(epicDoc({ rows: [row('s-a', 'in-progress'), row('', 'in-progress')] }))), { slice: null, source: 'step-one', ambiguous: ['s-a', ''] })
+    },
+  },
+  {
+    id: 'next-without-any-item-one',
+    run: async () => {
+      same(core(await nextOf(mk([['Goal', 'x']]))), { slice: '', source: 'step-one', ambiguous: [] })
+      same((await nextOf(mk([['Goal', 'x']]))).commandCandidates, [])
+    },
+  },
+  {
+    id: 'cli-next-prints-one-json-object-and-checks-its-flag',
+    run: async () => {
+      const doc = path.join(FIX, 'no-ledger-with-docs-label.md')
+      const ok = cli('next', '--doc', doc, '--state-relevant', 'true')
+      assert.equal(ok.status, 0, ok.stderr)
+      assert.equal(ok.stderr, '')
+      assert.ok(ok.stdout.endsWith('\n') && !ok.stdout.slice(0, -1).includes('\n'), 'one line of JSON')
+      same(Object.keys(JSON.parse(ok.stdout)).sort(), ['ambiguous', 'commandCandidates', 'slice', 'source'])
+      // exactly `true` or `false`; anything else is a usage error
+      for (const bad of ['maybe', '1', 'TRUE', '']) {
+        const r = cli('next', '--doc', doc, '--state-relevant', bad)
+        assert.equal(r.status, 2, `[${bad}]`)
+        assert.equal(r.stdout, '')
+        assert.match(r.stderr, /--state-relevant/)
+      }
+      assert.equal(cli('next').status, 2, '--doc is required')
+      const notHandoff = cli('next', '--doc', path.join(FIX, 'non-handoff.md'))
+      assert.equal(notHandoff.status, 1)
+      assert.equal(notHandoff.stdout, '')
+    },
+  },
+  {
+    id: 'cmd-skips-path-like',
+    run: async () => {
+      const t = epicDoc({ step: '1. Send it to `/dev/null`, read `/usr/bin/x`, `/C:/x`, `/templates/` and `//`, then run `/harness-build`.' })
+      same((await nextOf(t)).commandCandidates, ['/harness-build'])
+      // the name must start with a lowercase letter
+      same((await nextOf(epicDoc({ step: '1. Try `/Harness`, `/1x` and `/-x`.' }))).commandCandidates, [])
+      // the fixture whose only slash tokens are a device path and the self call
+      same(nextFixture('path-like-token').commandCandidates, [])
+    },
+  },
+  {
+    id: 'cmd-skips-self',
+    run: async () => {
+      const t = epicDoc({ step: '1. Resume with `/handoff resume docs/x.md`, `/handoff` or `/agent-harness:handoff list`, then run `/harness-build`.' })
+      same((await nextOf(t)).commandCandidates, ['/harness-build'])
+      // the name is matched whole: a command that merely starts with it is not the self call
+      same((await nextOf(epicDoc({ step: '1. Run `/handoff-notes now`.' }))).commandCandidates, ['/handoff-notes now'])
+    },
+  },
+  {
+    id: 'cmd-whole-token',
+    run: async () => {
+      // the token is one candidate with its arguments, byte for byte
+      same(nextFixture('done-only-last-row').commandCandidates, ['/harness --output-dir docs/harness/next-slice "next-slice"'])
+      same((await nextOf(epicDoc({ step: '1. Run `/agent-harness:harness-build --epic`.' }))).commandCandidates, ['/agent-harness:harness-build --epic'])
+    },
+  },
+  {
+    id: 'cmd-two-candidates-both-listed',
+    run: async () => {
+      same(nextFixture('two-command-tokens').commandCandidates, ['/harness-gate', '/harness-build --epic'])
+      // order is the order in the text, and an identical token written twice is listed twice
+      same((await nextOf(epicDoc({ step: '1. Run `/ship`, and if it stops run `/ship` again.' }))).commandCandidates, ['/ship', '/ship'])
+    },
+  },
+  {
+    id: 'cmd-zero',
+    run: async () => {
+      same(nextFixture('no-ledger-no-docs').commandCandidates, [])
+      same(nextFixture('legacy-no-labels').commandCandidates, [])
+    },
+  },
+  {
+    id: 'cmd-negation-stays-prose',
+    run: async () => {
+      // The script returns what has the shape of a command; deciding that item 1 says "not a command"
+      // is the model's reading of the prose.
+      same(nextFixture('negated-command-token').commandCandidates, ['/harness'])
+    },
+  },
 ]
 
 // ---- corpus tools (test-side): the parsers they export, on invented text ----------------------------------
@@ -981,6 +1233,78 @@ const corpusToolCases = [
       const noManifest = node('diff.mjs', '--corpus', FIX, '--what', 'next-legacy')
       assert.equal(noManifest.status, 1)
       assert.match(noManifest.stderr, /manifest\.json/)
+    },
+  },
+]
+
+// ---- diff.mjs --what next: the new derivation against the 9.0.1 one -------------------------------------------
+
+// A snapshot of in-memory documents (a folder of their own under the OS temp folder, never inside this
+// repository), for the changes the shared fixtures do not hold.
+function withSnapshotOfDocs(docs, fn) {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'handoff-nextdiff-'))
+  try {
+    const roots = path.join(tmp, 'roots')
+    fs.mkdirSync(roots)
+    for (const [name, text] of Object.entries(docs)) fs.writeFileSync(path.join(roots, `${name}.md`), text)
+    const out = path.join(tmp, 'snap')
+    const r = node('snapshot.mjs', '--roots', roots, '--out', out)
+    assert.equal(r.status, 0, r.stderr)
+    return fn(out)
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true })
+  }
+}
+
+const nextDiffCases = [
+  {
+    id: 'corpus-diff-next-classifies-the-fixture-changes',
+    run: async () => {
+      withSnapshot((snap) => {
+        const d = node('diff.mjs', '--corpus', snap, '--what', 'next', '--json')
+        assert.equal(d.status, 0, d.stderr)
+        const out = JSON.parse(d.stdout)
+        assert.equal(out.documents, FIXTURES.length)
+        same(out.classes, { unchanged: 10, 'normalisation-only': 0, 'became-label': 1, 'became-ambiguous': 1, 'became-docs-or-step-one': 1, other: 0 })
+        same(out.ids.other, [])
+        assert.equal(out.ids['became-label'].length, 1)
+        same(out.labelCheck, { withLabelAndInProgress: 1, valuesDiffered: 1, newIsLabel: 1 })
+        assert.equal(out.ambiguous, 1)
+        assert.equal(out.lastRow.documents, 1)
+        assert.equal(out.lastRow.valueChanged, 1)
+        // the readable form carries the same counts and no document text
+        const h = node('diff.mjs', '--corpus', snap, '--what', 'next')
+        assert.equal(h.status, 0, h.stderr)
+        assert.match(h.stdout, /^next: 13 documents/m)
+        assert.match(h.stdout, /became-label\s+1/)
+        assert.ok(!h.stdout.includes('s3-render') && !h.stdout.includes('Finish the renderer'), 'no document text in the report')
+      })
+    },
+  },
+  {
+    id: 'corpus-diff-next-separates-normalisation-and-flags-the-unexplained',
+    run: async () => {
+      const docs = {
+        'a-bold-cell': epicDoc({ rows: [row('**s-bold**', 'in-progress')] }),
+        'b-empty-cell': epicDoc({ rows: [row('', 'in-progress')] }),
+        'c-plain': epicDoc({ rows: [row('s-plain', 'in-progress')] }),
+      }
+      withSnapshotOfDocs(docs, (snap) => {
+        const out = JSON.parse(node('diff.mjs', '--corpus', snap, '--what', 'next', '--json').stdout)
+        same(out.classes, { unchanged: 1, 'normalisation-only': 1, 'became-label': 0, 'became-ambiguous': 0, 'became-docs-or-step-one': 0, other: 1 })
+        same(out.ids['normalisation-only'], ['d001'])
+        same(out.ids.other, ['d002'])
+      })
+    },
+  },
+  {
+    id: 'corpus-diff-next-state-not-relevant-is-reported-apart',
+    run: async () => {
+      // Without a live task state the Docs tier is not used: the documents that took it move to item 1.
+      withSnapshot((snap) => {
+        const out = JSON.parse(node('diff.mjs', '--corpus', snap, '--what', 'next', '--json').stdout)
+        assert.equal(out.stateNotRelevant.valueChanges, 1)
+      })
     },
   },
 ]
@@ -1707,6 +2031,44 @@ const contractCases = [
     },
   },
   {
+    id: 'resume-contract-next-rule-is-label-first-and-self-contained',
+    run: async () => {
+      const text = fs.readFileSync(path.join(ROOT, 'templates', 'handoff', 'resume.md'), 'utf8')
+      const once = (s, what) => assert.equal(text.split(s).length - 1, 1, `${what} is written exactly once`)
+      // the literals resume prints (the dash is U+2014); the ambiguity line is defined in one place
+      once('(Next : ambiguous — <N> in-progress rows; Next Steps item 1 follows)', 'the ambiguity line')
+      assert.ok(text.includes('(no single command — see Next Steps item 1)'), 'the no-single-command literal')
+      // the old derivation is gone: its name, both disclaimer lines and the unfinished gate branch
+      for (const gone of [
+        'three-tier fallback',
+        'no in-progress ledger row — taken from Next Steps item 1',
+        'came from a ledger row that is not in-progress',
+        'ask which command to run (rule 1)',
+      ]) assert.ok(!text.includes(gone), `the old text "${gone}" must be gone`)
+      // the script does the derivation, and the flag is passed
+      assert.match(text, /node "\{HANDOFF_JS\}" next --doc "[^"]+" --state-relevant /)
+      // the four tiers, in priority order
+      const from = text.indexOf('**`Next :` derivation')
+      const to = text.indexOf('Then STOP and ask via AskUserQuestion')
+      assert.ok(from > 0 && to > from, 'the derivation precedes the gate')
+      const rules = text.slice(from, to)
+      const at = ['1. **The label.**', '2. **One in-progress row.**', '3. **The recorded `Docs`.**', '4. **Item 1 verbatim.**'].map((m) => rules.indexOf(m))
+      assert.ok(at.every((i) => i >= 0) && at.every((i, k) => k === 0 || i > at[k - 1]), `the four tiers appear in order: ${at}`)
+      // rules only: no dated observation or measurement in the derivation
+      assert.ok(!/\b(observed|measured)\b[^\n]{0,60}\d{4}-\d{2}-\d{2}/i.test(rules), 'no dated narrative in the derivation')
+      // self-contained: the label line's shape is defined here, not by a pointer into generate.md
+      assert.ok(rules.includes('`Slice : <kebab-case identifier>`'), 'the label line shape is written out')
+      // a reference to generate's step names the file, because this file is read without it
+      once('drafted in `templates/handoff/generate.md` Step 1 item 4', 'the qualified generate reference')
+      // the gate: two or more candidates are listed numbered and "Adjust plan" is recommended
+      const forms = text.slice(text.indexOf("**The first option's forms.**"), text.indexOf('**NEVER start executing work'))
+      assert.ok(forms.length > 100, "the first option's forms section exists")
+      assert.match(forms, /two or more candidates/i)
+      assert.match(forms, /numbered/)
+      assert.match(forms, /Adjust plan/)
+    },
+  },
+  {
     id: 'sources-carry-no-literal-bom-character',
     run: async () => {
       // A BOM in source is invisible in a review; write it as an escape.
@@ -1781,8 +2143,10 @@ export const cases = [
   ...readingOrderCases,
   ...encodingCases,
   ...legacyCases,
+  ...nextCases,
   ...corpusCases,
   ...corpusToolCases,
+  ...nextDiffCases,
   ...readingPlanCases,
   ...pathCases,
   ...readingSimCases,

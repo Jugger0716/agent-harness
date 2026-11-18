@@ -2,8 +2,11 @@
 // numbers can be taken against it. This is a TEST-SIDE file on purpose: the rule it implements is
 // the one the handoff diet replaces, and it must not ship in skills/handoff/scripts/.
 //
-// Source of truth: skills/handoff/SKILL.md §Sub-command: resume, Step 5, "`Next :` derivation —
-// three-tier fallback" (and generate Step 1 items 4 and 5 for the label and the ledger columns):
+// Source of truth: the 9.0.1 contract text — "`Next :` derivation — three-tier fallback" in
+// §Sub-command: resume, Step 5 of skills/handoff/SKILL.md, which the contract split moved to
+// templates/handoff/resume.md and the label-first rule then replaced (`git log -S"three-tier
+// fallback"` finds the commits) — and generate Step 1 items 4 and 5 for the label and the ledger
+// columns:
 //
 //   1. A NON-EMPTY Progress Ledger table. Its Epic is the Epic cell of its LAST row, read as
 //      written (normalising the Epic cell is a deferred item in 9.0.1). Among that Epic's rows:
@@ -24,13 +27,17 @@
 //     counts as "not recorded".
 //   - The label is used only inside tier 1 (the contract nests it there): a label in a document
 //     without a ledger is never read.
+//   - A ledger without a `Slice` column gives every row a null slice, which is "no value": a row
+//     that cannot name a slice does not answer, and the derivation moves on to the next tier
+//     (an EMPTY cell is a value as written, and answers with '').
 //
 // `deriveLegacyNext(parsed)` takes the result of parseHandoff() and returns { slice, source } with
 // source one of "in-progress" | "label" | "last-row" | "docs" | "step-one". `legacyTiers(parsed)`
 // lists every tier's candidate (null when a tier does not apply) for the corpus metrics.
 
-// One outer backtick pair is Markdown, not part of the value.
+// One outer backtick pair is Markdown, not part of the value. A missing cell (null) stays null.
 function unwrapBackticks(v) {
+  if (v === null || v === undefined) return null
   return v.length >= 2 && v.startsWith('`') && v.endsWith('`') ? v.slice(1, -1) : v
 }
 
@@ -67,7 +74,7 @@ export function deriveLegacyNext(parsed) {
   if (t.ledger) {
     if (t.inProgress !== null) return { slice: t.inProgress, source: 'in-progress' }
     if (t.label !== null) return { slice: t.label, source: 'label' }
-    return { slice: t.lastRow, source: 'last-row' }
+    if (t.lastRow !== null) return { slice: t.lastRow, source: 'last-row' }
   }
   if (t.docs !== null) return { slice: t.docs, source: 'docs' }
   return { slice: t.stepOne, source: 'step-one' }

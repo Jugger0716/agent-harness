@@ -16,6 +16,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { InputError } from './lib/errors.mjs'
 import { parseHandoff } from './lib/parse.mjs'
+import { deriveNext } from './lib/next.mjs'
 import { allowedRoots } from './lib/paths.mjs'
 import { planReading } from './lib/reading.mjs'
 
@@ -44,9 +45,19 @@ function cmdReadingPlan(opts) {
   return planReading(parsed.readingOrder, allowedRoots(docPath), Number(opts.budget), docPath)
 }
 
+// What a resume briefing prints on its `Next :` row and which slash-command tokens item 1 offers
+// (lib/next.mjs). --state-relevant is `true` only when the live task state was found at resume time,
+// which is what lets the recorded `Docs` value name the next slice; left out it is `false`.
+function cmdNext(opts) {
+  const flag = opts['state-relevant']
+  if (flag !== undefined && flag !== 'true' && flag !== 'false') throw new UsageError('next: --state-relevant must be true or false')
+  return deriveNext(parseHandoff(readDoc(opts.doc)), { stateRelevant: flag === 'true' })
+}
+
 // name -> { options: every accepted --option, required: the ones that must be given, run }
 const COMMANDS = {
   parse: { options: ['doc'], required: ['doc'], run: cmdParse },
+  next: { options: ['doc', 'state-relevant'], required: ['doc'], run: cmdNext },
   'reading-plan': { options: ['doc', 'budget'], required: ['doc', 'budget'], run: cmdReadingPlan },
 }
 

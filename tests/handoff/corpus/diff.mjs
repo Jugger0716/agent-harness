@@ -11,6 +11,16 @@
 // What:
 //   next-legacy    where the 9.0.1 `Next :` row comes from, per document (legacy_next.mjs): counts
 //                  by source, and the same counts as the share of documents.
+//   next           the label-first `Next :` rule (skills/handoff/scripts/lib/next.mjs, run as if the
+//                  live task state were found) against the 9.0.1 one (legacy_next.mjs), per document:
+//                  every change is put in one class — normalisation-only (a Slice cell or label value
+//                  lost its ** / __ / backtick wrapper), became-label, became-ambiguous, became-
+//                  docs-or-step-one (9.0.1 printed the ledger's last row, the slice that had just
+//                  finished) or other, which is the class that must stay empty. Also: whether the
+//                  label wins in the documents where it and an in-progress row differed under 9.0.1,
+//                  how many documents are ambiguous, what became of the last-row documents, and the
+//                  same classes when the task state is NOT relevant (the Docs tier unused).
+//                  Prints document ids and counts only.
 //   extract-agree  the Reading Order entries the shipped parser (skills/handoff/scripts/lib/
 //                  parse.mjs) reads from each copy, against what the manifest recorded when the
 //                  snapshot was taken: same item count, and the same kind and raw text entry by
@@ -33,8 +43,9 @@ import fs from 'node:fs'
 import { pathToFileURL } from 'node:url'
 import { loadCorpus, computeMetrics, median, percentile } from './measure.mjs'
 import { InputError, exitOnError, stripHint } from './snapshot.mjs'
-import { deriveLegacyNext } from './legacy_next.mjs'
-import { parseRange } from '../../../skills/handoff/scripts/lib/parse.mjs'
+import { deriveLegacyNext, legacyTiers } from './legacy_next.mjs'
+import { parseRange, stripEmphasis } from '../../../skills/handoff/scripts/lib/parse.mjs'
+import { deriveNext } from '../../../skills/handoff/scripts/lib/next.mjs'
 import { validateHandoffPath } from '../../../skills/handoff/scripts/lib/paths.mjs'
 import { HEAD_LINES, OUTLINE_HEADING_BYTES, OUTLINE_MAX_ENTRIES, WHOLE_FILE_MAX_LINES, isMarkdownPath } from '../../../skills/handoff/scripts/lib/reading.mjs'
 
@@ -49,6 +60,85 @@ function nextLegacy(docs) {
   const lines = [`next-legacy: ${n} documents`]
   for (const s of SOURCES) lines.push(`  ${s.padEnd(12)} ${String(counts[s]).padStart(4)}  ${n ? (Math.round((1000 * counts[s]) / n) / 10).toFixed(1) : '-'}%`)
   return { data: { documents: n, counts }, lines }
+}
+
+// ---- next: the label-first rule against 9.0.1 -----------------------------------------------------------
+
+export const NEXT_CLASSES = ['unchanged', 'normalisation-only', 'became-label', 'became-ambiguous', 'became-docs-or-step-one', 'other']
+
+// One document's change. `legacy` is { slice, source } from legacy_next.mjs, `now` the result of
+// deriveNext (slice null = ambiguous). A change that is none of the named ones is `other`.
+export function classifyNextChange(legacy, now) {
+  if (now.slice === null) return 'became-ambiguous'
+  if (now.slice === legacy.slice) return 'unchanged'
+  if (now.source === 'label' && legacy.source !== 'label') return 'became-label'
+  if (legacy.source === 'last-row' && (now.source === 'docs' || now.source === 'step-one')) return 'became-docs-or-step-one'
+  if (now.source === legacy.source && now.slice === stripEmphasis(legacy.slice)) return 'normalisation-only'
+  return 'other'
+}
+
+function nextChange(docs) {
+  const per = docs.map((d) => ({
+    id: d.id,
+    legacy: deriveLegacyNext(d.parsed),
+    tiers: legacyTiers(d.parsed),
+    label: stripEmphasis(d.parsed.stepOne.sliceLabel),
+    relevant: deriveNext(d.parsed, { stateRelevant: true }),
+    notRelevant: deriveNext(d.parsed, { stateRelevant: false }),
+  }))
+  const tally = (pick) => {
+    const classes = Object.fromEntries(NEXT_CLASSES.map((c) => [c, 0]))
+    const ids = Object.fromEntries(NEXT_CLASSES.filter((c) => c !== 'unchanged').map((c) => [c, []]))
+    for (const x of per) {
+      const c = classifyNextChange(x.legacy, x[pick])
+      classes[c]++
+      if (c !== 'unchanged') ids[c].push(x.id)
+    }
+    return { classes, ids }
+  }
+  const main = tally('relevant')
+  const apart = tally('notRelevant')
+
+  // (a) the documents where the label and an in-progress row both existed and named other slices
+  const both = per.filter((x) => x.tiers.label !== null && x.tiers.ledger && x.tiers.inProgress !== null)
+  const differed = both.filter((x) => x.tiers.label !== x.tiers.inProgress)
+  const labelCheck = {
+    withLabelAndInProgress: both.length,
+    valuesDiffered: differed.length,
+    newIsLabel: differed.filter((x) => x.relevant.source === 'label' && x.relevant.slice === x.label).length,
+  }
+
+  const ambiguous = per.filter((x) => x.relevant.slice === null).length
+
+  // (c) what became of the documents whose 9.0.1 value was the ledger's last row
+  const last = per.filter((x) => x.legacy.source === 'last-row')
+  const lastRow = {
+    documents: last.length,
+    valueChanged: last.filter((x) => x.relevant.slice !== x.legacy.slice).length,
+    valueKept: last.filter((x) => x.relevant.slice === x.legacy.slice).length,
+    nowDocs: last.filter((x) => x.relevant.source === 'docs').length,
+    nowStepOne: last.filter((x) => x.relevant.source === 'step-one').length,
+  }
+
+  const stateNotRelevant = {
+    valueChanges: per.filter((x) => x.notRelevant.slice !== x.relevant.slice).length,
+    classes: apart.classes,
+    otherIds: apart.ids.other,
+  }
+
+  const n = per.length
+  const pct = (c) => (n ? `${(Math.round((1000 * c) / n) / 10).toFixed(1)}%` : '-')
+  const lines = [`next: ${n} documents, the label-first rule against 9.0.1 (task state relevant)`]
+  for (const c of NEXT_CLASSES) lines.push(`  ${c.padEnd(24)} ${String(main.classes[c]).padStart(4)}  ${pct(main.classes[c])}`)
+  for (const c of NEXT_CLASSES) if (c !== 'unchanged' && main.ids[c].length) lines.push(`  ${c}: ${main.ids[c].join(' ')}`)
+  lines.push(
+    `label check: ${labelCheck.withLabelAndInProgress} ledger documents have a label and an in-progress row; the two named other slices in ${labelCheck.valuesDiffered}; the new Next : is the label value in ${labelCheck.newIsLabel} of those`,
+    `ambiguous: ${ambiguous} documents (no label, two or more in-progress rows in the last row's Epic)`,
+    `9.0.1 last-row documents: ${lastRow.documents}; the value changed in ${lastRow.valueChanged} (now Docs ${lastRow.nowDocs}, item 1 ${lastRow.nowStepOne}); the value is the same in ${lastRow.valueKept}`,
+    `task state NOT relevant: ${stateNotRelevant.valueChanges} documents print another value than above (the Docs tier is unused); classes: ${NEXT_CLASSES.map((c) => `${c} ${apart.classes[c]}`).join(', ')}${apart.ids.other.length ? `; other: ${apart.ids.other.join(' ')}` : ''}`,
+  )
+  const data = { documents: n, stateRelevant: true, classes: main.classes, ids: main.ids, labelCheck, ambiguous, lastRow, stateNotRelevant }
+  return { data, lines }
 }
 
 // What the shipped parser reads as snapshot.mjs-style entries: [kind, raw] for the document
@@ -266,7 +356,7 @@ function reading(docs) {
   return { data, lines }
 }
 
-export const WHAT = { 'next-legacy': nextLegacy, 'extract-agree': extractAgree, reading }
+export const WHAT = { 'next-legacy': nextLegacy, next: nextChange, 'extract-agree': extractAgree, reading }
 
 // ---- CLI -------------------------------------------------------------------------------------------------
 
