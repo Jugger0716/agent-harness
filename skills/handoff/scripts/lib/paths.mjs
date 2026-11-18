@@ -25,12 +25,10 @@
 // with neither takes the session's folder (the caller's `--root`) as its one root.
 import path from 'node:path'
 import { runGit } from './git.mjs'
+import { isParentSegment } from './segment.mjs'
 
 const SHORT_GIT = /^git~\d+$/i
 const isGitSegment = (seg) => seg.replace(/[. ]+$/, '').toLowerCase() === '.git' || SHORT_GIT.test(seg)
-// `..`, and `..` followed by spaces, which Windows resolves to `..` as well. (`...` is a different
-// name — people write it as an abbreviation inside a path — and stays an ordinary segment.)
-const isParentSegment = (seg) => /^\.\.\s*$/.test(seg)
 
 // Is `abs` (already resolved) inside `root`? -> the path relative to the root, or null.
 function relativeInside(root, abs) {

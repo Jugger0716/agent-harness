@@ -175,7 +175,8 @@ const stripTicks = (v) => v.replace(/^`+|`+$/g, '').trim()
 function pathsOfDirtyFiles(value) {
   const out = []
   const n = value.length
-  const isSeparator = (j) => value[j] === ';' && (j + 1 >= n || /\s/.test(value[j + 1]))
+  // a `;` that ends the value is part of the last name: only "; " (a semicolon and white space) separates
+  const isSeparator = (j) => value[j] === ';' && j + 1 < n && /\s/.test(value[j + 1])
   let i = 0
   while (i < n) {
     if (/\s/.test(value[i]) || value[i] === ';') {

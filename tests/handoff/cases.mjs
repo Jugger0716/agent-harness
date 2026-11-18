@@ -2624,12 +2624,17 @@ async function withFilterRepo(fn) {
   const { makeRepo } = await mkrepoLib()
   const evil = makeRepo({ commits: [{ files: { '.gitattributes': '* filter=evil\n', 'a.txt': 'one\n' } }] })
   try {
-    evil.git('config', 'filter.evil.clean', 'touch PWNED_FILTER && cat')
-    const marker = path.join(evil.dir, 'PWNED_FILTER')
-    const touchStat = (secs) => {
+    // the marker lives beside the repository, not in it, so it can be told from anything a case creates there
+    const marker = path.join(evil.root, 'PWNED_FILTER')
+    evil.git('config', 'filter.evil.clean', `touch "${marker.replace(/\\/g, '/')}" && cat`)
+    // the same attribute through the repository's own info file: a `.git` gitfile that points here selects it too
+    fs.mkdirSync(path.join(evil.dir, '.git', 'info'), { recursive: true })
+    fs.writeFileSync(path.join(evil.dir, '.git', 'info', 'attributes'), '* filter=evil\n')
+    const touchStat = (secs, dir = evil.dir) => {
       const when = new Date(Date.now() + secs * 1000)
-      fs.utimesSync(path.join(evil.dir, 'a.txt'), when, when)
+      fs.utimesSync(path.join(dir, 'a.txt'), when, when)
     }
+    evil.restat = touchStat
     touchStat(5)
     evil.git('status', '--porcelain')
     assert.ok(fs.existsSync(marker), 'precondition: a plain `git status` in this repository runs the filter')
@@ -2742,6 +2747,174 @@ const driftSafetyCases = [
         same(d.dirty.stillDirty, ['a.txt'])
         assert.ok(d.skipped.some((s) => /4 recorded dirty path/.test(s) && /outside the repository/.test(s)), `skipped: ${d.skipped}`)
       })
+    },
+  },
+]
+
+// ---- drift: the folder a work-tree list vouches for must still be that repository's work tree --------------------------------
+
+const driftIdentityCases = [
+  {
+    id: 'drift-registered-worktree-whose-gitfile-is-gone-is-not-read-as-the-main-tree',
+    run: async () => {
+      // an in-tree work tree stays registered after its `.git` file is deleted; git then finds the MAIN tree above it
+      await withTemp({ commits: [{ files: { 'a.txt': 'one\n' } }] }, (r) => {
+        const wt = path.join(r.dir, 'wt-in')
+        r.git('worktree', 'add', '-q', '-b', 'intree', wt)
+        fs.writeFileSync(path.join(wt, 'w.txt'), 'work\n')
+        fs.rmSync(path.join(wt, '.git'))
+        const d = driftIn(r, driftDoc({ branch: 'intree', head: r.shas[0], worktree: wt, dirtyFiles: ['w.txt'] }))
+        assert.ok(d.skipped.some((s) => /does not belong to this repository/.test(s)), `a reason: ${d.skipped}`)
+        assert.equal(d.branch.viaWorktree, false)
+        assert.equal(d.branch.same, null, 'nothing was compared with the main tree')
+        assert.equal(d.branch.current, null)
+        same(d.dirty, NO_DIRTY)
+        assert.ok(d.skipped.some((s) => /1 recorded dirty path/.test(s)))
+      })
+    },
+  },
+  {
+    id: 'drift-registered-worktree-path-inside-another-repository-is-never-opened',
+    run: async () => {
+      // the registration outlives the folder: the path is now an empty folder inside a hostile repository
+      await withFilterRepo(async (evil, marker) => {
+        await withTemp({ commits: [{ files: { 'a.txt': 'one\n' } }] }, (r) => {
+          const sub = path.join(evil.dir, 'sub')
+          r.git('worktree', 'add', '-q', '-b', 'moved', sub)
+          fs.rmSync(sub, { recursive: true, force: true })
+          fs.mkdirSync(sub)
+          evil.restat(25)
+          const d = driftIn(r, driftDoc({ branch: 'moved', head: r.shas[0], worktree: sub, dirtyFiles: ['a.txt'] }))
+          assert.ok(!fs.existsSync(marker), 'no program of the repository that now holds the folder ran')
+          assert.ok(d.skipped.some((s) => /does not belong to this repository/.test(s)), `a reason: ${d.skipped}`)
+          assert.equal(d.branch.viaWorktree, false)
+          assert.equal(d.branch.same, null)
+          same(d.dirty, NO_DIRTY)
+        })
+      })
+    },
+  },
+  {
+    id: 'drift-registered-worktree-whose-gitfile-points-elsewhere-is-never-opened',
+    run: async () => {
+      await withFilterRepo(async (evil, marker) => {
+        await withTemp({ commits: [{ files: { 'a.txt': 'one\n' } }], worktree: { branch: 'feature' } }, (r) => {
+          // the work tree's `.git` file now names the hostile repository's git directory
+          const gitfile = path.join(r.worktreeDir, '.git')
+          fs.rmSync(gitfile, { force: true }) // git marks it read-only on Windows
+          fs.writeFileSync(gitfile, `gitdir: ${path.join(evil.dir, '.git').replace(/\\/g, '/')}\n`)
+          // precondition: a plain `status` in the tampered work tree runs the filter
+          r.gitIn(r.worktreeDir, 'status', '--porcelain')
+          assert.ok(fs.existsSync(marker), 'precondition: git status in the tampered work tree runs the hostile filter')
+          fs.rmSync(marker)
+          evil.restat(40, r.worktreeDir)
+          const d = driftIn(r, driftDoc({ branch: 'feature', head: r.shas[0], worktree: r.worktreeDir, dirtyFiles: ['a.txt'] }))
+          assert.ok(!fs.existsSync(marker), 'no program of the hostile git directory ran')
+          assert.ok(d.skipped.some((s) => /does not belong to this repository/.test(s)), `a reason: ${d.skipped}`)
+          assert.equal(d.branch.viaWorktree, false)
+          assert.equal(d.branch.same, null)
+          same(d.dirty, NO_DIRTY)
+        })
+      })
+    },
+  },
+  {
+    id: 'drift-unc-and-device-worktree-paths-are-not-evaluated',
+    run: async () => {
+      // a UNC name would be opened (a connection to a host the document chose) before anything decided it was no
+      // work tree of this repository; none of these hosts exist, and the answer must not wait for them
+      await withTemp({ commits: [{ message: 'one' }] }, (r) => {
+        const bs = String.fromCharCode(92)
+        const values = [
+          `${bs}${bs}nonexistent-host-7f3a${bs}share${bs}wt`,
+          '//nonexistent-host-7f3a/share/wt',
+          `${bs}${bs}.${bs}pipe${bs}handoff-nonexistent`,
+          `${bs}${bs}?${bs}C:${bs}nope`,
+        ]
+        for (const v of values) {
+          const t0 = Date.now()
+          const d = driftIn(r, driftDoc({ head: r.shas[0], worktree: v, dirtyFiles: ['a.txt'] }))
+          assert.ok(Date.now() - t0 < 8000, `${v}: answered at once`)
+          assert.ok(d.skipped.some((s) => /UNC and device paths are not evaluated/.test(s)), `${v}: a reason: ${d.skipped}`)
+          assert.equal(d.branch.viaWorktree, false, v)
+          assert.equal(d.branch.same, null, v)
+          same(d.dirty, NO_DIRTY)
+        }
+      })
+    },
+  },
+  {
+    id: 'drift-skipped-reasons-hold-no-control-characters-and-stay-short',
+    run: async () => {
+      await withTemp({ commits: [{ message: 'one' }] }, (r) => {
+        const esc = String.fromCharCode(27)
+        const bel = String.fromCharCode(7)
+        const d = driftIn(r, driftDoc({ head: r.shas[0], worktree: `relative${esc}[31mred${bel}${'x'.repeat(600)}` }))
+        const reason = d.skipped[0]
+        assert.ok(reason.includes('relative'), 'the value is still named')
+        const control = new RegExp(`[${String.fromCharCode(0)}-${String.fromCharCode(31)}${String.fromCharCode(127)}-${String.fromCharCode(159)}]`)
+        for (const s of d.skipped) assert.ok(!control.test(s), `no control character: ${JSON.stringify(s.slice(0, 60))}`)
+        assert.ok(reason.length < 500, `a short reason: ${reason.length} characters`)
+      })
+    },
+  },
+  {
+    id: 'drift-git-log-failure-is-skipped-not-lost',
+    run: async () => {
+      // the branch that counts a path git could not check: a stand-in for git whose `log -- <path>` fails
+      const { drift, runGit } = await lib('skills/handoff/scripts/lib/git.mjs')
+      const { parseHandoff } = await parseLib()
+      await withTemp({ commits: [{ files: { 'a.txt': 'one\n' } }] }, (r) => {
+        const saved = { ...process.env }
+        Object.assign(process.env, { GIT_CONFIG_GLOBAL: r.env.GIT_CONFIG_GLOBAL, GIT_CONFIG_NOSYSTEM: '1', GIT_CEILING_DIRECTORIES: r.root })
+        try {
+          const parsed = parseHandoff(driftDoc({ head: r.shas[0], dirtyFiles: ['gone.txt', 'also-gone.txt'] }))
+          const real = drift(parsed, r.dir)
+          same(real.dirty.lost, ['gone.txt', 'also-gone.txt']) // with a working git both are plainly lost
+          const failing = (cwd, args) => (args[0] === 'log' && args.includes('--') ? { ok: false, status: 128, out: '', err: 'fatal: stand-in' } : runGit(cwd, args))
+          const d = drift(parsed, r.dir, { git: failing })
+          same(d.dirty.lost, [])
+          same(d.dirty.committedSince, [])
+          assert.ok(d.skipped.some((s) => /git could not check 2 recorded dirty path/.test(s)), `skipped: ${d.skipped}`)
+          assert.equal(d.head.relation, 'same')
+        } finally {
+          for (const k of Object.keys(process.env)) if (!(k in saved)) delete process.env[k]
+          Object.assign(process.env, saved)
+        }
+      })
+    },
+  },
+  {
+    id: 'drift-recorded-dirty-path-with-a-padded-parent-segment-is-skipped',
+    run: async () => {
+      // Windows resolves `.. ` (a trailing space) as `..`, and the reading path rule already refuses it
+      await withTemp({ commits: [{ files: { 'a.txt': '1\n' } }] }, (r) => {
+        const d = driftIn(r, driftDoc({ head: r.shas[0], dirtyFiles: ['a/.. /b.txt', '.. /c.txt', 'a.txt'] }))
+        same(d.dirty.lost, ['a.txt'])
+        assert.ok(d.skipped.some((s) => /2 recorded dirty path/.test(s) && /outside the repository/.test(s)), `skipped: ${d.skipped}`)
+      })
+    },
+  },
+  {
+    id: 'parse-dirty-files-trailing-semicolon-is-part-of-the-name',
+    run: async () => {
+      const paths = async (value) => (await parseText(`# HANDOFF — T\n\n**Dirty files:** ${value}\n\n## Goal\nx\n`)).header.dirtyPaths
+      same(await paths('a.txt; b;'), ['a.txt', 'b;'])
+      same(await paths('a.txt; `c;`;'), ['a.txt', 'c;'])
+      same(await paths('a.txt; b; +2 more'), ['a.txt', 'b'])
+    },
+  },
+  {
+    id: 'resume-contract-names-lost-work-the-same-way-in-the-bullet-and-the-state-row',
+    run: async () => {
+      const text = readText('templates', 'handoff', 'resume.md')
+      const row = text.split('\n').find((l) => /^ {2}State {3}:/.test(l))
+      assert.ok(row, 'the briefing has a State row')
+      const phrase = 'recorded dirty work not found'
+      assert.ok(row.includes(phrase), 'the State row token says "not found", which is all the script knows')
+      assert.ok(!/uncommitted work gone/.test(text), 'the old, stronger token is gone')
+      const step3 = between(text, '### Step 3 —', '### Step 3.5').replace(/\s+/g, ' ')
+      assert.ok(step3.includes(`\`${phrase}\``), 'the bullet that reports `dirty.lost` names the same token')
     },
   },
 ]
@@ -3451,6 +3624,7 @@ export const cases = [
   ...harnessStateCases,
   ...driftCases,
   ...driftSafetyCases,
+  ...driftIdentityCases,
   ...gitEnvCases,
   ...rootFallbackCases,
   ...stateDiffCases,

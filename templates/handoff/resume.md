@@ -28,11 +28,13 @@ node "{HANDOFF_JS}" drift --doc "<the document located in Step 1>" --cwd "."
 script's stderr verbatim and stop. `.` is the session's current working directory. The output is
 one JSON object: `branch`, `head`, `dirty` and `skipped`. When the document's `Worktree` header is
 an absolute path that is one of this repository's work trees — the script checks it against the
-repository's own list of work trees and never opens any other folder — the script reads branch,
-HEAD and working tree THERE (`viaWorktree` in `branch` is true when that is another work tree than
-the session's), so a document written in a linked worktree and resumed from the main tree is not a
-branch mismatch. Any other `Worktree` (a relative path, a folder of another repository, one that is
-gone), and a session folder that is not a git work tree, compares nothing: `skipped` says why.
+repository's own list of work trees, confirms that the listed folder still is that work tree, and
+never opens any other folder — the script reads branch, HEAD and working tree THERE (`viaWorktree`
+in `branch` is true when that is another work tree than the session's), so a document written in a
+linked worktree and resumed from the main tree is not a branch mismatch. Any other `Worktree` (a
+relative or UNC path, a folder that is not, or is no longer, a work tree of this repository, one
+that is gone), and a session folder that is not a git work tree, compares nothing: `skipped` says
+why.
 Report, in this order:
 
 1. **Branch.** `branch.same` is false → say so explicitly (`branch.recorded` vs `branch.current`);
@@ -56,7 +58,8 @@ Report, in this order:
    - `dirty.lost` → **was dirty when recorded, now gone**: not in the working tree now, and no
      commit on this branch since the recorded HEAD touched them. The work may have been set aside
      (a stash), committed on another branch, or discarded — name every path and ask the human to
-     check where it went; nothing here restores it.
+     check where it went; nothing here restores it. The State row says
+     `recorded dirty work not found` for this.
    - `dirty.committedSince` → was dirty when recorded, committed since (information only).
    - `dirty.stillDirty` → still dirty.
 4. **`skipped`** — print every reason as it is (a worktree that is gone, a folder that is not a
@@ -215,7 +218,7 @@ Print (in `user_lang`):
 ```
 [handoff] Resume briefing — <title> (<date>)
   Goal    : <1-line goal>
-  State   : <verified-state summary> + drift: <none | N commits since | BACKWARD | DIVERGED | branch differs | dirty tree | uncommitted work gone | cannot verify>
+  State   : <verified-state summary> + drift: <none | N commits since | BACKWARD | DIVERGED | branch differs | dirty tree | recorded dirty work not found | cannot verify>
   Task    : <Step 3.5 summary — fixed-label record: "phase match (generate_done); docs_path exists" | "phase mismatch: recorded generate_done, now verify_done" | "state not relevant: <reason>"; Harness : none: "no harness task"; neither: "no record — task state is not a verification target"; for either of the last two add "; N recorded path(s) missing" when check (b) found any>
   Blockers: <summary or "none">
   Next    : <see "Next :" derivation below>
