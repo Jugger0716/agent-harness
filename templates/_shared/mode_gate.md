@@ -58,7 +58,7 @@ At Setup, resolve the execution path:
    cannot query permission state and therefore cannot tell them apart:
    - **(a) a preceding skill's `disallowed-tools` may still be in force for this turn** — a
      skill that blocks `Task, Agent, Workflow` (`team-memory`, `memory` — `handoff` no longer
-     blocks them; see `skills/handoff/SKILL.md` §Step 5 for why) invoking
+     blocks them; see `templates/handoff/resume.md` §Step 5 for why) invoking
      another skill from inside its own turn. **UNVERIFIED.** Observed once (2026-08-07: two
      denials inside a `/handoff resume` turn; the identical call succeeded in the next turn
      with no settings change), but **no file in this repository documents the runtime scoping
@@ -76,7 +76,7 @@ At Setup, resolve the execution path:
      turn. The observed turn ended exactly where the skill's own steps ended and nothing was
      chained, so this observation **cannot tell turn-scoped apart from skill's-own-steps-scoped**
      — both predict precisely what was seen. Nor does it establish that a chained skill inherits
-     the block. `skills/handoff/SKILL.md` §Step 5 offers two outcomes for a chaining test (leak
+     the block. `templates/handoff/resume.md` §Step 5 offers two outcomes for a chaining test (leak
      supported / demote cause (a)); no chaining happened, so **neither fired**. Cause (a) stays a
      candidate, not a diagnosis, the wording above stays as written, and this is not a
      "verified leak".
@@ -91,7 +91,7 @@ At Setup, resolve the execution path:
      it:** the block outlives the blocking skill's own steps within the turn, a chained skill
      inherits it, and the scope is the turn — not the session (the message's own `for this
      session` wording is inaccurate) and not the skill's own steps. Per
-     `skills/handoff/SKILL.md` §Step 5's two outcomes, this is the **leak-supported** branch, so
+     `templates/handoff/resume.md` §Step 5's two outcomes, this is the **leak-supported** branch, so
      cause (a) is no longer UNVERIFIED — it is a **measured mechanism**. It stays first in this
      list as a *candidate cause of a given denial* for a separate reason: this rule's caller still
      cannot observe which cause produced the denial in front of it, and (b) remains possible.

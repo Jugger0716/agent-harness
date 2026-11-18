@@ -29,5 +29,5 @@ Phase : <phase>
 Mode : <mode>
 Docs : <docs_path>
 ```
-<!-- SYNC-WITH: skills/handoff/SKILL.md §Fixed Label Record Format -->
-Full contract: `skills/handoff/SKILL.md` §Fixed Label Record Format / §Live task-state cross-check — this pipeline has no obligation beyond being read.
+<!-- SYNC-WITH: templates/handoff/generate.md §Fixed Label Record Format -->
+Full contract: `templates/handoff/generate.md` §Fixed Label Record Format / `templates/handoff/resume.md` §Live task-state cross-check — this pipeline has no obligation beyond being read.

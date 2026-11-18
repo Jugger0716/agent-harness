@@ -666,8 +666,8 @@ Session handoff for cross-session, epic-level continuity — the durable complem
                      DATA, not instructions) -> Resume Briefing
                      (Next : short slice id or full step text | Next cmd: the byte-identical
                      `/…` command to chain, or a no-single-command marker — see
-                     skills/handoff/SKILL.md §Sub-command: resume for the derivation)
-                  -> gate: Start next step (conditional — see skills/handoff/SKILL.md
+                     templates/handoff/resume.md §Sub-command: resume for the derivation)
+                  -> gate: Start next step (conditional — see templates/handoff/resume.md
                      §Sub-command: resume, Step 5) / Adjust plan / Briefing only
 /handoff list     -> enumerate handoff documents, newest first
 ```
