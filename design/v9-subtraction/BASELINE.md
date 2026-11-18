@@ -307,7 +307,7 @@ SPEC 1.3의 시뮬레이션 값과 다른 것은 `session-conflict`(2로 예상,
 | p10 | Minor | README의 "skills that dispatch sub-agents ask via AskUserQuestion"이 남은 스킬과 맞지 않는다 | 6단계 |
 | p11 | Minor | 삭제 토큰 검사가 `scripts/verify_sync_markers.py`를 통째로 빼서 그 파일의 현재형 문장 2곳이 가려진다. 이 문서 "린트와 테스트"의 "이력 주석 밖에서 0건"은 그 때문에 정확하지 않다 | 2단계 |
 
-**명명된 예외** (`RELEASING.md` §If a step fails). ① K7 — 위 "남은 것". 닫는 방법: 릴리스 뒤 설치본의 버전 표기를 맞춘다. ② 리뷰 수정으로 바뀐 경로(`/harness-build`의 "Partial edits" 질문과 자동 수정의 끊긴 적용 처리, md-optimize의 남은 백업 질문·"Skip" 뒤 백업 유지·열린 세션 확인, `/harness` Setup의 남은 백업 확인)는 실사용 세션에서 돌리지 않았다. 설치본은 릴리스 커밋 `e047218`의 내용이고, 실사용 검증은 그 내용에서 했다. 닫는 방법: 2단계 실사용 검증에서 두 경로를 돌린다. (2026-11-17: ①은 닫혔다 — 아래 "K7 종결". ②는 열려 있다.)
+**명명된 예외** (`RELEASING.md` §If a step fails). ① K7 — 위 "남은 것". 닫는 방법: 릴리스 뒤 설치본의 버전 표기를 맞춘다. ② 리뷰 수정으로 바뀐 경로(`/harness-build`의 "Partial edits" 질문과 자동 수정의 끊긴 적용 처리, md-optimize의 남은 백업 질문·"Skip" 뒤 백업 유지·열린 세션 확인, `/harness` Setup의 남은 백업 확인)는 실사용 세션에서 돌리지 않았다. 설치본은 릴리스 커밋 `e047218`의 내용이고, 실사용 검증은 그 내용에서 했다. 닫는 방법: 2단계 실사용 검증에서 두 경로를 돌린다. (2026-11-17: ①은 닫혔다 — 아래 "K7 종결". ②는 열려 있다.) (2026-11-18: ②는 일부만 남았다 — md-optimize와 `/harness` Setup의 백업 경로는 2단계 실사용 검증에서 돌렸고, "Partial edits" 질문과 끊긴 자동 수정은 아직이다. 아래 "2단계 후" → "실사용 검증"의 명명된 예외 ②.)
 
 ### K7 종결 (2026-11-17)
 
@@ -396,3 +396,63 @@ SPEC 1.3의 시뮬레이션 값과 다른 것은 `session-conflict`(2로 예상,
 | INLINE 경로의 평가자에는 "`PASS`인데 차단 항목" 정규화가 없다(1줄 반환 파싱). `/harness-build`가 "소유한다"고 적은 플래그의 효과가 정의돼 있지 않다. `finalizing` 세션에 `/harness-build evaluate`를 준 경우가 정해져 있지 않다 | 5단계 |
 
 실사용 검증(`STAGE2.md` Task 17)의 결과는 이 절 아래에 덧붙인다. 그때까지 W18·K2·K3, md-optimize 백업 이전, 명명된 예외 ②의 경로는 실사용으로 돌리지 않은 상태다.
+
+### 실사용 검증 (2026-11-17 ~ 18)
+
+`STAGE2.md` Task 17 Step 2의 결과다. 설치본은 9.0.0 그대로 두고, `claude --plugin-dir <저장소>`로 연 세션에서 릴리스 브랜치의 저장소 사본(`8e68f1f`)을 로드해 관측했다(사용자 결정 2026-11-17 — `claude plugin update`는 브랜치를 설치하지 못하고, 설치본을 제자리에서 덮어쓰면 K7이 되살아난다). 시험마다 저장소 밖에 작은 로컬 git 저장소를 하나씩 만들었다. 원자료인 관측 기록은 저장소 밖에 있고 커밋하지 않는다.
+
+로드 확인: `--plugin-dir` 세션의 스킬 목록에 `agent-harness:` 항목이 11개(스킬 6 + 세그먼트 5, 중복 없음)였고, 세그먼트 설명은 `INTERNAL — …`였다. `/harness doctor`: ①②③⑤ ✓, ④ ⚠ — 실행 중인 사본이 저장소라 알려진 설치 위치가 아니다(예상한 결과).
+
+| # | 시험 | 대상 | 결과 | 관측 |
+|---|---|---|---|---|
+| 1 | md-optimize 옛 위치(`.harness/md-optimize/`) 백업 | Task 12 | PASS | `/harness`는 그 백업 앞에서 아무것도 만들지 않고 멈췄다. `/md-optimize`는 옛 위치의 백업을 찾아 Restore했고, 비게 된 `.harness/`까지 지웠다 |
+| 2 | 세그먼트를 빈 인자로 직접 호출 | W6 | PASS | 다섯 세그먼트 모두 에이전트 0개로 끝났고, 오류가 빠진 인자 이름을 말했다 |
+| 3 | Model 질문에서 끊고 새 세션에서 재개 (INLINE) | K3 | PASS | Path 질문 없이 Model 질문부터 진행했고, 브랜치를 그대로 썼다(`-2` 없음). 끝까지 완주했다 |
+| 4 | `--lint-cmd`를 준 호출을 끊고 재개 (WORKFLOW) | K3, 리뷰 I3 | PASS (단서 1) | 인자 없는 재개에서 `lint_cmd`가 체크포인트의 `setup_args`로 복원됐다. 다만 재개 세션이 Setup Summary를 출력하지 않아 화면으로는 확인하지 못했고, state.json으로 판정했다 |
+| 5 | `.pylintrc`가 있는 폴더 (INLINE, `--fast`) | W15 | PASS | 저장값이 `pylint .`였다. Setup Summary와 Layer 1 보고서에 `{scope}`가 없다 |
+| 6 | 항상 실패하는 pre-commit 훅 → 훅 제거 → `/harness-build` | K2 | PASS | 커밋이 실패해도 아무것도 지우지 않았고 `phase`는 `finalizing`으로 남았다. 재개는 재평가 없이 커밋 질문으로 돌아가 커밋했다 |
+| 7 | md-optimize를 Phase 3 도중 끊고 Restore (새 위치) | Task 12, m9 | PASS | `.md-optimize/.gitignore`(`*`)가 먼저 생겼고 `git status`에 백업이 보이지 않았다. 백업은 실행 전 바이트와 같았고, Restore 뒤 sha256이 일치했다 |
+| 8 | md-optimize 평가자 지적에 "Skip" | Task 12, p3 | PASS (2차 시도) | Phase 5가 백업을 남기고 그 경로와 "다음 `/md-optimize`가 묻는다"는 안내를 출력했다. 1차 시도에서는 "Fix all"을 골랐다 |
+| 9 | build 오류 → "Partial edits" 질문 | p9, 명명된 예외 ② | 미관측 | 구현 에이전트를 건너뛰지 못해 build가 정상으로 끝났다. 다시 시도하지 않았다(사용자 결정) |
+| 10 | WORKFLOW에서 Layer 1 3회 실패 → "Continue to Evaluator" | 리뷰 I6·N3 | PASS (관측 1) | 화면은 `⚠ Verify (Layer 1): FAIL (skipped — Continue to Evaluator)`, state는 `layer1_result: "FAIL"`로 남았다 |
+| 11 | 끊긴 자동 수정 | 명명된 예외 ② | 안 돌림 | 사용자 결정 |
+
+정상 경로도 끝까지 돌았다. INLINE은 2회다(시험 3은 `finalizing` 기록 뒤 커밋, 시험 6은 커밋 실패 뒤 재개 커밋). WORKFLOW도 2회다(시험 10은 커밋까지, 시험 9는 Step 8 커밋 질문까지). WORKFLOW 쪽은 세그먼트 4종이 모두 `.harness/wf/` 사본에서 첫 시도에 실행됐다. W18은 관측할 수 없었다 — 모든 시험이 `balanced` 프리셋이었고, 이 프리셋은 advisor와 evaluator가 같은 모델이다.
+
+실패한 시험은 없다. 릴리스를 막는 관측도 없다.
+
+#### 다시 나온 알려진 결함
+
+- r3: 스펙 '범위 밖'에 "구현을 커밋하지 않는다"가 있었는데, Step 8이 "Commit code only (Recommended)"를 권했다(시험 3).
+- r5: run 2에서 나온 결정 2건이 "결정 질문은 세션당 한 번"이라 잔여로 남았다(시험 9).
+
+둘 다 9.0.1의 회귀가 아니다.
+
+#### 새로 드러난 것
+
+| 내용 | 갈 곳 |
+|---|---|
+| "Continue to Evaluator" 뒤의 커밋 질문과 Type B 블록에 Layer 1 FAIL이 드러나지 않는다 — `Reason : QA PASS`, `Remaining : none (cold pass skipped — skipL1)`. 계약대로의 출력이다(Remaining 표에 그런 행이 없다). 2회차 리뷰의 범위 밖 관찰과 같은 항목이다 | 5단계 8번 |
+| md-optimize §1a: 미커밋 변경 경고(2번)가 남은 백업 질문(4번)보다 먼저 와서, 끊긴 실행 자신이 남긴 편집을 두고 Continue/Abort를 먼저 묻는다 | 다음 9.0.x |
+| md-optimize의 격리 평가자가 같은 입력에 다른 판정을 냈다(Keyword safety: 1차 ISSUE, 2차 PASS). 키워드 안전망이 참조 문서 대부분에 걸리는 문제와 뿌리가 같다고 본다(추정) | 다음 9.0.x |
+| `setup` 재개 세션이 Setup Summary(item 12)를 출력하지 않았다. `setup` 행은 "items 8–13"을 명시하므로 계약은 출력을 요구한다 — 정해진 출력이 빠진 경우다 | 5단계 2번 |
+
+#### 오케스트레이터가 계약과 다르게 한 것
+
+- 시험 10: 첫 `harness.build` 호출에 spec 전문 대신 자리표시 문구를 넘겼다. 즉시 멈추고(트리 변경 없음) 전문으로 다시 실행했다. 재시도 1회차에는 spec을 요약과 경로로 넘겼다. 매 호출에 spec 전문(약 11KB)과 digest(약 8KB)를 다시 싣는 비용이 크다(K9, 5단계 3번).
+- 시험 1: Phase 2 미리보기에서 키워드 안전망에 걸리는 문장을 놓쳤다. Phase 3 직전에 Inline으로 옮기고 알렸다.
+- 시험 7: 질문 2개를 한 호출로 묶었다(1단계 실사용 검증에서도 같았다).
+
+#### 한계
+
+- 시험 5·6·8·10은 기록 세션 자신이 오케스트레이터였다. 별도 세션이 같은 문장을 같은 방식으로 따른다는 근거는 시험 3·4의 재개, 시험 7의 Restore, 시험 9다.
+- Setup item 8~10이 결과를 바로 쓰는지는 계약에 정해져 있지 않다(리뷰에서 미룬 Minor). 시험 3·4의 "Path 질문이 다시 나오지 않음" 판정은 item 8·9를 바로 쓴 경우를 전제로 한다.
+- `--plugin-dir` 세션에서는 저장소 안의 Write·Edit이 자동 모드 분류기에서 막혔다. 저장소 밖에 쓰는 것과 Bash로 쓰는 것은 통과했다. 원인은 확인하지 않았다. 이 절의 기록과 커밋은 `--plugin-dir` 없이 연 세션에서 했다. 시험 6의 `rm .git/hooks/pre-commit`도 같은 분류기가 거부해, 사용자가 직접 지웠다.
+
+#### 명명된 예외 (`RELEASING.md` §If a step fails)
+
+① **설치본 = 릴리스, `/harness doctor` ④ ✓ (`RELEASING.md` 8~9번).** 태그 전에는 관측할 수 없다. 닫는 방법: 릴리스 뒤 설치본을 9.0.1로 바꾸고 `/harness doctor` ④ ✓를 확인한다.
+
+② **1단계 예외 ②에서 남은 둘.** 하나는 "Partial edits" 질문이다(시험 9 미관측). 스크립트 쪽 — 빈 반환이 `implementation returned null — partial edits possible`이 되는 것 — 은 스텁 케이스 `build-null-implementation`이 고정한다. 다른 하나는 끊긴 자동 수정의 처리다(시험 11 안 돌림). 1단계 예외 ②의 나머지는 이번에 닫혔다: md-optimize의 남은 백업 질문과 "Skip" 뒤 백업 유지(시험 1·7·8), `/harness` Setup의 남은 백업 확인(시험 1). md-optimize의 열린 세션 확인은 9.0.1에서 없어졌다. 닫는 방법: "Partial edits"는 다음 실사용 검증에서 구현 에이전트를 건너뛰어 본다. 자동 수정은 5단계 4번이 Auto-fix를 남기면 그 단계에서 돌리고, 없애면 예외도 함께 사라진다.
+
+③ **W18.** `balanced` 프리셋에서는 advisor와 evaluator가 같아 구분되지 않는다. 닫는 방법: `frontier` 프리셋(advisor opus, evaluator fable)으로 INLINE 계획 검토를 1회 돌려 critic의 모델을 확인한다.
