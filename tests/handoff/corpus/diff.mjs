@@ -75,9 +75,12 @@
 //                  the header's Date; (b) "the same day" is the file-name date, per source folder (the
 //                  manifest's rootIndex); (c) whether `latest` could pick a document without asking depends on
 //                  the branch the session is on and on git, neither of which a snapshot has: it is reported
-//                  as an upper bound (assume the session is on the newest same-day document's branch and the
-//                  ancestry test passes) next to the certain figure (with no git help, every same-day group is
-//                  a choice). Also reported: how many of those days are the newest day of their folder (what
+//                  as an upper bound (assume the session is on the newest same-day document's branch, that
+//                  the commits its documents record lie on one line of history and pass the ancestry test;
+//                  `latest` then picks the one furthest along, so a group needs a choice only when no
+//                  document records that branch or the commits diverge) next to the certain figure (with no
+//                  git help, every same-day group is a choice) and the number of groups in which two or
+//                  more documents record one branch (what the ancestry order can settle). Also reported: how many of those days are the newest day of their folder (what
 //                  `latest` meets today), how many hold one slug family only, the slug rule against the
 //                  recorded file names (non-ASCII title with an ASCII slug, slugs outside `[a-z0-9-]`, over
 //                  40 characters), and the Do NOT sections: missing, pointer-only (`doNotRefOnly`), and of those
@@ -711,10 +714,12 @@ function latestComparison(docs) {
   for (const x of per) if (x.day && (!newestOfRoot.has(x.root) || x.day > newestOfRoot.get(x.root))) newestOfRoot.set(x.root, x.day)
   const multi = [...groups.values()].filter((g) => g.length >= 2).map((g) => {
     const newest = orderDocs(g.map((x) => ({ name: x.orderName, mtimeMs: x.d.mtimeMs, x })))[0].x
-    const sameBranch = newest.branch === null ? 0 : g.filter((x) => x.branch === newest.branch).length
-    const comparable = newest.branch !== null && !NO_BRANCH.includes(newest.branch)
+    const real = (x) => x.branch !== null && !NO_BRANCH.includes(x.branch)
+    const onNewestBranch = real(newest) ? g.filter((x) => x.branch === newest.branch).length : 0
+    // a branch that two or more documents of the day record (any branch, not only the newest document's)
+    const sharedBranch = g.some((x) => real(x) && g.filter((y) => y.branch === x.branch).length >= 2)
     const family = g.every((x) => x.name) && new Set(g.map((x) => splitDocName(x.name).slug.replace(/-\d+$/, ''))).size === 1
-    return { g, size: g.length, day: g[0].day, root: g[0].root, newestDay: g[0].day === newestOfRoot.get(g[0].root), couldPick: comparable && sameBranch === 1, family }
+    return { g, size: g.length, day: g[0].day, root: g[0].root, newestDay: g[0].day === newestOfRoot.get(g[0].root), couldPick: onNewestBranch >= 1, couldPickPreviousRule: onNewestBranch === 1, onNewestBranch, sharedBranch, family }
   })
   const bySize = { 2: 0, 3: 0, '4+': 0 }
   for (const m of multi) bySize[m.size >= 4 ? '4+' : m.size]++
@@ -727,10 +732,19 @@ function latestComparison(docs) {
     bySize,
     newestDay: { roots, groups: newestDay.length, couldPickAutomatically: newestDay.filter((m) => m.couldPick).length },
     noGitHelp: { needChoice: multi.length },
-    upperBound: { couldPickAutomatically: multi.filter((m) => m.couldPick).length, cannotPick: multi.filter((m) => !m.couldPick).length },
+    // the group is a choice only when its documents' commits diverge or no document records the session's branch; the upper bound
+    // assumes neither happens when the newest document records a real branch. `couldPickUnderPreviousRule` is the older rule (exactly
+    // one document on that branch); `gainFromAncestryOrder` are the groups the ancestry order adds (two or more on that branch)
+    sharedBranchGroups: multi.filter((m) => m.sharedBranch).length,
+    upperBound: {
+      couldPickAutomatically: multi.filter((m) => m.couldPick).length,
+      couldPickUnderPreviousRule: multi.filter((m) => m.couldPickPreviousRule).length,
+      gainFromAncestryOrder: multi.filter((m) => m.onNewestBranch >= 2).length,
+      cannotPick: multi.filter((m) => !m.couldPick).length,
+    },
     oneSlugFamilyOnly: multi.filter((m) => m.family).length,
     // one entry per group (document ids and numbers only; `couldPick` is the upper bound described above)
-    groupList: multi.map((m) => ({ root: m.root, size: m.size, newestDay: m.newestDay, couldPick: m.couldPick, oneSlugFamily: m.family, ids: m.g.map((x) => x.id) })),
+    groupList: multi.map((m) => ({ root: m.root, size: m.size, newestDay: m.newestDay, couldPick: m.couldPick, couldPickPreviousRule: m.couldPickPreviousRule, onNewestBranch: m.onNewestBranch, sharedBranch: m.sharedBranch, oneSlugFamily: m.family, ids: m.g.map((x) => x.id) })),
     daysFromHeaderDate: per.filter((x) => x.dayFrom === 'header').length,
     daysUnknown: per.filter((x) => x.dayFrom === 'none').length,
   }
@@ -769,7 +783,7 @@ function latestComparison(docs) {
   const data = {
     documents: docs.length,
     method:
-      'a snapshot holds no file names and no live repository: the file name comes from the Reading Order entry the snapshot verified to be the document itself, else from the Resume line (composed before the path was resolved, so it can lack a collision suffix); the day is the file-name date, else the header Date; the folder is the rootIndex; whether `latest` could pick without asking depends on the session branch and on git, which are unknown, so only an upper bound is given (the session is on the newest same-day document\'s branch and the ancestry test passes) beside the certain figure (with no git help every same-day group is a choice)',
+      'a snapshot holds no file names and no live repository: the file name comes from the Reading Order entry the snapshot verified to be the document itself, else from the Resume line (composed before the path was resolved, so it can lack a collision suffix); the day is the file-name date, else the header Date; the folder is the rootIndex; whether `latest` could pick without asking depends on the session branch and on git, which are unknown, so only an upper bound is given (the session is on the newest same-day document\'s branch and the commits of its documents lie on one line of history and pass the ancestry test) beside the certain figure (with no git help every same-day group is a choice)',
     sameDay,
     slug,
     doNot,
@@ -780,7 +794,7 @@ function latestComparison(docs) {
     `method: ${data.method}`,
     `same-day groups (documents of one folder on one day): ${s.groups} with ${s.documents} documents — of 2: ${bySize[2]}, of 3: ${bySize[3]}, of 4 or more: ${bySize['4+']}, the largest holds ${s.largest}; ${s.oneSlugFamilyOnly} hold one slug family only (a name and its -N re-runs; file names known for every document of the group); days taken from the header Date for ${s.daysFromHeaderDate} documents and unknown for ${s.daysUnknown}`,
     `newest day of its folder (what latest meets today): ${s.newestDay.groups} of ${s.newestDay.roots} folders have several documents on their newest day`,
-    `latest with no git help: ${s.noGitHelp.needChoice} of ${s.groups} groups (${share(s.noGitHelp.needChoice, s.groups)}) need a choice; upper bound with git (one document on the newest document's branch, ancestry assumed to pass): ${s.upperBound.couldPickAutomatically} could be picked (${share(s.upperBound.couldPickAutomatically, s.groups)}), ${s.upperBound.cannotPick} cannot (the newest document records no branch, a detached HEAD, or its branch is recorded by another document of the day too); of the newest-day groups: ${s.newestDay.couldPickAutomatically} of ${s.newestDay.groups}`,
+    `latest with no git help: ${s.noGitHelp.needChoice} of ${s.groups} groups (${share(s.noGitHelp.needChoice, s.groups)}) need a choice; ${s.sharedBranchGroups} groups have two or more documents recording one branch (the groups the ancestry order can settle); upper bound with git (the session is on the newest document's branch, the commits of its documents lie on one line of history and pass the ancestry test): ${s.upperBound.couldPickAutomatically} could be picked (${share(s.upperBound.couldPickAutomatically, s.groups)}) — ${s.upperBound.couldPickUnderPreviousRule} of them under the previous rule (exactly one document on the branch), ${s.upperBound.gainFromAncestryOrder} only through the ancestry order — and ${s.upperBound.cannotPick} cannot (the newest document records no branch or a detached HEAD); of the newest-day groups: ${s.newestDay.couldPickAutomatically} of ${s.newestDay.groups}`,
     `slug rule against the recorded file names (${slug.withFileName} of ${per.length} documents have one: ${slug.nameFrom.self} from the document's own Reading Order entry, ${slug.nameFrom.resume} from the Resume line; ${slug.withoutFileName} have none): ${slug.titleNonAscii} have a non-ASCII title, ${slug.titleNonAsciiSlugAscii} of them an ASCII slug; ${slug.slugNonAscii} slugs hold a non-ASCII character; ${slug.slugOutsideRule} slugs are outside [a-z0-9-] (the rule normalises them), ${slug.slugOver40} are over ${SLUG_CAP} characters`,
     `Do NOT: ${doNot.missing} documents have no section; ${doNot.refOnly} are pointer-only${doNot.refOnly ? ` (${doNot.refOnlyIds.join(' ')})` : ''}, ${doNot.refOnlyWithPath} of them name a .md path, ${doNot.pathInReadingOrder} of those paths are in the document's own Reading Order and ${doNot.pathInReadingOrderExisting} of those files existed when the snapshot was taken; indicative (a word pattern): ${doNot.carryStatementBesideOwnItems} documents carry a "the previous Do NOT still applies" sentence beside items of their own`,
   ]

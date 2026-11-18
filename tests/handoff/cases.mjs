@@ -4990,10 +4990,128 @@ const selectCases = [
           assert.equal(out.doc, null)
           assert.equal(out.candidates.length, 2)
         }
-        // two documents on the current branch: still a choice, even when both are behind HEAD
+        // a document whose commit cannot be checked is not one of those on the current branch: the one that can be is chosen
         put(dir, '2026-11-19-b.md', selDoc({ title: 'Other', branch: 'main', head: c1 }), at(19, 12))
-        assert.equal(choice(c1).needsChoice, true)
+        for (const head of [side, 'abcdef0123456789abcdef0123456789abcdef01', null]) {
+          const out = choice(head)
+          assert.equal(out.needsChoice, false, `head ${head}`)
+          assert.equal(out.doc, `${slashed(dir)}/2026-11-19-b.md`)
+        }
       })
+    },
+  },
+  {
+    id: 'latest-same-day-same-branch-picks-the-document-with-the-newest-commit',
+    run: async () => {
+      await withTemp({ commits: [1, 2, 3, 4].map((n) => ({ files: { 'a.txt': `${n}\n` } })) }, async (r) => {
+        const dir = path.join(r.root, 'handoffs')
+        fs.mkdirSync(dir)
+        const [c1, c2, c3, c4] = r.shas
+        // three documents on main, written in an order that contradicts the commits: the one that is furthest on is the OLDEST by mtime
+        put(dir, '2026-11-19-a.md', selDoc({ title: 'A', branch: 'main', head: c2 }), at(19, 12))
+        put(dir, '2026-11-19-b.md', selDoc({ title: 'B', branch: 'main', head: c3 }), at(19, 3))
+        put(dir, '2026-11-19-c.md', selDoc({ title: 'C', branch: 'main', head: c1 }), at(19, 20))
+        // another branch's document with a commit ahead of all of them is not considered
+        put(dir, '2026-11-19-d.md', selDoc({ title: 'D', branch: 'feature/x', head: c4 }), at(19, 23))
+        const out = latestIn(r, dir, 'main', r.dir)
+        assert.equal(out.needsChoice, false)
+        assert.equal(out.doc, `${slashed(dir)}/2026-11-19-b.md`)
+        same(baseNames(out.candidates), ['2026-11-19-d.md', '2026-11-19-c.md', '2026-11-19-a.md', '2026-11-19-b.md']) // the day's documents, newest first
+        // a commit ahead of HEAD is not an ancestor of it: that document is not one of those on the branch
+        r.git('checkout', '-q', '-b', 'later', c3)
+        put(dir, '2026-11-19-e.md', selDoc({ title: 'E', branch: 'later', head: c4 }), at(19, 22))
+        put(dir, '2026-11-19-f.md', selDoc({ title: 'F', branch: 'later', head: c2 }), at(19, 21))
+        assert.equal(latestIn(r, dir, 'later', r.dir).doc, `${slashed(dir)}/2026-11-19-f.md`)
+      })
+    },
+  },
+  {
+    id: 'latest-asks-when-the-documents-on-the-branch-diverged',
+    run: async () => {
+      await withTemp(undefined, async (r) => {
+        const dir = path.join(r.root, 'handoffs')
+        fs.mkdirSync(dir)
+        // main: c1 -> m1, side: c1 -> s1, merged: HEAD is a merge of both, so both commits are ancestors of HEAD but neither of the other
+        r.git('checkout', '-q', '-b', 'side')
+        r.write('s.txt', 's\n')
+        r.git('add', '-A')
+        r.git('commit', '-q', '-m', 'side work')
+        const s1 = r.git('rev-parse', 'HEAD')
+        r.git('checkout', '-q', 'main')
+        r.write('m.txt', 'm\n')
+        r.git('add', '-A')
+        r.git('commit', '-q', '-m', 'main work')
+        const m1 = r.git('rev-parse', 'HEAD')
+        r.git('merge', '-q', '--no-ff', '-m', 'merge side', 'side')
+        const merge = r.git('rev-parse', 'HEAD')
+        put(dir, '2026-11-19-a.md', selDoc({ title: 'A', branch: 'main', head: s1 }), at(19, 9))
+        put(dir, '2026-11-19-b.md', selDoc({ title: 'B', branch: 'main', head: m1 }), at(19, 12))
+        put(dir, '2026-11-19-c.md', selDoc({ title: 'C', branch: 'feature/x', head: merge }), at(19, 15))
+        // two documents on main whose commits diverged: no one is the latest; the other branch's document is not a candidate
+        const out = latestIn(r, dir, 'main', r.dir)
+        assert.equal(out.needsChoice, true)
+        assert.equal(out.doc, null)
+        same(baseNames(out.candidates), ['2026-11-19-b.md', '2026-11-19-a.md'])
+        // a third document on main at the merge is ahead of both: it is the latest
+        put(dir, '2026-11-19-d.md', selDoc({ title: 'D', branch: 'main', head: merge }), at(19, 1))
+        const d = latestIn(r, dir, 'main', r.dir)
+        assert.equal(d.needsChoice, false)
+        assert.equal(d.doc, `${slashed(dir)}/2026-11-19-d.md`)
+        // ... also when it is written first or last
+        put(dir, '2026-11-19-d.md', selDoc({ title: 'D', branch: 'main', head: merge }), at(19, 23))
+        assert.equal(latestIn(r, dir, 'main', r.dir).doc, `${slashed(dir)}/2026-11-19-d.md`)
+      })
+    },
+  },
+  {
+    id: 'latest-orders-documents-that-record-one-commit-by-the-ordering',
+    run: async () => {
+      await withTemp({ commits: [{ files: { 'a.txt': '1\n' } }, { files: { 'a.txt': '2\n' } }] }, async (r) => {
+        const dir = path.join(r.root, 'handoffs')
+        fs.mkdirSync(dir)
+        const [c1, c2] = r.shas
+        // the same commit: the ordering of list (the later mtime for two slugs)
+        put(dir, '2026-11-19-a.md', selDoc({ title: 'A', branch: 'main', head: c2 }), at(19, 9))
+        put(dir, '2026-11-19-b.md', selDoc({ title: 'B', branch: 'main', head: c2 }), at(19, 12))
+        assert.equal(latestIn(r, dir, 'main', r.dir).doc, `${slashed(dir)}/2026-11-19-b.md`)
+        // a short sha of the same commit is the same commit
+        put(dir, '2026-11-19-a.md', selDoc({ title: 'A', branch: 'main', head: c2.slice(0, 8) }), at(19, 18))
+        assert.equal(latestIn(r, dir, 'main', r.dir).doc, `${slashed(dir)}/2026-11-19-a.md`)
+        // the same slug: the collision suffix decides, whatever the mtimes say
+        put(dir, '2026-11-19-x.md', selDoc({ title: 'X', branch: 'main', head: c1 }), at(19, 22))
+        put(dir, '2026-11-19-x-2.md', selDoc({ title: 'X again', branch: 'main', head: c1 }), at(19, 2))
+        fs.rmSync(path.join(dir, '2026-11-19-a.md'))
+        fs.rmSync(path.join(dir, '2026-11-19-b.md'))
+        assert.equal(latestIn(r, dir, 'main', r.dir).doc, `${slashed(dir)}/2026-11-19-x-2.md`)
+      })
+    },
+  },
+  {
+    id: 'latest-asks-for-documents-on-the-branch-only-with-git-and-a-recorded-commit',
+    run: async () => {
+      await withTemp(undefined, async (plain) => {
+        await withTemp({ commits: [{ files: { 'a.txt': '1\n' } }] }, async (repo) => {
+          const dir = path.join(plain.root, 'handoffs')
+          fs.mkdirSync(dir)
+          put(dir, '2026-11-19-a.md', selDoc({ title: 'A', branch: 'main', head: repo.shas[0] }), at(19, 9))
+          put(dir, '2026-11-19-b.md', selDoc({ title: 'B', branch: 'main', head: repo.shas[0] }), at(19, 12))
+          // the session's folder is not in a repository: there is no commit to compare, so the day's documents are the candidates
+          const noRepo = runIn(plain, 'latest', '--dir', dir, '--branch', 'main', '--cwd', plain.dir)
+          assert.equal(noRepo.needsChoice, true)
+          assert.equal(noRepo.doc, null)
+          same(baseNames(noRepo.candidates), ['2026-11-19-b.md', '2026-11-19-a.md'])
+          // no document records the current branch: the same
+          const other = runIn(repo, 'latest', '--dir', dir, '--branch', 'release', '--cwd', repo.dir)
+          assert.equal(other.needsChoice, true)
+          same(baseNames(other.candidates), ['2026-11-19-b.md', '2026-11-19-a.md'])
+          // documents on the branch that record no commit cannot be compared
+          put(dir, '2026-11-19-a.md', selDoc({ title: 'A', branch: 'main' }), at(19, 9))
+          put(dir, '2026-11-19-b.md', selDoc({ title: 'B', branch: 'main' }), at(19, 12))
+          const bare = runIn(repo, 'latest', '--dir', dir, '--branch', 'main', '--cwd', repo.dir)
+          assert.equal(bare.needsChoice, true)
+          assert.equal(bare.candidates.length, 2)
+        })
+      }, true)
     },
   },
   {
@@ -5276,6 +5394,9 @@ const selectContractCases = [
       assert.match(flatten(text), /Step 5 ends in exactly one\s+AskUserQuestion call/)
       // an automatic pick among several same-day documents is not silent
       assert.match(flat, /other[^.]*same[- ]day|same[- ]day[^.]*other/i)
+      // the automatic pick is by recorded commit among the documents on the current branch; diverged commits narrow the candidates
+      assert.match(flat, /latest, by recorded commit, of those recording the current branch/)
+      assert.match(flat, /only those recording this branch when their commits diverged/)
     },
   },
   {
@@ -5339,15 +5460,17 @@ const latestDiffCases = [
         assert.equal(o.sameDay.documents, 5)
         same(o.sameDay.bySize, { 2: 1, 3: 1, '4+': 0 })
         assert.equal(o.sameDay.newestDay.groups, 1)
-        // with no git help every such day needs a choice; the heuristic could only pick when exactly one document records the
-        // branch the session is on — the best case assumes the session is on the newest document's branch and that its commit
-        // passes the ancestry test: the pair, not the three that all record main
+        // with no git help every such day needs a choice. With git, `latest` picks the document furthest along among those that
+        // record the session's branch, so a day needs a choice only when no document records it or the commits diverge: the best
+        // case (the session is on the newest document's branch, the commits lie on one line of history) is both days; the previous
+        // rule (exactly one document on that branch) would have settled only the pair, the three that all record main need the order
         assert.equal(o.sameDay.noGitHelp.needChoice, 2)
-        assert.equal(o.sameDay.upperBound.couldPickAutomatically, 1)
-        assert.equal(o.sameDay.upperBound.cannotPick, 1)
+        assert.equal(o.sameDay.sharedBranchGroups, 1)
+        same(o.sameDay.upperBound, { couldPickAutomatically: 2, couldPickUnderPreviousRule: 1, gainFromAncestryOrder: 1, cannotPick: 0 })
+        assert.equal(o.sameDay.newestDay.couldPickAutomatically, 1)
         assert.equal(o.sameDay.oneSlugFamilyOnly, 1) // delta and delta-2; alpha, alpha-2 and gamma are not one family
         // one entry per group, with document ids and numbers only
-        same(o.sameDay.groupList.map((g) => [g.size, g.newestDay, g.couldPick, g.oneSlugFamily]).sort(), [[2, false, true, true], [3, true, false, false]])
+        same(o.sameDay.groupList.map((g) => [g.size, g.newestDay, g.couldPick, g.couldPickPreviousRule, g.sharedBranch, g.oneSlugFamily]).sort(), [[2, false, true, true, false, true], [3, true, true, false, true, false]])
         for (const g of o.sameDay.groupList) assert.ok(g.ids.every((id) => /^d\d+$/.test(id)))
         assert.match(o.method, /no live repository/i)
         // slug rule: of the 8 documents with a file name, one has a non-ASCII title; its slug is ASCII; one slug breaks the rule

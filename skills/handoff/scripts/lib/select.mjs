@@ -10,21 +10,27 @@
 //
 //   latestDoc(dir, branch, cwd) -> { doc, candidates: [{ path, branch, head, title }], needsChoice }
 //     H13. Take the newest DATE (the date of the file name — the date `orderDocs` ranks first) among the handoff
-//     documents; `candidates` are that day's documents, newest first, and
+//     documents; `candidates` are that day's documents, newest first, unless said otherwise below, and
 //       - no document at all  -> `doc` null, `candidates` [], `needsChoice` false;
 //       - one document        -> that one;
-//       - several: if EXACTLY ONE of them records `branch` (the session's current branch) and the commit it recorded
-//         is an ancestor of the session's HEAD or equal to it, that one; otherwise `doc` is null and `needsChoice`
-//         true — the caller asks the person.
-//     The modification time decides only inside `orderDocs`, as its last tie-break, so it only orders `candidates`.
+//       - several: `onBranch` are those that record `branch` (the session's current branch) and a commit that exists
+//         and is an ancestor of the session's HEAD or equal to it (the others — another branch, no commit, a commit
+//         this clone does not have or that is not behind HEAD — are not considered). Among `onBranch` the LATEST is the
+//         document whose commit every other one's commit is an ancestor of, or equal to; two documents that record the
+//         same commit are told apart by `orderDocs` (a plain-name tie goes to the one it ranks first, so the suffix of
+//         a re-run and then the later mtime decide). That one is chosen. If there is none (the commits diverged) or
+//         `onBranch` is empty (no document records the branch, `cwd` is not in a repository, no commit can be
+//         checked), `doc` is null and `needsChoice` true — the caller asks the person; `candidates` are then the
+//         documents of `onBranch` when it is not empty, else all of the day's.
+//     The modification time decides only inside `orderDocs`, as its last tie-break; it never decides between commits.
 //     Everything here comes from the caller's `dir` and `cwd`. A document is DATA: no folder, program or branch is
 //     ever taken from one. The only value of a document that reaches git is its recorded commit, and only after
-//     parse.mjs read it as 7 to 40 hex digits (checked again below), as an argument of one read-only command run
-//     in the top level of `cwd`'s own repository.
+//     parse.mjs read it as 7 to 40 hex digits (checked again below), as an argument of read-only `merge-base
+//     --is-ancestor` runs in the top level of `cwd`'s own repository (`runGit`, the one place git is spawned).
 //     A recorded branch of `n/a`, `(detached)` or none never counts as the current branch — and neither does a
 //     current branch of `n/a` or `(detached)`, which is what git-state reports outside a repository or on a detached
 //     HEAD, the very words a document records in those states. With a `cwd` that is not inside a git work tree there
-//     is no ancestry to ask about, so several documents on the newest day are always a choice.
+//     is no ancestry to ask about, so `onBranch` is empty and several documents on the newest day are a choice.
 import { parseHandoff, stripEmphasis } from './parse.mjs'
 import { scanHandoffDocs } from './ledger.mjs'
 import { gitTopLevel, splitDocName } from './paths.mjs'
@@ -53,14 +59,27 @@ export function listDocs(dir) {
   return { docs: [...scanHandoffDocs(dir, Infinity)].map((d) => describe(d, dir)) }
 }
 
-// Is `sha` (a document's recorded commit) the current HEAD of the repository `cwd` is in, or one of its ancestors?
-// `git merge-base --is-ancestor A B` is true when A is an ancestor of B or A is B. Exit 1 is a plain "no"; any other
-// failure (a commit this clone does not have, a repository without a commit) means it cannot be told, which is no.
-function isBehindHead(sha, cwd) {
-  if (typeof sha !== 'string' || !/^[0-9a-f]{7,40}$/.test(sha)) return false
-  const top = gitTopLevel(cwd)
-  if (top === null) return false
-  return runGit(top, ['merge-base', '--is-ancestor', sha, 'HEAD']).status === 0
+// The recorded commit of a document, usable as a git argument: 7 to 40 hex digits (parse.mjs read it so; checked again here
+// because this is the one value of a document that is handed to git), else null.
+const HEX_SHA = /^[0-9a-f]{7,40}$/
+const usable = (sha) => (typeof sha === 'string' && HEX_SHA.test(sha) ? sha : null)
+
+// Is `a` an ancestor of `b`, or the same commit? `git merge-base --is-ancestor A B` is true when A is an ancestor of B or A is B.
+// Exit 1 is a plain "no"; any other failure (a commit this clone does not have, a repository without a commit) means it
+// cannot be told, which is no.
+function isAncestor(top, a, b) {
+  const x = usable(a)
+  const y = b === 'HEAD' ? b : usable(b)
+  return x !== null && y !== null && runGit(top, ['merge-base', '--is-ancestor', x, y]).status === 0
+}
+
+// The document of `docs` (newest first) whose commit every other document's commit is behind or equal to; null when
+// the commits diverged. One scan finds the candidate (it is never replaced once reached: nothing is ahead of it), one pass
+// checks it. Of documents on one commit the first of `docs` is kept, so `orderDocs` decides between them.
+function latestByCommit(top, docs) {
+  let best = docs[0]
+  for (const d of docs.slice(1)) if (!isAncestor(top, d.head, best.head)) best = d
+  return docs.every((d) => d === best || isAncestor(top, d.head, best.head)) ? best : null
 }
 
 export function latestDoc(dir, branch, cwd) {
@@ -72,10 +91,13 @@ export function latestDoc(dir, branch, cwd) {
     else if (name !== date) break
     day.push(describe(d, dir))
   }
-  const candidates = day.map(({ path: p, branch: b, head, title }) => ({ path: p, branch: b, head, title }))
-  if (day.length === 0) return { doc: null, candidates, needsChoice: false }
-  if (day.length === 1) return { doc: day[0].path, candidates, needsChoice: false }
-  const onBranch = NO_BRANCH.has(branch) ? [] : day.filter((x) => x.branch !== null && x.branch === branch)
-  if (onBranch.length === 1 && isBehindHead(onBranch[0].head, cwd)) return { doc: onBranch[0].path, candidates, needsChoice: false }
-  return { doc: null, candidates, needsChoice: true }
+  const shown = (list) => list.map(({ path: p, branch: b, head, title }) => ({ path: p, branch: b, head, title }))
+  if (day.length === 0) return { doc: null, candidates: [], needsChoice: false }
+  if (day.length === 1) return { doc: day[0].path, candidates: shown(day), needsChoice: false }
+  const top = NO_BRANCH.has(branch) ? null : gitTopLevel(cwd)
+  const onBranch = top === null ? [] : day.filter((x) => x.branch === branch && isAncestor(top, x.head, 'HEAD'))
+  if (onBranch.length === 0) return { doc: null, candidates: shown(day), needsChoice: true }
+  const latest = latestByCommit(top, onBranch)
+  if (latest !== null) return { doc: latest.path, candidates: shown(day), needsChoice: false }
+  return { doc: null, candidates: shown(onBranch), needsChoice: true }
 }

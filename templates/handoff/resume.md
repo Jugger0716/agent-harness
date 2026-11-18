@@ -13,10 +13,12 @@
 
   `<current branch>` is the `branch` of `node "{HANDOFF_JS}" git-state --cwd "."` (`n/a` when
   `isGit` is false); `{HANDOFF_JS}`, the quoting and a non-zero exit are as in Step 4. The output
-  is one JSON object: `doc`, `candidates` (the newest day's handoff documents, newest first, each
-  `{path, branch, head, title}`) and `needsChoice`.
+  is one JSON object: `doc`, `candidates` (the newest day's handoff documents, newest first — only
+  those recording this branch when their commits diverged — each `{path, branch, head, title}`) and
+  `needsChoice`.
   - `doc` set → that is the document. When `candidates` holds other documents of the same day,
-    say which were left and why (this one records the current branch, at or behind HEAD).
+    say which were left and why (this one is the latest, by recorded commit, of those recording the
+    current branch).
   - `doc` null and `candidates` empty → no handoff document exists: report it (in `user_lang`)
     and stop.
   - `needsChoice` true → the newest day has several documents and the script cannot tell which

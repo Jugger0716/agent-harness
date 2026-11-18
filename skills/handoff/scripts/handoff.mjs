@@ -152,10 +152,10 @@ function cmdList(opts) {
   return listDocs(opts.dir)
 }
 
-// The document a resume starts from (lib/select.mjs): the newest day's only document, or the one of its several that
-// records --branch (the session's current branch, as git-state reports it) with a commit HEAD of --cwd (default: the
-// folder the command runs in) is at or ahead of; otherwise `needsChoice` and the day's candidates. Reads only --dir and
-// --cwd; a document never names a folder or a program.
+// The document a resume starts from (lib/select.mjs): the newest day's only document, or of its several the one furthest
+// along (by the commits they record) among those that record --branch (the session's current branch, as git-state reports
+// it) with a commit that is at or behind the HEAD of --cwd (default: the folder the command runs in); otherwise
+// `needsChoice` and the candidates. Reads only --dir and --cwd; a document never names a folder or a program.
 function cmdLatest(opts) {
   if (opts.dir === '') throw new UsageError('latest: --dir must not be empty')
   if (opts.branch === '') throw new UsageError('latest: --branch must not be empty')
