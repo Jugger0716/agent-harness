@@ -3722,7 +3722,7 @@ const latestEpic = (dir) => cliOk('latest-epic', '--dir', dir)
 const ledgerOf = (rows, after = '') => mk([['Next Steps', '1. Carry on.'], ['Progress Ledger', table(rows) + after]])
 const finished = (n, from = 1, epic) => Array.from({ length: n }, (_, i) => row(`d${from + i}`, 'done', epic))
 const sliceList = (out) => out.rows.map((r) => r.slice)
-const NOTHING = { doc: null, rows: [], pointer: null, droppedDone: 0, unknownStatusRows: 0 }
+const NOTHING = { doc: null, rows: [], pointer: null, droppedDone: 0, unknownStatusRows: 0, chained: false }
 
 const ledgerCarryCases = [
   {
@@ -3809,6 +3809,8 @@ const ledgerCarryCases = [
         assert.equal(a.droppedDone, 3)
         assert.equal(b.droppedDone, 0)
         assert.equal(a.doc, path.resolve(many))
+        assert.equal(a.chained, false, 'neither document carries an `Earlier rows:` line')
+        assert.equal(b.chained, false)
       })
     },
   },
@@ -3826,6 +3828,7 @@ const ledgerCarryCases = [
           assert.equal(r.status, 0, r.stderr)
           const out = JSON.parse(r.stdout)
           assert.equal(out.pointer, name)
+          assert.equal(out.chained, true, 'the document carries an `Earlier rows:` line, whatever sits between it and the table')
           assert.ok(!r.stdout.includes('oldest-doc'), 'the old pointer text is not copied')
           same(sliceList(out), ['d4', 'd5', 'd6', 'd7', 'd8', 'u1'])
         }
@@ -3918,9 +3921,69 @@ const ledgerCarryCases = [
         const text = ledgerOf([...finished(7), row('u1', 'in-progress'), row('b1', 'blocked', 'ep-b')], '\n\nEarlier rows: 2026-01-01-oldest-doc.md')
         const lf = carryDoc(put(dir, '2026-02-01-lf.md', text), 'ep-a')
         const crlf = carryDoc(put(dir, '2026-02-01-crlf.md', toCrlf(text)), 'ep-a')
-        same({ rows: crlf.rows, droppedDone: crlf.droppedDone, unknownStatusRows: crlf.unknownStatusRows }, { rows: lf.rows, droppedDone: lf.droppedDone, unknownStatusRows: lf.unknownStatusRows })
+        same({ rows: crlf.rows, droppedDone: crlf.droppedDone, unknownStatusRows: crlf.unknownStatusRows, chained: crlf.chained }, { rows: lf.rows, droppedDone: lf.droppedDone, unknownStatusRows: lf.unknownStatusRows, chained: true })
         same(sliceList(crlf), ['d3', 'd4', 'd5', 'd6', 'd7', 'u1'])
         assert.equal(crlf.pointer, '2026-02-01-crlf.md')
+      })
+    },
+  },
+  {
+    id: 'ledger-carry-chained-says-whether-the-previous-document-has-an-earlier-rows-line',
+    run: async () => {
+      await inTmp((dir) => {
+        const rows = [...finished(3), row('u1', 'in-progress')]
+        const chainedOf = (name, text) => carryDoc(put(dir, name, text), 'ep-a').chained
+        const line = 'Earlier rows: 2026-04-01-old.md'
+        // a line under the table — after a blank line or directly under it, bare or bold, with the template's trailing comment — chains
+        assert.equal(chainedOf('2026-05-01-a.md', ledgerOf(rows, `\n\n${line}`)), true)
+        assert.equal(chainedOf('2026-05-02-b.md', ledgerOf(rows, `\n${line}`)), true)
+        assert.equal(chainedOf('2026-05-03-c.md', ledgerOf(rows, '\n\n**Earlier rows:** 2026-04-01-old.md')), true)
+        assert.equal(chainedOf('2026-05-04-d.md', ledgerOf(rows, `\n\n${line}   <!-- only when item 5d applies -->`)), true)
+        assert.equal(chainedOf('2026-05-05-e.md', toCrlf(ledgerOf(rows, `\n\n${line}`))), true)
+        // no line, or a line with nothing after the colon, does not
+        assert.equal(chainedOf('2026-05-06-f.md', ledgerOf(rows)), false)
+        assert.equal(chainedOf('2026-05-07-g.md', ledgerOf(rows, '\n\nEarlier rows:')), false)
+        // a line inside a code fence is an example, not a pointer; a real line after the fence still is one
+        assert.equal(chainedOf('2026-05-08-h.md', ledgerOf(rows, `\n\n\`\`\`\n${line}\n\`\`\``)), false)
+        assert.equal(chainedOf('2026-05-09-i.md', ledgerOf(rows, `\n\n\`\`\`\n${line}\n\`\`\`\n\n${line}`)), true)
+        // the same words in another section are prose; a document with no ledger has no such line
+        assert.equal(chainedOf('2026-05-10-j.md', mk([['Next Steps', `1. Look at\n${line}`], ['Progress Ledger', table(rows)]])), false)
+        assert.equal(chainedOf('2026-05-11-k.md', mk([['Next Steps', `1. Do it.\n${line}`]])), false)
+        // the Epic does not matter: it is a fact about the document
+        assert.equal(carryDoc(path.join(dir, '2026-05-01-a.md'), 'ep-z').chained, true)
+      })
+    },
+  },
+  {
+    id: 'ledger-carry-dir-mode-reports-chained-of-the-document-it-picked',
+    run: async () => {
+      await inTmp((dir) => {
+        put(dir, '2026-05-10-x.md', ledgerOf([row('a1', 'in-progress', 'ep-a')], '\n\nEarlier rows: 2026-04-01-old.md'))
+        put(dir, '2026-05-11-y.md', ledgerOf([row('b1', 'in-progress', 'ep-b')]))
+        const a = carryDir(dir, 'ep-a')
+        assert.equal(path.basename(a.doc), '2026-05-10-x.md')
+        assert.equal(a.chained, true)
+        assert.equal(a.droppedDone, 0)
+        assert.equal(carryDir(dir, 'ep-b').chained, false)
+        assert.equal(carryDir(dir, 'ep-z').chained, false)
+      })
+    },
+  },
+  {
+    id: 'ledger-carry-doc-mode-with-an-epic-the-document-lacks-has-a-document-and-no-rows',
+    run: async () => {
+      await inTmp((dir) => {
+        // `--doc` always names a document: `doc` can never be the "no source" signal in this mode, the empty `rows` is
+        const f = put(dir, '2026-05-01-a.md', ledgerOf([row('a1', 'in-progress', 'ep-a')]))
+        const out = carryDoc(f, 'ep-z')
+        assert.equal(out.doc, path.resolve(f))
+        same(out.rows, [])
+        assert.equal(out.droppedDone, 0)
+        // so the contract's no-source condition (item 5e) and Step 4's broken-chain report both name the empty `rows`
+        const text = readText('templates', 'handoff', 'generate.md')
+        const e = between(text, 'e. **No source found**', 'f. **').replace(/\s+/g, ' ')
+        assert.match(e, /`doc` is `null`[^)]*or `rows` is empty/)
+        assert.match(between(text, '### Step 4', null).replace(/\s+/g, ' '), /returned `doc` `null` or no `rows`/)
       })
     },
   },
@@ -4206,8 +4269,7 @@ const ledgerContractCases = [
       // the model no longer reads, scans or ranks earlier documents: the two scripts do
       assert.match(item5, /node "\{HANDOFF_JS\}" latest-epic --dir "[^"]+"/)
       assert.match(item5, /node "\{HANDOFF_JS\}" ledger-carry --dir "[^"]+" --epic "[^"]+"/)
-      assert.ok(!/\b(20|90)\b/.test(item5), 'the old scan caps (20 files, 90 days) are the script\'s now, not the model\'s')
-      assert.ok(!/newest-first/i.test(item5), 'no newest-first scan by hand')
+      assert.ok(!/newest-first/i.test(item5) && !/\b90 days\b/.test(item5) && !/capped at/i.test(item5), 'no scan instruction (newest-first, a cap, 90 days) is left for the model')
       assert.ok(!/Confirm the Epic identifier first|carry it forward unchanged from the source document/.test(flat), 'the circular Epic rule is gone')
       assert.match(flat, /never (open|read|scan)[^.]*(by hand|yourself)|not (open|read|scan)[^.]*by hand/i)
       // a script that fails is shown and stops the step, as in item 1
@@ -4216,6 +4278,8 @@ const ledgerContractCases = [
       const a = between(item5, 'a. **', 'b. **')
       assert.match(a, /proposal/i)
       assert.match(a.replace(/\s+/g, ' '), /only when[^.]*`null`[^.]*(different|another)/i)
+      // the script's reach is stated as a fact about the script, so a `null` is not read as "no document anywhere"
+      assert.match(a.replace(/\s+/g, ' '), /none of the 20 newest handoff documents, which is all the script reads/)
     },
   },
   {
@@ -4228,7 +4292,7 @@ const ledgerContractCases = [
       for (const s of ['in-progress', 'blocked', 'planned']) assert.ok(flat.includes(`\`${s}\``), `${s} is named as carried in full`)
       assert.match(flat, /most recent (5|five)/i)
       assert.match(flat, /unfinished/i)
-      assert.ok(flat.includes('`droppedDone`') && flat.includes('`unknownStatusRows`'), 'the two counts of the script are used')
+      assert.ok(flat.includes('`droppedDone`') && flat.includes('`unknownStatusRows`') && flat.includes('`chained`'), 'the script\'s counts and its `chained` flag are used')
       // a ledger holds one Epic
       assert.match(flat, /(different|another) Epic[^.]*never carried|never carr[^.]*(different|another) Epic/i)
       // the pointer line: written under the table only when finished rows were left out; the file name, not the old line's text
@@ -4238,9 +4302,16 @@ const ledgerContractCases = [
       assert.ok(pointer.includes('`droppedDone`') && /greater than 0|> 0|is not 0|above 0/.test(pointer), 'written only when `droppedDone` is above 0')
       assert.ok(pointer.includes('`pointer`'), 'the line carries the script\'s `pointer` value')
       assert.match(flat, /never (copy|reuse)[^.]*(old|its own|earlier)[^.]*(line|pointer)|(line|pointer)[^.]*(is|are) never copied/i)
-      // no source: an empty ledger and a loud report line, as before
-      assert.match(flat, /`doc`[^.]*`null`/)
-      assert.match(flat, /empty ledger/i)
+      // the chain: the line is ALSO written when the source itself carries one, so the way to still earlier rows stays open —
+      // even when this carry left nothing out — and only when a source was found (never under an empty ledger)
+      const d = between(item5, 'd. **The earlier rows.**', 'e. **').replace(/\s+/g, ' ')
+      assert.match(d, /`droppedDone`[^.]*(greater than 0|> 0)[^.]*\bor\b[^.]*`chained`/)
+      assert.match(d, /source was found/)
+      assert.match(d, /`droppedDone` 0 and `chained` false write no such line/, 'no line when nothing was left out and the source has none')
+      // no source: an empty ledger and a loud report line, as before; the 20-document reach and an empty `rows` are both named
+      const e = between(item5, 'e. **No source found**', 'f. **').replace(/\s+/g, ' ')
+      assert.match(e, /`doc` is `null`[^)]*20 newest handoff documents[^)]*or `rows` is empty/)
+      assert.match(e, /empty ledger/i)
     },
   },
   {
@@ -4279,6 +4350,7 @@ const ledgerContractCases = [
       const step4 = between(text, '### Step 4', null).replace(/\s+/g, ' ')
       assert.match(step4, /no carry-forward source/i)
       assert.ok(step4.includes('`doc`') && step4.includes('`null`'))
+      assert.match(step4, /returned `doc` `null` or no `rows`/)
       assert.match(step4, /outside the enum/i)
     },
   },

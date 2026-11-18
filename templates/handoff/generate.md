@@ -111,8 +111,9 @@ Gather, in this order:
       ```
 
       The output is one JSON object, `epic` and `doc`: the `Epic` of the last row of the newest
-      handoff document that has a ledger, and that document's path — both `null` when no document
-      has one (a folder that does not exist yet included). Use `epic` as the proposal, without
+      handoff document that has a ledger, and that document's path — both `null` when none of the
+      20 newest handoff documents, which is all the script reads, has one (a folder that does not
+      exist yet included). Use `epic` as the proposal, without
       asking. Ask the user only when it is `null`, or when this session's work concretely names a
       different epic id (the user said another one) — the id the work names is then the Epic.
       `Epic` is a kebab-case identifier (may be derived from the current `docs_path` slug when
@@ -126,28 +127,34 @@ Gather, in this order:
       The script picks the carry-forward source — the newest handoff document whose ledger has
       rows of this Epic, so a ledger-less single-task handoff sitting in between two epic slices
       does not break the chain — and returns one JSON object: `doc` (that document's path, or
-      `null`), `rows`, `pointer` (its file name), `droppedDone` and `unknownStatusRows`. A
-      document you already know can be named instead of searched, `--doc "<path>"` in place of
-      `--dir`. The rows follow one rule: **every unfinished row of this Epic is carried in full**
+      `null`), `rows`, `pointer` (its file name), `droppedDone`, `unknownStatusRows` and
+      `chained` (true when that document itself carries an `Earlier rows:` line). A document you
+      already know can be named instead of searched, `--doc "<path>"` in place of `--dir`; `doc`
+      is then always that document. The rows follow one rule: **every unfinished row of this Epic is carried in full**
       — `in-progress`, `blocked`, `planned`, and a row whose `Status` is none of the five enum
       values — **and, of the finished rows (`done`, `dropped`), only the most recent 5**. `rows` is
       in document order; `droppedDone` is how many finished rows were left out.
       A ledger carries the rows of ONE Epic: rows of a different Epic are never carried, and an
-      Epic that no document holds (a new epic) carries nothing.
+      Epic that none of the documents the script reads holds (a new epic) carries nothing.
    c. **Write the rows, then this session's own.** Put `rows` into the new ledger as given, then
       append or update this session's own row(s): a slice that already has a carried row is
       updated in place (`Slice` is unique within its Epic), never added a second time. The result
       is written into the NEW handoff file being composed in Step 2 — this does not touch the
       source document (consistent with the no-overwrite location convention above).
-   d. **The earlier rows.** When `droppedDone` is greater than 0, write one line under the table,
+   d. **The earlier rows.** When a source was found (not the empty-ledger case of (e)) and
+      `droppedDone` is greater than 0 **or** `chained` is true, write one line under the table,
       after a blank line, `Earlier rows: <pointer>`, with the script's `pointer` value — a file
-      name, no folder. Never copy the `Earlier rows:` line the source document may carry itself:
-      the new line names the source document, so the chain runs from document to document. With
-      `droppedDone` 0 write no such line.
-   e. **No source found** (`doc` is `null`: no handoff document has rows of this Epic): start from
-      an **empty ledger** — this is not an error, but it MUST be surfaced at Step 4's write report
-      ("no carry-forward source found — started a new ledger for Epic `<epic>`") so a broken chain
-      is never silent.
+      name, no folder, always the source document. Never copy the `Earlier rows:` line the source
+      document may carry itself: the new line names the source document, so the chain runs from
+      document to document, and a source that is `chained` keeps the way to its own earlier rows
+      open even when this carry left nothing out. With `droppedDone` 0 and `chained` false write
+      no such line.
+   e. **No source found** (`doc` is `null` — none of the 20 newest handoff documents the script
+      reads has rows of this Epic — or `rows` is empty): start from an **empty ledger** — this is
+      not an error, but it MUST be surfaced at Step 4's write report ("no carry-forward source
+      found — started a new ledger for Epic `<epic>`") so a broken chain is never silent. With
+      `--doc`, `doc` is always set, so an empty `rows` is what tells you the named document holds
+      no rows of this Epic.
    f. **A `Status` outside the enum** (`unknownStatusRows` above 0): those rows were carried as
       unfinished so that no row is lost. Keep their `Status` as written, guess no replacement, and
       name their `Slice` values in Step 4's report so the human corrects them.
@@ -246,7 +253,7 @@ would let a later audit conclude the removal cost nothing.
 3. Report (in `user_lang`). **The report is not optional chrome — it carries what the removed
    gate used to carry**, so print all of it:
    - **If a Progress Ledger applies (Step 1 item 5) and no carry-forward source was found**
-     (item 5e: `ledger-carry` returned `doc` `null`), say so explicitly — e.g. "No carry-forward
+     (item 5e: `ledger-carry` returned `doc` `null` or no `rows`), say so explicitly — e.g. "No carry-forward
      source found for Epic `<epic>` — started a new ledger." **A broken chain must never be
      silent**; this line moved from the preview to here, and it is the one line whose omission
      the removal of the gate could actually cost.

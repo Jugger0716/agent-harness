@@ -19,6 +19,13 @@
 // column reads as null). The Epic given to a command is read the same way, so `` `ep` `` and `**ep**`
 // name the Epic `ep`.
 //
+// The chain of earlier rows: a new document whose carry left finished rows out writes an `Earlier rows:
+// <file name>` line under its table, naming the SOURCE document (`pointer`). A source that itself carries
+// such a line is `chained`: the rows behind ITS line are still earlier than the new document, so the new
+// document writes a line too — naming the source, never repeating the source's own line. `chained` is a fact
+// about the source document: an `Earlier rows:` line (a value after the colon; bare or in bold) outside a
+// code fence, in the document's `## Progress Ledger` section.
+//
 // Which documents are looked at: the `*.md` files of ONE folder (no recursion) whose first line starts
 // with `# HANDOFF —`, ordered newest first by `orderDocs` (paths.mjs), at most the newest
 // SCAN_CAP of them — a file that is not a handoff document does not use up the cap. A folder that does
@@ -27,7 +34,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { InputError } from './errors.mjs'
-import { HANDOFF_PREFIX, parseHandoff, stripEmphasis } from './parse.mjs'
+import { HANDOFF_PREFIX, fenceFlags, findSections, parseHandoff, splitLines, stripEmphasis } from './parse.mjs'
 import { orderDocs } from './paths.mjs'
 
 export const STATUSES = ['done', 'in-progress', 'blocked', 'planned', 'dropped']
@@ -108,8 +115,23 @@ const rowsOf = (text) => {
   return ledger ? ledger.rows : []
 }
 
+// Does the document carry an `Earlier rows:` line (see the chain above)? Read with parse.mjs's own section and
+// code-fence reading, so the line is looked for only in the first `## Progress Ledger` section, outside fences.
+const EARLIER_ROWS = /^\s*(?:\*\*|__)?\s*Earlier rows\s*:(?:\*\*|__)?\s*\S/i
+
+function hasEarlierRowsLine(text) {
+  const lines = splitLines(text)
+  const flags = fenceFlags(lines)
+  const sec = findSections(lines, flags).find((x) => x.name === 'Progress Ledger')
+  if (!sec) return false
+  for (let i = sec.start + 1; i < sec.end; i++) if (!flags[i] && EARLIER_ROWS.test(lines[i])) return true
+  return false
+}
+
 // `latest-epic`: the Epic of the newest document that has a ledger with a row (its last row's Epic, normalised)
-// and that document's path -> { epic, doc }; both null when no document has one.
+// and that document's path -> { epic, doc }; both null when no document has one. A row with no Epic cell cannot
+// name an Epic, so the last row that has one is used; `next.mjs` and the corpus measurement take the literal last
+// row's Epic, and the two differ only when that cell is empty (no ledger of the corpus measured for stage 3 had one).
 export function latestEpic(dir) {
   for (const d of scanHandoffDocs(dir)) {
     const epic = epicOfRows(rowsOf(d.text))
@@ -118,12 +140,12 @@ export function latestEpic(dir) {
   return { epic: null, doc: null }
 }
 
-// `ledger-carry --doc`: the rows of one document -> { doc, rows, pointer, droppedDone, unknownStatusRows }
+// `ledger-carry --doc`: the rows of one document -> { doc, rows, droppedDone, unknownStatusRows, pointer, chained }
 // `pointer` is the document's own file name — the value of the `Earlier rows:` line a new document writes when
-// finished rows were left out. It is never read from an `Earlier rows:` line the document itself carries: the
-// chain is "new document -> this document -> the one its own line names".
+// finished rows were left out or when this document is `chained`. It is never read from an `Earlier rows:` line the
+// document itself carries: the chain is "new document -> this document -> the one its own line names".
 export function carryFromText(text, epic, file, opts) {
-  return { doc: path.resolve(file), ...carryLedger(rowsOf(text), epic, opts), pointer: path.basename(file) }
+  return { doc: path.resolve(file), ...carryLedger(rowsOf(text), epic, opts), pointer: path.basename(file), chained: hasEarlierRowsLine(text) }
 }
 
 // `ledger-carry --dir`: the newest document that has rows of this Epic, carried; no such document -> no rows and
@@ -132,7 +154,7 @@ export function carryFromDir(dir, epic, opts) {
   const want = stripEmphasis(epic)
   for (const d of scanHandoffDocs(dir)) {
     const rows = rowsOf(d.text)
-    if (rows.some((r) => (r.epic ?? '') === want)) return { doc: d.file, ...carryLedger(rows, want, opts), pointer: d.name }
+    if (rows.some((r) => (r.epic ?? '') === want)) return { doc: d.file, ...carryLedger(rows, want, opts), pointer: d.name, chained: hasEarlierRowsLine(d.text) }
   }
-  return { doc: null, rows: [], pointer: null, droppedDone: 0, unknownStatusRows: 0 }
+  return { doc: null, rows: [], pointer: null, droppedDone: 0, unknownStatusRows: 0, chained: false }
 }
