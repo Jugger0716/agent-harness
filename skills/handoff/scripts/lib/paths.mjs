@@ -1,15 +1,21 @@
 // The handoff's own path rule, and where a document's Reading Order paths are resolved from.
 // Nothing here reads a file's content; `deriveRepoRoot` and `validateHandoffPath` do not touch the
-// file system at all, and `gitTopLevel` runs one `git rev-parse`.
+// file system at all, and `gitTopLevel` runs one `git rev-parse`. (The real-path check of condition
+// 4 is the planner's, in reading.mjs.)
 //
-// The rule (`validateHandoffPath`) has four conditions. A path is accepted when
+// The rule has four conditions. A path is accepted when
 //   1. it is relative, or absolute and inside one of the allowed roots (a UNC path, a `~` path and
 //      a drive-relative `C:x` path are neither);
 //   2. no segment is `..` (an exact segment match, never a substring, after `\` becomes `/`);
 //   3. no segment is `.git` (any letter case, with the trailing dots or spaces Windows ignores, and
-//      the `GIT~1` short name of the same folder);
-//   4. it stays inside an allowed root once resolved (a relative path with no `..` segment does so by
-//      construction; an absolute one is compared against each root).
+//      the `GIT~1` short name of the same folder) and no segment holds a `:` — on NTFS
+//      `.git::$INDEX_ALLOCATION` names the `.git` folder and `x::$DATA` a file's data stream, so a
+//      colon is refused (it is legal in a POSIX file name too, which is not worth a platform split);
+//   4. its REAL location — links and junctions followed — is inside an allowed root. This condition
+//      is in two parts: `validateHandoffPath` compares the TEXT of the path (a relative path with no
+//      `..` segment is inside by construction, an absolute one is compared against each root) and
+//      never touches the file system; reading.mjs then compares the real path of the file it found
+//      with the real path of each root.
 // `docs/harness/…` is allowed: the 9.0.1 rule refused it, and the handoff's own task documents live
 // there. The rule is this file's; it does not cite the /harness path validator.
 //
@@ -44,6 +50,9 @@ export function validateHandoffPath(p, root) {
   if (segs.some(isParentSegment)) return { ok: false, reason: 'path contains a ".." segment' }
   if (norm.startsWith('~')) return { ok: false, reason: 'a ~ path is outside the repository' }
   if (/^[A-Za-z]:(?![/])/.test(norm)) return { ok: false, reason: 'drive-relative path is not allowed' }
+  if (norm.replace(/^[A-Za-z]:\//, '').split('/').some((s) => s.includes(':'))) {
+    return { ok: false, reason: 'NTFS stream name (a colon in a path segment)' }
+  }
   const absolute = /^([A-Za-z]:\/|\/)/.test(norm)
   let below = segs
   if (absolute) {

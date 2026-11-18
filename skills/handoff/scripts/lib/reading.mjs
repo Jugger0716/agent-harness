@@ -4,8 +4,9 @@
 //
 //   planReading(entries, roots, budgetBytes, docPath?) -> {
 //     entries: [{ raw, path, file, isFile, self, status, reason, range, bytes, lines, fileLines,
-//                 outline?, outlineBytes? }],             (one per input entry, same order)
-//     totalBytes, budget
+//                 outline?, outlineBytes?, truncated? }],  (one per input entry, same order; the three
+//                                                           outline fields come with a "partial")
+//     totalBytes (the bytes charged: each entry's bytes + outlineBytes), budget
 //   }
 //   `entries` are `parse`'s readingOrder items; `roots` is the allowed-root list (paths.mjs
 //   `allowedRoots`, or one folder); `docPath` is the document itself.
@@ -16,16 +17,23 @@
 //   - not a file shape (a memory item, a command): "skipped-invalid", reason "not a file";
 //   - a path that fails the handoff rule (paths.mjs `validateHandoffPath`): "skipped-invalid";
 //   - a directory, or a file that does not exist: "skipped-invalid" / "skipped-missing";
+//   - a file whose REAL location (links and junctions followed) is outside every allowed root:
+//     "skipped-invalid", reason "link leaves the repository" (condition 4 of paths.mjs);
 //   - a range hint: only that range. `path:START-END` reads those lines (the end is clipped to the
 //     file; a start past the end is a "partial" with the outline only). `path §Foo` reads the first
 //     section whose heading contains `Foo` (case-insensitive, headings inside code fences do not
 //     count) up to the next heading of the same or a higher level; with no such heading it is a
 //     "partial" with the outline only. Status "range"; `range` is always { type: "lines", start,
 //     end[, heading] } so a reader needs one rule;
+//   - a trailing hint that is none of those (a reversed or empty range, `:42`, `#L10-L20`, an
+//     empty `§`) is ignored and the whole file is read; the entry's reason says "range hint
+//     ignored". A remark in parentheses is not a hint;
 //   - no range and at most 2,000 lines: the whole file, "read";
 //   - no range and over 2,000 lines: NOT skipped — the first 400 lines plus an outline, "partial".
 // `bytes` is what the reader takes from the file; an outline is charged OUTLINE_HEADING_BYTES per
-// heading (`outlineBytes`). The budget is spent in document order. An entry that does not fit what is
+// heading returned (`outlineBytes`). An outline lists the level 1-3 headings of a Markdown file
+// (`.md`, `.markdown`; a `# ` line in any other file is a comment, so such a file has none), at
+// most OUTLINE_MAX_ENTRIES of them — `truncated` is true when there were more. The budget is spent in document order. An entry that does not fit what is
 // left is read as "partial" (first 400 lines and outline) when THAT fits — only a whole file has such
 // a form — and is "skipped-budget" when nothing fits; later entries are still considered, so a
 // smaller one further down is read. Order never changes, and nothing is cut to fit except by the
@@ -42,15 +50,20 @@ export const WHOLE_FILE_MAX_LINES = 2000
 export const HEAD_LINES = 400
 export const OUTLINE_HEADING_BYTES = 60
 export const OUTLINE_MAX_LEVEL = 3
+export const OUTLINE_MAX_ENTRIES = 200
 const OUTLINE_TEXT_MAX = 120
 const MAX_PLAN_BYTES = 64 * 1024 * 1024
 const HEADING = /^(#{1,6})[ \t]+(.*?)[ \t]*$/
+
+// Headings are read in Markdown files only.
+export const isMarkdownPath = (p) => /\.(md|markdown)$/i.test(p)
 
 // ---- one file, read once ---------------------------------------------------------------------
 
 // -> { size, lines, offs, text(k), headings() } — offs[k] is the byte offset where line k+1 starts,
 // offs[lines] the file size, so the bytes of lines a..b (1-based, inclusive) are offs[b] - offs[a-1].
 function loadFile(file) {
+  const markdown = isMarkdownPath(file)
   const buf = fs.readFileSync(file)
   const offs = [0]
   let i = -1
@@ -65,9 +78,10 @@ function loadFile(file) {
     // Every Markdown heading outside a code fence: [{ line, level, text }]
     headings() {
       if (heads) return heads
+      if (!markdown) return (heads = [])
       const texts = Array.from({ length: lines }, (_, k) => {
         const s = buf.toString('utf8', offs[k], offs[k + 1]).replace(/\r?\n$/, '')
-        return k === 0 ? s.replace(/^﻿/, '') : s
+        return k === 0 ? s.replace(/^\uFEFF/, '') : s
       })
       const flags = fenceFlags(texts)
       heads = []
@@ -81,11 +95,12 @@ function loadFile(file) {
   }
 }
 
-const outlineOf = (f) =>
-  f
-    .headings()
-    .filter((h) => h.level <= OUTLINE_MAX_LEVEL)
-    .map((h) => ({ line: h.line, level: h.level, text: h.text.slice(0, OUTLINE_TEXT_MAX) }))
+// -> { outline, truncated }
+function outlineOf(f) {
+  const all = f.headings().filter((h) => h.level <= OUTLINE_MAX_LEVEL)
+  const outline = all.slice(0, OUTLINE_MAX_ENTRIES).map((h) => ({ line: h.line, level: h.level, text: h.text.slice(0, OUTLINE_TEXT_MAX) }))
+  return { outline, truncated: all.length > outline.length }
+}
 
 // The first heading containing `hint` (case-insensitive) -> { start, end, heading } | null. A
 // trailing parenthesis on the hint is a remark and is tried without when the whole hint finds nothing.
@@ -117,7 +132,7 @@ const linesForm = (f, start, end, extra = {}, reason = null) => ({
 })
 
 function partialForm(f, reason, headOnly = true) {
-  const outline = outlineOf(f)
+  const { outline, truncated } = outlineOf(f)
   const end = headOnly ? Math.min(HEAD_LINES, f.lines) : 0
   return {
     status: 'partial',
@@ -127,6 +142,7 @@ function partialForm(f, reason, headOnly = true) {
     lines: end,
     outline,
     outlineBytes: outline.length * OUTLINE_HEADING_BYTES,
+    truncated,
   }
 }
 
@@ -168,8 +184,31 @@ function realKey(p) {
 
 const ABSOLUTE = /^([A-Za-z]:[\\/]|[\\/])/
 
+// The real path (links and junctions followed); the path as resolved when it cannot be read.
+function realPath(p) {
+  try {
+    return fs.realpathSync.native(p)
+  } catch {
+    return path.resolve(p)
+  }
+}
+
+function isInside(root, p) {
+  const rel = path.relative(root, p)
+  return rel !== '..' && !rel.startsWith('..' + path.sep) && !path.isAbsolute(rel)
+}
+
+// A trailing hint that is not one of the two range forms (a reversed or empty range, `:42`,
+// `#L10-L20`, an empty `§`) is dropped by the parser and the whole file is read; say so. A remark
+// in parentheses is not a hint.
+function ignoredHint(e) {
+  if (e.range || typeof e.raw !== 'string' || typeof e.path !== 'string' || !e.raw.startsWith(e.path)) return false
+  const rest = e.raw.slice(e.path.length).trim()
+  return rest !== '' && !/^\([^)]*\)$/.test(rest)
+}
+
 // -> { done: entry } for an entry that needs no budget, or { base, forms } for one that does.
-function resolveEntry(e, roots, docPath, docKey) {
+function resolveEntry(e, roots, rootReals, docPath, docKey) {
   const base = { raw: e.raw, path: e.path ?? null, file: null, isFile: Boolean(e.isFile), self: Boolean(e.self), status: null, reason: null, range: null, bytes: 0, lines: 0, fileLines: null }
   const done = (status, reason, more = {}) => ({ done: { ...base, ...more, status, reason } })
   if (e.self) return done('read', 'the document itself (already read)', { path: null, file: docPath })
@@ -193,6 +232,8 @@ function resolveEntry(e, roots, docPath, docKey) {
   if (!found) return done('skipped-missing', 'file not found')
   if (st.isDirectory()) return done('skipped-invalid', 'a directory, not a file', { file: found })
   if (!st.isFile()) return done('skipped-invalid', 'not a regular file', { file: found })
+  const real = realPath(found)
+  if (!rootReals.some((r) => isInside(r, real))) return done('skipped-invalid', 'link leaves the repository', { file: found })
   if (docKey && realKey(found) === docKey) return done('read', 'the document itself (already read)', { file: found })
   if (st.size > MAX_PLAN_BYTES) return done('skipped-invalid', `file larger than ${MAX_PLAN_BYTES} bytes`, { file: found })
   let f
@@ -208,11 +249,12 @@ function resolveEntry(e, roots, docPath, docKey) {
 
 export function planReading(entries, roots, budgetBytes, docPath = null) {
   const rootList = (Array.isArray(roots) ? roots : [roots]).filter(Boolean).map((r) => path.resolve(r))
+  const rootReals = rootList.map(realPath)
   const docKey = docPath ? realKey(docPath) : null
   const out = []
   let total = 0
   for (const e of entries) {
-    const r = resolveEntry(e, rootList, docPath, docKey)
+    const r = resolveEntry(e, rootList, rootReals, docPath, docKey)
     if (r.done) {
       out.push(r.done)
       continue
@@ -229,8 +271,9 @@ export function planReading(entries, roots, budgetBytes, docPath = null) {
       continue
     }
     total += costOf(pick)
-    const { status, reason, range, bytes, lines, outline, outlineBytes } = pick
-    out.push({ ...r.base, status, reason, range, bytes, lines, ...(outline ? { outline, outlineBytes } : {}) })
+    const { status, range, bytes, lines, outline, outlineBytes, truncated } = pick
+    const reason = ignoredHint(e) ? (pick.reason ? `${pick.reason}; range hint ignored` : 'range hint ignored') : pick.reason
+    out.push({ ...r.base, status, reason, range, bytes, lines, ...(outline ? { outline, outlineBytes, truncated } : {}) })
   }
   return { entries: out, totalBytes: total, budget: budgetBytes }
 }

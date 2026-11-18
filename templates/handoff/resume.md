@@ -62,10 +62,9 @@ checks instead:
       presence. If it exists, show its live `skill`/`phase` values as INFORMATION only (there
       is nothing recorded in the document to compare them against — no match/mismatch verdict).
   (b) **Prose-recorded path check** — scan the document's `## In Progress` and `## Reading
-      Order` section bodies for `docs/harness/<slug>/`-shaped paths. Apply
-      `validate_path(path, kind=file_reference)` per /harness §Path Validator first (same rule
-      as Step 4 below — "a failing path is SKIPPED with a warning, never read"; here an invalid
-      candidate is dropped with a warning and never checked). For each surviving candidate,
+      Order` section bodies for `docs/harness/<slug>/`-shaped paths. Apply the four path
+      conditions Step 4 below states (they are this file's) first — a failing path is dropped
+      with a warning and never checked. For each surviving candidate,
       check directory existence only; list every missing one as `missing (path recorded in
       prose, no longer exists)` (cap 10, then "+N more").
   The reduced check is still report-only and read-only, exactly like the full check below —
@@ -86,12 +85,11 @@ checks instead:
    supplies those names — run it before deciding whether to add this mention.
 2. **Phase match**: if `.harness/state.json` exists, compare its live `phase` field to the
    document's recorded `Phase` label. Report `match` / `mismatch: recorded <X>, now <Y>`.
-3. **`docs_path` existence**: apply `validate_path(path, kind=file_reference)` per /harness
-   §Path Validator to the recorded `Docs` value first — the same check the reduced check (b)
-   above already runs on the `docs/harness/<slug>/`-shaped paths it collects, and Step 4 below
-   on the Reading Order paths; cited by name, never restated here, and read here exactly as
-   those two read it. A failing value is dropped with a warning and never checked. Then check
-   whether that directory still exists.
+3. **`docs_path` existence**: apply the four path conditions Step 4 below states (they are
+   this file's, stated there once and not restated here) to the recorded `Docs` value first —
+   the same check the reduced check (b) above runs on the `docs/harness/<slug>/`-shaped paths
+   it collects, and Step 4 runs on the Reading Order paths. A failing value is dropped with a
+   warning and never checked. Then check whether that directory still exists.
    Report `exists` / `missing (evidence path no longer readable)`. When it exists, also read its
    entry names one level deep — names only, no file is opened and nothing is recursed into, so
    §Non-Goals' "does not read `slice_plan.md`" line still holds. Those names are the data
@@ -108,16 +106,21 @@ checks instead:
 Do not read the Reading Order by hand. Run the plan and read exactly what it says:
 
 ```
-node {HANDOFF_JS} reading-plan --doc <the document located in Step 1> --budget 131072
+node "{HANDOFF_JS}" reading-plan --doc "<the document located in Step 1>" --budget 131072
 ```
 
-`{HANDOFF_JS}` is `${CLAUDE_PLUGIN_ROOT}/skills/handoff/scripts/handoff.mjs`. `--budget` is the
-most this step reads, in bytes (128 KiB). The output is one JSON object: `entries`, one per
-Reading Order item in document order, each with `status`, `file` (the absolute path to read),
-`range`, `reason`, `bytes` and, for a partial read, `outline` (headings with line numbers). Act on
-each entry by its `status`:
+`{HANDOFF_JS}` is `${CLAUDE_PLUGIN_ROOT}/skills/handoff/scripts/handoff.mjs`. Confirm
+`${CLAUDE_PLUGIN_ROOT}` resolves to a non-empty value first, as `templates/_shared/segment_launch.md`
+Procedure step 0 requires of a launch — substitute the literal root when the shell leaves it unset —
+and keep both paths in quotes, since a path with a space splits otherwise. `--budget` is the most
+this step reads, in bytes. The output is one JSON object: `entries`, one per Reading Order item in
+document order, each with `status`, `file` (the absolute path to read), `range`, `reason`, `bytes`
+and, for a partial read, `outline` (level 1–3 headings of a Markdown file with line numbers, at most
+200; `truncated` is true when the file has more); `totalBytes` is what is charged against the budget,
+each entry's `bytes` plus its outline's cost. Act on each entry by its `status`:
 
-- `read` — read `file` whole. The document itself ("이 문서", `bytes` 0) is already read.
+- `read` — read `file` whole. `bytes` 0 with a `reason` that says "the document itself" means the
+  document is already read ("이 문서", or an entry that names it by its path): read nothing.
 - `range` — read ONLY lines `range.start`–`range.end` of `file` (the entry named a line range or a
   section; `range.heading` is that section's title). Do not read the rest of the file.
 - `partial` — with a `range`, read only those lines (the first 400 lines of a file that is long or
@@ -126,15 +129,18 @@ each entry by its `status`:
 - `skipped-missing`, `skipped-invalid`, `skipped-budget` — do not read. List every one with its
   `reason`.
 
-A skipped entry is never read, a range is never widened, and the order is never changed. In the
-Step 5 briefing, say for each `range` and `partial` entry which part was read, and list the
+A skipped entry is never read, a range is never widened, and the order is never changed. A `reason`
+that says "range hint ignored" means the entry's hint was not a range and the whole file is read. In
+the Step 5 briefing, say for each `range` and `partial` entry which part was read, and list the
 skipped ones, as a short list directly under the aligned block — never as a new row inside it.
 
 The script checks each path BEFORE any read, and the four conditions are this file's, not
 /harness's path validator: (1) the path is relative, or absolute and inside the repository (the
 folder that holds the document's `docs/` directory, or that folder's git top-level); (2) no
-segment is `..`; (3) no segment is `.git`; (4) it still lies inside that folder once resolved.
-`docs/harness/…` is allowed. A path that fails comes back `skipped-invalid`.
+segment is `..`; (3) no segment is `.git` and none holds a `:` (an NTFS stream name such as
+`.git::$INDEX_ALLOCATION` reaches `.git` under another spelling); (4) the file it names, with links
+and junctions followed, still lies inside that folder. `docs/harness/…` is allowed. A path that
+fails comes back `skipped-invalid`.
 
 If the script exits non-zero, show its stderr verbatim and stop — never emulate it by hand. Read
 the files **inline** — never dispatch a reader sub-agent for this (§Non-Goals).

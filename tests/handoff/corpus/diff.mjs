@@ -36,7 +36,7 @@ import { InputError, exitOnError, stripHint } from './snapshot.mjs'
 import { deriveLegacyNext } from './legacy_next.mjs'
 import { parseRange } from '../../../skills/handoff/scripts/lib/parse.mjs'
 import { validateHandoffPath } from '../../../skills/handoff/scripts/lib/paths.mjs'
-import { HEAD_LINES, OUTLINE_HEADING_BYTES, WHOLE_FILE_MAX_LINES } from '../../../skills/handoff/scripts/lib/reading.mjs'
+import { HEAD_LINES, OUTLINE_HEADING_BYTES, OUTLINE_MAX_ENTRIES, WHOLE_FILE_MAX_LINES, isMarkdownPath } from '../../../skills/handoff/scripts/lib/reading.mjs'
 
 const SOURCES = ['in-progress', 'label', 'last-row', 'docs', 'step-one']
 
@@ -81,7 +81,7 @@ function extractAgree(docs) {
 const KIB = 1024
 const B_STEP = 16 * KIB // D3: B is the P90 rounded UP to a multiple of this ...
 const B_CEILING = 128 * KIB // ... and never more than this (the rule's ceiling; B itself is written once, in templates/handoff/resume.md)
-const LINES_PER_HEADING = 40 // an outline's heading count when the file's headings cannot be counted
+const LINES_PER_HEADING = 40 // a Markdown file's heading count when its headings cannot be counted (a snapshot holds sizes, not text)
 const PATH_ROOT = path.resolve(path.sep, 'corpus-root') // never touched: the path rule is pure
 
 const stats = (perDoc) => ({ perDoc, median: median(perDoc), p90: percentile(perDoc, 0.9), max: perDoc.length ? Math.max(...perDoc) : null })
@@ -98,7 +98,8 @@ function formsOfEntry(e, includeAbsolute) {
   if (!validateHandoffPath(p, includeAbsolute && abs ? path.dirname(p) : PATH_ROOT).ok) return { cls: 'invalid', readable: false }
   if (!e.exists) return { cls: 'missing', readable: false }
   if (e.isDir || e.lines == null) return { cls: 'unreadable', readable: false }
-  const outline = OUTLINE_HEADING_BYTES * Math.round(e.lines / LINES_PER_HEADING)
+  // Only a Markdown file has an outline, and it lists at most OUTLINE_MAX_ENTRIES headings.
+  const outline = isMarkdownPath(p) ? OUTLINE_HEADING_BYTES * Math.min(OUTLINE_MAX_ENTRIES, Math.round(e.lines / LINES_PER_HEADING)) : 0
   const head = (e.bytes * Math.min(HEAD_LINES, e.lines)) / e.lines + outline
   const r = parseRange(e.raw)
   if (r && r.type === 'lines') {
@@ -259,7 +260,7 @@ function reading(docs) {
   for (const [k, c] of Object.entries(sim.classes)) lines.push(`  ${k.padEnd(14)} ${String(c.entries).padStart(5)} entries  ${num(c.bytes)} bytes`)
   const e = sim.estimates
   lines.push(
-    `estimates used: line range ${e.lineRange} (bytes by line share), section range ${e.sectionRange} (25% of the file; 0 resolved against a live file, the snapshot stores no source path), partial ${e.partial} (head bytes by line share, outline headings = lines / ${LINES_PER_HEADING}; 0 counted from a live file); every budget row also uses the partial estimate for the entries it reads as partial`,
+    `estimates used: line range ${e.lineRange} (bytes by line share), section range ${e.sectionRange} (25% of the file; 0 resolved against a live file, the snapshot stores no source path), partial ${e.partial} (head bytes by line share, outline headings = lines / ${LINES_PER_HEADING} for a .md or .markdown file, at most ${OUTLINE_MAX_ENTRIES}, none for any other file; 0 counted from a live file); every budget row also uses the partial estimate for the entries it reads as partial`,
     `path rules: ${rules.docsUnderHarnessPass} of ${rules.docsUnderHarness} recorded Docs values under docs/harness/ pass; ${rules.dotEntriesRejected} of ${rules.dotEntries} Reading Order entries with a .. or .git segment are rejected`,
   )
   return { data, lines }

@@ -1153,6 +1153,7 @@ const readingPlanCases = [
         assert.equal(e.bytes, bigFirst400)
         same(e.outline, BIG_OUTLINE)
         assert.equal(e.outlineBytes, 180)
+        assert.equal(e.truncated, false)
         assert.equal(p.totalBytes, bigFirst400 + 180)
         assert.ok(!e.status.startsWith('skipped'), 'an over-long file is read in part, never skipped')
       })
@@ -1161,7 +1162,7 @@ const readingPlanCases = [
   {
     id: 'reading-plan-reads-crlf-and-bom-files',
     run: async () => {
-      const text = '﻿# Title\r\nintro\r\n## Foo\r\nfoo text\r\n## Bar\r\nbar\r\n'
+      const text = '\uFEFF# Title\r\nintro\r\n## Foo\r\nfoo text\r\n## Bar\r\nbar\r\n'
       withRepo({ 'docs/c.md': text }, '1. `docs/c.md §Foo` — a section of a CRLF file\n2. `docs/c.md §Nope` — the outline of the same file', ({ doc }) => {
         const [a, b] = plan(doc).entries
         same(a.range, { type: 'lines', start: 3, end: 4, heading: 'Foo' })
@@ -1286,6 +1287,111 @@ const readingPlanCases = [
     },
   },
   {
+    id: 'reading-plan-rejects-ntfs-stream-names',
+    run: async () => {
+      // `.git::$INDEX_ALLOCATION` is another spelling of the .git folder on NTFS, and `x::$DATA` is a
+      // file's own data stream: a colon in a path segment is refused.
+      const { planReading } = await readingLib()
+      const ro = '1. `.git::$INDEX_ALLOCATION/config` — a stream spelling of .git\n2. `.git:$I30:$INDEX_ALLOCATION/config` — another one\n3. `in.md` — the control'
+      withRepo({ '.git/config': '[core]\n', 'in.md': 'text\n' }, ro, ({ repo, doc }) => {
+        const p = plan(doc)
+        same(p.entries.map((e) => e.status), ['skipped-invalid', 'skipped-invalid', 'read'])
+        for (const e of p.entries.slice(0, 2)) assert.match(e.reason, /stream/)
+        // `in.md::$DATA` does not look like a path to the parser, so hand the entry in directly.
+        const q = planReading([entry('in.md::$DATA'), entry('docs/x.md:$DATA')], [repo], 1e6, doc)
+        same(q.entries.map((e) => e.status), ['skipped-invalid', 'skipped-invalid'])
+        for (const e of q.entries) assert.match(e.reason, /stream/)
+      })
+    },
+  },
+  {
+    id: 'reading-plan-rejects-a-link-that-leaves-the-repository',
+    run: async () => {
+      const ro = '1. `link/secret.md` — through a link to a folder outside the repository\n2. `inlink/ok.md` — through a link that stays inside\n3. `real/ok.md` — the control'
+      withRepo({ 'real/ok.md': 'fine\n' }, ro, ({ dir, repo, doc, put }) => {
+        put(path.join(dir, 'outside', 'secret.md'), 'secret\n')
+        // A junction on Windows (no privilege needed), a symbolic link elsewhere.
+        fs.symlinkSync(path.join(dir, 'outside'), path.join(repo, 'link'), 'junction')
+        fs.symlinkSync(path.join(repo, 'real'), path.join(repo, 'inlink'), 'junction')
+        const p = plan(doc)
+        same(p.entries.map((e) => e.status), ['skipped-invalid', 'read', 'read'])
+        assert.equal(p.entries[0].reason, 'link leaves the repository')
+        assert.equal(p.entries[0].bytes, 0)
+        assert.equal(p.entries[1].bytes, 5)
+        assert.equal(p.totalBytes, 10)
+      })
+    },
+  },
+  {
+    id: 'reading-plan-outline-is-capped',
+    run: async () => {
+      // 201 headings (and 200, the exact limit) at the top of a 2,100-line file, so it is read as a partial.
+      const body = (n) =>
+        [...Array.from({ length: n }, (_, i) => `## H${String(i + 1).padStart(3, '0')}`), ...Array.from({ length: 2100 - n }, (_, i) => L(i + 1))].join('\n') + '\n'
+      const ro = '1. `docs/many.md` — 201 headings\n2. `docs/exact.md` — 200 headings'
+      withRepo({ 'docs/many.md': body(201), 'docs/exact.md': body(200) }, ro, ({ doc }) => {
+        const p = plan(doc)
+        const [many, exact] = p.entries
+        assert.equal(many.status, 'partial')
+        assert.equal(many.outline.length, 200)
+        assert.equal(many.outline[199].text, 'H200')
+        assert.equal(many.truncated, true)
+        assert.equal(many.outlineBytes, 200 * 60, 'the charge follows the entries returned')
+        assert.equal(exact.outline.length, 200)
+        assert.equal(exact.truncated, false)
+        assert.equal(p.totalBytes, many.bytes + many.outlineBytes + exact.bytes + exact.outlineBytes)
+      })
+    },
+  },
+  {
+    id: 'reading-plan-no-outline-for-a-file-that-is-not-markdown',
+    run: async () => {
+      // `# ` lines in a Python file are comments, not headings.
+      const py = Array.from({ length: 3000 }, (_, i) => (i % 3 === 0 ? `# comment ${i}` : `x = ${i}`)).join('\n') + '\n'
+      const first400 = bytesOf(py.split('\n').slice(0, 400).join('\n') + '\n')
+      const ro = '1. `src/big.py` — 3,000 lines\n2. `src/big.py §comment` — a section hint on a file with no headings\n3. `docs/big.markdown` — the other Markdown extension'
+      withRepo({ 'src/big.py': py, 'docs/big.markdown': BIG_MD }, ro, ({ doc }) => {
+        const [a, b, c] = plan(doc).entries
+        assert.equal(a.status, 'partial')
+        same(a.range, { type: 'lines', start: 1, end: 400 })
+        assert.equal(a.bytes, first400)
+        same(a.outline, [])
+        assert.equal(a.outlineBytes, 0)
+        assert.equal(a.truncated, false)
+        assert.equal(b.status, 'partial')
+        assert.equal(b.range, null)
+        same(b.outline, [])
+        same(c.outline, BIG_OUTLINE)
+      })
+    },
+  },
+  {
+    id: 'reading-plan-says-when-a-range-hint-is-ignored',
+    run: async () => {
+      const files = { 'src/a.js': lineText(1, 30), 'docs/x.md': X_MD }
+      const ro = [
+        '1. `src/a.js:20-10` — reversed',
+        '2. `src/a.js:0-5` — starts at line 0',
+        '3. `docs/x.md §` — an empty heading',
+        '4. `src/a.js:42` — one line is a hint, not a range',
+        '5. `src/a.js (entry point)` — a remark in parentheses',
+        '6. `src/a.js:5-7` — a real range',
+      ].join('\n')
+      withRepo(files, ro, ({ doc }) => {
+        const es = plan(doc).entries
+        for (const e of es.slice(0, 4)) {
+          assert.equal(e.status, 'read', e.raw) // the behaviour is unchanged: the whole file is read
+          assert.match(e.reason, /range hint ignored/, e.raw)
+        }
+        assert.equal(es[0].bytes, bytesOf(lineText(1, 30)))
+        assert.equal(es[4].status, 'read')
+        assert.equal(es[4].reason, null)
+        assert.equal(es[5].status, 'range')
+        assert.equal(es[5].reason, null)
+      })
+    },
+  },
+  {
     id: 'reading-plan-non-file-entry',
     run: async () => {
       const ro = '1. Memory item "design notes" — recall it before starting\n2. `git log --oneline -5` — recent history\n3. `src/a.js` — a real file'
@@ -1340,7 +1446,7 @@ const readingPlanCases = [
         same(Object.keys(p).sort(), ['budget', 'entries', 'totalBytes'])
         const common = ['bytes', 'file', 'fileLines', 'isFile', 'lines', 'path', 'range', 'raw', 'reason', 'self', 'status']
         same(Object.keys(p.entries[0]).sort(), common)
-        same(Object.keys(p.entries[1]).sort(), [...common, 'outline', 'outlineBytes'].sort())
+        same(Object.keys(p.entries[1]).sort(), [...common, 'outline', 'outlineBytes', 'truncated'].sort())
         same(Object.keys(p.entries[2]).sort(), common)
       })
     },
@@ -1453,7 +1559,7 @@ const pathCases = [
       for (const p of accepted) assert.equal(validateHandoffPath(p, root).ok, true, `accept ${p}`)
       const rejected = [
         '', '../x', 'a/../x', 'a\\..\\x', '..', '.. /x', '.git', '.git/config', 'a/.git/hooks/x', '.GIT/config', '.git./config',
-        'git~1/config', '//server/share/x', '\\\\server\\share\\x', '/etc/passwd', 'C:/Windows/x', 'C:foo', '~/x', 'a\0b',
+        'git~1/config', '.git::$INDEX_ALLOCATION/config', '.git:$I30:$INDEX_ALLOCATION/config', 'in.md::$DATA', 'C:/repo/in.md::$DATA', '//server/share/x', '\\\\server\\share\\x', '/etc/passwd', 'C:/Windows/x', 'C:foo', '~/x', 'a\0b',
         path.join(root, '.git', 'config'), root + '/../elsewhere/x', path.resolve(root, '..', 'elsewhere', 'x'),
       ]
       for (const p of rejected) {
@@ -1544,6 +1650,17 @@ const readingSimCases = [
     },
   },
   {
+    id: 'corpus-reading-simulation-charges-an-outline-only-for-markdown',
+    run: async () => {
+      const { simulateReading } = await diffLib()
+      // 4,000 lines -> 100 headings estimated; 20,000 lines -> 500, capped at 200; a .py file has none.
+      const docs = [{ readingOrder: [ent('a.md', 200000, 4000), ent('b.md', 1000000, 20000), ent('c.py', 200000, 4000)] }]
+      const r = simulateReading(docs)
+      // a: 20,000 + 60 x 100; b: 20,000 + 60 x 200; c: 20,000
+      assert.equal(r.unbudgeted.perDoc[0], 26000 + 32000 + 20000)
+    },
+  },
+  {
     id: 'corpus-reading-path-rule-checks',
     run: async () => {
       const { pathRuleChecks } = await diffLib()
@@ -1570,6 +1687,38 @@ const readingSimCases = [
         assert.match(t.stdout, /^reading: 13 documents/m)
         assert.match(t.stdout, /B = /)
       })
+    },
+  },
+]
+
+// ---- the contract text and the sources ---------------------------------------------------------------------------
+
+const contractCases = [
+  {
+    id: 'resume-contract-owns-its-path-rule-and-writes-the-budget-once',
+    run: async () => {
+      const text = fs.readFileSync(path.join(ROOT, 'templates', 'handoff', 'resume.md'), 'utf8')
+      assert.ok(!/validate_path|Path Validator/.test(text), 'resume.md must not cite the /harness path validator')
+      const given = text.match(/--budget (\d+)/g) || []
+      assert.equal(given.length, 1, 'the budget is passed in one place')
+      const b = /--budget (\d+)/.exec(text)[1]
+      assert.equal(text.split(b).length - 1, 1, 'the budget value is written once')
+      assert.ok(!/128 KiB/.test(text), 'the budget is not restated in another unit')
+    },
+  },
+  {
+    id: 'sources-carry-no-literal-bom-character',
+    run: async () => {
+      // A BOM in source is invisible in a review; write it as an escape.
+      const bom = String.fromCharCode(0xfeff)
+      const dirs = ['skills/handoff/scripts', 'skills/handoff/scripts/lib', 'tests/handoff', 'tests/handoff/corpus']
+      for (const d of dirs) {
+        for (const name of fs.readdirSync(path.join(ROOT, d))) {
+          if (!name.endsWith('.mjs')) continue
+          const text = fs.readFileSync(path.join(ROOT, d, name), 'utf8')
+          assert.ok(!text.includes(bom), `${d}/${name} contains the character U+FEFF; write it as an escape`)
+        }
+      }
     },
   },
 ]
@@ -1637,5 +1786,6 @@ export const cases = [
   ...readingPlanCases,
   ...pathCases,
   ...readingSimCases,
+  ...contractCases,
   ...runnerCases,
 ]
