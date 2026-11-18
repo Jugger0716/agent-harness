@@ -87,7 +87,8 @@ function cmdDrift(opts) {
 // newest document in a folder that holds rows of that Epic (--dir). Exactly one of the two is given; --epic is
 // read with one `**`/`__` pair and then one backtick pair removed, like the cells. The output also says which
 // document the rows came from (`doc`, null when none held the Epic), its file name (`pointer`), how many finished
-// rows were left out (`droppedDone`) and whether that document itself carries an `Earlier rows:` line (`chained`).
+// rows were left out (`droppedDone`), how many carried rows had a Status outside the enum (`unknownStatusRows`) or an
+// empty Epic cell (`unattributedRows`), and whether that document itself carries an `Earlier rows:` line (`chained`).
 function cmdLedgerCarry(opts) {
   const hasDoc = opts.doc !== undefined
   if (hasDoc === (opts.dir !== undefined)) throw new UsageError('ledger-carry: give exactly one of --doc and --dir')

@@ -3722,7 +3722,7 @@ const latestEpic = (dir) => cliOk('latest-epic', '--dir', dir)
 const ledgerOf = (rows, after = '') => mk([['Next Steps', '1. Carry on.'], ['Progress Ledger', table(rows) + after]])
 const finished = (n, from = 1, epic) => Array.from({ length: n }, (_, i) => row(`d${from + i}`, 'done', epic))
 const sliceList = (out) => out.rows.map((r) => r.slice)
-const NOTHING = { doc: null, rows: [], pointer: null, droppedDone: 0, unknownStatusRows: 0, chained: false }
+const NOTHING = { doc: null, rows: [], pointer: null, droppedDone: 0, unknownStatusRows: 0, unattributedRows: 0, chained: false }
 
 const ledgerCarryCases = [
   {
@@ -3949,6 +3949,9 @@ const ledgerCarryCases = [
         // the same words in another section are prose; a document with no ledger has no such line
         assert.equal(chainedOf('2026-05-10-j.md', mk([['Next Steps', `1. Look at\n${line}`], ['Progress Ledger', table(rows)]])), false)
         assert.equal(chainedOf('2026-05-11-k.md', mk([['Next Steps', `1. Do it.\n${line}`]])), false)
+        // the Step 2 template's own line, copied and never filled in, names no document
+        assert.equal(chainedOf('2026-05-12-l.md', ledgerOf(rows, '\n\nEarlier rows: <file name of the source document>   <!-- only when item 5d applies -->')), false)
+        assert.equal(chainedOf('2026-05-13-m.md', ledgerOf(rows, '\n\nEarlier rows: <previous>.md')), false)
         // the Epic does not matter: it is a fact about the document
         assert.equal(carryDoc(path.join(dir, '2026-05-01-a.md'), 'ep-z').chained, true)
       })
@@ -3984,6 +3987,54 @@ const ledgerCarryCases = [
         const e = between(text, 'e. **No source found**', 'f. **').replace(/\s+/g, ' ')
         assert.match(e, /`doc` is `null`[^)]*or `rows` is empty/)
         assert.match(between(text, '### Step 4', null).replace(/\s+/g, ' '), /returned `doc` `null` or no `rows`/)
+      })
+    },
+  },
+  {
+    id: 'ledger-carry-takes-a-row-with-an-empty-epic-cell-as-the-requested-epics',
+    run: async () => {
+      await inTmp((dir) => {
+        // a row that names no Epic is still work: it is carried as the requested Epic's, filled in, and counted
+        const rows = [row('s1', 'done'), ['', 's2', 'blocked', 'n/a', 'no epic written'], row('s3', 'in-progress')]
+        const out = carryDoc(put(dir, '2026-02-01-prev.md', ledgerOf(rows)), 'ep-a')
+        same(sliceList(out), ['s1', 's2', 's3'])
+        same(out.rows.map((r) => r.epic), ['ep-a', 'ep-a', 'ep-a'])
+        assert.equal(out.unattributedRows, 1)
+        assert.equal(out.rows[1].notes, 'no epic written')
+        // a normal ledger reports none
+        assert.equal(carryDoc(put(dir, '2026-02-02-plain.md', ledgerOf([row('s1', 'done'), row('s2', 'blocked')])), 'ep-a').unattributedRows, 0)
+        // the same rules as every row: a finished one is kept or left out by keepDone, and only a carried row is counted
+        const last = carryDoc(put(dir, '2026-02-03-last.md', ledgerOf([...finished(6), ['', 'dz', 'done', 'n/a', '']])), 'ep-a')
+        same(sliceList(last), ['d3', 'd4', 'd5', 'd6', 'dz'])
+        assert.equal(last.unattributedRows, 1)
+        const first = carryDoc(put(dir, '2026-02-04-first.md', ledgerOf([['', 'dz', 'done', 'n/a', ''], ...finished(6)])), 'ep-a')
+        same(sliceList(first), ['d2', 'd3', 'd4', 'd5', 'd6'])
+        assert.equal(first.unattributedRows, 0)
+        assert.equal(first.droppedDone, 2)
+        // another Epic's row is still not carried, and a ledger with no Epic column at all names no Epic: nothing, as before
+        const other = carryDoc(put(dir, '2026-02-05-other.md', ledgerOf([row('b1', 'blocked', 'ep-b'), ['', 's2', 'blocked', 'n/a', '']])), 'ep-a')
+        same(sliceList(other), ['s2'])
+        const noColumn = put(dir, '2026-02-06-nocol.md', mk([['Progress Ledger', '| Slice | Status |\n|---|---|\n| s1 | blocked |\n| s2 | in-progress |']]))
+        const none = carryDoc(noColumn, 'ep-a')
+        same(none.rows, [])
+        assert.equal(none.unattributedRows, 0)
+      })
+    },
+  },
+  {
+    id: 'ledger-carry-dir-mode-is-not-picked-by-rows-that-name-no-epic',
+    run: async () => {
+      await inTmp((dir) => {
+        // a document whose rows all leave the Epic cell empty cannot be said to hold the Epic: it is not the source
+        put(dir, '2026-02-01-old.md', ledgerOf([row('a1', 'in-progress', 'ep-a')]))
+        put(dir, '2026-02-02-blank.md', ledgerOf([['', 'x1', 'in-progress', 'n/a', '']]))
+        assert.equal(path.basename(carryDir(dir, 'ep-a').doc), '2026-02-01-old.md')
+        // in the document that IS the source, its blank rows come along
+        put(dir, '2026-02-03-mixed.md', ledgerOf([row('a1', 'done', 'ep-a'), ['', 'x1', 'blocked', 'n/a', '']]))
+        const out = carryDir(dir, 'ep-a')
+        assert.equal(path.basename(out.doc), '2026-02-03-mixed.md')
+        same(sliceList(out), ['a1', 'x1'])
+        assert.equal(out.unattributedRows, 1)
       })
     },
   },
@@ -4171,6 +4222,27 @@ const ledgerCarryCases = [
     },
   },
   {
+    id: 'orderDocs-an-effective-mtime-keeps-the-suffix-rule-and-the-mtime-rule-apart',
+    run: async () => {
+      const { orderDocs } = await pathsLib()
+      const order = (docs) => orderDocs(docs).map((d) => d.name.replace('2026-11-19-', '').replace('.md', ''))
+      const at = (slug, mtimeMs) => ({ name: `2026-11-19-${slug}.md`, mtimeMs })
+      // same slug: `-N` decides; other slugs: the mtime decides — so a:50, b:75, a-2:100 is a-2 > b > a (a ranks by ITS mtime, not a-2's)
+      same(order([at('a', 50), at('b', 75), at('a-2', 100)]), ['a-2', 'b', 'a'])
+      same(order([at('a-2', 100), at('b', 75), at('a', 50)]), ['a-2', 'b', 'a'])
+      // an mtime that contradicts the suffix: the suffix wins inside the slug, and the slug sits at the highest mtime it has
+      same(order([at('x', 500), at('x-2', 100), at('y', 300)]), ['x-2', 'x', 'y'])
+      same(order([at('x', 100), at('x-2', 50), at('y', 300)]), ['y', 'x-2', 'x'])
+      // a name that really ends in digits is not a collision of the shorter name when nothing makes it one: it stays a name of its own
+      same(order([at('stage-2', 100), at('x', 100)]), ['x', 'stage-2'])
+      same(order([at('x', 100), at('stage-2', 100)]), ['x', 'stage-2'])
+      // a name that ends in digits and has collisions of its own: `task-8` is the plain name of `task-8-2` and `task-8-3`, not their `-8` sibling
+      same(order([at('task-8', 100), at('task-8-2', 200), at('task-8-3', 150), at('other', 180)]), ['task-8-3', 'task-8-2', 'other', 'task-8'])
+      // two files that only differ by the suffix ARE one slug: the plain name is the older, whatever the mtimes say
+      same(order([at('x', 900), at('x-2', 10)]), ['x-2', 'x'])
+    },
+  },
+  {
     id: 'ledger-lib-carry-ledger-keep-done-parameter',
     run: async () => {
       const { carryLedger } = await ledgerLib()
@@ -4179,10 +4251,10 @@ const ledgerCarryCases = [
       same(carryLedger(rows, 'ep-a').rows.map((r) => r.slice), ['d2', 'd3', 'd4', 'd5', 'd6', 'u1'])
       same(carryLedger(rows, 'ep-a', { keepDone: 2 }).rows.map((r) => r.slice), ['d5', 'd6', 'u1'])
       same(carryLedger(rows, 'ep-a', { keepDone: 0 }).rows.map((r) => r.slice), ['u1'])
-      same(carryLedger(rows, 'ep-a', { keepDone: 0 }), { rows: carryLedger(rows, 'ep-a', { keepDone: 0 }).rows, droppedDone: 6, unknownStatusRows: 0 })
+      same(carryLedger(rows, 'ep-a', { keepDone: 0 }), { rows: carryLedger(rows, 'ep-a', { keepDone: 0 }).rows, droppedDone: 6, unknownStatusRows: 0, unattributedRows: 0 })
       assert.equal(carryLedger(rows, 'ep-a', { keepDone: 100 }).droppedDone, 0)
       for (const bad of [-1, 1.5, '5', NaN]) assert.throws(() => carryLedger(rows, 'ep-a', { keepDone: bad }), /keepDone/)
-      same(carryLedger([], 'ep-a'), { rows: [], droppedDone: 0, unknownStatusRows: 0 })
+      same(carryLedger([], 'ep-a'), { rows: [], droppedDone: 0, unknownStatusRows: 0, unattributedRows: 0 })
     },
   },
   {
@@ -4248,6 +4320,24 @@ const ledgerDiffCases = [
     },
   },
   {
+    id: 'corpus-diff-ledger-counts-rows-with-an-empty-epic-cell',
+    run: async () => {
+      const docs = {
+        'a-blank-epic': ledgerOf([row('s1', 'done'), ['', 's2', 'blocked', 'n/a', ''], row('s3', 'in-progress')]),
+        'b-plain': ledgerOf([row('s1', 'done'), row('s2', 'blocked')]),
+      }
+      withSnapshotOfDocs(docs, (snap) => {
+        const o = JSON.parse(node('diff.mjs', '--corpus', snap, '--what', 'ledger', '--json').stdout)
+        same(o.emptyEpic, { documents: 1, rows: 1 })
+        // the blank row is the chosen Epic's: it counts in the Epic's rows, is carried, and is not lost
+        same(o.rows.before, { median: 2.5, p90: 3, max: 3 })
+        same(o.unfinished, { rows: 3, lostRows: 0, lostDocuments: [], ruleHolds: 2 })
+        const h = node('diff.mjs', '--corpus', snap, '--what', 'ledger')
+        assert.match(h.stdout, /empty Epic cell: 1 documents, 1 rows/)
+      })
+    },
+  },
+  {
     id: 'corpus-diff-ledger-is-listed-in-the-usage',
     run: async () => {
       const r = node('diff.mjs')
@@ -4280,6 +4370,49 @@ const ledgerContractCases = [
       assert.match(a.replace(/\s+/g, ' '), /only when[^.]*`null`[^.]*(different|another)/i)
       // the script's reach is stated as a fact about the script, so a `null` is not read as "no document anywhere"
       assert.match(a.replace(/\s+/g, ' '), /none of the 20 newest handoff documents, which is all the script reads/)
+    },
+  },
+  {
+    id: 'generate-contract-proposes-the-epic-the-way-the-script-reads-it',
+    run: async () => {
+      const text = readText('templates', 'handoff', 'generate.md')
+      const item5 = between(text, '5. **Progress Ledger', '### Step 2')
+      const a = between(item5, 'a. **', 'b. **').replace(/\s+/g, ' ')
+      // the Epic is the one of the last row that HAS one, like the script reads it
+      assert.match(a, /last row that has one/)
+      // no ledger to propose from: the task's `docs_path` slug is the new Epic (no question); only without one is the user asked
+      assert.match(a, /`null`[^.]*`docs_path` slug[^.]*without asking/)
+      assert.match(a, /only when[^.]*(no `docs_path`|no such slug)[^.]*(different|another)/i)
+      // the missing age limit is a stated risk, and what the user names wins
+      assert.match(a, /no age limit/)
+      assert.match(a, /(months|long ago)/)
+    },
+  },
+  {
+    id: 'generate-contract-cells-are-bare-and-the-carried-rows-follow-the-same-rule',
+    run: async () => {
+      const text = readText('templates', 'handoff', 'generate.md')
+      const item5 = between(text, '5. **Progress Ledger', '### Step 2')
+      const flat = item5.replace(/\s+/g, ' ')
+      // one rule for every cell: never a wrapper around the WHOLE cell; free text in Notes keeps its own backticks
+      assert.ok(!/into the new ledger as given/.test(flat), 'no instruction to copy a cell as it came back')
+      assert.match(flat, /never wrap a whole cell in `\*\*` or backticks/)
+      assert.match(flat, /backticks inside free text[^.]*stay/)
+      assert.match(flat, /carried row[^.]*same rule/)
+    },
+  },
+  {
+    id: 'generate-contract-reports-rows-that-named-no-epic',
+    run: async () => {
+      const text = readText('templates', 'handoff', 'generate.md')
+      const item5 = between(text, '5. **Progress Ledger', '### Step 2')
+      const g = between(item5, 'g. **', '**Progress Ledger — column contract**').replace(/\s+/g, ' ')
+      assert.ok(g.includes('`unattributedRows`') && /empty `Epic` cell/.test(g))
+      assert.match(g, /taken as this Epic|this Epic's/)
+      assert.match(g, /`Slice`/)
+      const step4 = between(text, '### Step 4', null).replace(/\s+/g, ' ')
+      assert.match(step4, /empty `Epic` cell/)
+      assert.match(step4, /item 5g/)
     },
   },
   {

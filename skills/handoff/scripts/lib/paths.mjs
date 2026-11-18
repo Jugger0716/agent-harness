@@ -95,15 +95,22 @@ export function gitTopLevel(dir) {
 
 // The order of handoff documents, newest first. A document is `{ name, mtimeMs }`; `name` is its file name (a
 // folder part is ignored). The location convention (SKILL.md) names a file `YYYY-MM-DD-<slug>.md` and, when
-// that name is taken, appends `-2`, `-3`, … — the plain name is the OLDEST of its slug's files that day. So:
-//   1. the date in the file name, later first (a name with no date is the oldest);
-//   2. within one date and one slug, the larger numeric suffix first (a plain name counts as 1; the suffix is
-//      compared as a number, so `-10` is newer than `-3`);
-//   3. between two slugs, the one whose newest file has the later mtime first (a slug is placed by its newest
-//      file, so a `-2` file that was written before another slug's file does not outrank it);
-//   4. what is still equal (a clone gives every file the same mtime): the larger name first, so the result
-//      never depends on the order of the input.
-// The mtime only separates different slugs: it is the weakest signal, because a copy or a checkout resets it.
+// that name is taken, appends `-2`, `-3`, … — so of the files that share a slug that day the plain name is the
+// OLDEST. Two rules say what is newer, and they are kept apart:
+//   - the same slug on one date: the larger numeric suffix is newer (a plain name counts as 1; the suffix is
+//     compared as a number, so `-10` is newer than `-3`), whatever the mtimes say;
+//   - any other pair: the later mtime is newer.
+// Both rules hold at once through an EFFECTIVE mtime: within a slug the files are taken by ascending suffix and
+// each gets the highest mtime seen so far, so a file is never older than a smaller suffix of its own slug.
+// The order is then, all later first: date (a name with no date is the oldest), effective mtime, suffix, slug,
+// name — a total order, so the result does not depend on the order of the input. With consistent mtimes it
+// is the pairwise rule; with contradicting ones (a clock, a copy, a checkout) the suffix wins inside its slug
+// and the slug stays where its highest mtime puts it: `a` 50, `b` 75, `a-2` 100 is `a-2`, `b`, `a`.
+// Two limits. The mtime is the weakest signal, because a copy or a checkout resets it: files that differ by
+// nothing else are then told apart by suffix, slug and name only. And a slug that really ends in `-<digits>`
+// is a collision of the shorter name only when a file makes it one the same day — a plain file of that shorter
+// name, or another suffix of it; `stage-2` alone is a name of its own, but `stage` with `stage-2` is read as
+// a collision (a name is plain when another file's collision suffix hangs on it: `task-8` beside `task-8-2`).
 // Pure — no file system access; a new array comes back and the input is left as it is.
 function docKey(name) {
   const base = String(name).split(/[\\/]/).pop().replace(/\.md$/i, '')
@@ -111,23 +118,46 @@ function docKey(name) {
   const date = m ? m[1] : ''
   const rest = m ? (m[2] ?? '') : base
   const s = /^(.*?)-(\d+)$/.exec(rest)
-  return s ? { date, slug: s[1], n: Number(s[2]) } : { date, slug: rest, n: 1 }
+  return { date, rest, suffixed: s ? { slug: s[1], n: Number(s[2]) } : null }
 }
 
 const cmp = (a, b) => (a < b ? -1 : a > b ? 1 : 0)
 
 export function orderDocs(docs) {
   const items = docs.map((d) => ({ d, ...docKey(d.name), mtime: Number.isFinite(d.mtimeMs) ? d.mtimeMs : 0, name: String(d.name) }))
+  // per date: which names are the plain name of some collision, which plain names exist, how many suffixes each slug has
+  const byDate = new Map()
+  for (const it of items) {
+    if (!byDate.has(it.date)) byDate.set(it.date, { bases: new Set(), plain: new Set(), suffixes: new Map() })
+    const t = byDate.get(it.date)
+    t.plain.add(it.rest)
+    if (it.suffixed) {
+      t.bases.add(it.suffixed.slug)
+      t.suffixes.set(it.suffixed.slug, (t.suffixes.get(it.suffixed.slug) ?? 0) + 1)
+    }
+  }
+  for (const it of items) {
+    const t = byDate.get(it.date)
+    const collision = it.suffixed !== null && !t.bases.has(it.rest) && (t.plain.has(it.suffixed.slug) || t.suffixes.get(it.suffixed.slug) >= 2)
+    it.slug = collision ? it.suffixed.slug : it.rest
+    it.n = collision ? it.suffixed.n : 1
+  }
   const slugs = new Map()
   for (const it of items) {
     const key = `${it.date}\0${it.slug}`
     if (!slugs.has(key)) slugs.set(key, [])
     slugs.get(key).push(it)
   }
-  const groups = [...slugs.values()]
-  for (const g of groups) g.sort((a, b) => b.n - a.n || b.mtime - a.mtime || cmp(b.name, a.name))
-  groups.sort((a, b) => cmp(b[0].date, a[0].date) || b[0].mtime - a[0].mtime || b[0].n - a[0].n || cmp(b[0].slug, a[0].slug))
-  return groups.flat().map((it) => it.d)
+  for (const g of slugs.values()) {
+    g.sort((a, b) => a.n - b.n || a.mtime - b.mtime || cmp(a.name, b.name))
+    let high = -Infinity
+    for (const it of g) {
+      high = Math.max(high, it.mtime)
+      it.effective = high
+    }
+  }
+  items.sort((a, b) => cmp(b.date, a.date) || b.effective - a.effective || b.n - a.n || cmp(b.slug, a.slug) || cmp(b.name, a.name))
+  return items.map((it) => it.d)
 }
 
 // The folders a document's entries may be resolved against, in the order they are tried:

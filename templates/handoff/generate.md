@@ -110,14 +110,16 @@ Gather, in this order:
       node "{HANDOFF_JS}" latest-epic --dir "docs/harness/handoff"
       ```
 
-      The output is one JSON object, `epic` and `doc`: the `Epic` of the last row of the newest
-      handoff document that has a ledger, and that document's path — both `null` when none of the
-      20 newest handoff documents, which is all the script reads, has one (a folder that does not
-      exist yet included). Use `epic` as the proposal, without
-      asking. Ask the user only when it is `null`, or when this session's work concretely names a
-      different epic id (the user said another one) — the id the work names is then the Epic.
-      `Epic` is a kebab-case identifier (may be derived from the current `docs_path` slug when
-      there is no clearer name).
+      The output is one JSON object, `epic` and `doc`: the `Epic` of the last row that has one,
+      in the newest handoff document that has a ledger with such a row, and that document's
+      path — both `null` when none of the 20 newest handoff documents, which is all the script
+      reads, has one (a folder that does not exist yet included). Use `epic` as the proposal,
+      without asking. There is no age limit on that document, so an Epic from months ago can be
+      proposed this way; the id this session's work names wins. When `epic` is `null`, the new
+      Epic is the `docs_path` slug of item 2 (kebab-case; item 2 returned `relevant` true),
+      without asking. Ask the user only when `epic` is `null` and there is no such slug, or when
+      this session's work concretely names a different epic id — the id the work names is then
+      the Epic.
    b. **Carry the rows forward.** Run
 
       ```
@@ -136,11 +138,12 @@ Gather, in this order:
       in document order; `droppedDone` is how many finished rows were left out.
       A ledger carries the rows of ONE Epic: rows of a different Epic are never carried, and an
       Epic that none of the documents the script reads holds (a new epic) carries nothing.
-   c. **Write the rows, then this session's own.** Put `rows` into the new ledger as given, then
-      append or update this session's own row(s): a slice that already has a carried row is
-      updated in place (`Slice` is unique within its Epic), never added a second time. The result
-      is written into the NEW handoff file being composed in Step 2 — this does not touch the
-      source document (consistent with the no-overwrite location convention above).
+   c. **Write the rows, then this session's own.** Put `rows` into the new ledger, each cell
+      bare by the rule under the column contract, then append or update this session's own
+      row(s): a slice that already has a carried row is updated in place (`Slice` is unique
+      within its Epic), never added a second time. The result is written into the NEW handoff
+      file being composed in Step 2 — this does not touch the source document (consistent with
+      the no-overwrite location convention above).
    d. **The earlier rows.** When a source was found (not the empty-ledger case of (e)) and
       `droppedDone` is greater than 0 **or** `chained` is true, write one line under the table,
       after a blank line, `Earlier rows: <pointer>`, with the script's `pointer` value — a file
@@ -158,6 +161,9 @@ Gather, in this order:
    f. **A `Status` outside the enum** (`unknownStatusRows` above 0): those rows were carried as
       unfinished so that no row is lost. Keep their `Status` as written, guess no replacement, and
       name their `Slice` values in Step 4's report so the human corrects them.
+   g. **A row with an empty `Epic` cell** (`unattributedRows` above 0): the script took it as
+      this Epic's row and filled in its `epic`. Name those rows' `Slice` values in Step 4's report
+      so the human checks them.
 
    **Progress Ledger — column contract** (confirmed, so no two sessions invent different
    vocabulary):
@@ -170,8 +176,9 @@ Gather, in this order:
    | `Evidence` | a full 40-char commit sha, or an artifact path; `n/a` if neither exists yet |
    | `Notes` | free text in `user_lang` — residual risks, gotchas |
 
-   Write every cell bare — no `**`, no backticks. A reader strips one pair of them, but a bare
-   cell needs no reader.
+   Write every cell bare: never wrap a whole cell in `**` or backticks (backticks inside free
+   text, as in `Notes`, stay). A carried row follows the same rule — a `slice`, `evidence` or
+   `notes` that came back wrapped is written without the wrapper.
 
 ### Step 2 — Compose
 
@@ -257,8 +264,9 @@ would let a later audit conclude the removal cost nothing.
      source found for Epic `<epic>` — started a new ledger." **A broken chain must never be
      silent**; this line moved from the preview to here, and it is the one line whose omission
      the removal of the gate could actually cost.
-   - **If rows were carried with a `Status` outside the enum** (item 5f), name each such row's
-     `Slice` and its `Status`, so the human can correct them.
+   - **If rows were carried with a `Status` outside the enum** (item 5f) **or an empty `Epic`
+     cell** (item 5g), name each such row's `Slice` (and the `Status`, for the first kind), so the
+     human can correct them.
    - The path that was written, plus the resume one-liner below.
    - One line telling the user how to correct it — **three ways, and the third is the one that
      replaces `Cancel`**: edit the file directly; re-run `/handoff generate` (a re-run writes a
@@ -271,15 +279,15 @@ would let a later audit conclude the removal cost nothing.
 
 ```
 [handoff] Saved : docs/harness/handoff/YYYY-MM-DD-<slug>.md
-  Ledger  : <"no carry-forward source found for Epic <epic> — started a new ledger" | "N row(s) carried with a Status outside the enum: <slice> (<status>), …" | omit the line entirely>
+  Ledger  : <"no carry-forward source found for Epic <epic> — started a new ledger" | "N row(s) carried with a Status outside the enum or an empty Epic cell: <slice> (<status>), …" | omit the line entirely>
   Correct : edit that file / re-run `/handoff generate` (writes a new `-2` file — nothing is overwritten) / delete it if unwanted (until then a path-less `resume` picks it, being newest)
   Next session → /handoff resume docs/harness/handoff/YYYY-MM-DD-<slug>.md
 ```
 
-The `Ledger` row is **omitted when a carry-forward source WAS found and every carried `Status`
-was in the enum, and omitted when no ledger applies at all** — it exists to make the
-broken-chain case loud (and to hand a stray `Status` value back to the human). The `Correct` row
-always prints: it is what replaces the gate's "Edit" option.
+The `Ledger` row is **omitted when a carry-forward source WAS found and no carried row needs
+correcting (item 5f, 5g), and omitted when no ledger applies at all** — it exists to make the
+broken-chain case loud (and to hand a stray `Status` value or an empty `Epic` cell back to the
+human). The `Correct` row always prints: it is what replaces the gate's "Edit" option.
 
 > **gitignore note:** many projects gitignore `docs/harness/`. If `git check-ignore` says the
 > written file is ignored, append one warning line (in `user_lang`): the handoff exists only on

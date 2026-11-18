@@ -19,6 +19,12 @@
 // column reads as null). The Epic given to a command is read the same way, so `` `ep` `` and `**ep**`
 // name the Epic `ep`.
 //
+// A row whose Epic cell is present but EMPTY names no Epic, and is work all the same: it is carried as the
+// requested Epic's — its `epic` filled in, the unfinished/finished rule applied as to any row — and counted in
+// `unattributedRows`, so the person can check it. (A blank row of a document that holds several Epics is carried
+// with each Epic asked for.) A ledger with no Epic COLUMN names no Epic at all: nothing is carried from it.
+// With `--dir`, only a row that names the Epic makes a document the source; blank rows alone never do.
+//
 // The chain of earlier rows: a new document whose carry left finished rows out writes an `Earlier rows:
 // <file name>` line under its table, naming the SOURCE document (`pointer`). A source that itself carries
 // such a line is `chained`: the rows behind ITS line are still earlier than the new document, so the new
@@ -44,12 +50,14 @@ export const SCAN_CAP = 20
 
 export const isFinished = (status) => FINISHED.has(status)
 
-// parse.mjs's ledger rows -> { rows: [{ epic, slice, status, evidence, notes }], droppedDone, unknownStatusRows }
-// `epic` is the Epic to carry (read normalised, like the cells). Only that Epic's rows are looked at.
+// parse.mjs's ledger rows -> { rows: [{ epic, slice, status, evidence, notes }], droppedDone, unknownStatusRows,
+// unattributedRows }. `epic` is the Epic to carry (read normalised, like the cells). Only that Epic's rows are
+// looked at — and the rows whose Epic cell is empty (see above): they are carried as this Epic's, their `epic`
+// filled in, and the carried ones are counted in `unattributedRows`.
 export function carryLedger(rows, epic, { keepDone = KEEP_DONE } = {}) {
   if (!Number.isInteger(keepDone) || keepDone < 0) throw new Error('carryLedger: keepDone must be a whole number, 0 or more')
   const want = stripEmphasis(epic)
-  const mine = rows.filter((r) => (r.epic ?? '') === want)
+  const mine = rows.filter((r) => r.epic === want || r.epic === '')
   const finishedAt = []
   mine.forEach((r, i) => {
     if (isFinished(r.status)) finishedAt.push(i)
@@ -57,9 +65,10 @@ export function carryLedger(rows, epic, { keepDone = KEEP_DONE } = {}) {
   const keptFinished = new Set(finishedAt.slice(Math.max(0, finishedAt.length - keepDone)))
   const carried = mine.filter((r, i) => !isFinished(r.status) || keptFinished.has(i))
   return {
-    rows: carried.map(({ epic: e, slice, status, evidence, notes }) => ({ epic: e, slice, status, evidence, notes })),
+    rows: carried.map(({ epic: e, slice, status, evidence, notes }) => ({ epic: e === '' ? want : e, slice, status, evidence, notes })),
     droppedDone: finishedAt.length - keptFinished.size,
     unknownStatusRows: carried.filter((r) => !STATUSES.includes(r.status)).length,
+    unattributedRows: carried.filter((r) => r.epic === '').length,
   }
 }
 
@@ -117,7 +126,8 @@ const rowsOf = (text) => {
 
 // Does the document carry an `Earlier rows:` line (see the chain above)? Read with parse.mjs's own section and
 // code-fence reading, so the line is looked for only in the first `## Progress Ledger` section, outside fences.
-const EARLIER_ROWS = /^\s*(?:\*\*|__)?\s*Earlier rows\s*:(?:\*\*|__)?\s*\S/i
+// A value that starts with `<` is the Step 2 template's own placeholder, copied and never filled in: no pointer.
+const EARLIER_ROWS = /^\s*(?:\*\*|__)?\s*Earlier rows\s*:(?:\*\*|__)?\s*[^\s<]/i
 
 function hasEarlierRowsLine(text) {
   const lines = splitLines(text)
@@ -131,7 +141,7 @@ function hasEarlierRowsLine(text) {
 // `latest-epic`: the Epic of the newest document that has a ledger with a row (its last row's Epic, normalised)
 // and that document's path -> { epic, doc }; both null when no document has one. A row with no Epic cell cannot
 // name an Epic, so the last row that has one is used; `next.mjs` and the corpus measurement take the literal last
-// row's Epic, and the two differ only when that cell is empty (no ledger of the corpus measured for stage 3 had one).
+// row's Epic, and the two differ only when that cell is empty.
 export function latestEpic(dir) {
   for (const d of scanHandoffDocs(dir)) {
     const epic = epicOfRows(rowsOf(d.text))
@@ -140,7 +150,7 @@ export function latestEpic(dir) {
   return { epic: null, doc: null }
 }
 
-// `ledger-carry --doc`: the rows of one document -> { doc, rows, droppedDone, unknownStatusRows, pointer, chained }
+// `ledger-carry --doc`: the rows of one document -> { doc, rows, droppedDone, unknownStatusRows, unattributedRows, pointer, chained }
 // `pointer` is the document's own file name — the value of the `Earlier rows:` line a new document writes when
 // finished rows were left out or when this document is `chained`. It is never read from an `Earlier rows:` line the
 // document itself carries: the chain is "new document -> this document -> the one its own line names".
@@ -154,7 +164,7 @@ export function carryFromDir(dir, epic, opts) {
   const want = stripEmphasis(epic)
   for (const d of scanHandoffDocs(dir)) {
     const rows = rowsOf(d.text)
-    if (rows.some((r) => (r.epic ?? '') === want)) return { doc: d.file, ...carryLedger(rows, want, opts), pointer: d.name, chained: hasEarlierRowsLine(d.text) }
+    if (rows.some((r) => r.epic === want)) return { doc: d.file, ...carryLedger(rows, want, opts), pointer: d.name, chained: hasEarlierRowsLine(d.text) }
   }
-  return { doc: null, rows: [], pointer: null, droppedDone: 0, unknownStatusRows: 0, chained: false }
+  return { doc: null, rows: [], pointer: null, droppedDone: 0, unknownStatusRows: 0, unattributedRows: 0, chained: false }
 }

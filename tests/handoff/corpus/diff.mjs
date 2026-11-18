@@ -48,8 +48,10 @@
 //                  `..` or `.git` segment is rejected). Every number that rests on an estimate is
 //                  counted in the output: the manifest holds sizes, not content or source paths.
 //   ledger         the ledger carry rule (skills/handoff/scripts/lib/ledger.mjs, D5) applied to every
-//                  document that has a ledger with a row, as if a new handoff were written from it:
-//                  the Epic is the one of the document's LAST row, every unfinished row (anything but
+//                  document that has a ledger with a row, as if a new handoff were written from it
+//                  (a ledger with no Epic column names no Epic and is only counted; a row whose Epic
+//                  cell is empty is taken as the chosen Epic's and counted): the Epic is the one of
+//                  the document's LAST row, every unfinished row (anything but
 //                  `done` / `dropped`, values outside the enum included) is carried, plus the last 5
 //                  finished rows. Reports (a) the carried rows against the Epic's rows (median / P90 /
 //                  max over the ledger documents) and the documents over 100 rows — by table rows and by
@@ -545,11 +547,17 @@ const statusLabel = (v) => (v === null ? '<missing>' : v === '' ? '<empty>' : /^
 
 function ledgerCarry(docs) {
   const per = []
+  let noEpicColumn = 0
   for (const d of docs) {
     const rows = d.parsed && d.parsed.ledger ? d.parsed.ledger.rows : []
     if (!rows.length) continue
-    const epic = rows[rows.length - 1].epic ?? ''
-    const mine = rows.filter((r) => (r.epic ?? '') === epic)
+    const epic = rows[rows.length - 1].epic
+    if (epic === null) {
+      noEpicColumn++ // a ledger with no Epic column names no Epic: nothing is carried from it, and none is proposed
+      continue
+    }
+    // the chosen Epic's rows: those that name it, and those whose Epic cell is empty (carried as its rows)
+    const mine = rows.filter((r) => r.epic === epic || r.epic === '')
     const out = carryLedger(rows, epic, { keepDone: KEEP_DONE })
     const isOpen = (r) => !MEASURE_FINISHED.includes(r.status)
     const unfinished = mine.filter(isOpen).length
@@ -562,9 +570,10 @@ function ledgerCarry(docs) {
       unfinished,
       finished: mine.length - unfinished,
       unfinishedAfter: out.rows.filter(isOpen).length,
-      ruleHolds: carried === unfinished + Math.min(KEEP_DONE, mine.length - unfinished) && out.rows.every((r) => (r.epic ?? '') === epic),
-      epics: new Set(rows.map((r) => r.epic ?? '')).size,
-      otherUnfinished: rows.filter((r) => (r.epic ?? '') !== epic && isOpen(r)).length,
+      ruleHolds: carried === unfinished + Math.min(KEEP_DONE, mine.length - unfinished) && out.rows.every((r) => r.epic === epic),
+      epics: new Set(rows.map((r) => r.epic).filter((e) => e)).size,
+      otherUnfinished: rows.filter((r) => r.epic !== epic && r.epic !== '' && isOpen(r)).length,
+      emptyEpic: rows.filter((r) => r.epic === '').length,
       unknown: rows.map((r) => r.status).filter((v) => !MEASURE_ENUM.includes(v)),
       unknownCarried: out.unknownStatusRows,
     })
@@ -607,6 +616,8 @@ function ledgerCarry(docs) {
       onlyChosenEpic: multi.filter((p) => p.ruleHolds).length,
       otherEpicUnfinishedRows: multi.reduce((a, p) => a + p.otherUnfinished, 0),
     },
+    emptyEpic: { documents: per.filter((p) => p.emptyEpic).length, rows: per.reduce((a, p) => a + p.emptyEpic, 0) },
+    noEpicColumn,
     unknownStatus: {
       documents: per.filter((p) => p.unknown.length).length,
       rows: per.reduce((a, p) => a + p.unknown.length, 0),
@@ -633,6 +644,7 @@ function ledgerCarry(docs) {
     `(c) documents that hold several Epics: ${m.documents}${ids(m.ids)}; only the chosen Epic's rows come out in ${m.onlyChosenEpic}; ${m.otherEpicUnfinishedRows} unfinished rows of the other Epics stay behind`,
     `(d) Status values outside the enum: ${k.documents} documents, ${k.rows} rows (${k.rowsCarried} of them in the carried Epic, carried as unfinished)`,
     ...Object.entries(k.values).map(([v, c]) => `    ${v}: ${c.documents} documents, ${c.rows} rows`),
+    `(e) rows with an empty Epic cell: ${data.emptyEpic.documents} documents, ${data.emptyEpic.rows} rows (carried as the chosen Epic's); ledgers with no Epic column, set aside: ${noEpicColumn}`,
   ]
   return { data, lines }
 }
