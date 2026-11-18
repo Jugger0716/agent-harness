@@ -26,8 +26,8 @@ Gather, in this order:
      `head` is null (no repository, or no commit yet).
    - `Worktree` — `toplevel`, or `n/a` when `isGit` is false.
    - `Dirty` — `clean` when `dirty` is empty, else `N files` (the length of `dirty`) and, only
-     then, the `Dirty files` line: the `path` of the first 40 entries joined with `; `, then
-     `+N more` for the rest.
+     then, the `Dirty files` line: the `path` of the first 40 entries joined with `; ` (a path
+     whose name contains `; ` is wrapped in a backtick pair), then `+N more` for the rest.
    - `Upstream` — `ahead A, behind B` from `upstream`, or `n/a` when it is null.
 2. **Harness task state (READ-ONLY):** run
 

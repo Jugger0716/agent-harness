@@ -7,7 +7,9 @@
 //
 //   gitState(cwd) -> { isGit, toplevel, branch, head, subject, dirty: [{ status, path }],
 //                      upstream: { ahead, behind } | null }
-//     Not inside a git work tree -> isGit false and every other field null / [] (exit 0 upstream).
+//     Not inside a git work tree -> isGit false and every other field null / []. A folder that git
+//     cannot read although a `.git` entry sits at or above it (a damaged repository, a refused
+//     owner) is an ERROR, never "not a repository" — that answer would be written into a handoff.
 //     `branch` is "(detached)" for a detached HEAD; `head` and `subject` are null before the first
 //     commit; `status` is the two-letter porcelain code ("??" untracked, " M" modified, "A " added);
 //     `path` is relative to `toplevel` with forward slashes; EVERY changed path is listed, untracked
@@ -24,19 +26,24 @@
 //                           head: { relation, ahead: [{ sha, subject }], more },
 //                           dirty: { currentCount, lost[], committedSince[], stillDirty[] },
 //                           skipped[] }
-//     `parsed` is parseHandoff()'s result. The state is read from the recorded Worktree when the
-//     document names one that is still a git work tree (`viaWorktree` is true when that is another
-//     work tree than the one `cwd` is in), else from `cwd`. A recorded Worktree that is gone, or a
-//     `cwd` that is not a git work tree, compares nothing: `skipped` carries the reason, `same` is
-//     null and the relation "unknown", so no alarm can come from it.
+//     `parsed` is parseHandoff()'s result. The document is DATA: git is never run in a folder it
+//     names unless that folder is one of the work trees `git worktree list` gives for `cwd`'s own
+//     repository (the recorded path must be absolute, and is matched by real path). Then the state is
+//     read from it (`viaWorktree` is true when that is another work tree than the one `cwd` is in);
+//     otherwise from `cwd`. A recorded Worktree that fails that check, is gone, or cannot be checked
+//     because `cwd` is not a git work tree compares nothing: `skipped` carries the reason (and how
+//     many recorded dirty paths could not be checked), `same` is null and the relation "unknown".
 //     relation: "same" | "forward" (HEAD is ahead of the recorded commit; `ahead` lists the commits
 //     newest first, at most 20, `more` is how many were left out) | "backward" (HEAD is an ancestor
 //     of the recorded commit) | "diverged" (neither) | "unknown" (no recorded commit, or one this
 //     clone does not have; `skipped` says which).
 //     dirty: each path the document recorded as dirty is `stillDirty` (it is dirty now; a recorded
 //     folder counts when something below it is), else `committedSince` (a commit after the recorded
-//     one touched it), else `lost` (clean now and no commit touched it: the uncommitted work is gone).
-//     With relation "unknown" a clean path cannot be told from a committed one, so it is neither.
+//     one touched it), else `lost` (clean now and no commit on THIS branch since the recorded commit
+//     touched it — the work may sit in a stash or on another branch). A rename counts its original
+//     path as dirty too. With relation "unknown" a clean path cannot be told from a committed one, so
+//     it is neither; a path outside the repository (absolute, or with a `..` segment) or one git
+//     cannot check is skipped, never `lost`.
 import fs from 'node:fs'
 import path from 'node:path'
 import { spawnSync } from 'node:child_process'
@@ -44,21 +51,37 @@ import { InputError } from './errors.mjs'
 
 const AHEAD_CAP = 20
 
+// Variables that point git at a repository other than the one `cwd` is in; a helper run from a git hook
+// or a wrapper inherits them. GIT_CEILING_DIRECTORIES stays: it can only make discovery stop earlier
+// (never point git somewhere else) and a caller may set it on purpose. GIT_CONFIG_* stay for the same
+// reason — they are the caller's own settings.
+const REDIRECTING = ['GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE', 'GIT_COMMON_DIR', 'GIT_OBJECT_DIRECTORY', 'GIT_ALTERNATE_OBJECT_DIRECTORIES', 'GIT_NAMESPACE', 'GIT_PREFIX']
+
+function gitEnv() {
+  const env = {}
+  for (const [k, v] of Object.entries(process.env)) if (!REDIRECTING.includes(k.toUpperCase())) env[k] = v
+  env.GIT_OPTIONAL_LOCKS = '0'
+  return env
+}
+
 // One git call, read-only by construction (callers pass only the read-only subcommands above).
 // `--literal-pathspecs` makes a path from a document a name, never a pathspec with magic or a glob;
 // `GIT_OPTIONAL_LOCKS=0` keeps `status` from rewriting the index to refresh it; the fsmonitor setting
-// is switched off because a repository's own configuration must not run a program on a read.
-function git(cwd, args) {
+// is switched off because a repository's own configuration must not run a program on a read. None of
+// that makes an arbitrary repository safe to run `status` in — which is why drift never runs git in a
+// folder a document names unless the session's own repository lists it as one of its work trees.
+export function runGit(cwd, args) {
   const r = spawnSync('git', ['--literal-pathspecs', '-c', 'core.fsmonitor=false', ...args], {
     cwd,
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe'],
-    env: { ...process.env, GIT_OPTIONAL_LOCKS: '0' },
+    env: gitEnv(),
     maxBuffer: 256 * 1024 * 1024,
   })
   if (r.error) throw new Error(`cannot run git: ${r.error.code || r.error.message}`)
-  return { ok: r.status === 0, status: r.status, out: r.stdout }
+  return { ok: r.status === 0, status: r.status, out: r.stdout, err: r.stderr }
 }
+const git = runGit
 
 export function requireFolder(dir, what) {
   let st
@@ -87,7 +110,7 @@ const NOT_GIT = () => ({ isGit: false, toplevel: null, branch: null, head: null,
 // headers, `1` ordinary and `u` unmerged entries, `2` renames (the old name is the NEXT record), and
 // `?` untracked. The path is the rest of the record after its fixed fields, so it may hold spaces.
 function readStatus(text) {
-  const out = { oid: null, head: null, ab: null, dirty: [] }
+  const out = { oid: null, head: null, ab: null, dirty: [], renamedFrom: [] }
   const recs = text.split('\0')
   const fieldsBefore = { 1: 8, 2: 9, u: 10 }
   for (let i = 0; i < recs.length; i++) {
@@ -109,15 +132,60 @@ function readStatus(text) {
       const n = fieldsBefore[rec[0]]
       const xy = parts[1].replace(/\./g, ' ')
       out.dirty.push({ status: xy, path: parts.slice(n).join(' ') })
-      if (rec[0] === '2') i++ // the original name of a rename or copy
+      if (rec[0] === '2') out.renamedFrom.push(recs[++i]) // the original name of a rename or copy
     }
   }
   return out
 }
 
-export function gitState(cwd) {
+// The key two folders are compared by: real path, case-folded on Windows.
+function folderKey(p) {
+  let r
+  try {
+    r = fs.realpathSync.native(p)
+  } catch {
+    r = path.resolve(p)
+  }
+  return process.platform === 'win32' ? r.toLowerCase() : r
+}
+
+// Does `.git` in `d` look like a repository that git failed to read: a gitfile (a linked worktree or a
+// submodule), or a folder that holds a HEAD? An empty or stray `.git` folder is not one — git itself
+// walks past it.
+function hasGitEntry(d) {
+  const entry = path.join(d, '.git')
+  try {
+    return fs.statSync(entry).isFile() || fs.existsSync(path.join(entry, 'HEAD'))
+  } catch {
+    return false
+  }
+}
+
+// The nearest folder at or above `dir` that holds such a `.git` entry, stopping where git itself would (it
+// does not climb into a GIT_CEILING_DIRECTORIES folder); null when there is none.
+function gitEntryAt(dir) {
+  const ceilings = (process.env.GIT_CEILING_DIRECTORIES || '').split(path.delimiter).filter(Boolean).map(folderKey)
+  let d = path.resolve(dir)
+  for (;;) {
+    if (hasGitEntry(d)) return d
+    const up = path.dirname(d)
+    if (up === d || ceilings.includes(folderKey(up))) return null
+    d = up
+  }
+}
+
+// -> { state, renamedFrom }: `state` is what git-state prints; `renamedFrom` are the original names of the
+// renames in it, which drift counts as dirty without listing them (a rename is ONE entry of the output).
+function readGitState(cwd) {
   const top = git(cwd, ['rev-parse', '--show-toplevel'])
-  if (!top.ok || top.out.trim() === '') return NOT_GIT()
+  if (!top.ok || top.out.trim() === '') {
+    const holder = gitEntryAt(cwd)
+    if (holder) {
+      const why = top.err.split('\n').find((l) => l.trim() !== '') || 'no reason given'
+      throw new Error(`git cannot read the repository at ${holder}: ${why.trim()}`)
+    }
+    return { state: NOT_GIT(), renamedFrom: [] }
+  }
   const toplevel = path.resolve(top.out.trim())
   // Every later call runs at the top: porcelain paths are relative to it, and so must be the paths
   // handed to `git log -- <path>`.
@@ -130,16 +198,11 @@ export function gitState(cwd) {
     const log = git(toplevel, ['log', '-1', '--format=%s', head])
     subject = log.ok ? log.out.replace(/\r?\n$/, '') : null
   }
-  return {
-    isGit: true,
-    toplevel,
-    branch: s.head,
-    head,
-    subject,
-    dirty: s.dirty,
-    upstream: s.ab,
-  }
+  const state = { isGit: true, toplevel, branch: s.head, head, subject, dirty: s.dirty, upstream: s.ab }
+  return { state, renamedFrom: s.renamedFrom }
 }
+
+export const gitState = (cwd) => readGitState(cwd).state
 
 // ---- harness-state ----------------------------------------------------------------------------------
 
@@ -178,18 +241,28 @@ export function harnessState(cwd, branch) {
 
 const slash = (p) => String(p).replace(/\\/g, '/')
 
-// Is `dir` the same folder as `other`? (real paths, case-folded on Windows)
-function sameFolder(dir, other) {
-  const key = (p) => {
-    let r
-    try {
-      r = fs.realpathSync.native(p)
-    } catch {
-      r = path.resolve(p)
-    }
-    return process.platform === 'win32' ? r.toLowerCase() : r
+const sameFolder = (dir, other) => folderKey(dir) === folderKey(other)
+
+// An absolute path in the document's own spelling: a drive letter, a UNC name, or (off Windows) a leading
+// slash. A drive-relative or rooted-without-drive path on Windows is not: it depends on where the helper runs.
+const isAbsolutePath = (p) => /^[A-Za-z]:[\\/]/.test(p) || /^\\\\[^\\]/.test(p) || (process.platform !== 'win32' && p.startsWith('/'))
+
+// A recorded dirty path git cannot be asked about: it leaves the repository (absolute, or a `..` segment).
+const leavesRepository = (p) => p.includes('\0') || p.startsWith('/') || /^[A-Za-z]:/.test(p) || p.split('/').includes('..')
+
+// The work trees of the repository `top` belongs to, as git lists them (the main tree included).
+// [] when git cannot say, so nothing counts as verified.
+function listWorktrees(top) {
+  let r = git(top, ['worktree', 'list', '--porcelain', '-z'])
+  let recs
+  if (r.ok) {
+    recs = r.out.split('\0')
+  } else {
+    r = git(top, ['worktree', 'list', '--porcelain']) // a git without -z
+    if (!r.ok) return []
+    recs = r.out.split('\n')
   }
-  return key(dir) === key(other)
+  return recs.filter((x) => x.startsWith('worktree ')).map((x) => x.slice('worktree '.length).replace(/\r$/, ''))
 }
 
 function isFolder(p) {
@@ -223,24 +296,43 @@ export function drift(parsed, cwd) {
     skipped,
   }
 
-  // Where the state is read: the recorded worktree when the document names one that still exists.
-  let state = gitState(cwd)
-  if (h.worktree) {
-    let there = null
-    if (isFolder(h.worktree)) there = gitState(h.worktree)
-    // The recorded folder must itself be the top of a work tree: an empty folder that now sits inside
-    // some other repository is not the worktree the document was written in.
-    if (!there || !there.isGit || !sameFolder(there.toplevel, h.worktree)) {
-      skipped.push(`the worktree the document recorded (${h.worktree}) no longer exists or is not a git work tree — git state not compared`)
-      return result
-    }
-    result.branch.viaWorktree = !(state.isGit && sameFolder(there.toplevel, state.toplevel))
-    state = there
-  }
-  if (!state.isGit) {
-    skipped.push('the current folder is not inside a git work tree — git state not compared')
+  // A comparison that cannot be made: say why, and say what it leaves unchecked. Nothing here is an alarm.
+  const skip = (reason) => {
+    skipped.push(reason)
+    if (h.dirtyPaths.length > 0) skipped.push(`${h.dirtyPaths.length} recorded dirty path(s) cannot be checked — not reported as lost`)
     return result
   }
+
+  // Where the state is read: the session's own folder, unless the document names a work tree of THIS
+  // repository. The recorded path is data, and git runs in it only after the repository's own list of work
+  // trees has vouched for it (a folder of another repository can carry a configuration that runs a program
+  // on a plain `status`, and would answer the comparison with someone else's branch).
+  const here = readGitState(cwd)
+  let state = here.state
+  let renamedFrom = here.renamedFrom
+  if (h.worktree) {
+    if (!isAbsolutePath(h.worktree)) {
+      return skip(`the worktree the document recorded (${h.worktree}) is not an absolute path — not opened, git state not compared`)
+    }
+    if (!state.isGit) {
+      return skip(`the current folder is not inside a git work tree, so the worktree the document recorded (${h.worktree}) cannot be checked against it — not opened, git state not compared`)
+    }
+    const listed = listWorktrees(state.toplevel).find((w) => sameFolder(w, h.worktree))
+    if (listed === undefined) {
+      return skip(`the worktree the document recorded (${h.worktree}) is not one of this repository's work trees, or it no longer exists — not opened, git state not compared`)
+    }
+    if (!isFolder(listed)) {
+      return skip(`the worktree the document recorded (${h.worktree}) no longer exists — git state not compared`)
+    }
+    const there = readGitState(listed)
+    if (!there.state.isGit) {
+      return skip(`the worktree the document recorded (${h.worktree}) is no longer a git work tree — git state not compared`)
+    }
+    result.branch.viaWorktree = !sameFolder(there.state.toplevel, state.toplevel)
+    state = there.state
+    renamedFrom = there.renamedFrom
+  }
+  if (!state.isGit) return skip('the current folder is not inside a git work tree — git state not compared')
   const dir = state.toplevel
   result.branch.current = state.branch
 
@@ -280,23 +372,35 @@ export function drift(parsed, cwd) {
   }
 
   // the work that was uncommitted when the document was written
-  const current = new Set(state.dirty.map((d) => d.path))
+  // (A rename's original name is dirty too: its edit is staged under the new name.)
+  const current = new Set([...state.dirty.map((d) => d.path), ...renamedFrom])
   result.dirty.currentCount = state.dirty.length
   let undecided = 0
+  let outside = 0
+  let unchecked = 0
   for (const raw of h.dirtyPaths) {
     const p = slash(raw)
-    if (stillDirty(p, current)) {
+    if (leavesRepository(p)) {
+      outside++
+    } else if (stillDirty(p, current)) {
       result.dirty.stillDirty.push(raw)
     } else if (relation === 'unknown') {
       undecided++
     } else {
       const touched = git(dir, ['log', '-1', '--format=%H', `${full}..${state.head}`, '--', p])
-      if (touched.ok && touched.out.trim() !== '') result.dirty.committedSince.push(raw)
+      if (!touched.ok) unchecked++
+      else if (touched.out.trim() !== '') result.dirty.committedSince.push(raw)
       else result.dirty.lost.push(raw)
     }
   }
   if (undecided > 0) {
     skipped.push(`${undecided} recorded dirty path(s) are clean now, and without the recorded commit "committed since" cannot be told from "lost" — not reported as lost`)
+  }
+  if (outside > 0) {
+    skipped.push(`${outside} recorded dirty path(s) are outside the repository (an absolute path or a ".." segment) — not checked`)
+  }
+  if (unchecked > 0) {
+    skipped.push(`git could not check ${unchecked} recorded dirty path(s) — not reported as lost`)
   }
   return result
 }

@@ -24,7 +24,7 @@
 // in a sub-folder of its repository, and its entries are then relative to the top-level). A document
 // with neither takes the session's folder (the caller's `--root`) as its one root.
 import path from 'node:path'
-import { execFileSync } from 'node:child_process'
+import { runGit } from './git.mjs'
 
 const SHORT_GIT = /^git~\d+$/i
 const isGitSegment = (seg) => seg.replace(/[. ]+$/, '').toLowerCase() === '.git' || SHORT_GIT.test(seg)
@@ -81,13 +81,12 @@ export function deriveRepoRoot(docPath) {
   }
 }
 
-// `git rev-parse --show-toplevel` run in `dir`; null outside a repository or without git.
+// `git rev-parse --show-toplevel` run in `dir` (git.mjs's runner: the same environment and options as every
+// other git call of the helper); null outside a repository, in a folder that does not exist, or without git.
 export function gitTopLevel(dir) {
   try {
-    const out = execFileSync('git', ['-C', dir, 'rev-parse', '--show-toplevel'], {
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'ignore'],
-    }).trim()
+    const r = runGit(dir, ['rev-parse', '--show-toplevel'])
+    const out = r.ok ? r.out.trim() : ''
     return out ? path.resolve(out) : null
   } catch {
     return null

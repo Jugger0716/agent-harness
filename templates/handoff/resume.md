@@ -26,10 +26,13 @@ node "{HANDOFF_JS}" drift --doc "<the document located in Step 1>" --cwd "."
 
 `{HANDOFF_JS}`, the quoting and a non-zero exit are stated once, in Step 4 below: show the
 script's stderr verbatim and stop. `.` is the session's current working directory. The output is
-one JSON object: `branch`, `head`, `dirty` and `skipped`. When the document's `Worktree` header
-names a folder that still is a git work tree, the script reads branch, HEAD and working tree THERE
-(`viaWorktree` in `branch` is true when that is another work tree than the session's), so a
-document written in a linked worktree and resumed from the main tree is not a branch mismatch.
+one JSON object: `branch`, `head`, `dirty` and `skipped`. When the document's `Worktree` header is
+an absolute path that is one of this repository's work trees — the script checks it against the
+repository's own list of work trees and never opens any other folder — the script reads branch,
+HEAD and working tree THERE (`viaWorktree` in `branch` is true when that is another work tree than
+the session's), so a document written in a linked worktree and resumed from the main tree is not a
+branch mismatch. Any other `Worktree` (a relative path, a folder of another repository, one that is
+gone), and a session folder that is not a git work tree, compares nothing: `skipped` says why.
 Report, in this order:
 
 1. **Branch.** `branch.same` is false → say so explicitly (`branch.recorded` vs `branch.current`);
@@ -48,11 +51,12 @@ Report, in this order:
      commit alone would prove nothing about rewrites (rebased-away commits survive in the object
      store for weeks); the relationship above is the real detector.
 3. **Uncommitted work.** `dirty.currentCount` above 0 → note a dirty working tree. Then the
-   paths the document recorded as dirty:
-   - `dirty.lost` → **was dirty when recorded, now gone**: clean now, and no commit since the
-     recorded HEAD touched them, so the uncommitted work vanished (it may have been set aside,
-     for instance in a stash). Name every path, and say that nothing here restores it — the
-     human decides.
+   paths the document recorded as dirty (only the first 40 recorded dirty paths are checked —
+   `generate` records no more):
+   - `dirty.lost` → **was dirty when recorded, now gone**: not in the working tree now, and no
+     commit on this branch since the recorded HEAD touched them. The work may have been set aside
+     (a stash), committed on another branch, or discarded — name every path and ask the human to
+     check where it went; nothing here restores it.
    - `dirty.committedSince` → was dirty when recorded, committed since (information only).
    - `dirty.stillDirty` → still dirty.
 4. **`skipped`** — print every reason as it is (a worktree that is gone, a folder that is not a
@@ -76,9 +80,9 @@ folder, not `drift`'s `branch.current`, which is the recorded worktree's when `v
 or `n/a` when `isGit` is false. `{HANDOFF_JS}`, the quoting and a non-zero exit are as in Step 4.
 The output is one JSON object: `exists`, `relevant`, `reason` and `fields`. **`relevant` decides
 everything below.** It is true only when `.harness/state.json` exists, its `branch` equals the
-current branch and its `phase` is not `completed`; a state that is not relevant belongs to another
-branch or to a finished task. For it there is no phase comparison, no `/harness` re-entry hint, and
-the `Docs` tier of Step 5's `Next :` derivation is off.
+current branch and its `phase` is not `completed`. A state that is not relevant belongs to another
+branch or to a finished task: no phase comparison against it, no `/harness` re-entry hint, and the
+`Docs` tier of Step 5's `Next :` derivation is off.
 
 What the document records about a harness task is one of three things, read from its `## In Progress`
 section:
@@ -94,11 +98,12 @@ section:
 
 For the second and third, items 1-3 below (they need a recorded `Phase` or `Docs` value to compare
 against) are skipped and these two checks run instead — a dead `docs_path` recorded only in prose must
-still be reported, never silently passed over:
+still be reported, never silently passed over; item 4 below still applies to both:
   (a) **`.harness/state.json` existence** — always reported. If `exists`, show `fields.skill` and
       `fields.phase` as INFORMATION only (there is nothing recorded in the document to compare them
-      against — no match/mismatch verdict, and no re-entry hint); `fields` is null when the file
-      could not be read, and `reason` then says so.
+      against — no match/mismatch verdict; the `/harness` re-entry note is item 4's, decided by
+      `relevant` alone); `fields` is null when the file could not be read, and `reason` then says
+      so.
   (b) **Prose-recorded path check** — scan the document's `## In Progress` and `## Reading Order`
       section bodies for `docs/harness/<slug>/`-shaped paths. Apply conditions 1–3 of the path rule
       Step 4 below states (they are this file's) first — a failing path is dropped with a warning and
@@ -199,8 +204,8 @@ node "{HANDOFF_JS}" next --doc "<the document located in Step 1>" --state-releva
 
 `{HANDOFF_JS}`, the quoting and a non-zero exit are as in Step 4: show the script's stderr
 verbatim and stop. Pass `true` only when Step 3.5's `harness-state` call returned `relevant` true;
-in every other case (a state that is not relevant, no state file, a document with no record) pass
-`false`. The output is one JSON object:
+in every other case (a state that is not relevant, no state file) pass `false`. The output is one
+JSON object:
 `slice`, `source` (`label`, `in-progress`, `docs` or `step-one`), `ambiguous` (a list) and
 `commandCandidates` (a list). The two derivations below say what each field means for the
 briefing.

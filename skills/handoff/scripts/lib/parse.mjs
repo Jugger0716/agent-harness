@@ -167,14 +167,33 @@ function readHeader(lines, flags, firstSection) {
 
 const stripTicks = (v) => v.replace(/^`+|`+$/g, '').trim()
 
-// `a; b c; +2 more` -> the paths. Items are split at a semicolon followed by white space (so a path
-// that holds a bare `;` stays whole), wrapping backticks are dropped, and `+N more` / `none` /
-// `clean` / `n/a` are markers, not paths.
+// `a; b c; `x; y.txt`; +2 more` -> the paths. An item is either a backtick pair (its content is the path,
+// whatever it holds — this is how a name that contains "; " is written; anything after the closing
+// backtick up to the next separator is a remark and dropped) or plain text up to a semicolon followed by
+// white space (so a path that holds a bare `;` stays whole). `+N more` / `none` / `clean` / `n/a` among the
+// plain items are markers, not paths.
 function pathsOfDirtyFiles(value) {
-  return value
-    .split(/\s*;\s+/)
-    .map(stripTicks)
-    .filter((p) => p !== '' && !/^\+\d+ more$/i.test(p) && !/^(none|clean|n\/a|-)$/i.test(p))
+  const out = []
+  const n = value.length
+  const isSeparator = (j) => value[j] === ';' && (j + 1 >= n || /\s/.test(value[j + 1]))
+  let i = 0
+  while (i < n) {
+    if (/\s/.test(value[i]) || value[i] === ';') {
+      i++
+      continue
+    }
+    const close = value[i] === '`' ? value.indexOf('`', i + 1) : -1
+    let j = close > i ? close + 1 : i
+    while (j < n && !isSeparator(j)) j++
+    if (close > i) {
+      if (close > i + 1) out.push(value.slice(i + 1, close))
+    } else {
+      const item = value.slice(i, j).trim()
+      if (item !== '' && !/^\+\d+ more$/i.test(item) && !/^(none|clean|n\/a|-)$/i.test(item)) out.push(item)
+    }
+    i = j + 1
+  }
+  return out
 }
 
 // `3 files (src/a.js, `docs/b.md`)` -> the paths, when the value has a parenthesised list and EVERY

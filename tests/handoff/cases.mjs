@@ -45,9 +45,17 @@ const fixtureText = (name) => fs.readFileSync(path.join(FIX, `${name}.md`), 'utf
 const viaJson = (v) => JSON.parse(JSON.stringify(v))
 const toCrlf = (s) => s.replace(/\n/g, '\r\n')
 
-function cli(...args) {
-  return spawnSync(process.execPath, [HANDOFF_JS, ...args], { encoding: 'utf8' })
+function cliEnv(env, ...args) {
+  return spawnSync(process.execPath, [HANDOFF_JS, ...args], { encoding: 'utf8', env: env ?? process.env })
 }
+
+function cli(...args) {
+  return cliEnv(undefined, ...args)
+}
+
+// An environment in which git never looks for a repository above `dir`: a case about "no repository" must not
+// depend on where the OS keeps its temporary folder.
+const noRepoAbove = (dir) => ({ ...process.env, GIT_CEILING_DIRECTORIES: dir })
 
 // `parse` through the command line, as JSON.
 function parseFixture(name) {
@@ -1495,8 +1503,8 @@ function withRepo(files, readingOrder, fn) {
   }
 }
 
-function plan(doc, budget = 1e9) {
-  const r = cli('reading-plan', '--doc', doc, '--budget', String(budget))
+function plan(doc, budget = 1e9, env = undefined) {
+  const r = cliEnv(env, 'reading-plan', '--doc', doc, '--budget', String(budget))
   assert.equal(r.status, 0, `exit ${r.status}: ${r.stderr}`)
   assert.equal(r.stderr, '')
   return JSON.parse(r.stdout)
@@ -2015,7 +2023,7 @@ const readingPlanCases = [
         const doc = path.join(dir, 'loose.md')
         fs.writeFileSync(doc, mk([['Reading Order', '1. `a.md` — a file next to the document']]))
         fs.writeFileSync(path.join(dir, 'a.md'), 'x\n')
-        const [e] = plan(doc).entries
+        const [e] = plan(doc, 1e9, noRepoAbove(dir)).entries
         assert.equal(e.status, 'skipped-invalid')
         assert.match(e.reason, /root/)
       } finally {
@@ -2607,6 +2615,183 @@ const driftCases = [
   },
 ]
 
+// ---- drift: a recorded Worktree is data, and what git cannot check is never reported as lost ---------------------------------
+
+// A repository whose own configuration would run a program on a plain `git status`: a clean-filter driver
+// that creates PWNED_FILTER next to the files. The precondition is checked, not assumed: the same `status`
+// run directly creates the marker, so a case that sees no marker later proves the helper never ran git there.
+async function withFilterRepo(fn) {
+  const { makeRepo } = await mkrepoLib()
+  const evil = makeRepo({ commits: [{ files: { '.gitattributes': '* filter=evil\n', 'a.txt': 'one\n' } }] })
+  try {
+    evil.git('config', 'filter.evil.clean', 'touch PWNED_FILTER && cat')
+    const marker = path.join(evil.dir, 'PWNED_FILTER')
+    const touchStat = (secs) => {
+      const when = new Date(Date.now() + secs * 1000)
+      fs.utimesSync(path.join(evil.dir, 'a.txt'), when, when)
+    }
+    touchStat(5)
+    evil.git('status', '--porcelain')
+    assert.ok(fs.existsSync(marker), 'precondition: a plain `git status` in this repository runs the filter')
+    fs.rmSync(marker)
+    touchStat(15) // the index entry is stale again, so the next `status` would hash the file once more
+    return await fn(evil, marker)
+  } finally {
+    evil.cleanup()
+  }
+}
+
+const driftSafetyCases = [
+  {
+    id: 'drift-worktree-of-an-unrelated-repository-is-never-opened',
+    run: async () => {
+      await withFilterRepo(async (evil, marker) => {
+        await withTemp({ commits: [{ files: { 'a.txt': 'one\n' } }] }, (r) => {
+          const d = driftIn(r, driftDoc({ branch: 'main', head: r.shas[0], worktree: evil.dir, dirtyFiles: ['a.txt'] }))
+          assert.ok(!fs.existsSync(marker), 'no program of the unrelated repository ran')
+          assert.ok(d.skipped.some((s) => s.includes(evil.dir)), `a reason naming the folder: ${d.skipped}`)
+          // and no false reassurance either: nothing was compared
+          assert.equal(d.branch.viaWorktree, false)
+          assert.equal(d.branch.same, null)
+          assert.equal(d.head.relation, 'unknown')
+          same(d.dirty, NO_DIRTY)
+        })
+      })
+    },
+  },
+  {
+    id: 'drift-worktree-is-skipped-when-the-current-folder-is-not-a-repository',
+    run: async () => {
+      await withFilterRepo(async (evil, marker) => {
+        await withTemp(null, (plain) => {
+          const d = driftIn(plain, driftDoc({ head: evil.shas[0], worktree: evil.dir, dirtyFiles: ['a.txt'] }), plain.dir)
+          assert.ok(!fs.existsSync(marker), 'no program of the recorded repository ran')
+          assert.ok(d.skipped.length >= 1)
+          assert.equal(d.branch.viaWorktree, false)
+          assert.equal(d.branch.same, null)
+          same(d.dirty, NO_DIRTY)
+        }, true)
+      })
+    },
+  },
+  {
+    id: 'drift-worktree-must-be-an-absolute-path',
+    run: async () => {
+      await withTemp({ commits: [{ message: 'one' }], worktree: { branch: 'feature' } }, (r) => {
+        // a relative path would be read from the helper's own working directory, which the document does not choose
+        for (const rel of ['.', '..', 'wt', path.join('..', 'wt')]) {
+          const d = driftIn(r, driftDoc({ branch: 'feature', head: r.shas[0], worktree: rel }))
+          assert.ok(d.skipped.some((s) => /absolute/.test(s)), `${rel}: a reason: ${d.skipped}`)
+          assert.equal(d.branch.viaWorktree, false, rel)
+          assert.equal(d.branch.same, null, rel)
+          same(d.dirty, NO_DIRTY)
+        }
+      })
+    },
+  },
+  {
+    id: 'drift-worktree-main-tree-from-a-linked-worktree',
+    run: async () => {
+      // the repository's own work-tree list holds the main tree too: a document written there is still found
+      await withTemp({ commits: [{ message: 'one' }], worktree: { branch: 'feature' } }, (r) => {
+        const d = driftIn(r, driftDoc({ branch: 'main', head: r.shas[0], worktree: r.dir }), r.worktreeDir)
+        same(d.branch, { recorded: 'main', current: 'main', same: true, viaWorktree: true })
+        same(d.skipped, [])
+      })
+    },
+  },
+  {
+    id: 'drift-a-skipped-comparison-says-how-many-recorded-paths-it-could-not-check',
+    run: async () => {
+      await withTemp({ commits: [{ files: { 'a.txt': 'one\n', 'b.txt': 'two\n' } }] }, (r) => {
+        const gone = path.join(r.root, 'removed-worktree')
+        const d = driftIn(r, driftDoc({ head: r.shas[0], worktree: gone, dirtyFiles: ['a.txt', 'b.txt'] }))
+        assert.ok(d.skipped.some((s) => /2 recorded dirty path/.test(s)), `the count: ${d.skipped}`)
+      })
+      await withTemp(null, (plain) => {
+        const d = driftIn(plain, driftDoc({ head: null, dirtyFiles: ['a.txt'] }), plain.dir)
+        assert.ok(d.skipped.some((s) => /1 recorded dirty path/.test(s)), `the count: ${d.skipped}`)
+      }, true)
+    },
+  },
+  {
+    id: 'drift-dirty-rename-keeps-its-original-path-dirty',
+    run: async () => {
+      const text = Array.from({ length: 10 }, (_, i) => `line ${i + 1} of the file`).join('\n') + '\n'
+      await withTemp({ commits: [{ files: { 'a.txt': text } }], dirty: { 'a.txt': text.replace('line 10', 'LINE 10') } }, (r) => {
+        const doc = driftDoc({ head: r.shas[0], dirtyFiles: ['a.txt'] })
+        r.git('add', 'a.txt')
+        r.git('mv', 'a.txt', 'b.txt') // the edit travels with the rename: it is staged under the new name
+        assert.equal(gitStateIn(r).dirty.find((d) => d.path === 'b.txt').status, 'R ')
+        const d = driftIn(r, doc)
+        same(d.dirty.lost, [])
+        same(d.dirty.stillDirty, ['a.txt'])
+        same(d.dirty.committedSince, [])
+        assert.equal(d.dirty.currentCount, 1) // git-state's list is unchanged: one entry for the rename
+      })
+    },
+  },
+  {
+    id: 'drift-dirty-paths-git-cannot-check-are-skipped-not-lost',
+    run: async () => {
+      await withTemp({ commits: [{ files: { 'a.txt': '1\n', 'sub/b.txt': '2\n' } }], dirty: { 'a.txt': 'x\n' } }, (r) => {
+        const outside = ['../outside.txt', 'C:/Windows/win.ini', '/etc/hosts', 'sub/../a.txt']
+        const d = driftIn(r, driftDoc({ head: r.shas[0], dirtyFiles: [...outside, 'a.txt'] }))
+        same(d.dirty.lost, [])
+        same(d.dirty.committedSince, [])
+        same(d.dirty.stillDirty, ['a.txt'])
+        assert.ok(d.skipped.some((s) => /4 recorded dirty path/.test(s) && /outside the repository/.test(s)), `skipped: ${d.skipped}`)
+      })
+    },
+  },
+]
+
+// ---- git-state: the environment and a repository git cannot read ---------------------------------------------------------------
+
+const gitEnvCases = [
+  {
+    id: 'git-state-ignores-a-git-dir-inherited-from-the-environment',
+    run: async () => {
+      await withTemp({ commits: [{ message: 'mine' }] }, async (r) => {
+        await withTemp({ commits: [{ message: 'theirs' }] }, (other) => {
+          other.git('checkout', '-q', '-b', 'other-branch')
+          const env = { ...r.env, GIT_DIR: path.join(other.dir, '.git'), GIT_INDEX_FILE: path.join(other.dir, '.git', 'index') }
+          const res = spawnSync(process.execPath, [HANDOFF_JS, 'git-state', '--cwd', r.dir], { encoding: 'utf8', env })
+          assert.equal(res.status, 0, res.stderr)
+          const s = JSON.parse(res.stdout)
+          assert.equal(s.branch, 'main')
+          assert.equal(s.head, r.shas[0])
+          assert.equal(s.subject, 'mine')
+          assert.equal(real(s.toplevel), real(r.dir))
+        })
+      })
+    },
+  },
+  {
+    id: 'git-state-a-repository-git-cannot-read-is-an-error-not-a-non-repository',
+    run: async () => {
+      await withTemp({ commits: [{ message: 'one' }] }, (r) => {
+        fs.writeFileSync(path.join(r.dir, '.git', 'HEAD'), 'garbage, not a ref\n')
+        for (const cwd of [r.dir, path.join(r.dir, 'sub')]) {
+          fs.mkdirSync(cwd, { recursive: true })
+          const res = spawnSync(process.execPath, [HANDOFF_JS, 'git-state', '--cwd', cwd], { encoding: 'utf8', env: r.env })
+          assert.equal(res.status, 2, `${cwd}: ${res.stdout}`)
+          assert.equal(res.stdout, '')
+          assert.ok(res.stderr.trim().length > 0 && /git/.test(res.stderr))
+        }
+      })
+      // a folder with no repository above it is still just "not a repository", and so is one under a stray,
+      // empty `.git` folder (git itself walks past that)
+      await withTemp(null, (plain) => {
+        assert.equal(gitStateIn(plain).isGit, false)
+        fs.mkdirSync(path.join(plain.dir, '.git'))
+        fs.mkdirSync(path.join(plain.dir, 'inner'))
+        assert.equal(gitStateIn(plain, path.join(plain.dir, 'inner')).isGit, false)
+      }, true)
+    },
+  },
+]
+
 // ---- reading-plan --root: the session folder as a last-resort root -----------------------------------------------
 
 const rootFallbackCases = [
@@ -2626,10 +2811,11 @@ const rootFallbackCases = [
         const doc = path.join(dir, 'loose', 'doc.md')
         fs.mkdirSync(path.dirname(doc))
         fs.writeFileSync(doc, mk([['Reading Order', '1. `src/a.md` — in the session folder\n2. `../elsewhere/b.md` — outside it\n3. `src/none.md` — missing']]))
-        const without = cli('reading-plan', '--doc', doc, '--budget', '1000000')
+        const env = noRepoAbove(dir)
+        const without = cliEnv(env, 'reading-plan', '--doc', doc, '--budget', '1000000')
         assert.equal(without.status, 0, without.stderr)
         assert.equal(JSON.parse(without.stdout).entries[0].status, 'skipped-invalid')
-        const r = cli('reading-plan', '--doc', doc, '--budget', '1000000', '--root', session)
+        const r = cliEnv(env, 'reading-plan', '--doc', doc, '--budget', '1000000', '--root', session)
         assert.equal(r.status, 0, r.stderr)
         const [a, b, none] = JSON.parse(r.stdout).entries
         assert.equal(a.status, 'read')
@@ -2641,7 +2827,7 @@ const rootFallbackCases = [
         fs.mkdirSync(path.dirname(repoDoc), { recursive: true })
         fs.writeFileSync(path.join(dir, 'repo', 'own.md'), 'own\n')
         fs.writeFileSync(repoDoc, mk([['Reading Order', '1. `own.md` — in the document repository\n2. `src/a.md` — only under --root']]))
-        const own = cli('reading-plan', '--doc', repoDoc, '--budget', '1000000', '--root', session)
+        const own = cliEnv(env, 'reading-plan', '--doc', repoDoc, '--budget', '1000000', '--root', session)
         assert.equal(own.status, 0, own.stderr)
         const [x, y] = JSON.parse(own.stdout).entries
         assert.equal(x.status, 'read')
@@ -2878,6 +3064,87 @@ const stateContractCases = [
       assert.ok(s.includes('`branch`') && s.includes('`phase`') && s.includes('`completed`'))
       for (const token of ['Skill :', 'Task :', 'Phase :', 'Mode :', 'Docs :']) assert.ok(text.includes(token), token)
       assert.equal(text.split('<!-- SYNC-WITH:').length - 1, 1, 'no new SYNC marker')
+    },
+  },
+]
+
+// ---- fix round: the sentences the review found to contradict each other or to claim too much -------------------------------------
+
+const fixRoundCases = [
+  {
+    id: 'parse-dirty-files-path-with-a-semicolon-roundtrips',
+    run: async () => {
+      // a name that holds "; " is written between backticks (generate Step 1 item 1) and read back whole
+      const paths = async (value) => (await parseText(`# HANDOFF — T\n\n**Dirty files:** ${value}\n\n## Goal\nx\n`)).header.dirtyPaths
+      same(await paths('`x; y.txt`; z.txt; `docs/a b.md`; +1 more'), ['x; y.txt', 'z.txt', 'docs/a b.md'])
+      same(await paths('a.txt; b;c.txt'), ['a.txt', 'b;c.txt']) // a bare `;` with no space after it is part of a name
+      same(await paths('`only; one.txt`'), ['only; one.txt'])
+    },
+  },
+  {
+    id: 'generate-contract-wraps-a-dirty-path-that-holds-a-semicolon',
+    run: async () => {
+      const step1 = between(readText('templates', 'handoff', 'generate.md'), '### Step 1', '### Step 2')
+      assert.match(step1, /contains `; `[^.]*backtick/)
+    },
+  },
+  {
+    id: 'resume-contract-uses-a-recorded-worktree-only-as-the-script-verifies-it',
+    run: async () => {
+      const step3 = between(readText('templates', 'handoff', 'resume.md'), '### Step 3 —', '### Step 3.5')
+      const flat = step3.replace(/\s+/g, ' ')
+      assert.match(flat, /absolute path/)
+      assert.match(flat, /one of this repository's work trees/)
+      assert.match(flat, /never opens any other folder/)
+      // what is not verified compares nothing, and says why
+      assert.match(flat, /compares nothing/)
+      assert.ok(flat.includes('`skipped`'))
+    },
+  },
+  {
+    id: 'resume-contract-does-not-claim-lost-work-vanished',
+    run: async () => {
+      const step3 = between(readText('templates', 'handoff', 'resume.md'), '### Step 3 —', '### Step 3.5')
+      const flat = step3.replace(/\s+/g, ' ')
+      // the script only looks at this branch since the recorded HEAD: other explanations stay open
+      assert.ok(!/vanished/.test(flat), 'the contract does not assert that the work vanished')
+      assert.match(flat, /on another branch/)
+      assert.match(flat, /stash/)
+      assert.match(flat, /discarded/)
+      assert.match(flat, /ask the human to check/i)
+      assert.ok(flat.includes('was dirty when recorded, now gone'))
+      // only what generate records can be checked
+      assert.match(flat, /first 40 recorded dirty paths/)
+      // no command that discards or moves work, in any form
+      assert.ok(!/git (stash|reset|clean|checkout|restore)/.test(flat))
+    },
+  },
+  {
+    id: 'resume-contract-has-one-rule-for-the-re-entry-hint',
+    run: async () => {
+      const text = readText('templates', 'handoff', 'resume.md')
+      const step35 = between(text, '### Step 3.5', '### Step 4')
+      // the reduced check (a) is information; the hint is item 4's, decided by `relevant` alone — for every kind of document
+      const a = between(step35, '(a) **', '(b) **')
+      assert.ok(!/no re-entry hint/i.test(a), 'check (a) must not forbid a hint that item 4 gives')
+      assert.match(step35.replace(/\s+/g, ' '), /item 4 below still applies/)
+      const flat = step35.replace(/\s+/g, ' ')
+      // every sentence that says there is NO hint is conditioned on `relevant`
+      const sentences = flat.split(/(?<=\.)\s+/).filter((x) => /re-entry/.test(x) && /\bno\b|\bnever\b|\bwithout\b/i.test(x))
+      assert.ok(sentences.length >= 1)
+      for (const x of sentences) assert.ok(/relevant/.test(x), `a "no hint" sentence that does not name relevance: ${x}`)
+      // item 4 gives the hint on `relevant` true and the harness skill, nothing about the document's record
+      const item4 = between(step35, '4. **Never auto-correct', null)
+      assert.match(item4, /`relevant` is true and `fields\.skill` is\s+`"harness"`/)
+    },
+  },
+  {
+    id: 'resume-contract-step-5-passes-only-the-relevance-verdict',
+    run: async () => {
+      const text = readText('templates', 'handoff', 'resume.md')
+      const step5 = between(text, '### Step 5', '**`Next :` derivation').replace(/\s+/g, ' ')
+      assert.match(step5, /`harness-state` call returned `relevant` true/)
+      assert.ok(!/document with no record/.test(step5), 'what the document records plays no part in the flag')
     },
   },
 ]
@@ -3183,10 +3450,13 @@ export const cases = [
   ...gitStateCases,
   ...harnessStateCases,
   ...driftCases,
+  ...driftSafetyCases,
+  ...gitEnvCases,
   ...rootFallbackCases,
   ...stateDiffCases,
   ...readingSimCases,
   ...contractCases,
   ...stateContractCases,
+  ...fixRoundCases,
   ...runnerCases,
 ]
