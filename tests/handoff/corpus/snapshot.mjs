@@ -7,7 +7,8 @@
 // are ignored). The documents are private work records: this tool never prints or stores a root
 // path or a repository name, no document is ever committed, and `--out` must be a new, empty
 // folder OUTSIDE this repository (the tool refuses a folder inside it). Nothing here is
-// CI-wired; it is run by hand.
+// CI-wired; it is run by hand. This is a test-side tool, so human-readable progress lines on
+// stdout are allowed.
 //
 // Usage:
 //   node tests/handoff/corpus/snapshot.mjs --roots <dir> [<dir> ...] --out <dir>
@@ -26,10 +27,12 @@
 // text starts with `Reading Order` (case-insensitive, first match). Item = a list line with at
 // most 3 leading spaces (`1.` / `1)` / `-` / `*`).
 //   - An item that starts with `이 문서` is the document itself (kind "self").
-//   - Otherwise the FIRST backtick-quoted token of the item is the candidate. A trailing hint is
-//     stripped before resolving — ` §heading`, a trailing `(...)`, then `:12-34` / `#L12-L34` —
-//     but `raw` keeps the token as written. The candidate counts as a file entry only if it has no
-//     whitespace, contains `/` or `.`, and has no glob character. Anything else is not an entry.
+//   - Otherwise the candidate is the FIRST backtick-quoted token of the item that looks like a file
+//     path; an earlier token that does not (a label, a command, a heading) is passed over. A
+//     trailing hint is stripped before the test and before resolving — ` §heading`, a trailing
+//     `(...)`, then `:12-34` / `#L12-L34` — but `raw` keeps the token as written. "Looks like a
+//     file path" = no whitespace, no glob character, and either a `/` (or `\`) or a file-extension
+//     ending (`.` followed by letters or digits only). An item with no such token has no entry.
 // Resolution, first existing candidate wins:
 //   1. an absolute path as written (`C:/`, `/`, `~`; `~` expands through os.homedir());
 //   2. relative to the repo root derived from the document's own location (the parent of the
@@ -39,12 +42,14 @@
 // audit's rule, `split('\n').length` (a count of LF bytes plus one). Unlike that audit, files of
 // 5,000,000 bytes or more are counted too (they are almost surely over the 2000-line cap and
 // dropping them would understate the over-cap share); `lines` is null only above 256 MiB.
-// The audit script (`docs/harness/v9-audit/scripts/handoff_corpus/agg.js`, gitignored — not a
-// public link) used the same entry rule but stripped hints in another order, so a
-// `path:12-34 §x` token kept its range there.
+// The earlier audit script (private) used a first-token rule and stripped hints in another order,
+// so a `path:12-34 §x` token kept its range there; this tool does neither.
 //
-// Exit codes: 0 ok, 1 runtime failure, 2 usage or structural problem (bad flag, missing root,
-// non-empty or in-repo `--out`, no document found).
+// A leading BOM is ignored when testing the first line.
+//
+// Exit codes: 0 ok; 1 input problem, with a one-line message and no usage banner (a root that is
+// not a folder, a non-empty or in-repo `--out`, no document found, or an I/O error); 2 usage or
+// internal error (a flag problem, printed with the usage banner, or an unexpected exception).
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -59,7 +64,25 @@ const LIST_ITEM = /^\s{0,3}(\d+[.)]|[-*])\s/
 // ---- parsing helpers (exported: measure.mjs and later tools reuse them) ----------------------
 
 export function isHandoffText(text) {
-  return text.split('\n', 1)[0].startsWith(HANDOFF_PREFIX)
+  return text.replace(/^﻿/, '').split('\n', 1)[0].startsWith(HANDOFF_PREFIX)
+}
+
+// An input problem (a bad root or `--out`, an unreadable corpus): exit 1 with the message only.
+export class InputError extends Error {}
+
+// Shared top-level handler. InputError and fs errors -> 1 (input/I-O problem; an fs error prints
+// its code only, never the path it failed on); anything else is an internal error -> 2.
+export function exitOnError(tool, e) {
+  if (e instanceof InputError) {
+    console.error(`${tool}: ${e.message}`)
+    process.exit(1)
+  }
+  if (e && e.code) {
+    console.error(`${tool}: ${e.code} (${e.syscall || 'fs'})`)
+    process.exit(1)
+  }
+  console.error(`${tool}: internal error: ${e && e.message ? e.message : e}`)
+  process.exit(2)
 }
 
 // Level-2 sections outside code fences: [{ heading, body: string[], line }]. The body excludes
@@ -87,8 +110,9 @@ export function stripHint(token) {
     .replace(/[:#]L?\d+(-L?\d+)?$/, '')
 }
 
+// No whitespace, no glob character, and a path separator or a file-extension ending.
 export function looksLikePath(p) {
-  return p.length > 0 && !/\s/.test(p) && /[/.\\]/.test(p) && !/[*{]/.test(p)
+  return p.length > 0 && !/\s/.test(p) && !/[*{]/.test(p) && (/[/\\]/.test(p) || /\.[A-Za-z0-9]+$/.test(p))
 }
 
 export function isAbsoluteRef(p) {
@@ -107,11 +131,14 @@ export function extractReadingOrder(text) {
       out.entries.push({ raw: '이 문서', kind: 'self', path: '' })
       continue
     }
-    const m = l.match(/`([^`]+)`/)
-    if (!m) continue
-    const raw = m[1].trim()
-    const p = stripHint(raw)
-    if (looksLikePath(p)) out.entries.push({ raw, kind: 'path', path: p })
+    for (const m of l.matchAll(/`([^`]+)`/g)) {
+      const raw = m[1].trim()
+      const p = stripHint(raw)
+      if (looksLikePath(p)) {
+        out.entries.push({ raw, kind: 'path', path: p })
+        break
+      }
+    }
   }
   return out
 }
@@ -225,14 +252,14 @@ function main(argv) {
   const out = path.resolve(args.out)
   const rel = path.relative(repoRoot, out)
   if (rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel))) {
-    usage('--out must be outside this repository (corpus data is never committed)')
+    throw new InputError('--out must be outside this repository (corpus data is never committed)')
   }
   if (fs.existsSync(out) && (!fs.statSync(out).isDirectory() || fs.readdirSync(out).length > 0)) {
-    usage('--out must be a new or empty folder')
+    throw new InputError('--out must be a new or empty folder')
   }
   const roots = args.roots.map((r, i) => {
     const abs = path.resolve(r)
-    if (!fs.existsSync(abs) || !fs.statSync(abs).isDirectory()) usage(`root #${i + 1} is not a folder`)
+    if (!fs.existsSync(abs) || !fs.statSync(abs).isDirectory()) throw new InputError(`root #${i + 1} is not a folder`)
     return abs
   })
 
@@ -257,7 +284,7 @@ function main(argv) {
     }
     console.log(`root #${ri + 1}: ${stat.handoff} handoff, ${stat.otherMd} other .md, ${stat.subdirs} sub-folders, ${stat.other} other files, ${stat.duplicate} duplicate`)
   })
-  if (!found.length) usage('no handoff document found in any root')
+  if (!found.length) throw new InputError('no handoff document found in any root')
 
   fs.mkdirSync(out, { recursive: true })
   const gitTopCache = new Map()
@@ -300,8 +327,6 @@ if (isMain()) {
   try {
     main(process.argv.slice(2))
   } catch (e) {
-    // An fs error message carries the path it failed on; print the code only (no paths are printed).
-    console.error(`snapshot: ${e && e.code ? `${e.code} (${e.syscall || 'fs'})` : e && e.message ? e.message : e}`)
-    process.exit(1)
+    exitOnError('snapshot', e)
   }
 }

@@ -9,7 +9,8 @@
 // Output: a Markdown table on stdout, or with --json an object { meta, metrics }. `--mtime-before`
 // keeps only documents whose manifest mtime is earlier than the given instant (a date-time without
 // an offset is read in local time); the table header and `meta` say so. Nothing here prints a
-// path or a name. Nothing is CI-wired; it is run by hand.
+// path or a name. Nothing is CI-wired; it is run by hand. This is a test-side tool, so
+// human-readable output on stdout is allowed.
 //
 // What is measured (the `Next :` origin metrics — in-progress / label / last row, and the
 // label-vs-in-progress disagreement count — are NOT here; the `Next :` derivation lives in
@@ -29,8 +30,9 @@
 //                            audit's basis (every existing file entry, absolute and `..` ones and
 //                            the document itself included) for comparison with its numbers.
 //   - ledger.*               documents with a `## Progress Ledger` section (heading must START
-//                            with `Progress Ledger`, case-sensitive), data rows of its first
-//                            table (the two header lines are skipped), documents over 50 / 100
+//                            with `Progress Ledger`, case-sensitive), data rows of its FIRST
+//                            table only — the first run of consecutive `|` lines outside code
+//                            fences, minus its two header lines — documents over 50 / 100
 //                            rows, documents with 2 or more `in-progress` rows (Status cell with a
 //                            surrounding `**`/`__` pair and then a backtick pair removed), and the
 //                            ledger section's share of document bytes.
@@ -41,13 +43,15 @@
 // even count is the mean of the middle two. Sizes are raw bytes. Line counts are the snapshot's
 // (`split('\n').length`).
 //
-// Exit codes: 0 ok, 1 a copy is missing or its sha256 differs from the manifest (the table is
-// still printed), 2 usage or structural problem.
+// Exit codes: 0 ok; 1 input problem — no or unreadable manifest.json, or a copy that is missing
+// or whose sha256 differs from the manifest (the table is still printed in that last case);
+// 2 usage or internal error (a flag problem, printed with the usage banner, or an unexpected
+// exception).
 import fs from 'node:fs'
 import path from 'node:path'
 import crypto from 'node:crypto'
 import { pathToFileURL } from 'node:url'
-import { splitSections, stripHint, isAbsoluteRef } from './snapshot.mjs'
+import { splitSections, stripHint, isAbsoluteRef, InputError, exitOnError } from './snapshot.mjs'
 
 export const LINE_CAP = 2000
 
@@ -83,6 +87,23 @@ export function stripCell(c) {
 const cells = (l) => l.trim().replace(/^\|/, '').replace(/\|$/, '').split(/(?<!\\)\|/).map((c) => c.trim())
 const FIXED_LABELS = ['Skill', 'Task', 'Phase', 'Mode', 'Docs']
 
+// The first run of consecutive `|` lines outside code fences (same fence toggle as splitSections).
+function firstTable(body) {
+  const run = []
+  let fence = false
+  for (const l of body) {
+    if (/^\s*(```|~~~)/.test(l)) {
+      fence = !fence
+      if (run.length) break
+      continue
+    }
+    if (fence) continue
+    if (/^\s*\|/.test(l)) run.push(l)
+    else if (run.length) break
+  }
+  return run
+}
+
 // -> { ledger: { present, rows, inProgress, bytes }, fixedAll, docsUnderHarness }
 export function parseFacts(text) {
   const secs = splitSections(text)
@@ -91,7 +112,7 @@ export function parseFacts(text) {
   if (pl) {
     facts.ledger.present = true
     facts.ledger.bytes = Buffer.byteLength(pl.body.join('\n'))
-    const tbl = pl.body.filter((l) => /^\s*\|/.test(l))
+    const tbl = firstTable(pl.body)
     if (tbl.length >= 2) {
       const hdr = cells(tbl[0]).map((h) => stripCell(h).toLowerCase())
       const iSt = hdr.indexOf('status')
@@ -121,12 +142,18 @@ export function isContractReadable(raw) {
 // Iterates the manifest's docs list (never the folder), re-hashes every copy.
 // -> { manifest, docs: [{ ...manifestEntry, text, facts }], problems: string[] }
 export function loadCorpus(dir) {
-  const manifest = JSON.parse(fs.readFileSync(path.join(dir, 'manifest.json'), 'utf8'))
-  if (manifest.schema !== 1 || !Array.isArray(manifest.docs)) throw new Error('unsupported manifest')
+  let manifest
+  try {
+    manifest = JSON.parse(fs.readFileSync(path.join(dir, 'manifest.json'), 'utf8'))
+  } catch (e) {
+    if (e instanceof SyntaxError) throw new InputError('manifest.json is not valid JSON')
+    throw e
+  }
+  if (!manifest || manifest.schema !== 1 || !Array.isArray(manifest.docs)) throw new InputError('unsupported manifest')
   const problems = []
   const docs = []
   for (const e of manifest.docs) {
-    if (!/^d\d+\.md$/.test(e.file)) throw new Error(`bad file name in manifest: ${e.id}`)
+    if (!/^d\d+\.md$/.test(e.file)) throw new InputError(`bad file name in manifest: ${e.id}`)
     let buf
     try {
       buf = fs.readFileSync(path.join(dir, e.file))
@@ -235,7 +262,7 @@ export function computeMetrics(docs) {
 
 function fmt(v) {
   if (v === null || v === undefined) return 'n/a'
-  if (typeof v === 'number') return Number.isInteger(v) ? v.toLocaleString('en-US') : String(v)
+  if (typeof v === 'number') return v.toLocaleString('en-US', { maximumFractionDigits: 1 })
   return String(v)
 }
 
@@ -271,7 +298,7 @@ function parseArgs(argv) {
 function main(argv) {
   const args = parseArgs(argv)
   const dir = path.resolve(args.corpus)
-  if (!fs.existsSync(path.join(dir, 'manifest.json'))) usage('no manifest.json in --corpus')
+  if (!fs.existsSync(path.join(dir, 'manifest.json'))) throw new InputError('no manifest.json in --corpus')
   const { manifest, docs, problems } = loadCorpus(dir)
   const cutoff = args.mtimeBefore === null ? null : Date.parse(args.mtimeBefore)
   const picked = cutoff === null ? docs : docs.filter((d) => d.mtimeMs < cutoff)
@@ -297,8 +324,6 @@ if (isMain()) {
   try {
     main(process.argv.slice(2))
   } catch (e) {
-    // An fs error message carries the path it failed on; print the code only (no paths are printed).
-    console.error(`measure: ${e && e.code ? `${e.code} (${e.syscall || 'fs'})` : e && e.message ? e.message : e}`)
-    process.exit(1)
+    exitOnError('measure', e)
   }
 }
