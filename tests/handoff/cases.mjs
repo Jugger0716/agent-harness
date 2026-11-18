@@ -4011,13 +4011,38 @@ const ledgerCarryCases = [
         same(sliceList(first), ['d2', 'd3', 'd4', 'd5', 'd6'])
         assert.equal(first.unattributedRows, 0)
         assert.equal(first.droppedDone, 2)
-        // another Epic's row is still not carried, and a ledger with no Epic column at all names no Epic: nothing, as before
+        // another Epic's row is still not carried; a blank row rides along only with a document that names THIS Epic somewhere
+        const named = carryDoc(put(dir, '2026-02-05-named.md', ledgerOf([row('b1', 'blocked', 'ep-b'), row('a1', 'done', 'ep-a'), ['', 's2', 'blocked', 'n/a', '']])), 'ep-a')
+        same(sliceList(named), ['a1', 's2'])
+        assert.equal(named.unattributedRows, 1)
         const other = carryDoc(put(dir, '2026-02-05-other.md', ledgerOf([row('b1', 'blocked', 'ep-b'), ['', 's2', 'blocked', 'n/a', '']])), 'ep-a')
-        same(sliceList(other), ['s2'])
+        same(other.rows, [])
+        assert.equal(other.unattributedRows, 0)
         const noColumn = put(dir, '2026-02-06-nocol.md', mk([['Progress Ledger', '| Slice | Status |\n|---|---|\n| s1 | blocked |\n| s2 | in-progress |']]))
         const none = carryDoc(noColumn, 'ep-a')
         same(none.rows, [])
         assert.equal(none.unattributedRows, 0)
+      })
+    },
+  },
+  {
+    id: 'ledger-carry-doc-mode-attaches-blank-epic-rows-only-to-an-epic-the-document-names',
+    run: async () => {
+      await inTmp((dir) => {
+        // an Epic the document does not name gets NO rows — the blank ones included — so `rows` empty still means "this document holds none of it"
+        const multi = put(dir, '2026-03-01-multi.md', ledgerOf([row('a1', 'in-progress', 'ep-a'), ['', 'x1', 'blocked', 'n/a', ''], row('b1', 'blocked', 'ep-b')]))
+        const zzz = carryDoc(multi, 'ep-zzz')
+        same(zzz.rows, [])
+        assert.equal(zzz.unattributedRows, 0)
+        assert.equal(zzz.doc, path.resolve(multi))
+        // a document that has only blank-Epic rows names no Epic at all
+        const blankOnly = put(dir, '2026-03-02-blank.md', ledgerOf([['', 'x1', 'in-progress', 'n/a', ''], ['', 'x2', 'blocked', 'n/a', '']]))
+        same(carryDoc(blankOnly, 'ep-a').rows, [])
+        assert.equal(carryDoc(blankOnly, 'ep-a').unattributedRows, 0)
+        // a named Epic takes the blank rows with it, each time it is asked for
+        same(sliceList(carryDoc(multi, 'ep-a')), ['a1', 'x1'])
+        same(sliceList(carryDoc(multi, 'ep-b')), ['x1', 'b1'])
+        assert.equal(carryDoc(multi, 'ep-a').unattributedRows, 1)
       })
     },
   },
@@ -4243,6 +4268,45 @@ const ledgerCarryCases = [
     },
   },
   {
+    id: 'orderDocs-reads-a-numbered-slug-as-a-collision-only-when-a-lower-sibling-exists',
+    run: async () => {
+      const { orderDocs } = await pathsLib()
+      const order = (docs) => orderDocs(docs).map((d) => d.name.replace('2026-11-19-', '').replace('.md', ''))
+      const at = (slug, mtimeMs) => ({ name: `2026-11-19-${slug}.md`, mtimeMs })
+      // `stage-2` has no lower sibling (no `stage`, no smaller suffix), so it is a name of its own, and `stage-3` is not made newer by its number
+      same(order([at('stage-2', 500), at('stage-3', 100), at('y', 300)]), ['stage-2', 'y', 'stage-3'])
+      same(order([at('stage-3', 100), at('y', 300), at('stage-2', 500)]), ['stage-2', 'y', 'stage-3'])
+      // two numbered names are two names: the mtime decides, whichever number was edited last
+      same(order([at('task-7', 50), at('task-8', 100)]), ['task-8', 'task-7'])
+      same(order([at('task-7', 100), at('task-8', 50)]), ['task-7', 'task-8'])
+      // `task-8` has `task-8-2` hanging on it, so it is a plain name and not the `-8` of `task`, although `task` exists
+      same(order([at('task', 10), at('task-8', 300), at('task-8-2', 100), at('z', 200)]), ['task-8-2', 'task-8', 'z', 'task'])
+      // a plain name with its suffixes is one slug: the suffix decides inside it, whatever the mtimes say
+      same(order([at('x', 900), at('x-2', 10), at('x-3', 20), at('y', 500)]), ['x-3', 'x-2', 'x', 'y'])
+    },
+  },
+  {
+    id: 'orderDocs-does-not-depend-on-the-order-of-the-input',
+    run: async () => {
+      const { orderDocs } = await pathsLib()
+      const permutations = (a) => (a.length <= 1 ? [a] : a.flatMap((x, i) => permutations([...a.slice(0, i), ...a.slice(i + 1)]).map((p) => [x, ...p])))
+      const at = (name, mtimeMs) => ({ name, mtimeMs })
+      const inputs = [
+        // collisions, numbered names, equal mtimes, two dates
+        [at('2026-11-19-x.md', 100), at('2026-11-19-x-2.md', 100), at('2026-11-19-y.md', 100), at('2026-11-19-stage-2.md', 100), at('2026-11-19-stage-3.md', 100), at('2026-11-18-z.md', 900)],
+        // mtimes that contradict the suffixes
+        [at('2026-11-19-a.md', 50), at('2026-11-19-b.md', 75), at('2026-11-19-a-2.md', 100), at('2026-11-19-a-3.md', 10), at('2026-11-19-task-8.md', 60), at('2026-11-19-task-8-2.md', 70)],
+        // a name with no date, a folder part, a missing mtime
+        [at('notes.md', 5), at('dir/2026-01-01-q.md', 1), at('dir\\2026-01-01-q-2.md', 1), { name: '2026-01-02-m.md' }, at('2026-01-02-n.md', 0)],
+      ]
+      for (const input of inputs) {
+        const want = orderDocs(input).map((d) => d.name)
+        assert.equal(new Set(want).size, input.length, 'nothing is lost or repeated')
+        for (const p of permutations(input)) same(orderDocs(p).map((d) => d.name), want)
+      }
+    },
+  },
+  {
     id: 'ledger-lib-carry-ledger-keep-done-parameter',
     run: async () => {
       const { carryLedger } = await ledgerLib()
@@ -4338,6 +4402,24 @@ const ledgerDiffCases = [
     },
   },
   {
+    id: 'corpus-diff-ledger-sets-aside-a-ledger-with-no-epic-column',
+    run: async () => {
+      const docs = {
+        'a-plain': ledgerOf([row('s1', 'done'), row('s2', 'blocked')]),
+        'b-no-epic-column': mk([['Progress Ledger', '| Slice | Status |\n|---|---|\n| s1 | blocked |\n| s2 | in-progress |']]),
+      }
+      withSnapshotOfDocs(docs, (snap) => {
+        const o = JSON.parse(node('diff.mjs', '--corpus', snap, '--what', 'ledger', '--json').stdout)
+        assert.equal(o.noEpicColumn, 1)
+        // it names no Epic: it is not one of the ledger documents the rule is measured on
+        assert.equal(o.ledgerDocuments, 1)
+        same(o.rows.before, { median: 2, p90: 2, max: 2 })
+        same(o.unfinished, { rows: 1, lostRows: 0, lostDocuments: [], ruleHolds: 1 })
+        assert.match(node('diff.mjs', '--corpus', snap, '--what', 'ledger').stdout, /ledgers with no Epic column, set aside: 1/)
+      })
+    },
+  },
+  {
     id: 'corpus-diff-ledger-is-listed-in-the-usage',
     run: async () => {
       const r = node('diff.mjs')
@@ -4413,6 +4495,24 @@ const ledgerContractCases = [
       const step4 = between(text, '### Step 4', null).replace(/\s+/g, ' ')
       assert.match(step4, /empty `Epic` cell/)
       assert.match(step4, /item 5g/)
+    },
+  },
+  {
+    id: 'generate-contract-lists-every-field-and-tells-the-two-report-kinds-apart',
+    run: async () => {
+      const text = readText('templates', 'handoff', 'generate.md')
+      const item5 = between(text, '5. **Progress Ledger', '### Step 2')
+      const b = between(item5, 'b. **', 'c. **').replace(/\s+/g, ' ')
+      // every field the script returns is named where the output is described
+      for (const field of ['`doc`', '`rows`', '`pointer`', '`droppedDone`', '`unknownStatusRows`', '`unattributedRows`', '`chained`']) assert.ok(b.includes(field), `5b names ${field}`)
+      // the report row has one count and one list per kind: a Status is written for the first kind only
+      const step4 = between(text, '### Step 4', null)
+      const ledgerRow = step4.split('\n').find((l) => /^ {2}Ledger {2}:/.test(l))
+      assert.ok(ledgerRow, 'the report has a Ledger row')
+      assert.match(ledgerRow, /N row\(s\) carried with a Status outside the enum: <slice> \(<status>\)/)
+      assert.match(ledgerRow, /M row\(s\) carried with an empty Epic cell: <slice>(?! \()/)
+      // a row of both kinds is counted in each
+      assert.match(step4.replace(/\s+/g, ' '), /(counted|counts?) in both|each kind(?:'s)? (?:own )?count/i)
     },
   },
   {

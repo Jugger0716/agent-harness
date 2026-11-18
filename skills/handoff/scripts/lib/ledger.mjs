@@ -7,8 +7,8 @@
 //   - a ledger carries the rows of ONE Epic; a row of another Epic is never carried;
 //   - every UNFINISHED row of that Epic is carried in full. "Finished" is Status `done` or `dropped`;
 //     everything else is unfinished — `in-progress`, `blocked`, `planned` and any value outside the
-//     enum (a real document has `not-started`, `todo`, `done(partial)`): an unknown value must never
-//     cost a row, so it counts as unfinished and is reported in `unknownStatusRows`;
+//     enum: an unknown value must never cost a row, so it counts as unfinished and is reported in
+//     `unknownStatusRows`;
 //   - of the finished rows only the most recent `keepDone` (default 5) are carried; `droppedDone`
 //     says how many were left out. Rows keep the order they have in the document.
 //   So the carried count is `unfinished + min(keepDone, finished)`: it is bounded only where the
@@ -21,9 +21,11 @@
 //
 // A row whose Epic cell is present but EMPTY names no Epic, and is work all the same: it is carried as the
 // requested Epic's — its `epic` filled in, the unfinished/finished rule applied as to any row — and counted in
-// `unattributedRows`, so the person can check it. (A blank row of a document that holds several Epics is carried
-// with each Epic asked for.) A ledger with no Epic COLUMN names no Epic at all: nothing is carried from it.
-// With `--dir`, only a row that names the Epic makes a document the source; blank rows alone never do.
+// `unattributedRows`, so the person can check it. That holds only for an Epic the document NAMES in at least one
+// row — an Epic it does not name gets no rows at all, so an empty `rows` always means "this document holds none
+// of it" — and a blank row of a document that names several Epics is carried with each one asked for. A ledger
+// with no Epic COLUMN names no Epic at all: nothing is carried from it. With `--dir`, the same rule picks the
+// source: only a row that names the Epic makes a document the source, blank rows alone never do.
 //
 // The chain of earlier rows: a new document whose carry left finished rows out writes an `Earlier rows:
 // <file name>` line under its table, naming the SOURCE document (`pointer`). A source that itself carries
@@ -52,12 +54,13 @@ export const isFinished = (status) => FINISHED.has(status)
 
 // parse.mjs's ledger rows -> { rows: [{ epic, slice, status, evidence, notes }], droppedDone, unknownStatusRows,
 // unattributedRows }. `epic` is the Epic to carry (read normalised, like the cells). Only that Epic's rows are
-// looked at — and the rows whose Epic cell is empty (see above): they are carried as this Epic's, their `epic`
-// filled in, and the carried ones are counted in `unattributedRows`.
+// looked at — and, when some row names it, the rows whose Epic cell is empty (see above): they are carried as this
+// Epic's, their `epic` filled in, and the carried ones are counted in `unattributedRows`.
 export function carryLedger(rows, epic, { keepDone = KEEP_DONE } = {}) {
   if (!Number.isInteger(keepDone) || keepDone < 0) throw new Error('carryLedger: keepDone must be a whole number, 0 or more')
   const want = stripEmphasis(epic)
-  const mine = rows.filter((r) => r.epic === want || r.epic === '')
+  const named = rows.some((r) => r.epic === want)
+  const mine = rows.filter((r) => r.epic === want || (named && r.epic === ''))
   const finishedAt = []
   mine.forEach((r, i) => {
     if (isFinished(r.status)) finishedAt.push(i)

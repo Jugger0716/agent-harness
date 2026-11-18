@@ -129,8 +129,9 @@ Gather, in this order:
       The script picks the carry-forward source — the newest handoff document whose ledger has
       rows of this Epic, so a ledger-less single-task handoff sitting in between two epic slices
       does not break the chain — and returns one JSON object: `doc` (that document's path, or
-      `null`), `rows`, `pointer` (its file name), `droppedDone`, `unknownStatusRows` and
-      `chained` (true when that document itself carries an `Earlier rows:` line). A document you
+      `null`), `rows`, `pointer` (its file name), `droppedDone`, `unknownStatusRows`,
+      `unattributedRows` and `chained` (true when that document itself carries an `Earlier rows:`
+      line). A document you
       already know can be named instead of searched, `--doc "<path>"` in place of `--dir`; `doc`
       is then always that document. The rows follow one rule: **every unfinished row of this Epic is carried in full**
       — `in-progress`, `blocked`, `planned`, and a row whose `Status` is none of the five enum
@@ -265,8 +266,9 @@ would let a later audit conclude the removal cost nothing.
      silent**; this line moved from the preview to here, and it is the one line whose omission
      the removal of the gate could actually cost.
    - **If rows were carried with a `Status` outside the enum** (item 5f) **or an empty `Epic`
-     cell** (item 5g), name each such row's `Slice` (and the `Status`, for the first kind), so the
-     human can correct them.
+     cell** (item 5g), say so on the `Ledger` row below, so the human can correct them: one count
+     and one list per kind — each row's `Slice`, and its `Status` for the first kind only. A row
+     of both kinds is counted in both.
    - The path that was written, plus the resume one-liner below.
    - One line telling the user how to correct it — **three ways, and the third is the one that
      replaces `Cancel`**: edit the file directly; re-run `/handoff generate` (a re-run writes a
@@ -279,7 +281,7 @@ would let a later audit conclude the removal cost nothing.
 
 ```
 [handoff] Saved : docs/harness/handoff/YYYY-MM-DD-<slug>.md
-  Ledger  : <"no carry-forward source found for Epic <epic> — started a new ledger" | "N row(s) carried with a Status outside the enum or an empty Epic cell: <slice> (<status>), …" | omit the line entirely>
+  Ledger  : <"no carry-forward source found for Epic <epic> — started a new ledger" | "N row(s) carried with a Status outside the enum: <slice> (<status>), …" and/or "M row(s) carried with an empty Epic cell: <slice>, …" | omit the line entirely>
   Correct : edit that file / re-run `/handoff generate` (writes a new `-2` file — nothing is overwritten) / delete it if unwanted (until then a path-less `resume` picks it, being newest)
   Next session → /handoff resume docs/harness/handoff/YYYY-MM-DD-<slug>.md
 ```

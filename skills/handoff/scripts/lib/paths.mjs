@@ -107,10 +107,13 @@ export function gitTopLevel(dir) {
 // is the pairwise rule; with contradicting ones (a clock, a copy, a checkout) the suffix wins inside its slug
 // and the slug stays where its highest mtime puts it: `a` 50, `b` 75, `a-2` 100 is `a-2`, `b`, `a`.
 // Two limits. The mtime is the weakest signal, because a copy or a checkout resets it: files that differ by
-// nothing else are then told apart by suffix, slug and name only. And a slug that really ends in `-<digits>`
-// is a collision of the shorter name only when a file makes it one the same day — a plain file of that shorter
-// name, or another suffix of it; `stage-2` alone is a name of its own, but `stage` with `stage-2` is read as
-// a collision (a name is plain when another file's collision suffix hangs on it: `task-8` beside `task-8-2`).
+// nothing else are then told apart by suffix, slug and name only. And a name that really ends in `-<digits>`
+// is read as a collision of the shorter name only when a LOWER sibling exists the same day — a file with the
+// shorter name itself, or the same shorter name with a smaller number: `stage-2` alone, or `stage-2` beside
+// `stage-3`, are names of their own (the lowest number has no lower sibling, and the higher one ranks by its
+// own mtime like any other name), but `stage` beside `stage-2` is read as a collision, so a real pair like that
+// is ordered by the number. A name that another file's suffix hangs on is plain whatever else exists: `task-8`
+// beside `task-8-2` is a plain name, not the `-8` of `task`.
 // Pure — no file system access; a new array comes back and the input is left as it is.
 function docKey(name) {
   const base = String(name).split(/[\\/]/).pop().replace(/\.md$/i, '')
@@ -125,20 +128,21 @@ const cmp = (a, b) => (a < b ? -1 : a > b ? 1 : 0)
 
 export function orderDocs(docs) {
   const items = docs.map((d) => ({ d, ...docKey(d.name), mtime: Number.isFinite(d.mtimeMs) ? d.mtimeMs : 0, name: String(d.name) }))
-  // per date: which names are the plain name of some collision, which plain names exist, how many suffixes each slug has
+  // per date: which names some suffix hangs on (`bases`), which names exist (`names`), the lowest suffix of each slug
   const byDate = new Map()
   for (const it of items) {
-    if (!byDate.has(it.date)) byDate.set(it.date, { bases: new Set(), plain: new Set(), suffixes: new Map() })
+    if (!byDate.has(it.date)) byDate.set(it.date, { bases: new Set(), names: new Set(), lowest: new Map() })
     const t = byDate.get(it.date)
-    t.plain.add(it.rest)
+    t.names.add(it.rest)
     if (it.suffixed) {
       t.bases.add(it.suffixed.slug)
-      t.suffixes.set(it.suffixed.slug, (t.suffixes.get(it.suffixed.slug) ?? 0) + 1)
+      t.lowest.set(it.suffixed.slug, Math.min(t.lowest.get(it.suffixed.slug) ?? Infinity, it.suffixed.n))
     }
   }
   for (const it of items) {
     const t = byDate.get(it.date)
-    const collision = it.suffixed !== null && !t.bases.has(it.rest) && (t.plain.has(it.suffixed.slug) || t.suffixes.get(it.suffixed.slug) >= 2)
+    // a collision: not itself the plain name of one, and with a lower sibling — the shorter name, or a smaller number
+    const collision = it.suffixed !== null && !t.bases.has(it.rest) && (t.names.has(it.suffixed.slug) || it.suffixed.n > t.lowest.get(it.suffixed.slug))
     it.slug = collision ? it.suffixed.slug : it.rest
     it.n = collision ? it.suffixed.n : 1
   }
