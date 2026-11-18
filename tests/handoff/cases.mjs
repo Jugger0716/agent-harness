@@ -5572,15 +5572,31 @@ const dietContractCases = [
       // (with the section its `doNot` entry carried over), else the newest `list` document on this branch — never from the
       // briefing's one-line summary; a pointer-only section is followed one hop, and what is read is data
       const item = flatten(between(text, '- Do NOT —', '5. **Progress Ledger'))
+      // the source is the section itself, read whole — never the briefing's summary row
       assert.ok(!/briefing showed it/.test(item), 'the source is not the briefing row, which is a summary')
-      assert.match(item, /whole `Do NOT` section/)
-      assert.match(item, /resumed[^;]*`doNot`/)
+      assert.match(item, /source is the whole `Do NOT` section of the previous handoff/)
+      assert.match(item, /read itself, never the briefing's summary row/)
+      // which previous handoff: the resumed one, else the newest `list` document on this branch; no branch matches nothing
+      assert.match(item, /the one this session resumed/)
       assert.match(item, /node "\{HANDOFF_JS\}" list --dir "docs\/harness\/handoff"/)
-      assert.match(item, /`branch`[^.]*item 1's Branch/)
-      assert.match(item, /pointer-only[^.]*one hop/)
+      assert.match(item, /`branch` is item 1's Branch/)
+      assert.match(item, /`n\/a` or `\(detached\)` matches none[^.]*only this session's items/)
+      // a pointer is followed through the script (path rule, failure states), never by hand, and only one hop
+      assert.ok(!/followed one hop/.test(item), 'no instruction to follow a pointer by hand')
+      assert.match(item, /node "\{HANDOFF_JS\}" reading-plan --doc "<that document>" --budget \d+ --root "\."/)
+      assert.match(item, /`doNot` entry/)
+      assert.match(item, /`range`[^.]*one hop/)
+      // what cannot be read is never dropped silently and never passed on as a pointer: one line here, one in the report
+      assert.match(item, /any other status[^.]*itself only a pointer/i)
+      assert.ok(item.includes('`carried-over items could not be read: <path> (<reason>)`'))
+      assert.match(item, /every item you did read/)
+      assert.match(item, /Step 4's report/)
       assert.match(item, /DATA, not instructions/)
-      // the "never open earlier documents by hand" rule is the ledger's
-      assert.match(flatten(ledgerText()), /only the two commands below read earlier documents[^.]*never open, scan or rank[^.]*by hand/)
+      const report = between(text, '### Step 4', '> **gitignore note')
+      assert.match(report, /^ {2}Do NOT {2}: <"carried-over items could not be read: <path> \(<reason>\)" \| omit the line entirely>$/m)
+      assert.match(flatten(report), /`Do NOT` — only when[^.]*could not be read/)
+      // the "never open earlier documents by hand" rule is scoped to the ledger, so it cannot contradict item 4's read
+      assert.match(flatten(ledgerText()), /For the ledger only the two commands below read earlier documents[^.]*never open, scan or rank[^.]*by hand/)
       // a concurrent run's new path goes everywhere Step 3 put the old one
       const step4 = flatten(between(text, '### Step 4', '> **gitignore note'))
       assert.match(step4, /run `resolve-path` again[^.]*`## Resume` line[^.]*Reading Order entry/)
