@@ -937,17 +937,21 @@ const corpusToolCases = [
   {
     id: 'corpus-diff-reports-a-reading-order-difference-by-id',
     run: async () => {
-      // Edit the manifest after the fact: the comparison must name the document, not its text.
+      // Edit the manifest after the fact — one document loses an entry, another has an entry
+      // whose text changed: the comparison must name both documents, and never print their text.
       withSnapshot((snap) => {
         const mf = path.join(snap, 'manifest.json')
         const man = JSON.parse(fs.readFileSync(mf, 'utf8'))
-        const victim = man.docs.find((d) => d.readingOrder.length > 2)
-        victim.readingOrder.pop()
+        const [missing, changed] = man.docs.filter((d) => d.readingOrder.length >= 2)
+        missing.readingOrder.pop()
+        changed.readingOrder[1].raw += '-changed'
         fs.writeFileSync(mf, JSON.stringify(man))
         const e = node('diff.mjs', '--corpus', snap, '--what', 'extract-agree')
         assert.equal(e.status, 0, e.stderr)
-        assert.match(e.stdout, /12 agree, 1 differ/)
-        assert.match(e.stdout, new RegExp(`${victim.id}: entries`))
+        assert.match(e.stdout, /11 agree, 2 differ/)
+        assert.match(e.stdout, new RegExp(`${missing.id}: entries 1 \\(manifest\\) vs 2 \\(shipped\\)`))
+        assert.match(e.stdout, new RegExp(`${changed.id}: entries 2 \\(manifest\\) vs 2 \\(shipped\\).*first difference at entry 2`))
+        assert.ok(!e.stdout.includes('-changed'), 'no document text in the report')
       })
     },
   },
