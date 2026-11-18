@@ -122,12 +122,7 @@ function cmdLatestEpic(opts) {
   return latestEpic(opts.dir)
 }
 
-// The file a new handoff document is written to (lib/paths.mjs): `<--dir>/<--date>-<slug>[-N].md` with `/`, where the
-// slug is --slug normalised to `[a-z0-9-]`, at most 40 characters (the model supplies an English kebab-case summary;
-// nothing is transliterated), and -N makes a taken name new. `slug` in the output is the normalised slug without -N;
-// `normalized` says --slug changed. Nothing is created. A slug with no ASCII letter or digit is an input problem (exit
-// 1, the message asks for an English summary); a --date that is not a calendar date written YYYY-MM-DD is a usage
-// problem (exit 2), like any other malformed option value.
+// True when `text` is a calendar date written YYYY-MM-DD (`2026-02-30` is not one).
 function isCalendarDate(text) {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text)
   if (!m) return false
@@ -135,6 +130,12 @@ function isCalendarDate(text) {
   return d.getUTCFullYear() === Number(m[1]) && d.getUTCMonth() === Number(m[2]) - 1 && d.getUTCDate() === Number(m[3])
 }
 
+// The file a new handoff document is written to (lib/paths.mjs): `<--dir>/<--date>-<slug>[-N].md` with `/`, where the
+// slug is --slug normalised to `[a-z0-9-]`, at most 40 characters (the model supplies an English kebab-case summary;
+// nothing is transliterated), and -N makes a taken name new. `slug` in the output is the normalised slug without -N;
+// `normalized` says --slug changed. Nothing is created. A slug with no ASCII letter or digit is an input problem (exit
+// 1, the message asks for an English summary); a --date that is not a calendar date written YYYY-MM-DD is a usage
+// problem (exit 2), like any other malformed option value.
 function cmdResolvePath(opts) {
   if (opts.dir === '') throw new UsageError('resolve-path: --dir must not be empty')
   if (!isCalendarDate(opts.date)) throw new UsageError('resolve-path: --date must be a calendar date written YYYY-MM-DD')

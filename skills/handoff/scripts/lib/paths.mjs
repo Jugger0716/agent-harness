@@ -113,10 +113,12 @@ export function gitTopLevel(dir) {
 // Two limits. The mtime is the weakest signal, because a copy or a checkout resets it: files that differ by
 // nothing else are then told apart by suffix, slug and name only. And a name that really ends in `-<digits>`
 // is read as a collision of the shorter name only when a LOWER sibling exists the same day — a file with the
-// shorter name itself, or the same shorter name with a smaller number: `stage-2` alone, or `stage-2` beside
-// `stage-3`, are names of their own (the lowest number has no lower sibling, and the higher one ranks by its
-// own mtime like any other name), but `stage` beside `stage-2` is read as a collision, so a real pair like that
-// is ordered by the number. A name that another file's suffix hangs on is plain whatever else exists: `task-8`
+// shorter name itself, or the same shorter name with a smaller number: `stage-2` alone is a name of its own,
+// and so is the lowest number beside higher ones (`stage-2` beside `stage-3`: it has no lower sibling), while
+// each higher number joins the `stage` family and ranks by its effective mtime in that family — its own mtime
+// only while no smaller number of the family is later (`stage-3` here; add `stage-4` and it ranks by the later
+// of its own mtime and `stage-3`'s).
+// `stage` beside `stage-2` is read as a collision too, so a real pair like that is ordered by the number. A name that another file's suffix hangs on is plain whatever else exists: `task-8`
 // beside `task-8-2` is a plain name, not the `-8` of `task`.
 // Pure — no file system access; a new array comes back and the input is left as it is.
 function docKey(name) {

@@ -3290,7 +3290,9 @@ const stateContractCases = [
       assert.match(step3, /node "\{HANDOFF_JS\}" drift --doc "[^"]+" --cwd "\."/)
       for (const hand of ['git cat-file', 'git merge-base', 'git status', 'git log']) assert.ok(!step3.includes(hand), `${hand} is the script's, not a step to run by hand`)
       assert.ok(step3.includes('`dirty.lost`'))
-      assert.ok(step3.includes('was dirty when recorded, now gone'))
+      // the lost-work bullet names its case with the State row's token, one wording for both
+      assert.match(step3.replace(/\s+/g, ' '), /`dirty\.lost` → \*\*`recorded dirty work not found`\*\*/)
+      assert.ok(!step3.includes('now gone'), 'the second, stronger wording is gone')
       assert.ok(step3.includes('`viaWorktree`'))
       assert.ok(step3.includes('`skipped`'))
       for (const rel of ['same', 'forward', 'backward', 'diverged', 'unknown']) assert.ok(step3.includes(`\`${rel}\``), `the ${rel} relationship is reported`)
@@ -3410,7 +3412,7 @@ const fixRoundCases = [
       assert.match(flat, /stash/)
       assert.match(flat, /discarded/)
       assert.match(flat, /ask the human to check/i)
-      assert.ok(flat.includes('was dirty when recorded, now gone'))
+      assert.ok(flat.includes('**`recorded dirty work not found`**'), 'the bullet uses the State row token, which claims only "not found"')
       // only what generate records can be checked
       assert.match(flat, /first 40 recorded dirty paths/)
       // no command that discards or moves work, in any form
@@ -5507,6 +5509,77 @@ const latestDiffCases = [
   },
 ]
 
+// ---- the contract text after the H15 diet: rules only, one term per thing, cross-references that name their file -------------
+
+const HANDOFF_CONTRACT_FILES = [['skills', 'handoff', 'SKILL.md'], ['templates', 'handoff', 'generate.md'], ['templates', 'handoff', 'resume.md']]
+
+const dietContractCases = [
+  {
+    id: 'handoff-contract-carries-no-dated-observation-or-planning-tag',
+    run: async () => {
+      for (const f of HANDOFF_CONTRACT_FILES) {
+        const text = readText(...f)
+        const dated = text.split('\n').filter((l) => /(Observed|Measured|MEASURED|OBSERVED)[^.]{0,40}20[0-9]{2}/.test(l))
+        assert.deepEqual(dated, [], `${f.join('/')} carries a dated observation (it belongs in design/handoff-diet/RATIONALE.md)`)
+        assert.ok(!/\bAC-\d|\bP0-\d|spec D-\d/.test(text), `${f.join('/')} cites a planning identifier no reader can resolve`)
+        // a bare §Non-Goals reference points nowhere from a template: it names SKILL.md
+        if (f[0] === 'templates') assert.ok(!/(?<!SKILL\.md )§Non-Goals/.test(text), `${f.join('/')} has a bare §Non-Goals reference`)
+      }
+    },
+  },
+  {
+    id: 'resume-contract-names-every-next-field-and-one-term-per-candidate-kind',
+    run: async () => {
+      const text = readText('templates', 'handoff', 'resume.md')
+      const flat = flatten(text)
+      // the field list of `next` names the count the ambiguity line prints
+      assert.match(flatten(between(text, '### Step 5', 'Print (in `user_lang`)')), /`ambiguous` \(a list\), `inProgressRows`/)
+      // the ambiguity trigger carries its own exception: rows that ALL lack a value give the tier nothing
+      const tier2 = flatten(between(text, '2. **One in-progress row.**', '3. **The recorded `Docs`.**'))
+      assert.match(tier2, /TWO OR MORE rows are in progress, at least one of them with a `Slice` value/)
+      assert.match(tier2, /ALL lack a value give this tier nothing/)
+      // the script's list is "token candidates", the judged ones "candidates"; the old mixed term is gone
+      assert.ok(!/command candidates/.test(flat), 'the old term "command candidates" is gone')
+      assert.match(flat, /`commandCandidates`[^.]*token candidates/)
+      // one place gives the order under the aligned block; the others defer to it
+      assert.ok(!/directly under the aligned/.test(flat))
+      // the first option's description is the one listed with the gate, not "the command"
+      assert.ok(!/described by the command/.test(flat))
+      // rule 4 reads a carried-over Do NOT section as the document's own
+      assert.match(flat, /`Do NOT` section read through Step 4's `doNot` entry[^.]*counts as this document's own/)
+    },
+  },
+  {
+    id: 'generate-contract-names-the-do-not-source-and-repairs-every-path-site',
+    run: async () => {
+      const text = readText('templates', 'handoff', 'generate.md')
+      const flat = flatten(text)
+      // the still-in-force Do NOT items come from the previous handoff: the resume briefing, else ONE document `list` names
+      const item = flatten(between(text, '- Do NOT —', '5. **Progress Ledger'))
+      assert.match(item, /resume briefing/)
+      assert.match(item, /node "\{HANDOFF_JS\}" list --dir "docs\/harness\/handoff"/)
+      assert.match(item, /one document/)
+      // the "never open earlier documents by hand" rule is the ledger's
+      assert.match(flat, /never open, scan or rank those documents by hand for it/)
+      // a concurrent run's new path goes everywhere Step 3 put the old one
+      const step4 = flatten(between(text, '### Step 4', '> **gitignore note'))
+      assert.match(step4, /run `resolve-path` again[^.]*`## Resume` line[^.]*Reading Order entry/)
+      // no line is a left-over fragment of an old rewrap
+      assert.ok(!text.split('\n').some((l) => /^\s*line\)\. A document you$/.test(l)))
+    },
+  },
+  {
+    id: 'skill-contract-discloses-the-slug-rule-difference',
+    run: async () => {
+      const conv = flatten(between(readText('skills', 'handoff', 'SKILL.md'), '**Location convention', '**Base directory.**'))
+      assert.match(conv, /differs on purpose from `templates\/_shared\/slugify\.md`/)
+      assert.match(conv, /non-ASCII character is a separator/)
+      assert.match(conv, /40 characters/)
+      assert.match(conv, /empty result asks for an English summary/)
+    },
+  },
+]
+
 // ---- the runner's own exit codes ----------------------------------------------------------------------------
 
 function runnerExit(casesSource) {
@@ -5590,5 +5663,6 @@ export const cases = [
   ...selectCases,
   ...selectContractCases,
   ...latestDiffCases,
+  ...dietContractCases,
   ...runnerCases,
 ]

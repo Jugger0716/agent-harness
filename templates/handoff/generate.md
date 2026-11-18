@@ -41,7 +41,7 @@ Gather, in this order:
    current branch and its `phase` is not `completed` — the script decides; never judge it by hand.
    Under **In Progress**:
    - `relevant` is true → record `fields` using the **Fixed Label Record Format** below — labels
-     are English raw parse anchors that `resume`'s Step 3.5 live cross-check compares against;
+     are English raw parse anchors that `resume.md` Step 3.5's live cross-check compares against;
      values are recorded as stored.
    - otherwise → write ONE line instead, `Harness : none (<reason>)`, with the script's `reason`,
      and no five-line record: a state file that belongs to another branch, or to a finished task,
@@ -87,9 +87,7 @@ Gather, in this order:
      the labelled value first and never scans prose for a slice name. Without the label it
      depends on the ledger's `in-progress` rows (one names the slice, several are ambiguous) and
      on the live task state; a handoff written between slices has no `in-progress` row, so
-     `Next :` ends as item 1 printed verbatim. Measured 2026-08-28 over all 31 ledger-bearing
-     handoffs in `docs/harness/handoff/`: 17 have no `in-progress` row, and none of them
-     carried this label yet.
+     `Next :` ends as item 1 printed verbatim.
    - Definition of Done — how a future session knows the effort is finished
    - Reading Order — files a fresh session should read, in order, each with a 1-line reason
      (prefer: this handoff → key spec/plan docs → the 1–3 most central source files).
@@ -98,15 +96,19 @@ Gather, in this order:
      whose heading contains that text.
    - Do NOT — guardrails and forbidden actions, written out **in full in every document**, the
      ones still in force from earlier handoffs included, each with its reason in one clause.
-     "Same as the previous handoff's Do NOT", a bare path or "the earlier items still apply" is
-     not allowed, however the line is worded: `resume` reads only this document's section, and a
-     pointer to a document that is not in the Reading Order is lost.
-5. **Progress Ledger (epic continuity, optional — NEW, P0-1):** only when this handoff is part
+     Their source is the previous handoff's `Do NOT` section as this session's resume briefing
+     showed it; if this session did not resume from one, read the `Do NOT` section of the first
+     document `node "{HANDOFF_JS}" list --dir "docs/harness/handoff"` returns — that one document,
+     that one section. "Same as the previous handoff's Do NOT", a bare path or "the earlier items
+     still apply" is not allowed, however the line is worded: `resume` reads only this document's
+     section, and a pointer to a document that is not in the Reading Order is lost.
+5. **Progress Ledger (epic continuity, optional):** only when this handoff is part
    of a multi-slice epic (skip entirely for a single-task handoff — never force an empty table).
    The `Slice` column below feeds item 4's slice command convention above — a row here is what
-   makes that convention apply. Two commands read the earlier handoff documents for this item,
-   so never open, scan or rank those documents by hand; `{HANDOFF_JS}`, the quoting and a
-   non-zero exit are as in item 1 (show the script's stderr verbatim and stop).
+   makes that convention apply. Two commands read the earlier handoff documents for the ledger,
+   so never open, scan or rank those documents by hand for it (item 4's one `Do NOT` read is
+   the only other read of an earlier document); `{HANDOFF_JS}`, the quoting and a non-zero exit
+   are as in item 1 (show the script's stderr verbatim and stop).
 
    a. **Propose the Epic from the previous ledger.** Run
 
@@ -135,12 +137,12 @@ Gather, in this order:
       does not break the chain — and returns one JSON object: `doc` (that document's path, or
       `null`), `rows`, `pointer` (its file name), `droppedDone`, `unknownStatusRows`,
       `unattributedRows` and `chained` (true when that document itself carries an `Earlier rows:`
-      line). A document you
-      already know can be named instead of searched, `--doc "<path>"` in place of `--dir`; `doc`
-      is then always that document. The rows follow one rule: **every unfinished row of this Epic is carried in full**
-      — `in-progress`, `blocked`, `planned`, and a row whose `Status` is none of the five enum
-      values — **and, of the finished rows (`done`, `dropped`), only the most recent 5**. `rows` is
-      in document order; `droppedDone` is how many finished rows were left out.
+      line). A document you already know can be named instead of searched, `--doc "<path>"` in
+      place of `--dir`; `doc` is then always that document. The rows follow one rule: **every
+      unfinished row of this Epic is carried in full** — `in-progress`, `blocked`, `planned`, and
+      a row whose `Status` is none of the five enum values — **and, of the finished rows (`done`,
+      `dropped`), only the most recent 5**. `rows` is in document order; `droppedDone` is how many
+      finished rows were left out.
       A ledger carries the rows of ONE Epic: rows of a different Epic are never carried, and an
       Epic that none of the documents the script reads holds (a new epic) carries nothing.
    c. **Write the rows, then this session's own.** Put `rows` into the new ledger, each cell
@@ -241,57 +243,34 @@ node "{HANDOFF_JS}" resolve-path --slug "<slug>" --date "<today, YYYY-MM-DD>" --
 when the name is taken), `slug` and `normalized`. Put `path` into the `## Resume` line and into
 any Reading Order entry that names this document: Step 2 could not know it. A non-zero exit:
 stderr verbatim and stop — except exit 1 asking for an English kebab-case summary: write one and
-run it again, once. Then go straight to Step 4 — **`generate` never asks whether to save.**
-
-**Why there is no confirmation here, stated so it is not "restored" as a missing safety net.**
-Three properties make the write safe without one, and all three are structural rather than
-promised: (i) the location convention **never overwrites** — `resolve-path` gives a taken name a
-number, so no prior handoff can be destroyed and a re-run after a correction is simply a new
-file; (ii) the write is a single local document under `docs/harness/handoff/`, touching no git
-state, no `.harness/`, and nothing outward-facing; and (iii) `generate` is *already* an
-explicit user action (§Non-Goals — nothing auto-generates a handoff), so the gate was a second
-confirmation of a command the user had just typed. What a preview-gate genuinely bought was the
-chance to correct a fact before it became durable; that is preserved by writing first and
-reporting after — **the file is the preview**, and correcting it means editing it in place or
-re-running (a new file, never an overwrite). Step 4 says both.
-
-**Not all of it survives, and the difference is written down rather than glossed.** Of what the
-gate did: the broken-chain warning and the resolved path **moved** to Step 4's report; the
-full-document preview is **replaced** — by the written file itself, not by anything Step 4
-prints; and `Cancel` is **removed outright**, so there is no longer any path through `generate`
-that writes nothing. A handoff created by mistake is corrected by deleting the file (Step 4).
-**Do not describe this change as lossless** — an earlier revision of this paragraph claimed
-"nothing is dropped, only re-ordered", which is false on both the preview and `Cancel`, and
-would let a later audit conclude the removal cost nothing.
+run it again, once. Then go straight to Step 4 — **`generate` never asks whether to save**: the
+written file is the preview, and Step 4's report says how to correct it.
 
 ### Step 4 — Write & report
 
 1. Ensure `docs/harness/handoff/` exists.
 2. Write to the path resolved in Step 3. If a collision appeared between resolution and write
-   (a concurrent run), run `resolve-path` again, update the `## Resume` line to the new path and
-   write there — **never overwrite an existing handoff**, and name the path actually written in
-   the report below.
-3. Report (in `user_lang`). **The report is not optional chrome — it carries what the removed
-   gate used to carry**, so print all of it:
+   (a concurrent run), run `resolve-path` again, put the new path into the `## Resume` line and
+   into any Reading Order entry that names this document, and write there — **never overwrite an
+   existing handoff**, and name the path actually written in the report below.
+3. Report (in `user_lang`) — print all of it:
    - **If a Progress Ledger applies (Step 1 item 5) and no carry-forward source was found**
-     (item 5e: `ledger-carry` returned `doc` `null` or no `rows`), say so explicitly — e.g. "No carry-forward
-     source found for Epic `<epic>` — started a new ledger." **A broken chain must never be
-     silent**; this line moved from the preview to here, and it is the one line whose omission
-     the removal of the gate could actually cost.
+     (item 5e: `ledger-carry` returned `doc` `null` or no `rows`), say so explicitly — e.g. "No
+     carry-forward source found for Epic `<epic>` — started a new ledger." **A broken chain must
+     never be silent.**
    - **If rows were carried with a `Status` outside the enum** (item 5f) **or an empty `Epic`
      cell** (item 5g), say so on the `Ledger` row below, so the human can correct them: one count
      and one list per kind — each row's `Slice`, and its `Status` for the first kind only. A row
      of both kinds is counted in both.
    - The path that was written, plus the resume one-liner below.
-   - One line telling the user how to correct it — **three ways, and the third is the one that
-     replaces `Cancel`**: edit the file directly; re-run `/handoff generate` (a re-run writes a
-     new file — prior handoffs are never modified); or **delete the file**, which is a
-     legitimate correction and not a repair of anything, since a handoff is a plain local
-     document that no state, no lint and no other skill reads. **Say so explicitly**: with no
-     gate, an unwanted `generate` — including a bare `/handoff`, which IS `generate` per the
-     dispatch table — can only be undone by deleting, and until it is deleted a path-less
-     `/handoff resume` will pick it (or offer it among the day's candidates), because `resume`
-     Step 1 takes the NEWEST document.
+   - One line telling the user how to correct it — three ways: edit the file directly; re-run
+     `/handoff generate` (a re-run writes a new file — prior handoffs are never modified); or
+     **delete the file**, a legitimate correction, since a handoff is a plain local document
+     that no state, no lint and no other skill reads. **Say so explicitly**: an unwanted
+     `generate` — including a bare `/handoff`, which IS `generate` per the dispatch table — can
+     only be undone by deleting, and until it is deleted a path-less `/handoff resume` will pick
+     it (or offer it among the day's candidates), because `resume.md` Step 1 takes the NEWEST
+     document.
 
 ```
 [handoff] Saved : docs/harness/handoff/YYYY-MM-DD-<slug>.md
@@ -301,9 +280,8 @@ would let a later audit conclude the removal cost nothing.
 ```
 
 The `Ledger` row is **omitted when a carry-forward source WAS found and no carried row needs
-correcting (item 5f, 5g), and omitted when no ledger applies at all** — it exists to make the
-broken-chain case loud (and to hand a stray `Status` value or an empty `Epic` cell back to the
-human). The `Correct` row always prints: it is what replaces the gate's "Edit" option.
+correcting (item 5f, 5g), and omitted when no ledger applies at all**. The `Correct` row always
+prints.
 
 > **gitignore note:** many projects gitignore `docs/harness/`. If `git check-ignore` says the
 > written file is ignored, append one warning line (in `user_lang`): the handoff exists only on
