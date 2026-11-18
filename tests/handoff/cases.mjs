@@ -15,7 +15,7 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { spawnSync } from 'node:child_process'
+import { spawnSync, execFileSync } from 'node:child_process'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
 const ROOT = fileURLToPath(new URL('../../', import.meta.url))
@@ -36,6 +36,9 @@ const parseLib = () => lib('skills/handoff/scripts/lib/parse.mjs')
 const legacyLib = () => lib('tests/handoff/corpus/legacy_next.mjs')
 const snapshotLib = () => lib('tests/handoff/corpus/snapshot.mjs')
 const measureLib = () => lib('tests/handoff/corpus/measure.mjs')
+const readingLib = () => lib('skills/handoff/scripts/lib/reading.mjs')
+const pathsLib = () => lib('skills/handoff/scripts/lib/paths.mjs')
+const diffLib = () => lib('tests/handoff/corpus/diff.mjs')
 
 const fixtureText = (name) => fs.readFileSync(path.join(FIX, `${name}.md`), 'utf8')
 const viaJson = (v) => JSON.parse(JSON.stringify(v))
@@ -277,6 +280,21 @@ const sectionCases = [
     run: async () => {
       const p = await parseText(mk([['Goal', 'first'], ['Goal', 'second']]))
       assert.equal(p.sections.Goal, 'first')
+    },
+  },
+  {
+    id: 'parse-section-named-like-an-object-property-is-kept',
+    run: async () => {
+      // `name in {}` is true for toString, constructor and friends, so a section with such a title
+      // used to be dropped; `__proto__` must not become the prototype either.
+      const p = await parseText(mk([['toString', 'a'], ['constructor', 'b'], ['__proto__', 'c'], ['Goal', 'd']]))
+      same(Object.keys(p.sections), ['toString', 'constructor', '__proto__', 'Goal'])
+      assert.equal(p.sections.toString, 'a')
+      assert.equal(p.sections.constructor, 'b')
+      assert.equal(Object.getOwnPropertyDescriptor(p.sections, '__proto__').value, 'c')
+      assert.equal(p.sections.Goal, 'd')
+      const head = '# HANDOFF — T\n\n**constructor:** x  **Date:** 2026-03-03\n\n## Goal\nx\n'
+      assert.equal((await parseText(head)).header.date, '2026-03-03')
     },
   },
   {
@@ -967,6 +985,595 @@ const corpusToolCases = [
   },
 ]
 
+// ---- reading-plan: which Reading Order entries are read, and how much ------------------------------------------
+//
+// These cases build a throwaway repository under the OS temp folder (never inside this one), write
+// invented files and a handoff document at docs/harness/handoff/doc.md, and run the real command
+// line on it. Cases that need an absolute path call `planReading` on hand-built entries instead, so
+// they do not depend on the temp folder's name being a single word.
+
+const L = (n) => `line ${String(n).padStart(3, '0')}`
+const lineText = (from, to, f = L) => Array.from({ length: to - from + 1 }, (_, i) => f(from + i)).join('\n') + '\n'
+const bytesOf = (s) => Buffer.byteLength(s)
+const entry = (p, range = null) => ({ raw: p, path: p, range, isFile: true, self: false })
+
+function withRepo(files, readingOrder, fn) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'handoff-plan-'))
+  try {
+    const repo = path.join(dir, 'repo')
+    const put = (abs, content) => {
+      fs.mkdirSync(path.dirname(abs), { recursive: true })
+      fs.writeFileSync(abs, content)
+    }
+    for (const [rel, content] of Object.entries(files)) put(path.join(repo, rel), content)
+    const doc = path.join(repo, 'docs', 'harness', 'handoff', 'doc.md')
+    put(doc, mk([['Goal', 'x'], ['Reading Order', readingOrder]]))
+    return fn({ dir, repo, doc, put })
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true })
+  }
+}
+
+function plan(doc, budget = 1e9) {
+  const r = cli('reading-plan', '--doc', doc, '--budget', String(budget))
+  assert.equal(r.status, 0, `exit ${r.status}: ${r.stderr}`)
+  assert.equal(r.stderr, '')
+  return JSON.parse(r.stdout)
+}
+
+const X_MD = [
+  '# Title', // 1
+  'intro', // 2
+  '```', // 3
+  '## Foo decoy', // 4 (inside a fence: not a heading)
+  '```', // 5
+  '## Setup', // 6
+  'setup text', // 7
+  '## Foo bar', // 8
+  'foo text', // 9
+  '### Foo detail', // 10
+  'detail text', // 11
+  '```', // 12
+  '## fenced in foo', // 13 (inside a fence)
+  '```', // 14
+  'more foo', // 15
+  '## Next', // 16
+  'next text', // 17
+  '#### Deep', // 18
+].join('\n') + '\n'
+const xLines = X_MD.split('\n')
+const xBytes = (from, to) => bytesOf(xLines.slice(from - 1, to).join('\n') + '\n')
+
+// 2,500 lines: a title, a fenced `# ` line, two headings that count and one that does not.
+const BIG_MD =
+  Array.from({ length: 2500 }, (_, i) => {
+    const n = i + 1
+    if (n === 1) return '# Big'
+    if (n === 9) return '```'
+    if (n === 10) return '# not a heading, it is inside a fence'
+    if (n === 11) return '```'
+    if (n === 700) return '## Mid'
+    if (n === 2300) return '### Late'
+    if (n === 2301) return '#### Deeper'
+    return L(n)
+  }).join('\n') + '\n'
+const BIG_OUTLINE = [
+  { line: 1, level: 1, text: 'Big' },
+  { line: 700, level: 2, text: 'Mid' },
+  { line: 2300, level: 3, text: 'Late' },
+]
+const bigFirst400 = bytesOf(BIG_MD.split('\n').slice(0, 400).join('\n') + '\n')
+
+const readingPlanCases = [
+  {
+    id: 'reading-plan-line-range',
+    run: async () => {
+      const files = { 'src/a.js': lineText(1, 300), 'src/b.js': lineText(1, 10) }
+      withRepo(files, '1. `src/a.js:120-180` — the part that matters\n2. `src/b.js` — a whole small file', ({ doc, repo }) => {
+        const p = plan(doc)
+        const want = bytesOf(lineText(120, 180))
+        const [a, b] = p.entries
+        assert.equal(a.status, 'range')
+        same(a.range, { type: 'lines', start: 120, end: 180 })
+        assert.equal(a.lines, 61)
+        assert.equal(a.bytes, want)
+        assert.equal(a.fileLines, 300)
+        assert.equal(a.file, path.join(repo, 'src', 'a.js'))
+        assert.equal(b.status, 'read')
+        assert.equal(b.range, null)
+        assert.equal(b.bytes, bytesOf(lineText(1, 10)))
+        assert.equal(p.totalBytes, want + b.bytes)
+        assert.equal(p.budget, 1e9)
+      })
+    },
+  },
+  {
+    id: 'reading-plan-line-range-past-the-end',
+    run: async () => {
+      withRepo({ 'src/a.js': lineText(1, 300) }, '1. `src/a.js:250-400` — runs past the end\n2. `src/a.js:400-500` — starts past the end', ({ doc }) => {
+        const [clipped, beyond] = plan(doc).entries
+        assert.equal(clipped.status, 'range')
+        same(clipped.range, { type: 'lines', start: 250, end: 300 })
+        assert.equal(clipped.bytes, bytesOf(lineText(250, 300)))
+        assert.equal(beyond.status, 'partial')
+        assert.equal(beyond.range, null)
+        assert.equal(beyond.bytes, 0)
+        assert.match(beyond.reason, /after the end/)
+      })
+    },
+  },
+  {
+    id: 'reading-plan-section-range',
+    run: async () => {
+      const ro = [
+        '1. `docs/x.md §foo` — the first heading that contains it, case-insensitively',
+        '2. `docs/x.md §Foo detail` — a deeper heading ends at the next heading of the same or a higher level',
+        '3. `docs/x.md §Foo bar (see note)` — a trailing parenthesis is a remark, not part of the title',
+      ].join('\n')
+      withRepo({ 'docs/x.md': X_MD }, ro, ({ doc }) => {
+        const [a, b, c] = plan(doc).entries
+        for (const [e, start, end, heading] of [[a, 8, 15, 'Foo bar'], [b, 10, 15, 'Foo detail'], [c, 8, 15, 'Foo bar']]) {
+          assert.equal(e.status, 'range', e.raw)
+          same(e.range, { type: 'lines', start, end, heading }, e.raw)
+          assert.equal(e.lines, end - start + 1, e.raw)
+          assert.equal(e.bytes, xBytes(start, end), e.raw)
+        }
+      })
+    },
+  },
+  {
+    id: 'reading-plan-section-range-missing-heading',
+    run: async () => {
+      withRepo({ 'docs/x.md': X_MD }, '1. `docs/x.md §Nope` — no such heading', ({ doc }) => {
+        const [e] = plan(doc).entries
+        assert.equal(e.status, 'partial')
+        assert.equal(e.range, null)
+        assert.equal(e.bytes, 0)
+        assert.match(e.reason, /Nope/)
+        same(e.outline, [
+          { line: 1, level: 1, text: 'Title' },
+          { line: 6, level: 2, text: 'Setup' },
+          { line: 8, level: 2, text: 'Foo bar' },
+          { line: 10, level: 3, text: 'Foo detail' },
+          { line: 16, level: 2, text: 'Next' },
+        ])
+      })
+    },
+  },
+  {
+    id: 'reading-plan-oversize-without-range',
+    run: async () => {
+      withRepo({ 'docs/big.md': BIG_MD }, '1. `docs/big.md` — a long file with no range', ({ doc }) => {
+        const p = plan(doc)
+        const [e] = p.entries
+        assert.equal(e.status, 'partial')
+        same(e.range, { type: 'lines', start: 1, end: 400 })
+        assert.equal(e.lines, 400)
+        assert.equal(e.fileLines, 2500)
+        assert.equal(e.bytes, bigFirst400)
+        same(e.outline, BIG_OUTLINE)
+        assert.equal(e.outlineBytes, 180)
+        assert.equal(p.totalBytes, bigFirst400 + 180)
+        assert.ok(!e.status.startsWith('skipped'), 'an over-long file is read in part, never skipped')
+      })
+    },
+  },
+  {
+    id: 'reading-plan-reads-crlf-and-bom-files',
+    run: async () => {
+      const text = '﻿# Title\r\nintro\r\n## Foo\r\nfoo text\r\n## Bar\r\nbar\r\n'
+      withRepo({ 'docs/c.md': text }, '1. `docs/c.md §Foo` — a section of a CRLF file\n2. `docs/c.md §Nope` — the outline of the same file', ({ doc }) => {
+        const [a, b] = plan(doc).entries
+        same(a.range, { type: 'lines', start: 3, end: 4, heading: 'Foo' })
+        assert.equal(a.bytes, bytesOf('## Foo\r\nfoo text\r\n'))
+        same(b.outline.map((h) => h.text), ['Title', 'Foo', 'Bar'])
+      })
+    },
+  },
+  {
+    id: 'reading-plan-line-cap-boundary',
+    run: async () => {
+      const ro = '1. `a.md` — exactly 2000 lines\n2. `b.md` — 2001 lines'
+      withRepo({ 'a.md': lineText(1, 2000), 'b.md': lineText(1, 2001) }, ro, ({ doc }) => {
+        const [a, b] = plan(doc).entries
+        assert.equal(a.status, 'read')
+        assert.equal(a.fileLines, 2000)
+        assert.equal(b.status, 'partial')
+        assert.equal(b.fileLines, 2001)
+      })
+    },
+  },
+  {
+    id: 'reading-plan-budget-degrades-to-partial',
+    run: async () => {
+      const mid = ['# Mid', ...Array.from({ length: 999 }, (_, i) => L(i + 2))].join('\n') + '\n'
+      const first400 = bytesOf(mid.split('\n').slice(0, 400).join('\n') + '\n')
+      const small = lineText(1, 5)
+      const tiny = 'x'.repeat(19) + '\n'
+      const budget = bytesOf(small) + first400 + 60 + bytesOf(tiny)
+      assert.ok(budget < bytesOf(small) + bytesOf(mid), 'the whole file must not fit')
+      const ro = '1. `small.txt` — small\n2. `mid.md` — does not fit whole, its head and outline do\n3. `tiny.txt` — fits exactly'
+      withRepo({ 'small.txt': small, 'mid.md': mid, 'tiny.txt': tiny }, ro, ({ doc }) => {
+        const p = plan(doc, budget)
+        const [s, m, t] = p.entries
+        assert.equal(s.status, 'read')
+        assert.equal(m.status, 'partial')
+        same(m.range, { type: 'lines', start: 1, end: 400 })
+        assert.equal(m.bytes, first400)
+        same(m.outline, [{ line: 1, level: 1, text: 'Mid' }])
+        assert.match(m.reason, /budget/)
+        assert.equal(t.status, 'read')
+        assert.equal(p.totalBytes, budget)
+      })
+    },
+  },
+  {
+    id: 'reading-plan-budget-skips-and-continues',
+    run: async () => {
+      const one = 'x'.repeat(19) + '\n'
+      const files = {
+        'src/one.txt': one.repeat(5), // 100 bytes
+        'src/two.txt': one.repeat(30), // 600 bytes, 30 lines: no shorter form
+        'src/three.txt': 'xxxx\n'.repeat(10), // 50 bytes
+      }
+      const ro = '1. `src/one.txt` — first\n2. `src/two.txt` — too large for what is left\n3. `src/three.txt` — smaller, comes later'
+      withRepo(files, ro, ({ doc }) => {
+        const p = plan(doc, 150)
+        same(p.entries.map((e) => e.path), ['src/one.txt', 'src/two.txt', 'src/three.txt'])
+        same(p.entries.map((e) => e.status), ['read', 'skipped-budget', 'read'])
+        assert.match(p.entries[1].reason, /budget/)
+        assert.equal(p.entries[1].bytes, 0)
+        assert.equal(p.totalBytes, 150)
+      })
+    },
+  },
+  {
+    id: 'reading-plan-budget-never-shrinks-a-range-or-a-partial',
+    run: async () => {
+      const files = {
+        'src/one.txt': ('x'.repeat(19) + '\n').repeat(5), // 100 bytes
+        'src/a.js': lineText(1, 300),
+        'docs/big.md': BIG_MD,
+        'src/three.txt': 'xxxx\n'.repeat(10), // 50 bytes
+      }
+      const ro = '1. `src/one.txt` — first\n2. `src/a.js:1-100` — a range that does not fit\n3. `docs/big.md` — a partial that does not fit\n4. `src/three.txt` — fits'
+      withRepo(files, ro, ({ doc }) => {
+        const p = plan(doc, 500)
+        same(p.entries.map((e) => e.status), ['read', 'skipped-budget', 'skipped-budget', 'read'])
+        assert.equal(p.totalBytes, 150)
+      })
+    },
+  },
+  {
+    id: 'reading-plan-docs-harness-allowed',
+    run: async () => {
+      withRepo({ 'docs/harness/x/y.md': 'hello\n' }, '1. `docs/harness/x/y.md` — a recorded task document', ({ doc }) => {
+        const [e] = plan(doc).entries
+        assert.equal(e.status, 'read')
+        assert.equal(e.bytes, 6)
+      })
+    },
+  },
+  {
+    id: 'reading-plan-rejects',
+    run: async () => {
+      const files = { '../x': 'secret\n', '.git/config': '[core]\n', 'src/a.js': 'ok\n' }
+      const ro = '1. `../x` — outside the repository\n2. `.git/config` — inside .git\n3. `docs/../src/a.js` — a `..` segment anywhere\n4. `src/a.js` — the control'
+      withRepo(files, ro, ({ doc }) => {
+        const p = plan(doc)
+        same(p.entries.map((e) => e.status), ['skipped-invalid', 'skipped-invalid', 'skipped-invalid', 'read'])
+        assert.match(p.entries[0].reason, /\.\./)
+        assert.match(p.entries[1].reason, /\.git/)
+        assert.match(p.entries[2].reason, /\.\./)
+        assert.equal(p.totalBytes, 3)
+      })
+    },
+  },
+  {
+    id: 'reading-plan-rejects-an-absolute-path-outside-the-repository',
+    run: async () => {
+      const { planReading } = await readingLib()
+      withRepo({ 'src/a.js': 'ok\n' }, '1. `src/a.js` — placeholder', ({ dir, repo, doc, put }) => {
+        const outside = path.join(dir, 'outside', 'secret.txt')
+        put(outside, 'secret\n')
+        const inside = path.join(repo, 'src', 'a.js')
+        const p = planReading([entry(outside), entry('~/notes.md'), entry('//server/share/x.md'), entry(inside)], [repo], 1e6, doc)
+        same(p.entries.map((e) => e.status), ['skipped-invalid', 'skipped-invalid', 'skipped-invalid', 'read'])
+        assert.match(p.entries[0].reason, /outside/)
+        assert.equal(p.entries[3].file, inside)
+        assert.equal(p.entries[3].bytes, 3)
+      })
+    },
+  },
+  {
+    id: 'reading-plan-non-file-entry',
+    run: async () => {
+      const ro = '1. Memory item "design notes" — recall it before starting\n2. `git log --oneline -5` — recent history\n3. `src/a.js` — a real file'
+      withRepo({ 'src/a.js': 'ok\n' }, ro, ({ doc }) => {
+        const p = plan(doc)
+        for (const e of p.entries.slice(0, 2)) {
+          assert.equal(e.isFile, false)
+          assert.equal(e.status, 'skipped-invalid')
+          assert.equal(e.reason, 'not a file')
+          assert.equal(e.path, null)
+          assert.equal(e.bytes, 0)
+        }
+        assert.equal(p.entries[2].status, 'read')
+      })
+    },
+  },
+  {
+    id: 'reading-plan-self-entry',
+    run: async () => {
+      const ro = '1. 이 문서 — read first\n2. `docs/harness/handoff/doc.md` — the same document, by path\n3. `src/a.js` — a real file'
+      withRepo({ 'src/a.js': 'ok\n' }, ro, ({ doc }) => {
+        const p = plan(doc, 10)
+        const [self, byPath, real] = p.entries
+        assert.equal(self.self, true)
+        assert.equal(self.status, 'read')
+        assert.equal(self.bytes, 0)
+        assert.equal(self.file, doc)
+        assert.equal(byPath.status, 'read')
+        assert.equal(byPath.bytes, 0)
+        assert.match(byPath.reason, /itself/)
+        assert.equal(real.bytes, 3)
+        assert.equal(p.totalBytes, 3)
+      })
+    },
+  },
+  {
+    id: 'reading-plan-missing-file-and-directory',
+    run: async () => {
+      withRepo({ 'src/a.js': 'ok\n' }, '1. `src/nope.js` — gone\n2. `src/` — a folder', ({ doc }) => {
+        const [missing, dir] = plan(doc).entries
+        assert.equal(missing.status, 'skipped-missing')
+        assert.equal(dir.status, 'skipped-invalid')
+        assert.match(dir.reason, /directory/)
+      })
+    },
+  },
+  {
+    id: 'reading-plan-entry-shape',
+    run: async () => {
+      withRepo({ 'src/a.js': 'ok\n', 'docs/big.md': BIG_MD }, '1. `src/a.js` — read\n2. `docs/big.md` — partial\n3. `src/nope.js` — missing', ({ doc }) => {
+        const p = plan(doc)
+        same(Object.keys(p).sort(), ['budget', 'entries', 'totalBytes'])
+        const common = ['bytes', 'file', 'fileLines', 'isFile', 'lines', 'path', 'range', 'raw', 'reason', 'self', 'status']
+        same(Object.keys(p.entries[0]).sort(), common)
+        same(Object.keys(p.entries[1]).sort(), [...common, 'outline', 'outlineBytes'].sort())
+        same(Object.keys(p.entries[2]).sort(), common)
+      })
+    },
+  },
+  {
+    id: 'reading-plan-roots-are-tried-in-order',
+    run: async () => {
+      const { planReading } = await readingLib()
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'handoff-roots-'))
+      try {
+        const a = path.join(dir, 'a')
+        const b = path.join(dir, 'b')
+        for (const [root, name, text] of [[a, 'both.md', 'from a\n'], [b, 'both.md', 'from b\n'], [b, 'only-b.md', 'b\n']]) {
+          fs.mkdirSync(root, { recursive: true })
+          fs.writeFileSync(path.join(root, name), text)
+        }
+        const p = planReading([entry('both.md'), entry('only-b.md'), entry('none.md')], [a, b], 1e6)
+        same(p.entries.map((e) => e.file), [path.join(a, 'both.md'), path.join(b, 'only-b.md'), null])
+        assert.equal(p.entries[2].status, 'skipped-missing')
+        const none = planReading([entry('both.md')], [], 1e6)
+        assert.equal(none.entries[0].status, 'skipped-invalid')
+        assert.match(none.entries[0].reason, /root/)
+      } finally {
+        fs.rmSync(dir, { recursive: true, force: true })
+      }
+    },
+  },
+  {
+    id: 'reading-plan-git-top-level-is-a-second-root',
+    run: async () => {
+      // A document in a sub-folder of its repository: entries may be relative to the repository's top.
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'handoff-git-'))
+      try {
+        const top = path.join(dir, 'top')
+        execFileSync('git', ['init', '-q', top], { stdio: 'ignore' })
+        const doc = path.join(top, 'sub', 'docs', 'harness', 'handoff', 'doc.md')
+        const put = (abs, t) => {
+          fs.mkdirSync(path.dirname(abs), { recursive: true })
+          fs.writeFileSync(abs, t)
+        }
+        put(doc, mk([['Goal', 'x'], ['Reading Order', '1. `shared/f.md` — relative to the top\n2. `g.md` — relative to the sub-folder']]))
+        put(path.join(top, 'shared', 'f.md'), 'f\n')
+        put(path.join(top, 'sub', 'g.md'), 'gg\n')
+        const [f, g] = plan(doc).entries
+        const real = (p) => fs.realpathSync(p)
+        assert.equal(f.status, 'read')
+        assert.equal(real(f.file), real(path.join(top, 'shared', 'f.md')))
+        assert.equal(g.status, 'read')
+        assert.equal(real(g.file), real(path.join(top, 'sub', 'g.md')))
+      } finally {
+        fs.rmSync(dir, { recursive: true, force: true })
+      }
+    },
+  },
+  {
+    id: 'reading-plan-usage-and-input-errors',
+    run: async () => {
+      const doc = path.join(FIX, 'reading-order-forms.md')
+      const noBudget = cli('reading-plan', '--doc', doc)
+      assert.equal(noBudget.status, 2)
+      assert.equal(noBudget.stdout, '')
+      assert.match(noBudget.stderr, /--budget/)
+      assert.equal(cli('reading-plan', '--budget', '100').status, 2)
+      for (const bad of ['abc', '0', '-5', '1.5', '']) {
+        const r = cli('reading-plan', '--doc', doc, '--budget', bad)
+        assert.equal(r.status, 2, `budget ${JSON.stringify(bad)}`)
+        assert.equal(r.stdout, '')
+        assert.match(r.stderr, /--budget/)
+      }
+      const missing = cli('reading-plan', '--doc', path.join(FIX, 'does-not-exist.md'), '--budget', '100')
+      assert.equal(missing.status, 1)
+      assert.equal(missing.stdout, '')
+      const foreign = cli('reading-plan', '--doc', path.join(FIX, 'non-handoff.md'), '--budget', '100')
+      assert.equal(foreign.status, 1)
+      assert.match(foreign.stderr, /# HANDOFF —/)
+    },
+  },
+  {
+    id: 'reading-plan-a-document-outside-any-docs-folder-has-no-root',
+    run: async () => {
+      // Without a `docs` folder above it (and outside a git repository) a document has no root
+      // to resolve against, so nothing is read — the entries say why.
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'handoff-noroot-'))
+      try {
+        const doc = path.join(dir, 'loose.md')
+        fs.writeFileSync(doc, mk([['Reading Order', '1. `a.md` — a file next to the document']]))
+        fs.writeFileSync(path.join(dir, 'a.md'), 'x\n')
+        const [e] = plan(doc).entries
+        assert.equal(e.status, 'skipped-invalid')
+        assert.match(e.reason, /root/)
+      } finally {
+        fs.rmSync(dir, { recursive: true, force: true })
+      }
+    },
+  },
+]
+
+// ---- paths.mjs: the handoff's own path rule ------------------------------------------------------------------
+
+const pathCases = [
+  {
+    id: 'paths-validate-handoff-path',
+    run: async () => {
+      const { validateHandoffPath } = await pathsLib()
+      const root = path.resolve(os.tmpdir(), 'handoff-rule-root')
+      const accepted = [
+        'src/a.js', 'docs/harness/x/y.md', 'a\\b.md', './a.md', '.github/x.yml', '.gitignore', 'src/.gitkeep', 'a/b.git/c',
+        'dir/', path.join(root, 'src', 'a.js'),
+      ]
+      for (const p of accepted) assert.equal(validateHandoffPath(p, root).ok, true, `accept ${p}`)
+      const rejected = [
+        '', '../x', 'a/../x', 'a\\..\\x', '..', '.. /x', '.git', '.git/config', 'a/.git/hooks/x', '.GIT/config', '.git./config',
+        'git~1/config', '//server/share/x', '\\\\server\\share\\x', '/etc/passwd', 'C:/Windows/x', 'C:foo', '~/x', 'a\0b',
+        path.join(root, '.git', 'config'), root + '/../elsewhere/x', path.resolve(root, '..', 'elsewhere', 'x'),
+      ]
+      for (const p of rejected) {
+        const r = validateHandoffPath(p, root)
+        assert.equal(r.ok, false, `reject ${JSON.stringify(p)}`)
+        assert.equal(typeof r.reason, 'string', `a reason for ${JSON.stringify(p)}`)
+      }
+      // `root` may be several folders: an absolute path is accepted inside any of them.
+      const other = path.resolve(os.tmpdir(), 'handoff-rule-other')
+      assert.equal(validateHandoffPath(path.join(other, 'x.md'), [root, other]).ok, true)
+      assert.equal(validateHandoffPath(path.join(other, 'x.md'), root).ok, false)
+    },
+  },
+  {
+    id: 'paths-derive-repo-root',
+    run: async () => {
+      const { deriveRepoRoot } = await pathsLib()
+      const snap = await snapshotLib()
+      const base = path.resolve(os.tmpdir(), 'handoff-derive')
+      const doc = path.join(base, 'repo', 'docs', 'harness', 'handoff', 'doc.md')
+      assert.equal(deriveRepoRoot(doc), path.join(base, 'repo'))
+      assert.equal(deriveRepoRoot(path.join(base, 'repo', 'docs', 'docs', 'x', 'doc.md')), path.join(base, 'repo', 'docs'))
+      for (const p of [doc, path.join(base, 'repo', 'notes', 'doc.md')]) {
+        assert.equal(deriveRepoRoot(p), snap.deriveRepoRoot(path.dirname(p)), p)
+      }
+    },
+  },
+]
+
+// ---- diff.mjs --what reading: the budget simulation ----------------------------------------------------------
+
+const ent = (raw, bytes, lines, extra = {}) => ({ raw, kind: 'path', exists: true, isDir: false, self: false, bytes, lines, ...extra })
+
+const readingSimCases = [
+  {
+    id: 'corpus-reading-simulation-follows-the-policy',
+    run: async () => {
+      const { simulateReading } = await diffLib()
+      const docs = [
+        // 1,000 + 4,000 (partial form 1,600 + 60 x 25 = 3,100) + 500
+        { readingOrder: [ent('a.md', 1000, 100), ent('b.md', 4000, 1000), ent('c.md', 500, 50)] },
+        // over 2,000 lines, no range: partial 20,000 + 60 x 100 = 26,000; nothing shorter exists
+        { readingOrder: [ent('z.md', 200000, 4000)] },
+        // a line range (10 of 100 lines), a section (25%), a file that is gone, the document itself, a `..` path
+        { readingOrder: [ent('s.js:11-20', 1000, 100), ent('d.md §Foo', 2000, 50), ent('gone.md', null, null, { exists: false }), { raw: '이 문서', kind: 'self', exists: true, isDir: false, self: true, bytes: 9, lines: 3 }, ent('../up.md', 800, 80)] },
+      ]
+      const r = simulateReading(docs, { budgets: [3000, 4500, 5000, 1e9] })
+      same(r.unbudgeted.perDoc, [5500, 26000, 600])
+      assert.equal(r.unbudgeted.max, 26000)
+      assert.equal(r.readable, 3 + 1 + 2)
+      same(r.estimates, { lineRange: 1, sectionRange: 1, partial: 1 })
+      const by = Object.fromEntries(r.byBudget.map((b) => [b.budget, b]))
+      same(by[3000].perDoc, [1500, 0, 600])
+      assert.equal(by[3000].skipped, 2)
+      assert.equal(by[3000].degraded, 0)
+      assert.equal(by[3000].zeroRead, 1)
+      assert.equal(by[3000].docsAtCap, 2)
+      same(by[4500].perDoc, [4100, 0, 600])
+      same(by[4500].status, { read: 1, range: 2, partial: 1, 'skipped-budget': 2 })
+      assert.equal(by[4500].degraded, 1)
+      assert.equal(by[4500].skipped, 2)
+      same(by[5000].perDoc, [5000, 0, 600])
+      assert.equal(by[5000].degraded, 0)
+      assert.equal(by[5000].skipped, 2)
+      same(by[1e9].perDoc, [5500, 26000, 600])
+      assert.equal(by[1e9].skipped, 0)
+      assert.equal(by[1e9].docsAtCap, 0)
+      assert.equal(by[1e9].zeroRead, 0)
+    },
+  },
+  {
+    id: 'corpus-reading-simulation-agrees-with-the-planner-on-whole-files',
+    run: async () => {
+      // The simulation works from recorded sizes; on whole files (no estimate involved) it must
+      // spend a budget exactly as the shipped planner does.
+      const { simulateReading } = await diffLib()
+      const one = 'x'.repeat(19) + '\n'
+      const files = { 'src/one.txt': one.repeat(5), 'src/two.txt': one.repeat(30), 'src/three.txt': 'xxxx\n'.repeat(10) }
+      const ro = '1. `src/one.txt` — a\n2. `src/two.txt` — b\n3. `src/three.txt` — c'
+      withRepo(files, ro, ({ doc }) => {
+        const p = plan(doc, 150)
+        const manifest = [ent('src/one.txt', 100, 6), ent('src/two.txt', 600, 31), ent('src/three.txt', 50, 11)] // the snapshot counts one line more
+        const sim = simulateReading([{ readingOrder: manifest }], { budgets: [150] }).byBudget[0]
+        same(sim.status, { read: 2, range: 0, partial: 0, 'skipped-budget': 1 })
+        assert.equal(sim.perDoc[0], p.totalBytes)
+        assert.equal(p.entries.filter((e) => e.status === 'skipped-budget').length, sim.skipped)
+      })
+    },
+  },
+  {
+    id: 'corpus-reading-path-rule-checks',
+    run: async () => {
+      const { pathRuleChecks } = await diffLib()
+      const docs = [
+        { facts: { docsUnderHarness: true }, parsed: { fixedLabels: { Docs: 'docs/harness/x-task/' } }, readingOrder: [ent('../x.md', 1, 1), ent('.git/config', 1, 1), ent('src/a.js', 1, 1), ent('a/../b.md', 1, 1)] },
+        { facts: { docsUnderHarness: true }, parsed: { fixedLabels: { Docs: 'docs/harness/../y' } }, readingOrder: [] },
+        { facts: { docsUnderHarness: false }, parsed: { fixedLabels: null }, readingOrder: [] },
+      ]
+      same(pathRuleChecks(docs), { docsUnderHarness: 2, docsUnderHarnessPass: 1, dotEntries: 3, dotEntriesRejected: 3 })
+    },
+  },
+  {
+    id: 'corpus-diff-reading-runs-on-a-snapshot',
+    run: async () => {
+      withSnapshot((snap) => {
+        const j = node('diff.mjs', '--corpus', snap, '--what', 'reading', '--json')
+        assert.equal(j.status, 0, j.stderr)
+        const o = JSON.parse(j.stdout)
+        assert.equal(o.what, 'reading')
+        assert.equal(o.documents, FIXTURES.length)
+        assert.ok(Array.isArray(o.byBudget) && o.byBudget.length >= 3)
+        const t = node('diff.mjs', '--corpus', snap, '--what', 'reading')
+        assert.equal(t.status, 0, t.stderr)
+        assert.match(t.stdout, /^reading: 13 documents/m)
+        assert.match(t.stdout, /B = /)
+      })
+    },
+  },
+]
+
 // ---- the runner's own exit codes ----------------------------------------------------------------------------
 
 function runnerExit(casesSource) {
@@ -1027,5 +1634,8 @@ export const cases = [
   ...legacyCases,
   ...corpusCases,
   ...corpusToolCases,
+  ...readingPlanCases,
+  ...pathCases,
+  ...readingSimCases,
   ...runnerCases,
 ]

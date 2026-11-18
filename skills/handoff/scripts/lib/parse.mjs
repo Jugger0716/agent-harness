@@ -8,7 +8,8 @@
 //                 worktree, upstream }               (a label the document lacks reads as null;
 //                                                     dirtyPaths and worktree are not parsed yet)
 //     sections: { <name>: <body text> }               (level-2 headings outside code fences, in
-//                                                     document order; see "Section names")
+//                                                     document order; see "Section names"; a
+//                                                     null-prototype object, so any title is a key)
 //     fixedLabels: { Skill, Task, Phase, Mode, Docs } | null   (from "## In Progress")
 //     harness:  "absent"                              (the `Harness :` line is not parsed yet)
 //     ledger:   { rows: [{ epic, epicRaw, slice, status, evidence, notes }] } | null
@@ -121,7 +122,7 @@ function bodyOf(secs, lines, flags, name) {
 const HEADER_LABEL = /\*\*([A-Za-z][A-Za-z ]*):\*\*/g
 
 function readHeader(lines, flags, firstSection) {
-  const raw = {}
+  const raw = Object.create(null) // a label named `constructor` must be a label, not a lookup miss
   for (let i = 1; i < firstSection; i++) {
     if (flags[i]) continue
     const l = lines[i]
@@ -129,10 +130,10 @@ function readHeader(lines, flags, firstSection) {
     marks.forEach((m, k) => {
       const name = m[1].trim().toLowerCase()
       const to = k + 1 < marks.length ? marks[k + 1].index : l.length
-      if (!(name in raw)) raw[name] = l.slice(m.index + m[0].length, to).trim()
+      if (!Object.hasOwn(raw, name)) raw[name] = l.slice(m.index + m[0].length, to).trim()
     })
   }
-  const get = (k) => (k in raw ? raw[k] : null)
+  const get = (k) => (Object.hasOwn(raw, k) ? raw[k] : null)
   const headRaw = get('head')
   let head = null
   let headSubject = null
@@ -379,9 +380,10 @@ export function parseHandoff(text) {
   const flags = fenceFlags(lines)
   const secs = findSections(lines, flags)
 
-  const sections = {}
+  // No prototype: a section titled `toString` or `__proto__` is an ordinary key.
+  const sections = Object.create(null)
   for (const s of secs) {
-    if (!(s.name in sections)) sections[s.name] = trimBlankEdges(lines.slice(s.start + 1, s.end)).join('\n')
+    if (!Object.hasOwn(sections, s.name)) sections[s.name] = trimBlankEdges(lines.slice(s.start + 1, s.end)).join('\n')
   }
   const body = (name) => bodyOf(secs, lines, flags, name)
 

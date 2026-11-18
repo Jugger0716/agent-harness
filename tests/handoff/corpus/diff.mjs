@@ -15,6 +15,15 @@
 //                  parse.mjs) reads from each copy, against what the manifest recorded when the
 //                  snapshot was taken: same item count, and the same kind and raw text entry by
 //                  entry. Lists the ids that differ and where.
+//   reading        what `/handoff resume` would read under the reading plan (skills/handoff/scripts/
+//                  lib/reading.mjs), simulated from the manifest's recorded bytes and lines: per-
+//                  document read volume (median, P90, max) before any budget and after each
+//                  candidate budget, the budget B the D3 rule gives (P90 rounded up to a multiple of
+//                  16 KiB, capped at 128 KiB), how many entries are read in the shorter `partial` form
+//                  or skipped for the budget, and the documents at the cap or reading nothing; plus
+//                  the path-rule checks (a `Docs` value under docs/harness/ passes, an entry with a
+//                  `..` or `.git` segment is rejected). Every number that rests on an estimate is
+//                  counted in the output: the manifest holds sizes, not content or source paths.
 //
 // Exit codes: 0 the comparison ran (a difference is a finding, printed, not a failure); 1 input
 // problem — no or unreadable manifest.json, a copy that is missing or whose sha256 differs from
@@ -22,9 +31,12 @@
 import path from 'node:path'
 import fs from 'node:fs'
 import { pathToFileURL } from 'node:url'
-import { loadCorpus } from './measure.mjs'
-import { InputError, exitOnError } from './snapshot.mjs'
+import { loadCorpus, computeMetrics, median, percentile } from './measure.mjs'
+import { InputError, exitOnError, stripHint } from './snapshot.mjs'
 import { deriveLegacyNext } from './legacy_next.mjs'
+import { parseRange } from '../../../skills/handoff/scripts/lib/parse.mjs'
+import { validateHandoffPath } from '../../../skills/handoff/scripts/lib/paths.mjs'
+import { HEAD_LINES, OUTLINE_HEADING_BYTES, WHOLE_FILE_MAX_LINES } from '../../../skills/handoff/scripts/lib/reading.mjs'
 
 const SOURCES = ['in-progress', 'label', 'last-row', 'docs', 'step-one']
 
@@ -64,7 +76,196 @@ function extractAgree(docs) {
   return { data: { documents: docs.length, agree: docs.length - differ.length, differ }, lines }
 }
 
-export const WHAT = { 'next-legacy': nextLegacy, 'extract-agree': extractAgree }
+// ---- reading: the budget simulation ------------------------------------------------------------------
+
+const KIB = 1024
+const B_STEP = 16 * KIB // D3: B is the P90 rounded UP to a multiple of this ...
+const B_CEILING = 128 * KIB // ... and never more than this (the rule's ceiling; B itself is written once, in templates/handoff/resume.md)
+const LINES_PER_HEADING = 40 // an outline's heading count when the file's headings cannot be counted
+const PATH_ROOT = path.resolve(path.sep, 'corpus-root') // never touched: the path rule is pure
+
+const stats = (perDoc) => ({ perDoc, median: median(perDoc), p90: percentile(perDoc, 0.9), max: perDoc.length ? Math.max(...perDoc) : null })
+
+// One manifest entry under the reading plan: its class, whether a resume could read it, the form it
+// takes with the whole budget at its disposal (`primary`) and the shorter `partial` form tried when
+// that does not fit (`alt`). Costs are bytes; the outline is charged OUTLINE_HEADING_BYTES a heading.
+function formsOfEntry(e, includeAbsolute) {
+  if (e.kind === 'self' || e.self) return { cls: 'self', readable: false }
+  const p = stripHint(e.raw)
+  const abs = /^([A-Za-z]:[\\/]|[\\/])/.test(p)
+  // An absolute path is outside the allowed root unless the snapshot's roots were known; the
+  // sensitivity run reads it as if its own folder were the root.
+  if (!validateHandoffPath(p, includeAbsolute && abs ? path.dirname(p) : PATH_ROOT).ok) return { cls: 'invalid', readable: false }
+  if (!e.exists) return { cls: 'missing', readable: false }
+  if (e.isDir || e.lines == null) return { cls: 'unreadable', readable: false }
+  const outline = OUTLINE_HEADING_BYTES * Math.round(e.lines / LINES_PER_HEADING)
+  const head = (e.bytes * Math.min(HEAD_LINES, e.lines)) / e.lines + outline
+  const r = parseRange(e.raw)
+  if (r && r.type === 'lines') {
+    if (r.start > e.lines) return { cls: 'partial', readable: true, estimate: 'partial', primary: { cost: outline } }
+    const n = Math.min(r.end, e.lines) - r.start + 1
+    return { cls: 'range-lines', readable: true, estimate: 'lineRange', primary: { cost: (e.bytes * n) / e.lines } }
+  }
+  if (r && r.type === 'section') return { cls: 'range-section', readable: true, estimate: 'sectionRange', primary: { cost: e.bytes * 0.25 } }
+  if (e.lines > WHOLE_FILE_MAX_LINES) return { cls: 'partial', readable: true, estimate: 'partial', primary: { cost: head } }
+  return { cls: 'whole', readable: true, primary: { cost: e.bytes }, alt: e.lines > HEAD_LINES ? { cost: head } : null }
+}
+
+// The same walk the planner makes, in document order, on costs: an entry that does not fit what is
+// left degrades to its `alt` form if that fits, else it is skipped and the walk goes on.
+function spendBudget(forms, budget) {
+  let total = 0
+  let skipped = 0
+  let degraded = 0
+  let readable = 0
+  const status = { read: 0, range: 0, partial: 0, 'skipped-budget': 0 }
+  for (const f of forms) {
+    if (!f.readable) continue
+    readable++
+    const left = budget - total
+    if (f.primary.cost <= left) {
+      total += f.primary.cost
+      status[f.cls === 'whole' ? 'read' : f.cls === 'partial' ? 'partial' : 'range']++
+    } else if (f.alt && f.alt.cost <= left) {
+      total += f.alt.cost
+      degraded++
+      status.partial++
+    } else {
+      skipped++
+      status['skipped-budget']++
+    }
+  }
+  return { total, skipped, degraded, readable, status }
+}
+
+// -> { documents, entries, readable, docsWithReadable, unbudgeted, byBudget[], classes, estimates }
+// `unbudgeted` and each `byBudget[i]` carry `perDoc` (bytes read per document) with its median, P90
+// and max. `estimates` counts the readable entries whose bytes come from a model, not a measurement:
+// a line range (by line share), a section (25% of the file — there is no live file to look in), a
+// `partial` (head bytes by line share, outline heading count = lines / 40).
+export function simulateReading(docs, { budgets = [], includeAbsolute = false } = {}) {
+  const perDocForms = docs.map((d) => d.readingOrder.map((e) => formsOfEntry(e, includeAbsolute)))
+  const unbudgeted = perDocForms.map((fs_) => fs_.reduce((a, f) => a + (f.readable ? f.primary.cost : 0), 0))
+  const classes = {}
+  const estimates = { lineRange: 0, sectionRange: 0, partial: 0 }
+  let entries = 0
+  let readable = 0
+  let docsWithReadable = 0
+  for (const forms of perDocForms) {
+    if (forms.some((f) => f.readable)) docsWithReadable++
+    for (const f of forms) {
+      entries++
+      const c = (classes[f.cls] ||= { entries: 0, bytes: 0 })
+      c.entries++
+      if (f.readable) {
+        readable++
+        c.bytes += f.primary.cost
+        if (f.estimate) estimates[f.estimate]++
+      }
+    }
+  }
+  const byBudget = budgets.map((budget) => {
+    const rs = perDocForms.map((forms) => spendBudget(forms, budget))
+    const after = stats(rs.map((r) => r.total))
+    return {
+      budget,
+      ...after,
+      docsAtCap: unbudgeted.filter((v) => v > budget).length,
+      skipped: rs.reduce((a, r) => a + r.skipped, 0),
+      degraded: rs.reduce((a, r) => a + r.degraded, 0),
+      docsWithSkipped: rs.filter((r) => r.skipped > 0).length,
+      zeroRead: rs.filter((r) => r.readable > 0 && r.total === 0).length,
+      status: Object.fromEntries(Object.keys(rs[0] ? rs[0].status : {}).map((k) => [k, rs.reduce((a, r) => a + r.status[k], 0)])),
+    }
+  })
+  return { documents: docs.length, entries, readable, docsWithReadable, unbudgeted: stats(unbudgeted), byBudget, classes, estimates }
+}
+
+// The path rule on the corpus: every `Docs` value recorded under docs/harness/ passes, and every
+// Reading Order entry with a `..` or `.git` segment is still rejected.
+export function pathRuleChecks(docs) {
+  const out = { docsUnderHarness: 0, docsUnderHarnessPass: 0, dotEntries: 0, dotEntriesRejected: 0 }
+  for (const d of docs) {
+    if (d.facts && d.facts.docsUnderHarness) {
+      out.docsUnderHarness++
+      const value = d.parsed && d.parsed.fixedLabels ? d.parsed.fixedLabels.Docs : null
+      const first = String(value ?? '').replace(/`/g, '').trim().split(/\s+/)[0]
+      if (validateHandoffPath(stripHint(first), PATH_ROOT).ok) out.docsUnderHarnessPass++
+    }
+    for (const e of d.readingOrder) {
+      if (e.kind !== 'path') continue
+      const p = stripHint(e.raw)
+      const segs = p.replace(/\\/g, '/').split('/')
+      if (!segs.includes('..') && !segs.includes('.git')) continue
+      out.dotEntries++
+      if (!validateHandoffPath(p, PATH_ROOT).ok) out.dotEntriesRejected++
+    }
+  }
+  return out
+}
+
+const kib = (b) => `${Math.round(b / KIB)} KiB`
+const num = (n) => (n === null || n === undefined ? 'n/a' : Math.round(n).toLocaleString('en-US'))
+const share = (n, d) => (d ? `${(Math.round((1000 * n) / d) / 10).toFixed(1)}%` : '-')
+const triple = (s) => `${num(s.median)} / ${num(s.p90)} / ${num(s.max)}`
+
+function reading(docs) {
+  const baseRows = Object.fromEntries(computeMetrics(docs).map((r) => [r.key, r.value]))
+  const baseline = { median: baseRows['readBytes.median'], p90: baseRows['readBytes.p90'], max: baseRows['readBytes.max'] }
+  const first = simulateReading(docs)
+  const p90 = first.unbudgeted.p90
+  const roundedUp = p90 === null ? 0 : Math.ceil(p90 / B_STEP) * B_STEP
+  const B = Math.min(roundedUp, B_CEILING)
+  const budgets = [...new Set([64 * KIB, 96 * KIB, 128 * KIB, 256 * KIB, roundedUp].filter((b) => b > 0))].sort((a, b) => a - b)
+  const sim = simulateReading(docs, { budgets })
+  const sens = simulateReading(docs, { includeAbsolute: true }).unbudgeted
+  const rules = pathRuleChecks(docs)
+  const N = sim.documents
+  const data = {
+    documents: N,
+    entries: sim.entries,
+    readable: sim.readable,
+    docsWithReadable: sim.docsWithReadable,
+    baseline9_0_1: baseline,
+    unbudgeted: { median: sim.unbudgeted.median, p90, max: sim.unbudgeted.max },
+    absoluteSensitivity: { median: sens.median, p90: sens.p90, max: sens.max },
+    budgetRule: { p90, roundedUpToStep: roundedUp, ceiling: B_CEILING, B, capped: roundedUp > B_CEILING, stepBytes: B_STEP },
+    byBudget: sim.byBudget.map(({ perDoc, ...rest }) => rest),
+    classes: sim.classes,
+    estimates: { ...sim.estimates, sectionResolvedAgainstALiveFile: 0, outlineCountedFromALiveFile: 0 },
+    pathRules: rules,
+  }
+  const lines = [
+    `reading: ${N} documents, ${sim.entries} Reading Order entries, ${sim.readable} readable (valid path, existing file, not the document itself); ${sim.docsWithReadable} documents have at least one`,
+    `read volume per document, bytes (median / P90 / max):`,
+    `  9.0.1 baseline (files over ${WHOLE_FILE_MAX_LINES} lines skipped)         ${triple(baseline)}`,
+    `  range-aware, no budget                                ${triple(sim.unbudgeted)}`,
+    `  range-aware, no budget, existing absolute entries read ${triple(sens)}   (sensitivity: the snapshot has no root, absolute entries are otherwise outside it)`,
+    `B (D3): P90 ${num(p90)} -> next multiple of ${kib(B_STEP)}: ${num(roundedUp)} (${kib(roundedUp)}) -> ${roundedUp > B_CEILING ? `over the ${kib(B_CEILING)} ceiling` : 'within the ceiling'} -> B = ${num(B)} (${kib(B)})`,
+    `by budget (budget; skipped-budget of readable; read as partial because the whole file did not fit; documents at the cap; volume after the budget median / P90 / max; documents that read nothing of those with a readable entry):`,
+  ]
+  for (const b of sim.byBudget) {
+    const mark = b.budget === B ? '  <- B' : b.budget === roundedUp && roundedUp > B_CEILING ? '  (uncapped P90 rule, for reference)' : ''
+    lines.push(
+      `  ${kib(b.budget).padStart(8)}  skipped ${b.skipped}/${sim.readable} (${share(b.skipped, sim.readable)})  partial ${b.degraded} (${share(b.degraded, sim.readable)})  at cap ${b.docsAtCap}/${N} (${share(b.docsAtCap, N)})  after ${triple(b)}  nothing read ${b.zeroRead}/${sim.docsWithReadable}${mark}`,
+    )
+  }
+  const atB = sim.byBudget.find((b) => b.budget === B)
+  if (atB) {
+    const s = atB.status
+    lines.push(`readable entries by final status at B: read ${s.read}, range ${s.range}, partial ${s.partial} (${atB.degraded} of them only because the whole file did not fit), skipped-budget ${s['skipped-budget']}`)
+  }
+  lines.push('volume by entry class, no budget (readable entries; bytes charged):')
+  for (const [k, c] of Object.entries(sim.classes)) lines.push(`  ${k.padEnd(14)} ${String(c.entries).padStart(5)} entries  ${num(c.bytes)} bytes`)
+  const e = sim.estimates
+  lines.push(
+    `estimates used: line range ${e.lineRange} (bytes by line share), section range ${e.sectionRange} (25% of the file; 0 resolved against a live file, the snapshot stores no source path), partial ${e.partial} (head bytes by line share, outline headings = lines / ${LINES_PER_HEADING}; 0 counted from a live file); every budget row also uses the partial estimate for the entries it reads as partial`,
+    `path rules: ${rules.docsUnderHarnessPass} of ${rules.docsUnderHarness} recorded Docs values under docs/harness/ pass; ${rules.dotEntriesRejected} of ${rules.dotEntries} Reading Order entries with a .. or .git segment are rejected`,
+  )
+  return { data, lines }
+}
+
+export const WHAT = { 'next-legacy': nextLegacy, 'extract-agree': extractAgree, reading }
 
 // ---- CLI -------------------------------------------------------------------------------------------------
 

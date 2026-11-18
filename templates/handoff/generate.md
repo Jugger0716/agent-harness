@@ -60,7 +60,10 @@ Gather, in this order:
      heuristic tried in its place matched 3 of the 17 with 2 of those 3 wrong.
    - Definition of Done — how a future session knows the effort is finished
    - Reading Order — files a fresh session should read, in order, each with a 1-line reason
-     (prefer: this handoff → key spec/plan docs → the 1–3 most central source files)
+     (prefer: this handoff → key spec/plan docs → the 1–3 most central source files).
+     Optional: `path:START-END`, inside the path's backticks, reads only those lines.
+     Optional: `path §heading text`, inside the same backticks, reads only the first section
+     whose heading contains that text.
    - Do NOT — guardrails and forbidden actions carried over from this session's decisions
 5. **Progress Ledger (epic continuity, optional — NEW, P0-1):** only when this handoff is part
    of a multi-slice epic (skip entirely for a single-task handoff — never force an empty table).

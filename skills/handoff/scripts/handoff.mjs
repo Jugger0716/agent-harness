@@ -13,8 +13,11 @@
 // Adding a command: write one function from the parsed options to a plain object, and one line in
 // COMMANDS below naming its options. Nothing else in this file changes.
 import fs from 'node:fs'
+import path from 'node:path'
 import { InputError } from './lib/errors.mjs'
 import { parseHandoff } from './lib/parse.mjs'
+import { allowedRoots } from './lib/paths.mjs'
+import { planReading } from './lib/reading.mjs'
 
 class UsageError extends Error {}
 
@@ -32,9 +35,19 @@ function cmdParse(opts) {
   return parseHandoff(readDoc(opts.doc))
 }
 
+// How a resume reads the document's Reading Order (lib/reading.mjs): per entry a status, the range to
+// read and the bytes, within --budget bytes. The allowed roots come from where the document lives.
+function cmdReadingPlan(opts) {
+  if (!/^[1-9]\d{0,14}$/.test(opts.budget)) throw new UsageError('reading-plan: --budget must be a positive whole number of bytes')
+  const docPath = path.resolve(opts.doc)
+  const parsed = parseHandoff(readDoc(docPath))
+  return planReading(parsed.readingOrder, allowedRoots(docPath), Number(opts.budget), docPath)
+}
+
 // name -> { options: every accepted --option, required: the ones that must be given, run }
 const COMMANDS = {
   parse: { options: ['doc'], required: ['doc'], run: cmdParse },
+  'reading-plan': { options: ['doc', 'budget'], required: ['doc', 'budget'], run: cmdReadingPlan },
 }
 
 // ---- dispatch -----------------------------------------------------------------------------------------

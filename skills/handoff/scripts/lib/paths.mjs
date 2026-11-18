@@ -1,0 +1,96 @@
+// The handoff's own path rule, and where a document's Reading Order paths are resolved from.
+// Nothing here reads a file's content; `deriveRepoRoot` and `validateHandoffPath` do not touch the
+// file system at all, and `gitTopLevel` runs one `git rev-parse`.
+//
+// The rule (`validateHandoffPath`) has four conditions. A path is accepted when
+//   1. it is relative, or absolute and inside one of the allowed roots (a UNC path, a `~` path and
+//      a drive-relative `C:x` path are neither);
+//   2. no segment is `..` (an exact segment match, never a substring, after `\` becomes `/`);
+//   3. no segment is `.git` (any letter case, with the trailing dots or spaces Windows ignores, and
+//      the `GIT~1` short name of the same folder);
+//   4. it stays inside an allowed root once resolved (a relative path with no `..` segment does so by
+//      construction; an absolute one is compared against each root).
+// `docs/harness/…` is allowed: the 9.0.1 rule refused it, and the handoff's own task documents live
+// there. The rule is this file's; it does not cite the /harness path validator.
+//
+// The allowed roots of a document are the folder that holds its `docs/` directory (the nearest
+// `docs` folder above the document, its parent) and that folder's git top-level (a document can live
+// in a sub-folder of its repository, and its entries are then relative to the top-level).
+import path from 'node:path'
+import { execFileSync } from 'node:child_process'
+
+const SHORT_GIT = /^git~\d+$/i
+const isGitSegment = (seg) => seg.replace(/[. ]+$/, '').toLowerCase() === '.git' || SHORT_GIT.test(seg)
+// `..`, and `..` followed by spaces, which Windows resolves to `..` as well. (`...` is a different
+// name — people write it as an abbreviation inside a path — and stays an ordinary segment.)
+const isParentSegment = (seg) => /^\.\.\s*$/.test(seg)
+
+// Is `abs` (already resolved) inside `root`? -> the path relative to the root, or null.
+function relativeInside(root, abs) {
+  const rel = path.relative(root, abs)
+  if (rel === '..' || rel.startsWith('..' + path.sep) || path.isAbsolute(rel)) return null
+  return rel
+}
+
+// validateHandoffPath(p, root) -> { ok: true } | { ok: false, reason }
+// `root` is one folder or an array of them (the allowed roots).
+export function validateHandoffPath(p, root) {
+  const roots = (Array.isArray(root) ? root : [root]).filter(Boolean).map((r) => path.resolve(r))
+  if (typeof p !== 'string' || p === '') return { ok: false, reason: 'empty path' }
+  if (p.includes('\0')) return { ok: false, reason: 'path contains a NUL character' }
+  const norm = p.replace(/\\/g, '/')
+  if (norm.startsWith('//')) return { ok: false, reason: 'UNC paths are not allowed' }
+  const segs = norm.split('/')
+  if (segs.some(isParentSegment)) return { ok: false, reason: 'path contains a ".." segment' }
+  if (norm.startsWith('~')) return { ok: false, reason: 'a ~ path is outside the repository' }
+  if (/^[A-Za-z]:(?![/])/.test(norm)) return { ok: false, reason: 'drive-relative path is not allowed' }
+  const absolute = /^([A-Za-z]:\/|\/)/.test(norm)
+  let below = segs
+  if (absolute) {
+    const abs = path.resolve(p)
+    let rel = null
+    for (const r of roots) {
+      rel = relativeInside(r, abs)
+      if (rel !== null) break
+    }
+    if (rel === null) return { ok: false, reason: 'absolute path outside the repository' }
+    below = rel.split(/[\\/]/)
+  }
+  if (below.some(isGitSegment)) return { ok: false, reason: 'path is inside .git/' }
+  return { ok: true }
+}
+
+// The parent of the nearest `docs` folder above the document; null when there is none.
+export function deriveRepoRoot(docPath) {
+  let a = path.dirname(path.resolve(docPath))
+  for (;;) {
+    if (path.basename(a) === 'docs') return path.dirname(a)
+    const up = path.dirname(a)
+    if (up === a) return null
+    a = up
+  }
+}
+
+// `git rev-parse --show-toplevel` run in `dir`; null outside a repository or without git.
+export function gitTopLevel(dir) {
+  try {
+    const out = execFileSync('git', ['-C', dir, 'rev-parse', '--show-toplevel'], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim()
+    return out ? path.resolve(out) : null
+  } catch {
+    return null
+  }
+}
+
+// The folders a document's entries may be resolved against, in the order they are tried:
+// the derived root, then the git top-level of the folder git is asked about (the derived root, else
+// the document's own folder). Duplicates and missing roots are dropped.
+export function allowedRoots(docPath) {
+  const derived = deriveRepoRoot(docPath)
+  const top = gitTopLevel(derived || path.dirname(path.resolve(docPath)))
+  const roots = []
+  for (const r of [derived, top]) if (r && !roots.includes(path.resolve(r))) roots.push(path.resolve(r))
+  return roots
+}
