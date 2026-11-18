@@ -5,10 +5,10 @@
 
 agent-harness is a **Claude Code plugin repository**, not an application. It ships 6 skills whose
 primary artifact is a contract document (`skills/<name>/SKILL.md`), plus the prompt templates,
-native Workflow segment scripts, and self-consistency lints those contracts depend on. There is no
-application source, and the only behavioural tests are the segment stub tests under
-`tests/segment_stubs/` and the `/handoff` helper-script tests under `tests/handoff/` — the
-contracts *are* the code, and a wrong sentence is a defect.
+native Workflow segment scripts, the `/handoff` helper script, and self-consistency lints those
+contracts depend on. There is no application source, and the only behavioural tests are the segment
+stub tests under `tests/segment_stubs/` and the `/handoff` helper-script tests under
+`tests/handoff/` — the contracts *are* the code, and a wrong sentence is a defect.
 
 ## Tech Stack
 
@@ -18,6 +18,7 @@ contracts *are* the code, and a wrong sentence is a defect.
 | Prompt templates | Markdown | `templates/` |
 | Workflow segments | JavaScript, engine-hosted | `workflows/*.workflow.js`; only `export const meta` is allowed as module syntax |
 | Lint | Python 3, stdlib only (`pathlib`, `re`, `hashlib`, `argparse`) | `scripts/*.py` |
+| Helper script | Node.js (ESM, stdlib only) | `skills/handoff/scripts/handoff.mjs` |
 | Syntax check | Node.js | `scripts/check_workflow_syntax.mjs` |
 | Manifest | `.claude-plugin/plugin.json`, `.claude-plugin/marketplace.json` | version lives at **3 key paths** — see Important Notes |
 
@@ -62,7 +63,8 @@ marker was found **nowhere** (the single source lost all its sync sites).
 There is no build, dev, or deploy command. The test commands are the two runners in the table
 above: the segment stub runner and `node tests/handoff/run.mjs`. Neither is part of the `lint-cmd`
 chain; run the first as well after changing anything under `workflows/` and the second after
-changing anything under `skills/handoff/` or `templates/handoff/`. Both run in the same CI workflow.
+changing anything under `skills/handoff/` or `templates/handoff/` (or `templates/_shared/session_boundary.md`,
+which it also reads). Both run in the same CI workflow.
 
 ## Architecture
 
@@ -150,10 +152,12 @@ frontmatter is the plugin's exposure contract, so treat it as part of the skill'
 ## Verification
 
 The nine lints under `scripts/`, plus `.github/scripts/check_lint_wiring.sh` and the CI wiring
-in `.github/workflows/lint.yml`, are the entire **static** verification layer. The behavioural
-layer is two separate suites, neither part of the `lint-cmd` chain: the segment stub tests under
-`tests/segment_stubs/` cover the Workflow segments only, and the tests under `tests/handoff/` cover
-the `/handoff` helper scripts (and assert on the text of the `/handoff` contract files):
+in `.github/workflows/lint.yml`, are the **static** verification layer; the one static check outside
+it is the set of assertions on the text of the `/handoff` contract files inside `tests/handoff/`
+(the dated-marker ban lives there and, as a twin, in `verify_body_budget.py`). The behavioural layer
+is two separate suites, neither part of the `lint-cmd` chain: the segment stub tests under
+`tests/segment_stubs/` cover the Workflow segments only, and the rest of `tests/handoff/` covers the
+`/handoff` helper scripts:
 
 - `verify_sync_markers.py` — SYNC group referential integrity, `min_sites` occurrence floor, and
   token consistency; **plus** a section-reference check over `SECTION_REF_TARGETS`, which now
@@ -231,9 +235,10 @@ the `/handoff` helper scripts (and assert on the text of the `/handoff` contract
   limits.
 - `verify_body_budget.py` — per-skill `SKILL.md` body ceilings, three named `/handoff` loads
   (`generate`, `generate+ledger`, `resume`) with a hard SPEC cap on `generate` that a ceiling raise
-  cannot buy, and a ban on dated measurement markers and planning tags in the `/handoff` contract
-  files. Ceilings are measured sizes with zero slack (lowering is free, raising needs an explicit
-  raise in the same commit); the measurement basis and figures are in its docstring, not copied here.
+  cannot buy (every `templates/handoff/*.md` must belong to a load or carry a ceiling), and a ban on
+  dated measurement markers and planning tags in the `/handoff` contract files. Ceilings are measured
+  sizes with zero slack (lowering is free, raising needs an explicit raise in the same commit); the
+  measurement basis and figures are in its docstring, not copied here.
 - `check_workflow_syntax.mjs` — compiles each script through `AsyncFunction` because `node --check`
   false-greens on ESM `export`, then guards CR in both the working tree and the index blob.
 - `.github/scripts/check_lint_wiring.sh` — compares the lint scripts that exist against the ones

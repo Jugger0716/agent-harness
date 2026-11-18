@@ -12,9 +12,11 @@ MEASUREMENT BASIS
 -----------------
 Fixed here BEFORE any size was written down, because a byte count differs by basis:
 
-  (a) a file is read as BINARY and every carriage return (0x0D) is removed before it is
-      counted. This repository is edited on Windows with core.autocrlf=true, so a working
-      tree copy can be CRLF where the committed blob is LF; the CR must not count;
+  (a) a file is read as BINARY, decoded as strict UTF-8 with its carriage returns still in
+      place, and only then has every carriage return (0x0D) removed before it is counted.
+      This repository is edited on Windows with core.autocrlf=true, so a working tree copy
+      can be CRLF where the committed blob is LF; the CR must not count. The order matters:
+      removing CRs first would let a CR that splits a multi-byte sequence heal a damaged file;
   (b) the unit is BYTES of the UTF-8 encoding, never characters. The bodies are mostly ASCII
       but carry multi-byte characters (em dashes, arrows, some Korean), so bytes and
       characters differ; the description lint counts characters, this one deliberately does
@@ -24,8 +26,9 @@ Fixed here BEFORE any size was written down, because a byte count differs by bas
   (d) a file that is not valid UTF-8 is a structural problem too, even though only its size
       is budgeted, so a damaged file cannot pass as a small one.
 
-What is measured: ``len(raw_bytes.replace(b"\\r", b""))``. A "load" is the plain SUM of the
-measured files it names; nothing is deduplicated or discounted.
+What is measured: ``len(raw_bytes.decode("utf-8").replace("\\r", "").encode("utf-8"))``,
+which for valid UTF-8 is the byte count with every 0x0D removed. A "load" is the plain SUM
+of the measured files it names; nothing is deduplicated or discounted.
 
 WHAT THIS CHECKS
 ----------------
@@ -40,7 +43,10 @@ WHAT THIS CHECKS
      templates/handoff/generate-ledger.md also has a ceiling of its own. On top of the
      ratchet, the generate load is held to a hard SPEC cap (GENERATE_LOAD_SPEC_CAP, 15,360
      bytes): a measured generate load above it fails even if its ratchet ceiling was
-     raised, and a ratchet ceiling above it is a mis-edit.
+     raised, and a ratchet ceiling above it is a mis-edit. Every templates/handoff/*.md
+     must be named by a load or have a ceiling of its own, so text moved out of
+     generate.md into a new template cannot leave the budget; an unbudgeted one is a
+     structural problem.
   c. DATED-MARKER AND PLANNING-TAG BAN over skills/handoff/SKILL.md and every
      templates/handoff/*.md: no line matching ``(Observed|Measured|MEASURED|OBSERVED)``
      followed within 40 non-period characters by ``20dd``, and none carrying a planning
@@ -99,10 +105,13 @@ WHAT THIS DOES NOT CHECK
   * It budgets SKILL.md bodies, not what a body points at. Text moved out of a body into a
     template the skill always reads passes the body ratchet; for /handoff the loads close
     that, for the other five skills nothing does.
-  * A template that /handoff generate starts always reading must be added to the ``generate``
-    entry of LOAD_FILES in the same commit; the lint cannot know a call's reads, only the
-    list it is given. A new templates/handoff/*.md is scanned for markers (check c) but has no
-    byte budget until it is listed.
+  * It cannot know which call reads a template, only the lists it is given. A new
+    templates/handoff/*.md fails as unbudgeted until it is listed, but listing it under its
+    own ceiling only budgets its size: a template that /handoff generate always reads must
+    be added to the ``generate`` entry of LOAD_FILES in the same commit, or the generate
+    load under-counts what a call loads.
+  * It does not stop a file from shrinking: an empty or truncated body passes, because
+    lowering is free.
   * It does not repeat the contract test's rule that a template must not carry a bare
     ``§Non-Goals`` reference, and it scans the files it globs, where the test names four.
 
@@ -115,8 +124,10 @@ EXIT CODES
      too), not 2
   2  structural problem: a listed file is missing or unreadable, a BOM, a file that is not
      valid UTF-8, a skill with no recorded ceiling or a ceiling with no skill, a load with
-     no ceiling, or a ceiling configured for the generate load above the SPEC cap while the
-     measured load is still within it
+     no ceiling or a ceiling with no file list, no ``generate`` load configured at all, a
+     templates/handoff/*.md that no load names and no ceiling covers, or a ceiling
+     configured for the generate load above the SPEC cap while the measured load is still
+     within it
 """
 
 import argparse
@@ -185,6 +196,11 @@ FILE_CEILING = {
 # ASCII-only, as they are in JavaScript: without it a Hangul letter before `AC-1` is a word
 # character in Python (no boundary, no hit) and not in JS (boundary, hit). `\d` and `\d+` are
 # match-equivalent here, so `+` is kept for readability only.
+# One difference remains: the `[^.]{0,40}` window counts Python code points but JS UTF-16 code
+# units, so around astral characters (emoji) the two windows differ. The lint's window is the
+# wider one, so it can flag a line the test misses and never the reverse: not a silent pass.
+# Nothing checks the two regexes against each other mechanically -- when one is changed, change
+# the other in the same commit.
 DATED_RE = re.compile(r"(Observed|Measured|MEASURED|OBSERVED)[^.]{0,40}20[0-9]{2}", re.ASCII)
 TAG_RES = (
     re.compile(r"\bAC-\d+", re.ASCII),
@@ -201,9 +217,10 @@ def repo_root() -> Path:
 
 
 def read_measured(root: Path, rel: str, structural: list):
-    """Return (bytes_without_CR, text) for one file, or None after recording why not.
+    """Return (bytes_without_CR, text_without_CR) for one file, or None after recording why not.
 
-    BOM is checked on the raw bytes and the decode is strict, so neither can hide in a size.
+    BOM is checked on the raw bytes and the decode is strict and runs BEFORE the CRs are
+    removed, so neither a BOM nor a CR inside a multi-byte sequence can hide in a size.
     """
     path = root / rel
     if not path.is_file():
@@ -217,13 +234,13 @@ def read_measured(root: Path, rel: str, structural: list):
     if raw.startswith(BOM):
         structural.append("%s: starts with a UTF-8 BOM -- remove it; a BOM adds 3 bytes the LF twin does not have" % rel)
         return None
-    clean = raw.replace(b"\r", b"")
     try:
-        text = clean.decode("utf-8")
+        text = raw.decode("utf-8")
     except UnicodeDecodeError as exc:
         structural.append("%s: not valid UTF-8 (%s at byte %d)" % (rel, exc.reason, exc.start))
         return None
-    return len(clean), text
+    text = text.replace("\r", "")
+    return len(text.encode("utf-8")), text
 
 
 def scan_markers(rel: str, text: str) -> list:
@@ -270,9 +287,23 @@ def main() -> int:
         structural.append("load %s: no ceiling recorded -- add one in the same commit" % name)
     for name in sorted(set(LOAD_CEILING) - set(LOAD_FILES)):
         structural.append("load %s: has a ceiling but no file list in LOAD_FILES" % name)
+    # The SPEC cap below is defined on the `generate` load, so a config without it cannot be judged.
+    if "generate" not in LOAD_FILES or "generate" not in LOAD_CEILING:
+        structural.append(
+            "load generate: missing from LOAD_FILES or LOAD_CEILING -- the SPEC cap is defined on it"
+        )
     template_rels = sorted(p.relative_to(root).as_posix() for p in root.glob(HANDOFF_TEMPLATES_GLOB))
     if not template_rels:
         structural.append("no %s found" % HANDOFF_TEMPLATES_GLOB)
+    # Every handoff template is budgeted by a load or by a ceiling of its own: otherwise moving
+    # text out of generate.md into a new file would take it out of every budget.
+    budgeted = {f for files in LOAD_FILES.values() for f in files} | set(FILE_CEILING)
+    for rel in template_rels:
+        if rel not in budgeted:
+            structural.append(
+                "%s: unbudgeted handoff template -- add it to a load in LOAD_FILES or give it a "
+                "FILE_CEILING entry in the same commit" % rel
+            )
 
     # ---- read every file once ------------------------------------------------------------
     wanted = {"skills/%s/SKILL.md" % n for n in skills_found}
