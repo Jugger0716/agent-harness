@@ -17,6 +17,9 @@
 //     ledger:   { rows: [{ epic, epicRaw, slice, status, evidence, notes }] } | null
 //     stepOne:  { text, candidates[], sliceLabel }    (Next Steps item 1)
 //     readingOrder: [{ raw, path, range, isFile, self }]
+//     doNotMissing: boolean   (the document has no `## Do NOT` section at all)
+//     doNotRefOnly: boolean   (the section is only a pointer to another document — see "The Do NOT section")
+//     doNotRef:     string | null   (the pointed-to document's path, when doNotRefOnly and the section names one)
 //   }
 //
 // Rules in force here:
@@ -40,6 +43,8 @@
 //   - Harness record: "record" when any of the five fixed labels is present (it wins when a
 //     document carries both); else "none" for a `Harness : none` or `Harness : none (<reason>)`
 //     line; else "absent" — a document written before either existed.
+//   - The Do NOT section: `readDoNot` below says when it is only a pointer ("same as the previous handoff's Do NOT:
+//     `docs/…/x.md`"), which the `generate` contract no longer allows and older documents have.
 //   - Unknown fields are null, never absent.
 //
 // Everything exported besides `parseHandoff` is a building block that the corpus tools share.
@@ -434,6 +439,65 @@ export function readingOrderOf(text) {
   return readingOrderEntries(bodyOf(findSections(lines, flags), lines, flags, 'Reading Order'))
 }
 
+// ---- the Do NOT section: a pointer to another document ------------------------------------------------------------------------
+
+// A document written before the contract required the section in full may carry it only as a reference to an earlier
+// document: "same as the previous handoff's Do NOT: `docs/harness/handoff/x.md`". A resume that reads only this
+// document loses the guardrails. `doNotRefOnly` says the section is such a pointer. The test is a heuristic with one
+// documented direction of error: it answers true for a section that is short and refers to something, and never
+// for an empty or missing section (that is `doNotMissing`, a separate problem), a rich section, or a guardrail that
+// merely names a file. A wrong "true" costs one extra read of the pointed-to section (the briefing prints it with the
+// document's own lines), a wrong "false" is the state before this field existed.
+//
+// The section is a pointer when ALL THREE hold:
+//   1. a reference word occurs outside the reference anchors — one of CARRY below (same, see, carry/carried/inherit…,
+//      previous, prior, earlier, unchanged; 이전, 직전, 동일, 승계, 참조, 그대로), so a guardrail that names a file
+//      ("Do not edit `docs/spec.md`") is not a pointer;
+//   2. it names a document: a reference anchor (a `.md` path in backticks, a markdown link) or one of the words of
+//      DOCUMENT (handoff, document, 핸드오프, 문서) — so "동일 브랜치 push 금지" is a guardrail, not a pointer;
+//   3. what is left of the section is shorter than POINTER_OWN_TEXT_MAX letters and digits once the reference anchors
+//      (HTML comments, links, URLs, and backtick spans that are a `.md` path), the reference words and the filler words
+//      of FILLER (articles, prepositions, "handoff", "document", "Do NOT" itself, …) are removed. A guardrail written
+//      in a backtick pair that is not a `.md` path stays and counts.
+// `doNotRef` is the first anchor in text order: the first backtick token that, with its trailing hint removed, looks
+// like a path and ends in `.md`. A markdown link is not followed (conservative: a link-only pointer is still a pointer,
+// with no path); null when the section is not a pointer or names no such path. The path is DATA: the caller validates it
+// with the Reading Order's rule (reading-plan) before anything is read.
+const CARRY = String.raw`\b(?:same|see|carry|carries|carried|carrying|inherit|inherits|inherited|previous|prior|earlier|unchanged)\b|이전|직전|동일|승계|참조|그대로`
+const FILLER = String.raw`\b(?:a|an|as|the|of|in|on|at|to|from|with|its|it|this|that|these|those|and|or|is|are|be|over|all|still|apply|applies|valid|keep|kept|handoffs?|documents?|docs?|sections?|list|do|not|s)\b|핸드오프|문서|섹션|목록|전부|모두|유효|유지|적용`
+const DOCUMENT = String.raw`\b(?:handoffs?|documents?)\b|핸드오프|문서`
+const POINTER_OWN_TEXT_MAX = 12
+
+// A backtick token that is a reference anchor -> its path without the hint; null otherwise.
+function anchorPath(token) {
+  const p = stripHint(token.trim())
+  return looksLikePath(p) && /\.md$/i.test(p) ? p : null
+}
+
+export function readDoNot(body) {
+  if (body === undefined) return { missing: true, refOnly: false, ref: null }
+  const text = body.replace(/<!--[\s\S]*?-->/g, ' ')
+  let ref = null
+  let anchored = false
+  const rest = text
+    .replace(/`([^`\n]*)`/g, (_, tok) => {
+      const a = anchorPath(tok)
+      if (a !== null && ref === null) ref = a
+      anchored ||= a !== null
+      return a === null ? ` ${tok} ` : ' '
+    })
+    .replace(/\[[^\]]*\]\([^)]*\)/g, () => {
+      anchored = true
+      return ' '
+    })
+    .replace(/https?:\/\/\S+/g, ' ')
+  const refers = new RegExp(CARRY, 'i').test(rest)
+  const namesDocument = anchored || new RegExp(DOCUMENT, 'i').test(rest)
+  const own = rest.replace(new RegExp(CARRY, 'gi'), ' ').replace(new RegExp(FILLER, 'gi'), ' ').replace(/[^\p{L}\p{N}]/gu, '')
+  const refOnly = refers && namesDocument && own.length < POINTER_OWN_TEXT_MAX
+  return { missing: false, refOnly, ref: refOnly ? ref : null }
+}
+
 // ---- the whole document -------------------------------------------------------------------------------------------------------
 
 export function parseHandoff(text) {
@@ -451,6 +515,7 @@ export function parseHandoff(text) {
   }
   const body = (name) => bodyOf(secs, lines, flags, name)
   const fixedLabels = readFixedLabels(body('In Progress'))
+  const doNot = readDoNot(sections['Do NOT'])
 
   return {
     header: readHeader(lines, flags, secs.length ? secs[0].start : lines.length),
@@ -460,5 +525,8 @@ export function parseHandoff(text) {
     ledger: readLedger(body('Progress Ledger')),
     stepOne: readStepOne(body('Next Steps')),
     readingOrder: readingOrderEntries(body('Reading Order')),
+    doNotMissing: doNot.missing,
+    doNotRefOnly: doNot.refOnly,
+    doNotRef: doNot.ref,
   }
 }

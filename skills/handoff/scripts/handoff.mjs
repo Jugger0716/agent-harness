@@ -8,7 +8,9 @@
 // a handoff) with a message on stderr; 2 a usage problem (unknown command, missing or unknown
 // option) or an internal error, also with a message on stderr. On any failure stdout stays empty.
 // A caller that gets a non-zero exit must report it and stop — never fall back to reading the
-// document by hand.
+// document by hand. The one exception is by design: `resolve-path` exits 1 with a message asking for
+// an English kebab-case summary when its slug has no ASCII letter or digit; the caller writes one
+// and runs it again (templates/handoff/generate.md Step 3).
 //
 // Adding a command: write one function from the parsed options to a plain object, and one line in
 // COMMANDS below naming its options. Nothing else in this file changes.
@@ -17,9 +19,10 @@ import path from 'node:path'
 import { InputError } from './lib/errors.mjs'
 import { parseHandoff, stripEmphasis } from './lib/parse.mjs'
 import { deriveNext } from './lib/next.mjs'
-import { allowedRoots } from './lib/paths.mjs'
+import { allowedRoots, nextDocName, normalizeSlug } from './lib/paths.mjs'
 import { planReading } from './lib/reading.mjs'
 import { carryFromDir, carryFromText, latestEpic } from './lib/ledger.mjs'
+import { latestDoc, listDocs } from './lib/select.mjs'
 import { drift, gitState, harnessState, requireFolder } from './lib/git.mjs'
 
 class UsageError extends Error {}
@@ -41,12 +44,25 @@ function cmdParse(opts) {
 // How a resume reads the document's Reading Order (lib/reading.mjs): per entry a status, the range to
 // read and the bytes, within --budget bytes. The allowed roots come from where the document lives;
 // --root (the session's folder) is a root only for a document that has none of its own.
+// `doNot` is null unless the document's `Do NOT` section is only a pointer to another document (`doNotRefOnly`, parse.mjs).
+// Then it is the plan entry for the `Do NOT` section of the document that section names — planned by the very same rule
+// as a Reading Order entry (path rule, roots, real path, budget), apart from `entries`, and first, so the guardrails are
+// not what the budget runs out on. A pointer that names no path comes back `skipped-invalid` with that reason.
 function cmdReadingPlan(opts) {
   if (!/^[1-9]\d{0,14}$/.test(opts.budget)) throw new UsageError('reading-plan: --budget must be a positive whole number of bytes')
   if (opts.root === '') throw new UsageError('reading-plan: --root must not be empty')
   const docPath = path.resolve(opts.doc)
   const parsed = parseHandoff(readDoc(docPath))
-  return planReading(parsed.readingOrder, allowedRoots(docPath, opts.root), Number(opts.budget), docPath)
+  const roots = allowedRoots(docPath, opts.root)
+  if (!parsed.doNotRefOnly) return { ...planReading(parsed.readingOrder, roots, Number(opts.budget), docPath), doNot: null }
+  const pointed =
+    parsed.doNotRef === null
+      ? { raw: '', path: null, range: null, isFile: false, self: false }
+      : { raw: `${parsed.doNotRef} §Do NOT`, path: parsed.doNotRef, range: { type: 'section', heading: 'Do NOT' }, isFile: true, self: false }
+  const plan = planReading([pointed, ...parsed.readingOrder], roots, Number(opts.budget), docPath)
+  const [doNot, ...entries] = plan.entries
+  if (parsed.doNotRef === null) doNot.reason = 'the Do NOT section points to another document without naming a file'
+  return { ...plan, entries, doNot }
 }
 
 // What a resume briefing prints on its `Next :` row and which slash-command tokens item 1 offers
@@ -106,6 +122,48 @@ function cmdLatestEpic(opts) {
   return latestEpic(opts.dir)
 }
 
+// The file a new handoff document is written to (lib/paths.mjs): `<--dir>/<--date>-<slug>[-N].md` with `/`, where the
+// slug is --slug normalised to `[a-z0-9-]`, at most 40 characters (the model supplies an English kebab-case summary;
+// nothing is transliterated), and -N makes a taken name new. `slug` in the output is the normalised slug without -N;
+// `normalized` says --slug changed. Nothing is created. A slug with no ASCII letter or digit is an input problem (exit
+// 1, the message asks for an English summary); a --date that is not a calendar date written YYYY-MM-DD is a usage
+// problem (exit 2), like any other malformed option value.
+function isCalendarDate(text) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text)
+  if (!m) return false
+  const d = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])))
+  return d.getUTCFullYear() === Number(m[1]) && d.getUTCMonth() === Number(m[2]) - 1 && d.getUTCDate() === Number(m[3])
+}
+
+function cmdResolvePath(opts) {
+  if (opts.dir === '') throw new UsageError('resolve-path: --dir must not be empty')
+  if (!isCalendarDate(opts.date)) throw new UsageError('resolve-path: --date must be a calendar date written YYYY-MM-DD')
+  const slug = normalizeSlug(opts.slug)
+  if (slug === '') {
+    throw new InputError('resolve-path: the slug has no ASCII letter or digit and the helper does not transliterate; give an English kebab-case summary of the title (a-z, 0-9 and "-", at most 40 characters)')
+  }
+  const folder = opts.dir.replace(/\\/g, '/').replace(/\/+$/, '')
+  return { path: `${folder}/${nextDocName(opts.dir, opts.date, slug)}`, slug, normalized: slug !== opts.slug }
+}
+
+// Every handoff document of a folder, newest first (lib/select.mjs): path, header values and file-name slug.
+function cmdList(opts) {
+  if (opts.dir === '') throw new UsageError('list: --dir must not be empty')
+  return listDocs(opts.dir)
+}
+
+// The document a resume starts from (lib/select.mjs): the newest day's only document, or the one of its several that
+// records --branch (the session's current branch, as git-state reports it) with a commit HEAD of --cwd (default: the
+// folder the command runs in) is at or ahead of; otherwise `needsChoice` and the day's candidates. Reads only --dir and
+// --cwd; a document never names a folder or a program.
+function cmdLatest(opts) {
+  if (opts.dir === '') throw new UsageError('latest: --dir must not be empty')
+  if (opts.branch === '') throw new UsageError('latest: --branch must not be empty')
+  const cwd = opts.cwd === undefined ? process.cwd() : opts.cwd
+  requireFolder(cwd, '--cwd')
+  return latestDoc(opts.dir, opts.branch, path.resolve(cwd))
+}
+
 // name -> { options: every accepted --option, required: the ones that must be given, run }
 const COMMANDS = {
   parse: { options: ['doc'], required: ['doc'], run: cmdParse },
@@ -116,6 +174,9 @@ const COMMANDS = {
   drift: { options: ['doc', 'cwd'], required: ['doc', 'cwd'], run: cmdDrift },
   'ledger-carry': { options: ['doc', 'dir', 'epic'], required: ['epic'], run: cmdLedgerCarry },
   'latest-epic': { options: ['dir'], required: ['dir'], run: cmdLatestEpic },
+  'resolve-path': { options: ['slug', 'date', 'dir'], required: ['slug', 'date', 'dir'], run: cmdResolvePath },
+  list: { options: ['dir'], required: ['dir'], run: cmdList },
+  latest: { options: ['dir', 'branch', 'cwd'], required: ['dir', 'branch'], run: cmdLatest },
 }
 
 // ---- dispatch -----------------------------------------------------------------------------------------

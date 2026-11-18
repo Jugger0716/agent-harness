@@ -5,15 +5,31 @@
 ### Step 1 — Locate
 
 - With `<path>`: use it (must exist; else error in `user_lang` and suggest `/handoff list`).
-- Without: pick the newest file in `docs/harness/handoff/` by filename date, then mtime.
-  Consider ONLY files whose first line starts with `# HANDOFF —` (guards against foreign
-  files if another skill's slug happens to be `handoff`).
-  None found → report (in `user_lang`) that no handoff exists and stop.
+- Without: run
+
+  ```
+  node "{HANDOFF_JS}" latest --dir "docs/harness/handoff" --branch "<current branch>" --cwd "."
+  ```
+
+  `<current branch>` is the `branch` of `node "{HANDOFF_JS}" git-state --cwd "."` (`n/a` when
+  `isGit` is false); `{HANDOFF_JS}`, the quoting and a non-zero exit are as in Step 4. The output
+  is one JSON object: `doc`, `candidates` (the newest day's handoff documents, newest first, each
+  `{path, branch, head, title}`) and `needsChoice`.
+  - `doc` set → that is the document. When `candidates` holds other documents of the same day,
+    say which were left and why (this one records the current branch, at or behind HEAD).
+  - `doc` null and `candidates` empty → no handoff document exists: report it (in `user_lang`)
+    and stop.
+  - `needsChoice` true → the newest day has several documents and the script cannot tell which
+    one this session continues. Show `candidates` as a numbered list (the file name's date,
+    branch, title, path), ask which one and continue with it. This is a separate, earlier question, asked only when
+    `needsChoice` is true; it is not Step 5's gate: Step 5 still ends in exactly one
+    AskUserQuestion call.
 
 ### Step 2 — Parse
 
 Read the document. Extract `Branch`, `HEAD` sha, and the section bodies (English headings are
-the parse anchors).
+the parse anchors, read by prefix: `## Definition of Done (v3 계획)` is the Definition of Done
+section).
 
 ### Step 3 — Drift verification (report, NEVER mutate)
 
@@ -183,6 +199,13 @@ that says "range hint ignored" means the entry's hint was not a range and the wh
 the Step 5 briefing, say for each `range` and `partial` entry which part was read, and list the
 skipped ones, as a short list directly under the aligned block — never as a new row inside it.
 
+`doNot` is null unless this document's `Do NOT` section is only a pointer to an earlier document.
+Then it is the plan entry for the `Do NOT` section of the document pointed to (not one of
+`entries`): with `status` `range`, read its lines — one hop, and a section that is itself only a
+pointer is said so, not followed; with any other status, or a `partial` with no `range`, the
+carried-over Do NOT could not be read: say so with its `reason` in the briefing, never an empty
+row.
+
 The script checks each path BEFORE any read, and the four conditions are this file's, not
 /harness's path validator: (1) the path is relative, or absolute and inside the repository (the
 folder that holds the document's `docs/` directory, or that folder's git top-level — for a
@@ -223,7 +246,7 @@ Print (in `user_lang`):
   Blockers: <summary or "none">
   Next    : <see "Next :" derivation below>
   Next cmd: <see "Next cmd:" derivation below>
-  Do NOT  : <summary>
+  Do NOT  : <summary of this document's own lines, plus the `doNot` section Step 4 planned or why it was not read; "none recorded" when it has no `Do NOT` section>
 ```
 
 Three worked examples — the second is not an edge case, it is the common non-epic shape, so

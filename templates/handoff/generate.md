@@ -96,7 +96,11 @@ Gather, in this order:
      Optional: `path:START-END`, inside the path's backticks, reads only those lines.
      Optional: `path §heading text`, inside the same backticks, reads only the first section
      whose heading contains that text.
-   - Do NOT — guardrails and forbidden actions carried over from this session's decisions
+   - Do NOT — guardrails and forbidden actions, written out **in full in every document**, the
+     ones still in force from earlier handoffs included, each with its reason in one clause.
+     "Same as the previous handoff's Do NOT", a bare path or "the earlier items still apply" is
+     not allowed, however the line is worded: `resume` reads only this document's section, and a
+     pointer to a document that is not in the Reading Order is lost.
 5. **Progress Ledger (epic continuity, optional — NEW, P0-1):** only when this handoff is part
    of a multi-slice epic (skip entirely for a single-task handoff — never force an empty table).
    The `Slice` column below feeds item 4's slice command convention above — a row here is what
@@ -227,21 +231,29 @@ both and never neither (Step 1 item 2).
 
 ### Step 3 — Resolve the final path (no gate — the write is unconditional)
 
-Resolve the FINAL target path: apply the collision rule from the location convention NOW, so
-the resolved path IS the write path. Then go straight to Step 4 — **`generate` never asks
-whether to save.**
+Choose the slug — an English kebab-case summary of the title, nothing transliterated — and run
+
+```
+node "{HANDOFF_JS}" resolve-path --slug "<slug>" --date "<today, YYYY-MM-DD>" --dir "docs/harness/handoff"
+```
+
+(`{HANDOFF_JS}` and the quoting as in Step 1 item 1.) It prints `path` (the write path, numbered
+when the name is taken), `slug` and `normalized`. Put `path` into the `## Resume` line and into
+any Reading Order entry that names this document: Step 2 could not know it. A non-zero exit:
+stderr verbatim and stop — except exit 1 asking for an English kebab-case summary: write one and
+run it again, once. Then go straight to Step 4 — **`generate` never asks whether to save.**
 
 **Why there is no confirmation here, stated so it is not "restored" as a missing safety net.**
 Three properties make the write safe without one, and all three are structural rather than
-promised: (i) the location convention **never overwrites** — an existing filename takes `-2`,
-`-3`, …, so no prior handoff can be destroyed and a re-run after a correction is simply a new
+promised: (i) the location convention **never overwrites** — `resolve-path` gives a taken name a
+number, so no prior handoff can be destroyed and a re-run after a correction is simply a new
 file; (ii) the write is a single local document under `docs/harness/handoff/`, touching no git
 state, no `.harness/`, and nothing outward-facing; and (iii) `generate` is *already* an
 explicit user action (§Non-Goals — nothing auto-generates a handoff), so the gate was a second
 confirmation of a command the user had just typed. What a preview-gate genuinely bought was the
 chance to correct a fact before it became durable; that is preserved by writing first and
 reporting after — **the file is the preview**, and correcting it means editing it in place or
-re-running (which yields `-2`, never an overwrite). Step 4 says both.
+re-running (a new file, never an overwrite). Step 4 says both.
 
 **Not all of it survives, and the difference is written down rather than glossed.** Of what the
 gate did: the broken-chain warning and the resolved path **moved** to Step 4's report; the
@@ -256,8 +268,9 @@ would let a later audit conclude the removal cost nothing.
 
 1. Ensure `docs/harness/handoff/` exists.
 2. Write to the path resolved in Step 3. If a collision appeared between resolution and write
-   (a concurrent run), re-resolve by the same `-2`/`-3` rule and write there — **never
-   overwrite an existing handoff**, and name the path actually written in the report below.
+   (a concurrent run), run `resolve-path` again, update the `## Resume` line to the new path and
+   write there — **never overwrite an existing handoff**, and name the path actually written in
+   the report below.
 3. Report (in `user_lang`). **The report is not optional chrome — it carries what the removed
    gate used to carry**, so print all of it:
    - **If a Progress Ledger applies (Step 1 item 5) and no carry-forward source was found**
@@ -272,17 +285,18 @@ would let a later audit conclude the removal cost nothing.
    - The path that was written, plus the resume one-liner below.
    - One line telling the user how to correct it — **three ways, and the third is the one that
      replaces `Cancel`**: edit the file directly; re-run `/handoff generate` (a re-run writes a
-     NEW `-2` file — prior handoffs are never modified); or **delete the file**, which is a
+     new file — prior handoffs are never modified); or **delete the file**, which is a
      legitimate correction and not a repair of anything, since a handoff is a plain local
      document that no state, no lint and no other skill reads. **Say so explicitly**: with no
      gate, an unwanted `generate` — including a bare `/handoff`, which IS `generate` per the
      dispatch table — can only be undone by deleting, and until it is deleted a path-less
-     `/handoff resume` will select it, because `resume` Step 1 picks the NEWEST document.
+     `/handoff resume` will pick it (or offer it among the day's candidates), because `resume`
+     Step 1 takes the NEWEST document.
 
 ```
 [handoff] Saved : docs/harness/handoff/YYYY-MM-DD-<slug>.md
   Ledger  : <"no carry-forward source found for Epic <epic> — started a new ledger" | "N row(s) carried with a Status outside the enum: <slice> (<status>), …" and/or "M row(s) carried with an empty Epic cell: <slice>, …" | omit the line entirely>
-  Correct : edit that file / re-run `/handoff generate` (writes a new `-2` file — nothing is overwritten) / delete it if unwanted (until then a path-less `resume` picks it, being newest)
+  Correct : edit that file / re-run `/handoff generate` (new file (the name may differ on a re-run) — nothing is overwritten) / delete it if unwanted (until then a path-less `resume` may pick or offer it, being newest)
   Next session → /handoff resume docs/harness/handoff/YYYY-MM-DD-<slug>.md
 ```
 

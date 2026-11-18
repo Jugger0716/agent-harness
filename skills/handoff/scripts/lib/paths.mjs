@@ -1,9 +1,11 @@
 // The handoff's own path rule, and where a document's Reading Order paths are resolved from — and, apart
-// from both, the order of the handoff documents in a folder (`orderDocs`, a pure function of file names and
-// mtimes that `latest-epic` and `ledger-carry --dir` use).
-// Nothing here reads a file's content; `deriveRepoRoot` and `validateHandoffPath` do not touch the
-// file system at all, and `gitTopLevel` runs one `git rev-parse`. (The real-path check of condition
-// 4 is the planner's, in reading.mjs.)
+// from both, how handoff documents are named and ordered: the slug rule and the collision suffix of a NEW
+// document (`normalizeSlug`, `nextDocName`; `resolve-path` is built on them) and the order of the documents
+// in a folder (`orderDocs`, a pure function of file names and mtimes that `list`, `latest`, `latest-epic`
+// and `ledger-carry --dir` use; `splitDocName` reads the date and the slug out of a name).
+// Nothing here reads a file's content; `deriveRepoRoot`, `validateHandoffPath`, `normalizeSlug` and
+// `splitDocName` do not touch the file system at all, `nextDocName` lists one folder, and `gitTopLevel` runs
+// one `git rev-parse`. (The real-path check of condition 4 is the planner's, in reading.mjs.)
 //
 // The rule has four conditions. A path is accepted when
 //   1. it is relative, or absolute and inside one of the allowed roots (a UNC path, a `~` path and
@@ -25,7 +27,9 @@
 // `docs` folder above the document, its parent) and that folder's git top-level (a document can live
 // in a sub-folder of its repository, and its entries are then relative to the top-level). A document
 // with neither takes the session's folder (the caller's `--root`) as its one root.
+import fs from 'node:fs'
 import path from 'node:path'
+import { InputError } from './errors.mjs'
 import { runGit } from './git.mjs'
 import { isParentSegment } from './segment.mjs'
 
@@ -124,6 +128,14 @@ function docKey(name) {
   return { date, rest, suffixed: s ? { slug: s[1], n: Number(s[2]) } : null }
 }
 
+// A document name -> { date, slug }: `2026-11-19-x-2.md` is `2026-11-19` and `x-2` (the slug as the name has it, a
+// collision suffix included — only `orderDocs`, which sees the siblings, can tell a suffix from a name that ends in
+// digits). A name with no date has the date `` (the oldest, see `orderDocs`) and its whole base as the slug.
+export function splitDocName(name) {
+  const { date, rest } = docKey(name)
+  return { date, slug: rest }
+}
+
 const cmp = (a, b) => (a < b ? -1 : a > b ? 1 : 0)
 
 export function orderDocs(docs) {
@@ -162,6 +174,70 @@ export function orderDocs(docs) {
   }
   items.sort((a, b) => cmp(b.date, a.date) || b.effective - a.effective || b.n - a.n || cmp(b.slug, a.slug) || cmp(b.name, a.name))
   return items.map((it) => it.d)
+}
+
+// ---- naming a new document ------------------------------------------------------------------------------------
+
+export const SLUG_MAX = 40
+
+// The slug rule (SKILL.md, location convention): `[a-z0-9-]`, at most SLUG_MAX characters. Upper-case ASCII letters
+// become lower case, every other run of characters becomes ONE `-`, a leading or trailing `-` is dropped — and nothing
+// is transliterated: an accented or non-Latin letter is a separator (the model supplies the English words, the
+// helper never guesses them). Only A-Z is lower-cased by hand, because `toLowerCase()` also turns a non-ASCII letter
+// (the Kelvin sign) into an ASCII one. A slug longer than SLUG_MAX is cut at a `-` boundary when there is one: the
+// first SLUG_MAX characters are kept when the character after them is a `-` (they end a word), else back to the last
+// `-` inside them; one long word is cut at SLUG_MAX. No `-` is left at the end. `` when nothing is left.
+export function normalizeSlug(input) {
+  const s = String(input)
+    .replace(/[A-Z]/g, (c) => c.toLowerCase())
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+  if (s.length <= SLUG_MAX) return s
+  let cut = s.slice(0, SLUG_MAX)
+  if (s[SLUG_MAX] !== '-') {
+    const k = cut.lastIndexOf('-')
+    if (k > 0) cut = cut.slice(0, k)
+  }
+  return cut.replace(/-+$/, '')
+}
+
+// The file name a NEW document of `date` and `slug` gets in `dir`: `<date>-<slug>.md`, or the same with `-N` when the
+// name is taken. N is one more than the highest number any file of that slug and day has (the plain name counts as 1),
+// not the first free one: orderDocs ranks the files of one slug by that number, so a gap left by a deleted file must
+// not give the NEWEST document a lower number than an older one (`latest` would then pick the older). Names are
+// compared in lower case, because the file system may; whatever the arithmetic says, a name that exists in any form
+// (a folder, a link, another letter case) is skipped. A folder that does not exist holds no document, and a path
+// that is not a folder is an InputError. Nothing is created.
+export function nextDocName(dir, date, slug) {
+  const stem = `${date}-${slug}`
+  let names
+  try {
+    names = fs.readdirSync(dir)
+  } catch (e) {
+    if (e.code !== 'ENOENT') throw new InputError(`cannot read folder ${dir}: ${e.code || e.message}`)
+    names = []
+  }
+  let top = 0
+  for (const name of names) {
+    const lower = name.toLowerCase()
+    if (!lower.endsWith('.md')) continue
+    const base = lower.slice(0, -3)
+    if (base === stem) top = Math.max(top, 1)
+    else if (base.startsWith(`${stem}-`)) {
+      const tail = base.slice(stem.length + 1)
+      if (/^([2-9]|[1-9]\d+)$/.test(tail)) top = Math.max(top, Number(tail))
+    }
+  }
+  const nameOf = (n) => (n === 1 ? `${stem}.md` : `${stem}-${n}.md`)
+  for (let n = top === 0 ? 1 : top + 1; ; n++) {
+    const file = path.join(dir, nameOf(n))
+    try {
+      fs.lstatSync(file)
+    } catch (e) {
+      if (e.code === 'ENOENT') return nameOf(n)
+      throw new InputError(`cannot check ${file}: ${e.code || e.message}`)
+    }
+  }
 }
 
 // The folders a document's entries may be resolved against, in the order they are tried:

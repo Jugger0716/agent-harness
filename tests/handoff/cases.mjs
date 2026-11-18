@@ -1932,7 +1932,8 @@ const readingPlanCases = [
     run: async () => {
       withRepo({ 'src/a.js': 'ok\n', 'docs/big.md': BIG_MD }, '1. `src/a.js` — read\n2. `docs/big.md` — partial\n3. `src/nope.js` — missing', ({ doc }) => {
         const p = plan(doc)
-        same(Object.keys(p).sort(), ['budget', 'entries', 'totalBytes'])
+        same(Object.keys(p).sort(), ['budget', 'doNot', 'entries', 'totalBytes'])
+        assert.equal(p.doNot, null, 'a document with a Do NOT section of its own plans nothing for it')
         const common = ['bytes', 'file', 'fileLines', 'isFile', 'lines', 'path', 'range', 'raw', 'reason', 'self', 'status']
         same(Object.keys(p.entries[0]).sort(), common)
         same(Object.keys(p.entries[1]).sort(), [...common, 'outline', 'outlineBytes', 'truncated'].sort())
@@ -4589,6 +4590,800 @@ const ledgerContractCases = [
   },
 ]
 
+// ---- resolve-path, list, latest and the Do NOT carry-over form (H12, H13, H14) ----------------------------------------------
+//
+// Folders of invented documents under the OS temp folder, removed in a `finally`; the git cases use the throw-away
+// repositories of mkrepo.mjs (a case never reads the repository this one lives in). The commands are driven through the
+// command line, like the ledger commands above: JSON on stdout, an exit code, a message on stderr.
+
+const slashed = (p) => p.replace(/\\/g, '/')
+const mkdtemp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'handoff-select-'))
+const resolveOut = (dir, slug, date = '2026-11-19') => cliOk('resolve-path', '--slug', slug, '--date', date, '--dir', dir)
+const listOut = (dir) => cliOk('list', '--dir', dir)
+const baseNames = (docs) => docs.map((d) => path.basename(d.path))
+const at = (day, hour = 0) => Date.UTC(2026, 10, day, hour) // a modification time on a day of 2026-11
+
+// A handoff document with the header lines `list` and `latest` read. `head` null records `n/a`; `worktree` null
+// leaves that line out.
+function selDoc({ title = 'Sample', date = '2026-11-19', branch = 'main', head = null, worktree = null } = {}) {
+  const lines = [`# HANDOFF — ${title}`, '', `**Date:** ${date}  **Project:** sample-service`, `**Branch:** ${branch}  **HEAD:** ${head === null ? 'n/a' : `${head} Sample subject`}`]
+  if (worktree !== null) lines.push(`**Worktree:** ${worktree}`)
+  lines.push('**Dirty:** clean  **Upstream:** n/a', '', '## Goal', 'x', '')
+  return lines.join('\n')
+}
+
+// `latest` in a temp repository's environment, with the session's folder given or left to the command's default
+function latestIn(r, dir, branch, cwd) {
+  return runIn(r, 'latest', '--dir', dir, '--branch', branch, ...(cwd === undefined ? [] : ['--cwd', cwd]))
+}
+
+const selectCases = [
+  // ---- resolve-path ----
+  {
+    id: 'resolve-path-collision-suffix',
+    run: async () => {
+      await inTmp((dir) => {
+        const base = `${slashed(dir)}/2026-11-19-sample`
+        // nothing there: the plain name, and the command writes nothing
+        same(resolveOut(dir, 'sample'), { path: `${base}.md`, slug: 'sample', normalized: false })
+        same(fs.readdirSync(dir), [])
+        // the plain name is taken: -2, and when that is taken too, -3
+        put(dir, '2026-11-19-sample.md', 'x')
+        assert.equal(resolveOut(dir, 'sample').path, `${base}-2.md`)
+        put(dir, '2026-11-19-sample-2.md', 'x')
+        assert.equal(resolveOut(dir, 'sample').path, `${base}-3.md`)
+        // `slug` is the normalised slug, not the numbered one
+        assert.equal(resolveOut(dir, 'sample').slug, 'sample')
+        // another day, another slug and a longer slug that merely starts the same do not collide
+        const other = mkdtemp()
+        try {
+          put(other, '2026-11-18-sample.md', 'x')
+          put(other, '2026-11-19-sample-extra.md', 'x')
+          put(other, '2026-11-19-other-2.md', 'x')
+          assert.equal(resolveOut(other, 'sample').path, `${slashed(other)}/2026-11-19-sample.md`)
+        } finally {
+          fs.rmSync(other, { recursive: true, force: true })
+        }
+      })
+    },
+  },
+  {
+    id: 'resolve-path-new-file-ranks-above-its-siblings',
+    run: async () => {
+      const { orderDocs } = await pathsLib()
+      // the new file must be the NEWEST of its slug by the ordering `list` and `latest` use, whatever was deleted before
+      // (a handoff is deleted when unwanted): the existing names -> the name the next file gets
+      const scenarios = [
+        [['2026-11-19-sample-2.md'], '2026-11-19-sample-3.md'], // the plain name was deleted, `-2` is left: not the free plain name
+        [['2026-11-19-sample.md', '2026-11-19-sample-3.md'], '2026-11-19-sample-4.md'], // `-2` was deleted: no gap is filled
+        [['2026-11-19-sample.md', '2026-11-19-sample-2.md', '2026-11-19-sample-10.md'], '2026-11-19-sample-11.md'], // numbers compare as numbers
+      ]
+      for (const [existing, want] of scenarios) {
+        await inTmp((dir) => {
+          for (const name of existing) put(dir, name, 'x')
+          const next = path.basename(resolveOut(dir, 'sample').path)
+          assert.equal(next, want)
+          // and the ordering agrees: the file written last is the newest of its slug (with the plain name among the existing
+          // files the number alone says so, whatever the modification times say; without it the later mtime does)
+          const all = (mtime) => [...existing, next].map((name, i) => ({ name, mtimeMs: mtime(i) }))
+          assert.equal(orderDocs(all((i) => 1000 + i))[0].name, next)
+          if (existing.includes('2026-11-19-sample.md')) assert.equal(orderDocs(all((i) => 1000 - i))[0].name, next)
+        })
+      }
+      // an entry that is not a file, and a name that differs only in letter case, are taken names too; `-1` is no sibling
+      await inTmp((dir) => {
+        fs.mkdirSync(path.join(dir, '2026-11-19-sample.md'))
+        assert.equal(path.basename(resolveOut(dir, 'sample').path), '2026-11-19-sample-2.md')
+        put(dir, '2026-11-19-Other.md', 'x')
+        assert.equal(path.basename(resolveOut(dir, 'other').path), '2026-11-19-other-2.md')
+        put(dir, '2026-11-19-third-1.md', 'x')
+        assert.equal(path.basename(resolveOut(dir, 'third').path), '2026-11-19-third.md')
+      })
+    },
+  },
+  {
+    id: 'resolve-path-normalizes',
+    run: async () => {
+      const kelvin = String.fromCharCode(0x212a)
+      const table = [
+        ['Hello World!', 'hello-world', true],
+        ['hello-world', 'hello-world', false],
+        ['  --Hello__World--  ', 'hello-world', true],
+        ['v8.7 Tiering/Plan', 'v8-7-tiering-plan', true],
+        ['a---b', 'a-b', true],
+        ['Résumé-menu', 'r-sum-menu', true], // no transliteration: a non-ASCII letter is a separator
+        [`${kelvin}ey-plan`, 'ey-plan', true], // a letter that lower-cases to ASCII is still not ASCII
+        ['한글 Plan 2', 'plan-2', true],
+        ['plan-2', 'plan-2', false],
+      ]
+      await inTmp((dir) => {
+        for (const [given, want, normalized] of table) {
+          const out = resolveOut(dir, given)
+          assert.equal(out.slug, want, `slug of ${JSON.stringify(given)}`)
+          assert.equal(out.normalized, normalized, `normalized for ${JSON.stringify(given)}`)
+          assert.equal(out.path, `${slashed(dir)}/2026-11-19-${want}.md`)
+          same(Object.keys(out).sort(), ['normalized', 'path', 'slug'])
+        }
+      })
+    },
+  },
+  {
+    id: 'resolve-path-caps-40',
+    run: async () => {
+      await inTmp((dir) => {
+        const slugOf = (s) => resolveOut(dir, s)
+        // words: the cut is at a `-` boundary, never in a word
+        const words = ['alpha', 'bravo', 'charlie', 'delta', 'echo', 'foxtrot', 'golf', 'hotel', 'india', 'juliet']
+        let want = ''
+        for (const w of words) {
+          if ((want === '' ? w : `${want}-${w}`).length > 40) break
+          want = want === '' ? w : `${want}-${w}`
+        }
+        const long = slugOf(words.join('-'))
+        assert.equal(long.slug, want)
+        assert.ok(long.slug.length <= 40 && long.slug.length > 30)
+        assert.equal(long.normalized, true)
+        // exactly 40 characters is kept as it is
+        const exact = `${'a'.repeat(20)}-${'b'.repeat(19)}`
+        assert.equal(exact.length, 40)
+        same(slugOf(exact), { path: `${slashed(dir)}/2026-11-19-${exact}.md`, slug: exact, normalized: false })
+        // the 41st character is a `-`: the first 40 are a whole slug
+        assert.equal(slugOf(`${exact}-ccc`).slug, exact)
+        // the cut lands mid-word: back to the last `-`
+        assert.equal(slugOf(`${'a'.repeat(10)}-${'b'.repeat(50)}`).slug, 'a'.repeat(10))
+        // one long word: cut at 40
+        assert.equal(slugOf('a'.repeat(60)).slug, 'a'.repeat(40))
+        // the first 40 characters end with a `-`: no trailing `-` is left
+        const trailing = `${'a'.repeat(39)}-bbb`
+        assert.equal(trailing.length, 43)
+        assert.equal(slugOf(trailing).slug, 'a'.repeat(39))
+        // the cap is on the slug: the number a collision adds comes on top
+        put(dir, `2026-11-19-${exact}.md`, 'x')
+        assert.equal(slugOf(exact).path, `${slashed(dir)}/2026-11-19-${exact}-2.md`)
+      })
+    },
+  },
+  {
+    id: 'resolve-path-empty-after-normalize',
+    run: async () => {
+      await inTmp((dir) => {
+        for (const given of ['한글만', '---', '', '!!! ???', '日本語']) {
+          const r = cli('resolve-path', '--slug', given, '--date', '2026-11-19', '--dir', dir)
+          assert.equal(r.status, 1, `exit for ${JSON.stringify(given)}: ${r.stderr}`)
+          assert.equal(r.stdout, '')
+          assert.match(r.stderr, /English kebab-case summary/)
+          assert.match(r.stderr, /no ASCII letter or digit/)
+        }
+        same(fs.readdirSync(dir), [])
+      })
+    },
+  },
+  {
+    id: 'resolve-path-malformed-date-is-a-usage-error',
+    run: async () => {
+      await inTmp((dir) => {
+        for (const bad of ['2026-13-01', '2026-02-30', '2026-02-29', '20261119', 'today', '2026-1-1', '', '2026-11-19x', ' 2026-11-19']) {
+          const r = cli('resolve-path', '--slug', 'sample', '--date', bad, '--dir', dir)
+          assert.equal(r.status, 2, `exit for ${JSON.stringify(bad)}`)
+          assert.equal(r.stdout, '')
+          assert.match(r.stderr, /--date/)
+        }
+        // a real leap day is a date
+        assert.equal(resolveOut(dir, 'sample', '2028-02-29').path, `${slashed(dir)}/2028-02-29-sample.md`)
+      })
+    },
+  },
+  {
+    id: 'resolve-path-input-and-usage-errors',
+    run: async () => {
+      await inTmp((dir) => {
+        assert.equal(cli('resolve-path', '--date', '2026-11-19', '--dir', dir).status, 2)
+        assert.equal(cli('resolve-path', '--slug', 'a', '--dir', dir).status, 2)
+        assert.equal(cli('resolve-path', '--slug', 'a', '--date', '2026-11-19').status, 2)
+        assert.equal(cli('resolve-path', '--slug', 'a', '--date', '2026-11-19', '--dir', '').status, 2)
+        // a folder that does not exist yet is the first handoff of a project: the plain name
+        const missing = path.join(dir, 'docs', 'harness', 'handoff')
+        assert.equal(resolveOut(missing, 'a').path, `${slashed(missing)}/2026-11-19-a.md`)
+        assert.ok(!fs.existsSync(path.join(dir, 'docs')), 'resolve-path creates nothing')
+        // a trailing slash and a backslash in the folder do not show in the path
+        assert.equal(resolveOut(`${dir}${path.sep}`, 'a').path, `${slashed(dir)}/2026-11-19-a.md`)
+        // a file where the folder should be is an input problem
+        const file = put(dir, 'readme.txt', 'x')
+        const r = cli('resolve-path', '--slug', 'a', '--date', '2026-11-19', '--dir', file)
+        assert.equal(r.status, 1)
+        assert.equal(r.stdout, '')
+        assert.ok(r.stderr.trim().length > 0)
+      })
+    },
+  },
+  // ---- list ----
+  {
+    id: 'list-order',
+    run: async () => {
+      await inTmp((dir) => {
+        // file-name date first (an older date with the newest mtime of all is last), then the collision suffix
+        // (`-2` was written at 09:00, before the plain name's 20:00, and still ranks first), then mtime
+        put(dir, '2026-11-18-older-day.md', selDoc({ title: 'Older day', date: '2026-11-18', branch: 'feature/x', head: 'e'.repeat(40) }), at(30))
+        put(dir, '2026-11-19-x.md', selDoc({ title: 'X', branch: 'main', head: 'a'.repeat(40) }), at(19, 20))
+        put(dir, '2026-11-19-x-2.md', selDoc({ title: 'X again' }), at(19, 9))
+        put(dir, '2026-11-19-y.md', selDoc({ title: 'Y' }), at(19, 12))
+        const out = listOut(dir)
+        same(Object.keys(out), ['docs'])
+        same(baseNames(out.docs), ['2026-11-19-x-2.md', '2026-11-19-x.md', '2026-11-19-y.md', '2026-11-18-older-day.md'])
+        same(Object.keys(out.docs[0]).sort(), ['branch', 'date', 'head', 'mtimeMs', 'path', 'slug', 'title'])
+        // the header values, the slug from the file name, the folder as given with `/`
+        same({ ...out.docs[1], mtimeMs: null }, { path: `${slashed(dir)}/2026-11-19-x.md`, date: '2026-11-19', slug: 'x', branch: 'main', head: 'a'.repeat(40), title: 'X', mtimeMs: null })
+        assert.equal(out.docs[1].mtimeMs, at(19, 20))
+        assert.equal(out.docs[0].slug, 'x-2')
+        assert.equal(out.docs[3].branch, 'feature/x')
+        assert.equal(out.docs[3].date, '2026-11-18')
+        // mtime is the last tie-break: two slugs on one day follow it
+        put(dir, '2026-11-19-z.md', selDoc({ title: 'Z' }), at(19, 23))
+        assert.equal(baseNames(listOut(dir).docs)[0], '2026-11-19-z.md')
+      })
+    },
+  },
+  {
+    id: 'list-skips-non-handoff-md',
+    run: async () => {
+      await inTmp((dir) => {
+        put(dir, '2026-11-19-real.md', selDoc({ title: 'Real' }))
+        put(dir, '2026-11-20-notes.md', '# Notes\n\n**Branch:** main\n')
+        put(dir, '2026-11-21-lowercase.md', '# handoff — lowercase\n')
+        put(dir, '2026-11-22-readme.txt', selDoc({ title: 'Not markdown' }))
+        put(dir, '2026-11-23-empty.md', '')
+        fs.mkdirSync(path.join(dir, '2026-11-24-folder.md'))
+        fs.mkdirSync(path.join(dir, 'sub'))
+        put(path.join(dir, 'sub'), '2026-11-25-nested.md', selDoc({ title: 'Nested' }))
+        // a BOM and CRLF are read like the other commands read them
+        put(dir, '2026-11-18-bom.md', String.fromCharCode(0xfeff) + toCrlf(selDoc({ title: 'Bom', branch: 'dev' })))
+        const out = listOut(dir)
+        same(baseNames(out.docs), ['2026-11-19-real.md', '2026-11-18-bom.md'])
+        assert.equal(out.docs[1].title, 'Bom')
+        assert.equal(out.docs[1].branch, 'dev')
+      })
+    },
+  },
+  {
+    id: 'list-has-no-cap-and-reads-absent-header-values-as-null',
+    run: async () => {
+      await inTmp((dir) => {
+        const pad = (n) => String(n).padStart(2, '0')
+        for (let i = 1; i <= 25; i++) put(dir, `2026-10-${pad(i)}-d.md`, selDoc({ title: `D${i}`, date: `2026-10-${pad(i)}` }))
+        put(dir, '2026-11-01-bare.md', '# HANDOFF — Only a title\n')
+        const out = listOut(dir)
+        assert.equal(out.docs.length, 26, 'every handoff document, not the newest 20')
+        same({ ...out.docs[0], mtimeMs: null, path: null }, { path: null, date: null, slug: 'bare', branch: null, head: null, title: 'Only a title', mtimeMs: null })
+        // a recorded branch wrapped in backticks is read without them; `n/a` stays as written; a short sha is as recorded
+        put(dir, '2026-12-01-ticks.md', '# HANDOFF — T\n\n**Date:** 2026-12-01\n**Branch:** `feature/y`  **HEAD:** abc1234 Subject\n')
+        const t = listOut(dir).docs[0]
+        assert.equal(t.branch, 'feature/y')
+        assert.equal(t.head, 'abc1234')
+      })
+    },
+  },
+  {
+    id: 'list-empty-and-missing-folder-and-errors',
+    run: async () => {
+      await inTmp((dir) => {
+        same(listOut(dir), { docs: [] })
+        same(listOut(path.join(dir, 'no-such-folder')), { docs: [] })
+        const file = put(dir, 'readme.txt', 'x')
+        const r = cli('list', '--dir', file)
+        assert.equal(r.status, 1)
+        assert.equal(r.stdout, '')
+        assert.equal(cli('list').status, 2)
+        assert.equal(cli('list', '--dir', '').status, 2)
+      })
+    },
+  },
+  // ---- latest ----
+  {
+    id: 'latest-single-newest-document-is-chosen-without-git',
+    run: async () => {
+      await withTemp(undefined, async (r) => {
+        const dir = path.join(r.root, 'handoffs')
+        fs.mkdirSync(dir)
+        // the newest DATE has one document: it wins although another day's document has the newest mtime
+        put(dir, '2026-11-19-new.md', selDoc({ title: 'New', branch: 'feature/z', head: 'c'.repeat(40) }), at(19))
+        put(dir, '2026-11-18-a.md', selDoc({ title: 'A', date: '2026-11-18' }), at(30))
+        put(dir, '2026-11-18-b.md', selDoc({ title: 'B', date: '2026-11-18' }), at(31))
+        // nothing a git call could answer: the recorded commit is not in this clone, and the branch is not the current one
+        const out = latestIn(r, dir, 'main', r.dir)
+        same(Object.keys(out).sort(), ['candidates', 'doc', 'needsChoice'])
+        assert.equal(out.needsChoice, false)
+        assert.equal(out.doc, `${slashed(dir)}/2026-11-19-new.md`)
+        same(out.candidates, [{ path: out.doc, branch: 'feature/z', head: 'c'.repeat(40), title: 'New' }])
+      })
+    },
+  },
+  {
+    id: 'latest-no-document',
+    run: async () => {
+      await withTemp(undefined, async (r) => {
+        const dir = path.join(r.root, 'handoffs')
+        fs.mkdirSync(dir)
+        same(latestIn(r, dir, 'main', r.dir), { doc: null, candidates: [], needsChoice: false })
+        same(latestIn(r, path.join(r.root, 'no-such-folder'), 'main', r.dir), { doc: null, candidates: [], needsChoice: false })
+        put(dir, '2026-11-19-notes.md', '# Notes\n')
+        same(latestIn(r, dir, 'main', r.dir), { doc: null, candidates: [], needsChoice: false })
+      })
+    },
+  },
+  {
+    id: 'latest-same-day-different-branch',
+    run: async () => {
+      await withTemp(undefined, async (r) => {
+        const dir = path.join(r.root, 'handoffs')
+        fs.mkdirSync(dir)
+        put(dir, '2026-11-19-a.md', selDoc({ title: 'On main', branch: 'main', head: 'a'.repeat(40) }), at(19, 9))
+        put(dir, '2026-11-19-b.md', selDoc({ title: 'On feature', branch: 'feature/x', head: 'b'.repeat(40) }), at(19, 12))
+        // an older day's document with the newest mtime of all is not a candidate
+        put(dir, '2026-11-18-old.md', selDoc({ title: 'Older day', date: '2026-11-18' }), at(30))
+        // the session is on a third branch: nothing says which of the two it continues
+        const out = latestIn(r, dir, 'release', r.dir)
+        assert.equal(out.needsChoice, true)
+        assert.equal(out.doc, null)
+        same(baseNames(out.candidates), ['2026-11-19-b.md', '2026-11-19-a.md']) // newest first
+        same(out.candidates[0], { path: `${slashed(dir)}/2026-11-19-b.md`, branch: 'feature/x', head: 'b'.repeat(40), title: 'On feature' })
+        // mtime is the last tie-break and nothing else decides the candidate order
+        put(dir, '2026-11-19-a.md', selDoc({ title: 'On main', branch: 'main', head: 'a'.repeat(40) }), at(19, 18))
+        same(baseNames(latestIn(r, dir, 'release', r.dir).candidates), ['2026-11-19-a.md', '2026-11-19-b.md'])
+        // three on one day: all three are candidates
+        put(dir, '2026-11-19-c.md', selDoc({ title: 'C', branch: 'dev' }), at(19, 3))
+        assert.equal(latestIn(r, dir, 'release', r.dir).candidates.length, 3)
+      })
+    },
+  },
+  {
+    id: 'latest-prefers-current-branch-descendant',
+    run: async () => {
+      await withTemp({ commits: [{ files: { 'a.txt': '1\n' } }, { files: { 'a.txt': '2\n' } }, { files: { 'a.txt': '3\n' } }] }, async (r) => {
+        const dir = path.join(r.root, 'handoffs')
+        fs.mkdirSync(dir)
+        const [c1, c2, c3] = r.shas
+        // exactly one of the two records the current branch, and HEAD (c3) descends from its commit (c2)
+        put(dir, '2026-11-19-main-work.md', selDoc({ title: 'On main', branch: 'main', head: c2 }), at(19, 9))
+        put(dir, '2026-11-19-feature-work.md', selDoc({ title: 'On feature', branch: 'feature/x', head: c1 }), at(19, 12))
+        const out = latestIn(r, dir, 'main', r.dir)
+        assert.equal(out.needsChoice, false)
+        assert.equal(out.doc, `${slashed(dir)}/2026-11-19-main-work.md`)
+        // the other same-day document is still listed, newest first
+        same(baseNames(out.candidates), ['2026-11-19-feature-work.md', '2026-11-19-main-work.md'])
+        // HEAD itself counts (ancestor-or-equal), and so does a short recorded sha
+        put(dir, '2026-11-19-main-work.md', selDoc({ title: 'On main', branch: 'main', head: c3 }), at(19, 9))
+        assert.equal(latestIn(r, dir, 'main', r.dir).doc, `${slashed(dir)}/2026-11-19-main-work.md`)
+        put(dir, '2026-11-19-main-work.md', selDoc({ title: 'On main', branch: 'main', head: c2.slice(0, 7) }), at(19, 9))
+        assert.equal(latestIn(r, dir, 'main', r.dir).doc, `${slashed(dir)}/2026-11-19-main-work.md`)
+        // the session's folder defaults to the folder the command runs in
+        const res = spawnSync(process.execPath, [HANDOFF_JS, 'latest', '--dir', dir, '--branch', 'main'], { encoding: 'utf8', env: r.env, cwd: r.dir })
+        assert.equal(res.status, 0, res.stderr)
+        assert.equal(JSON.parse(res.stdout).needsChoice, false)
+        // nothing is written to the repository by the check
+        assert.equal(r.git('status', '--porcelain'), '')
+      })
+    },
+  },
+  {
+    id: 'latest-asks-when-the-recorded-commit-is-not-behind-head',
+    run: async () => {
+      await withTemp({ commits: [{ files: { 'a.txt': '1\n' } }, { files: { 'a.txt': '2\n' } }] }, async (r) => {
+        const dir = path.join(r.root, 'handoffs')
+        fs.mkdirSync(dir)
+        const [c1] = r.shas
+        // a commit on another line of history: not an ancestor of main's HEAD
+        r.git('checkout', '-q', '-b', 'side', c1)
+        r.write('s.txt', 'side\n')
+        r.git('add', '-A')
+        r.git('commit', '-q', '-m', 'side work')
+        const side = r.git('rev-parse', 'HEAD')
+        r.git('checkout', '-q', 'main')
+        put(dir, '2026-11-19-b.md', selDoc({ title: 'Other', branch: 'feature/x', head: c1 }), at(19, 12))
+        const choice = (head) => {
+          put(dir, '2026-11-19-a.md', selDoc({ title: 'Main', branch: 'main', head }), at(19, 9))
+          return latestIn(r, dir, 'main', r.dir)
+        }
+        // diverged, a commit this clone does not have, no commit recorded: the git preference does not apply
+        for (const head of [side, 'abcdef0123456789abcdef0123456789abcdef01', null]) {
+          const out = choice(head)
+          assert.equal(out.needsChoice, true, `head ${head}`)
+          assert.equal(out.doc, null)
+          assert.equal(out.candidates.length, 2)
+        }
+        // two documents on the current branch: still a choice, even when both are behind HEAD
+        put(dir, '2026-11-19-b.md', selDoc({ title: 'Other', branch: 'main', head: c1 }), at(19, 12))
+        assert.equal(choice(c1).needsChoice, true)
+      })
+    },
+  },
+  {
+    id: 'latest-skips-the-git-preference-outside-a-repository',
+    run: async () => {
+      await withTemp(undefined, async (plain) => {
+        await withTemp({ commits: [{ files: { 'a.txt': '1\n' } }] }, async (repo) => {
+          const dir = path.join(plain.root, 'handoffs')
+          fs.mkdirSync(dir)
+          // the document names a work tree that IS a repository whose HEAD is the recorded commit; the session's folder is not
+          // one. A document's `Worktree` is data and never a folder to run git in, so there is no preference to apply.
+          put(dir, '2026-11-19-a.md', selDoc({ title: 'Main', branch: 'main', head: repo.shas[0], worktree: repo.dir }), at(19, 9))
+          put(dir, '2026-11-19-b.md', selDoc({ title: 'Other', branch: 'feature/x', head: repo.shas[0] }), at(19, 12))
+          const noRepo = runIn(plain, 'latest', '--dir', dir, '--branch', 'main', '--cwd', plain.dir)
+          assert.equal(noRepo.needsChoice, true)
+          assert.equal(noRepo.doc, null)
+          same(baseNames(noRepo.candidates), ['2026-11-19-b.md', '2026-11-19-a.md'])
+          // the same two documents with the session's folder inside the repository: the preference applies
+          assert.equal(runIn(repo, 'latest', '--dir', dir, '--branch', 'main', '--cwd', repo.dir).doc, `${slashed(dir)}/2026-11-19-a.md`)
+        })
+      }, true)
+    },
+  },
+  {
+    id: 'latest-never-reads-detached-or-no-branch-as-the-current-branch',
+    run: async () => {
+      await withTemp({ commits: [{ files: { 'a.txt': '1\n' } }] }, async (r) => {
+        const dir = path.join(r.root, 'handoffs')
+        fs.mkdirSync(dir)
+        const [c1] = r.shas
+        for (const recorded of ['(detached)', 'n/a']) {
+          put(dir, '2026-11-19-a.md', selDoc({ title: 'A', branch: recorded, head: c1 }), at(19, 9))
+          put(dir, '2026-11-19-b.md', selDoc({ title: 'B', branch: 'feature/x', head: c1 }), at(19, 12))
+          // the session is detached / outside git (git-state says so with the same words): the one document that
+          // says the same words is not "the current branch's"
+          const out = latestIn(r, dir, recorded, r.dir)
+          assert.equal(out.needsChoice, true, recorded)
+          assert.equal(out.doc, null)
+        }
+        // a document that records no branch line at all never matches either
+        put(dir, '2026-11-19-a.md', '# HANDOFF — No branch\n\n**Date:** 2026-11-19\n**HEAD:** ' + c1 + ' Subject\n', at(19, 9))
+        assert.equal(latestIn(r, dir, 'main', r.dir).needsChoice, true)
+        assert.equal(latestIn(r, dir, 'null', r.dir).needsChoice, true)
+      })
+    },
+  },
+  {
+    id: 'latest-input-and-usage-errors',
+    run: async () => {
+      await inTmp((dir) => {
+        assert.equal(cli('latest', '--dir', dir).status, 2)
+        assert.equal(cli('latest', '--branch', 'main').status, 2)
+        assert.equal(cli('latest', '--dir', dir, '--branch', '').status, 2)
+        assert.equal(cli('latest', '--dir', '', '--branch', 'main').status, 2)
+        const r = cli('latest', '--dir', dir, '--branch', 'main', '--cwd', path.join(dir, 'no-such-folder'))
+        assert.equal(r.status, 1)
+        assert.equal(r.stdout, '')
+        const file = put(dir, 'readme.txt', 'x')
+        assert.equal(cli('latest', '--dir', file, '--branch', 'main').status, 1)
+        // the three commands are in the usage text
+        const u = cli('no-such-command')
+        for (const name of ['resolve-path', 'list', 'latest']) assert.match(u.stderr, new RegExp(`\\b${name}\\b`))
+      })
+    },
+  },
+  // ---- parse: the Do NOT section and the heading variants ----
+  {
+    id: 'parse-do-not-reference-only',
+    run: async () => {
+      const prev = 'docs/harness/handoff/2026-11-18-previous.md'
+      const of = async (body, heading = 'Do NOT') => {
+        const p = await parseText(mk([['Goal', 'x'], [heading, body]]))
+        return { refOnly: p.doNotRefOnly, ref: p.doNotRef, missing: p.doNotMissing }
+      }
+      const ONLY = (ref) => ({ refOnly: true, ref, missing: false })
+      const OWN = { refOnly: false, ref: null, missing: false }
+      // a reference and nothing else: English, Korean, a hint after the path, a heading variant, bullets, bold
+      same(await of(`Same as the previous handoff's Do NOT: \`${prev}\``), ONLY(prev))
+      same(await of(`Carried over unchanged from \`${prev}\` (see its Do NOT section).`), ONLY(prev))
+      same(await of(`- See \`${prev} §Do NOT\`\n`), ONLY(prev))
+      same(await of(`지난 핸드오프에 적힌 금지 목록과 동일 — \`${prev}\` 참조`), ONLY(prev))
+      same(await of(`**이전 핸드오프의 금지 사항을 승계함** (\`${prev}\`)`), ONLY(prev))
+      same(await of(`Inherit the previous handoff's Do NOT: \`${prev}\``, 'Do NOT (v3 계획)'), ONLY(prev))
+      // the same pointer without a path to follow: still only a pointer, and there is nothing to read
+      same(await of("Same as the previous handoff's Do NOT."), ONLY(null))
+      // a rich section: false, with or without a reference among its items
+      const rich = ['- Do not push to main without approval.', '- Do not edit generated files under `dist/`.', '- Do not run the migration against the shared database.'].join('\n')
+      same(await of(rich), OWN)
+      same(await of(`- Same as the previous handoff's Do NOT: \`${prev}\`\n${rich}`), OWN)
+      // a reference word, a path and a guardrail of its own
+      same(await of(`See \`docs/spec.md\` before changing anything; never push to main without approval.`), OWN)
+      // a path in a guardrail is not a pointer: no reference word
+      same(await of('Do not edit `docs/harness/handoff/2026-11-18-previous.md`.'), OWN)
+      same(await of('Do not edit `src/a.js`.'), OWN)
+      // a carry-over sentence that names no file, beside items of its own, has its own content
+      same(await of('앞선 handoff들의 금지 사항은 모두 그대로 적용된다. 이번에 더한 항목은 다음과 같다.\n\n- 배포 브랜치에 직접 커밋하지 않는다.\n- 공용 DB에 쓰기 쿼리를 날리지 않는다.'), OWN)
+      // a link is not a backtick path: the section is still read as a pointer by its words, but nothing is followed
+      same(await of(`Same as [the previous handoff](${prev}).`), ONLY(null))
+      // a short guardrail with a reference word that names no document is a guardrail, not a pointer
+      same(await of('동일 브랜치 push 금지'), OWN)
+      same(await of('Same as before: do not push to main.'), OWN)
+      same(await of('Do not touch the same files as the previous session.'), OWN)
+      // an empty section is not a pointer; a document with no section reports it separately
+      same(await of(''), OWN)
+      same(await of('<!-- nothing yet -->'), OWN)
+      const none = await parseText(mk([['Goal', 'x']]))
+      assert.equal(none.doNotMissing, true)
+      assert.equal(none.doNotRefOnly, false)
+      assert.equal(none.doNotRef, null)
+      // the fields are in the command line's JSON, null and false rather than absent
+      const r = cli('parse', '--doc', path.join(FIX, 'legacy-no-labels.md'))
+      const o = JSON.parse(r.stdout)
+      for (const k of ['doNotRefOnly', 'doNotMissing', 'doNotRef']) assert.ok(k in o, k)
+    },
+  },
+  {
+    id: 'parse-reads-a-heading-variant-by-its-prefix',
+    run: async () => {
+      const p = await parseText(mk([['Goal', 'x'], ['Definition of Done (v3 계획)', '- shipped'], ['Do NOT (v3)', '- Do not push.']]))
+      assert.equal(p.sections['Definition of Done'], '- shipped')
+      assert.equal(p.sections['Do NOT'], '- Do not push.')
+      assert.equal(p.doNotMissing, false)
+    },
+  },
+  // ---- reading-plan: the document a pointer-only Do NOT section names ----
+  {
+    id: 'reading-plan-plans-the-do-not-section-a-pointer-only-section-names',
+    run: async () => {
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'handoff-donot-'))
+      try {
+        const hand = path.join(dir, 'repo', 'docs', 'harness', 'handoff')
+        fs.mkdirSync(hand, { recursive: true })
+        const prevName = '2026-11-18-previous.md'
+        const prevText = mk([['Goal', 'g'], ['Do NOT', '- Do not push to main.\n- Do not touch the shared database.'], ['Resume', 'r']])
+        fs.writeFileSync(path.join(hand, prevName), prevText)
+        const rel = `docs/harness/handoff/${prevName}`
+        const docOf = (body, order = '1. `src/a.js` — code') => {
+          const f = path.join(hand, '2026-11-19-current.md')
+          fs.writeFileSync(f, mk([['Goal', 'x'], ['Reading Order', order], ['Do NOT', body]]))
+          return f
+        }
+        fs.mkdirSync(path.join(dir, 'repo', 'src'))
+        fs.writeFileSync(path.join(dir, 'repo', 'src', 'a.js'), 'x\n')
+        // a pointer-only section: the entry for the pointed-to section comes back apart from the Reading Order entries
+        const p = plan(docOf(`Same as the previous handoff's Do NOT: \`${rel}\``))
+        assert.equal(p.entries.length, 1, 'one entry per Reading Order item, the pointer is not one of them')
+        assert.equal(p.entries[0].status, 'read')
+        const lines = prevText.split('\n')
+        const from = lines.indexOf('## Do NOT') + 1
+        assert.equal(p.doNot.status, 'range')
+        same({ type: p.doNot.range.type, start: p.doNot.range.start, end: p.doNot.range.end }, { type: 'lines', start: from, end: from + 3 })
+        assert.equal(p.doNot.file, path.join(hand, prevName))
+        assert.equal(p.totalBytes, p.entries[0].bytes + p.doNot.bytes + (p.doNot.outlineBytes || 0), 'the section is charged to the same budget')
+        // a rich section of its own: nothing is planned for it
+        assert.equal(plan(docOf('- Do not push to main without approval.\n- Do not edit generated files.')).doNot, null)
+        // the rule is the Reading Order's: a path that leaves the repository, a missing file, a pointer with no path
+        const bad = plan(docOf('Same as the previous handoff: `../outside.md`'))
+        assert.equal(bad.doNot.status, 'skipped-invalid')
+        assert.ok(bad.doNot.reason.length > 0)
+        assert.equal(plan(docOf('Same as the previous handoff: `docs/harness/handoff/2026-01-01-gone.md`')).doNot.status, 'skipped-missing')
+        const noPath = plan(docOf("Same as the previous handoff's Do NOT."))
+        assert.equal(noPath.doNot.status, 'skipped-invalid')
+        assert.match(noPath.doNot.reason, /without naming a file/)
+        // the pointed-to document has no such section: the entry says so, and reads nothing
+        fs.writeFileSync(path.join(hand, prevName), mk([['Goal', 'g']]))
+        const noSection = plan(docOf(`Same as the previous handoff's Do NOT: \`${rel}\``))
+        assert.equal(noSection.doNot.status, 'partial')
+        assert.equal(noSection.doNot.range, null)
+        // the budget is spent on the section first: a Reading Order entry that would use all of it is the one that is skipped
+        fs.writeFileSync(path.join(hand, prevName), prevText)
+        fs.writeFileSync(path.join(dir, 'repo', 'src', 'big.js'), 'x'.repeat(380))
+        const tight = plan(docOf(`Same as the previous handoff's Do NOT: \`${rel}\``, '1. `src/big.js` — large'), 400)
+        assert.equal(tight.doNot.status, 'range')
+        assert.equal(tight.entries[0].status, 'skipped-budget')
+        assert.ok(tight.totalBytes <= 400)
+      } finally {
+        fs.rmSync(dir, { recursive: true, force: true })
+      }
+    },
+  },
+]
+
+// ---- the contract text: slug, collisions, the latest document, the pointer-only Do NOT section --------------------------------
+
+const flatten = (s) => s.replace(/\s+/g, ' ')
+
+const selectContractCases = [
+  {
+    id: 'skill-contract-location-convention-has-no-transliteration-and-names-resolve-path',
+    run: async () => {
+      const text = readText('skills', 'handoff', 'SKILL.md')
+      const conv = flatten(between(text, '**Location convention', '**Base directory.**'))
+      assert.match(conv, /English kebab-case/)
+      assert.ok(conv.includes('[a-z0-9-]'), 'the character set is written out')
+      assert.match(conv, /at most 40 characters/)
+      assert.match(conv, /no transliteration/i)
+      assert.match(conv, /the model supplies the English words/i)
+      assert.match(conv, /`resolve-path`/)
+      assert.match(conv, /`-2`, `-3`/)
+      assert.match(conv, /NEVER overwrite/)
+      // the old rule, which contradicts templates/_shared/slugify.md, is gone from every contract file
+      for (const f of [['skills', 'handoff', 'SKILL.md'], ['templates', 'handoff', 'generate.md'], ['templates', 'handoff', 'resume.md']]) {
+        assert.ok(!/transliterate non-ASCII/i.test(readText(...f)), `${f.join('/')} still says "transliterate non-ASCII"`)
+      }
+    },
+  },
+  {
+    id: 'skill-contract-list-runs-the-list-command',
+    run: async () => {
+      const text = readText('skills', 'handoff', 'SKILL.md')
+      const sec = between(text, '## Sub-command: list', '## Non-Goals')
+      assert.match(sec, /node "\{HANDOFF_JS\}" list --dir "docs\/harness\/handoff"/)
+      assert.match(flatten(sec), /non-zero exit/)
+      assert.match(flatten(sec), /never scan the folder by hand/)
+      assert.ok(sec.includes('${CLAUDE_PLUGIN_ROOT}/skills/handoff/scripts/handoff.mjs'), 'this file is read without generate.md: it names the script itself')
+      assert.ok(!/Scan `docs\/harness\/handoff\/\*\.md`/.test(sec), 'no scan instruction is left for the model')
+    },
+  },
+  {
+    id: 'generate-contract-resolves-the-path-with-the-script-and-promises-no-numbered-name',
+    run: async () => {
+      const text = readText('templates', 'handoff', 'generate.md')
+      const step3 = between(text, '### Step 3', '### Step 4')
+      assert.match(step3, /node "\{HANDOFF_JS\}" resolve-path --slug "[^"]+" --date "[^"]+" --dir "docs\/harness\/handoff"/)
+      assert.match(flatten(step3), /English kebab-case summary/)
+      // a slug with no ASCII letter exits 1 and asks for an English summary: write one and run it again (the one exception
+      // to "show stderr and stop", named narrowly); the path the script returns goes into the Resume line
+      assert.match(flatten(step3), /stderr verbatim and stop/)
+      assert.match(flatten(step3), /except exit 1[^.]*English kebab-case summary/)
+      assert.match(flatten(step3), /run it again/)
+      assert.match(step3, /`## Resume` line/)
+      // the model no longer numbers a collision, and no sentence promises a numbered file
+      assert.ok(!/`-2`|`-3`/.test(text), 'generate.md does not name the numbered file')
+      assert.ok(!/-2\/-3|`-2`\/`-3`/.test(text), 'generate.md does not apply a numbering rule itself')
+      const step4 = between(text, '### Step 4', '> **gitignore note')
+      assert.match(flatten(step4), /run `resolve-path` again/)
+      assert.ok(step4.includes('new file (the name may differ on a re-run)'), 'the Correct row says the re-run name may differ')
+      assert.ok(!/NEW `-2` file|new `-2` file/i.test(text))
+    },
+  },
+  {
+    id: 'generate-contract-writes-the-do-not-section-in-full',
+    run: async () => {
+      const text = readText('templates', 'handoff', 'generate.md')
+      const item = flatten(between(text, '- Do NOT —', '5. **Progress Ledger'))
+      assert.match(item, /in full/)
+      assert.match(item, /every document/)
+      assert.match(item, /still in force/i)
+      // a reference to another document, or to a path, is not a way to carry the section over
+      assert.match(item, /same as the previous handoff/i)
+      assert.match(item, /the earlier items still apply/i, 'the mixed form is named too')
+      assert.match(item, /not allowed/)
+      assert.match(item, /reads only this document/)
+      assert.match(item, /one clause/)
+    },
+  },
+  {
+    id: 'resume-contract-locates-with-latest-and-asks-for-a-choice-only-when-needed',
+    run: async () => {
+      const text = readText('templates', 'handoff', 'resume.md')
+      const step1 = between(text, '### Step 1', '### Step 2')
+      const flat = flatten(step1)
+      assert.match(step1, /node "\{HANDOFF_JS\}" latest --dir "docs\/harness\/handoff" --branch "[^"]+" --cwd "\."/)
+      assert.ok(step1.includes('needsChoice'), 'the flag is named')
+      assert.match(flat, /git-state/, 'the current branch comes from git-state')
+      assert.match(flat, /candidates/)
+      assert.match(flat, /date, branch/)
+      assert.match(flat, /title/)
+      assert.match(flat, /no handoff (document )?exists/i, 'no document: report and stop')
+      // the old by-hand rule is gone
+      assert.ok(!/by filename date, then mtime/.test(text), 'the filename-date-then-mtime rule is gone')
+      assert.ok(!/Consider ONLY files whose first line/.test(text))
+      // the selection is a separate, earlier question: Step 5 still ends in exactly one AskUserQuestion
+      assert.match(flat, /separate/)
+      assert.match(flat, /earlier/)
+      assert.match(flat, /only when `needsChoice` is true/)
+      assert.match(flat, /not Step 5's gate/)
+      assert.match(flat, /Step 5 still ends in exactly one AskUserQuestion call/)
+      // and Step 5 itself still says it
+      assert.match(flatten(text), /Step 5 ends in exactly one\s+AskUserQuestion call/)
+      // an automatic pick among several same-day documents is not silent
+      assert.match(flat, /other[^.]*same[- ]day|same[- ]day[^.]*other/i)
+    },
+  },
+  {
+    id: 'resume-contract-reads-headings-by-prefix-and-the-do-not-section-a-pointer-names',
+    run: async () => {
+      const text = readText('templates', 'handoff', 'resume.md')
+      const step2 = flatten(between(text, '### Step 2', '### Step 3'))
+      assert.match(step2, /by prefix/)
+      assert.ok(step2.includes('`## Definition of Done (v3 계획)`'), 'the example heading is written out')
+      // Step 4: the plan's `doNot` entry
+      const step4 = flatten(between(text, '### Step 4', '### Step 5'))
+      assert.match(step4, /`doNot`/)
+      assert.match(step4, /only (a )?pointer/i)
+      assert.match(step4, /`doNot` is null/)
+      assert.match(step4, /`range`, read/i)
+      assert.match(step4, /could not be read/i)
+      assert.match(step4, /never an empty row/i)
+      // Step 5: the Do NOT row prints what was read, says when it could not be, and says when the document has no section
+      const step5 = flatten(between(text, '### Step 5', 'Three worked examples'))
+      assert.match(step5, /Do NOT\s+: <[^>]*`doNot`/)
+      assert.match(step5, /no `Do NOT` section/)
+      // the path rule is the Reading Order's: this file does not state a second one for the pointed-to document
+      assert.ok(!/validate_path|Path Validator/.test(text))
+    },
+  },
+]
+
+// ---- diff.mjs --what latest: the selection, the slug rule and the pointer-only Do NOT section on a snapshot ----------------------
+
+const withResume = (doc, name) => doc.replace(/\n$/, '') + `\n\n## Resume\nRun: \`/handoff resume docs/harness/handoff/${name}\`\n`
+
+const latestDiffCases = [
+  {
+    id: 'corpus-diff-latest-reports-same-day-groups-the-slug-rule-and-pointer-only-do-not-sections',
+    run: async () => {
+      const prev = '2026-11-17-hangul-title.md'
+      const docs = {
+        // 2026-11-19: three documents that all record main (the heuristic cannot pick, whichever is the newest); 2026-11-18: two
+        // documents on two branches (it can pick, whichever is the newest); then single days, the first with a Korean title
+        'a-main': withResume(selDoc({ title: 'Alpha', date: '2026-11-19', branch: 'main' }), '2026-11-19-alpha.md'),
+        'b-main-again': withResume(selDoc({ title: 'Alpha again', date: '2026-11-19', branch: 'main' }), '2026-11-19-alpha-2.md'),
+        'c-main-third': withResume(selDoc({ title: 'Gamma', date: '2026-11-19', branch: 'main' }), '2026-11-19-gamma.md'),
+        'd-pair-a': withResume(selDoc({ title: 'Delta', date: '2026-11-18', branch: 'main' }), '2026-11-18-delta.md'),
+        'd-pair-b': withResume(selDoc({ title: 'Delta b', date: '2026-11-18', branch: 'feature/x' }), '2026-11-18-delta-2.md'),
+        'e-korean-title': withResume(selDoc({ title: '한글 제목', date: '2026-11-17' }), prev),
+        // a pointer-only Do NOT section whose path the document's own Reading Order lists
+        'f-pointer': withResume(
+          mk([['Reading Order', `1. \`docs/harness/handoff/${prev}\` — the earlier guardrails`], ['Do NOT', `Same as the previous handoff's Do NOT: \`docs/harness/handoff/${prev}\``]], selDoc({ title: 'Phi', date: '2026-11-16' })),
+          '2026-11-16-phi.md',
+        ),
+        'g-rich': withResume(mk([['Do NOT', '- Do not push to main without approval.\n- Do not edit generated files.\n- Do not run the migration.']], selDoc({ title: 'Rho', date: '2026-11-15' })), '2026-11-15-Rho_Plan.md'),
+      }
+      withSnapshotOfDocs(docs, (snap) => {
+        const r = node('diff.mjs', '--corpus', snap, '--what', 'latest', '--json')
+        assert.equal(r.status, 0, r.stderr)
+        const o = JSON.parse(r.stdout)
+        assert.equal(o.what, 'latest')
+        assert.equal(o.documents, 8)
+        // one folder, two days with several documents (three and two); only the first is the newest day, the one `latest` meets today
+        assert.equal(o.sameDay.groups, 2)
+        assert.equal(o.sameDay.documents, 5)
+        same(o.sameDay.bySize, { 2: 1, 3: 1, '4+': 0 })
+        assert.equal(o.sameDay.newestDay.groups, 1)
+        // with no git help every such day needs a choice; the heuristic could only pick when exactly one document records the
+        // branch the session is on — the best case assumes the session is on the newest document's branch and that its commit
+        // passes the ancestry test: the pair, not the three that all record main
+        assert.equal(o.sameDay.noGitHelp.needChoice, 2)
+        assert.equal(o.sameDay.upperBound.couldPickAutomatically, 1)
+        assert.equal(o.sameDay.upperBound.cannotPick, 1)
+        assert.equal(o.sameDay.oneSlugFamilyOnly, 1) // delta and delta-2; alpha, alpha-2 and gamma are not one family
+        // one entry per group, with document ids and numbers only
+        same(o.sameDay.groupList.map((g) => [g.size, g.newestDay, g.couldPick, g.oneSlugFamily]).sort(), [[2, false, true, true], [3, true, false, false]])
+        for (const g of o.sameDay.groupList) assert.ok(g.ids.every((id) => /^d\d+$/.test(id)))
+        assert.match(o.method, /no live repository/i)
+        // slug rule: of the 8 documents with a file name, one has a non-ASCII title; its slug is ASCII; one slug breaks the rule
+        assert.equal(o.slug.withFileName, 8)
+        same(o.slug.nameFrom, { self: 0, resume: 8 }) // the fixtures resolve to nothing, so the Resume line is the only source here
+        assert.equal(o.slug.withoutFileName, 0)
+        assert.equal(o.slug.titleNonAscii, 1)
+        assert.equal(o.slug.titleNonAsciiSlugAscii, 1)
+        assert.equal(o.slug.slugOutsideRule, 1)
+        assert.equal(o.slug.slugNonAscii, 0)
+        // Do NOT: one pointer-only section, its path listed in its own Reading Order (the file does not exist in a snapshot of fixtures)
+        assert.equal(o.doNot.refOnly, 1)
+        assert.equal(o.doNot.refOnlyWithPath, 1)
+        assert.equal(o.doNot.pathInReadingOrder, 1)
+        assert.equal(o.doNot.pathInReadingOrderExisting, 0)
+        assert.equal(o.doNot.missing, 6)
+        assert.equal(o.doNot.carryStatementBesideOwnItems, 0)
+        // the readable form prints counts and ids only
+        const h = node('diff.mjs', '--corpus', snap, '--what', 'latest')
+        assert.equal(h.status, 0, h.stderr)
+        assert.match(h.stdout, /^latest: 8 documents/m)
+        assert.match(h.stdout, /no live repository/i)
+        assert.ok(!/Alpha|Gamma|한글|hangul|Rho|feature\/x/.test(h.stdout), 'no document text, title, branch or file name in the report')
+      })
+    },
+  },
+  {
+    id: 'corpus-diff-latest-is-listed-in-the-usage',
+    run: async () => {
+      const r = node('diff.mjs')
+      assert.equal(r.status, 2)
+      assert.match(r.stderr, /\blatest\b/)
+    },
+  },
+]
+
 // ---- the runner's own exit codes ----------------------------------------------------------------------------
 
 function runnerExit(casesSource) {
@@ -4669,5 +5464,8 @@ export const cases = [
   ...ledgerCarryCases,
   ...ledgerDiffCases,
   ...ledgerContractCases,
+  ...selectCases,
+  ...selectContractCases,
+  ...latestDiffCases,
   ...runnerCases,
 ]

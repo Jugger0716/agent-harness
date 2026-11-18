@@ -85,8 +85,9 @@ export function epicOfRows(rows) {
 // A leading BOM is ignored, as parse.mjs ignores it.
 const stripBom = (text) => (text.charCodeAt(0) === 0xfeff ? text.slice(1) : text)
 
-// The handoff documents of `dir`, newest first, at most `cap` of them -> { name, file, text } one at a time,
-// so a caller that finds what it wants stops reading.
+// The handoff documents of `dir`, newest first, at most `cap` of them -> { name, file, text, mtimeMs } one at a time,
+// so a caller that finds what it wants stops reading. (`list` and `latest` use it too: `list` with no cap, `latest` until
+// the date changes.)
 export function* scanHandoffDocs(dir, cap = SCAN_CAP) {
   let names
   try {
@@ -118,7 +119,7 @@ export function* scanHandoffDocs(dir, cap = SCAN_CAP) {
     }
     if (!stripBom(text).startsWith(HANDOFF_PREFIX)) continue
     seen++
-    yield { name: d.name, file: path.resolve(d.file), text }
+    yield { name: d.name, file: path.resolve(d.file), text, mtimeMs: d.mtimeMs }
   }
 }
 

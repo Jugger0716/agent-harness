@@ -40,9 +40,10 @@ Parse the argument immediately after `/handoff`:
 | anything else | Show a help message (in `user_lang`) listing the commands above |
 
 **Location convention (single canonical path):** `docs/harness/handoff/YYYY-MM-DD-<slug>.md`
-— date is today, slug is a short kebab-case label derived from the title (lowercase,
-transliterate non-ASCII to ASCII, non-word chars removed, max 40 chars). If the exact filename
-already exists, append `-2`, `-3`, … — NEVER overwrite an existing handoff.
+— date is today, slug is an English kebab-case summary of the title: `[a-z0-9-]`, at most 40
+characters. There is no transliteration: the model supplies the English words. `resolve-path`
+(generate Step 3) normalises the slug and, when the name is taken, appends `-2`, `-3`, … —
+NEVER overwrite an existing handoff.
 
 **Base directory.** The session's current working directory is the base for `docs/harness/handoff/`
 (where `generate` writes and `resume` and `list` look) and the last-resort root of a relative Reading
@@ -55,7 +56,13 @@ it only says where `resume` evaluates git state (Step 3).
 
 ## Sub-command: list
 
-Scan `docs/harness/handoff/*.md` (only files whose first line starts with `# HANDOFF —`), newest first. Print (labels English raw, values as stored):
+Run `node "{HANDOFF_JS}" list --dir "docs/harness/handoff"`. `{HANDOFF_JS}` is
+`${CLAUDE_PLUGIN_ROOT}/skills/handoff/scripts/handoff.mjs`: confirm `${CLAUDE_PLUGIN_ROOT}` resolves
+to a non-empty value first and keep both paths in quotes. A non-zero exit → show its stderr verbatim
+and stop — never scan the folder by hand. The output is one JSON object, `docs`: every handoff
+document of the folder (first line `# HANDOFF —`), newest first, each `{path, date, slug, branch,
+head, title, mtimeMs}` with the header values as the document records them (null when it records
+none). Print (labels English raw, values as stored, a null value as `-`):
 
 ```
 [handoff] 3 handoff document(s)
@@ -63,8 +70,8 @@ Scan `docs/harness/handoff/*.md` (only files whose first line starts with `# HAN
   ...
 ```
 
-(date, slug, recorded branch, recorded HEAD — may be displayed truncated to 7+ chars — path; one line each.) None found → say so in
-`user_lang`.
+(date, slug, recorded branch, recorded HEAD — may be displayed truncated to 7+ chars — path; one line each.) `docs` empty →
+say so in `user_lang`.
 
 ---
 

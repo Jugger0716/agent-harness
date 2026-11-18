@@ -65,6 +65,26 @@
 //                  Its count of finished rows uses its own list (`done`, `dropped`), not the shipped one,
 //                  so a change of the shipped rule shows as a difference.
 //
+//   latest         what `resolve-path`, `latest` and the Do NOT carry-over form (skills/handoff/scripts/lib/
+//                  paths.mjs, select.mjs, parse.mjs `readDoNot`) meet in the corpus. Counts and document ids
+//                  only; no title, branch, file name or document text is printed. A snapshot holds no
+//                  file names and no live repository, so (a) a document's file name is recovered from its
+//                  own Reading Order entry that the snapshot verified to be the document itself (`self`),
+//                  else from its `## Resume` line, which `generate` composes BEFORE the path is resolved and
+//                  can therefore lack a collision suffix; documents with neither are counted, and their day is
+//                  the header's Date; (b) "the same day" is the file-name date, per source folder (the
+//                  manifest's rootIndex); (c) whether `latest` could pick a document without asking depends on
+//                  the branch the session is on and on git, neither of which a snapshot has: it is reported
+//                  as an upper bound (assume the session is on the newest same-day document's branch and the
+//                  ancestry test passes) next to the certain figure (with no git help, every same-day group is
+//                  a choice). Also reported: how many of those days are the newest day of their folder (what
+//                  `latest` meets today), how many hold one slug family only, the slug rule against the
+//                  recorded file names (non-ASCII title with an ASCII slug, slugs outside `[a-z0-9-]`, over
+//                  40 characters), and the Do NOT sections: missing, pointer-only (`doNotRefOnly`), and of those
+//                  the ones whose path the document's own Reading Order lists (and that existed when the
+//                  snapshot was taken) — plus an indicative count of documents that carry a "the previous
+//                  Do NOT still applies" sentence beside items of their own (a word pattern, precision unknown).
+//
 // Exit codes: 0 the comparison ran (a difference is a finding, printed, not a failure); 1 input
 // problem — no or unreadable manifest.json, a copy that is missing or whose sha256 differs from
 // the manifest, or a copy that is not a handoff document; 2 usage or internal error.
@@ -77,7 +97,7 @@ import { deriveLegacyNext, legacyTiers } from './legacy_next.mjs'
 import { FIXED_LABELS, parseRange, stripEmphasis } from '../../../skills/handoff/scripts/lib/parse.mjs'
 import { deriveNext } from '../../../skills/handoff/scripts/lib/next.mjs'
 import { KEEP_DONE, carryLedger } from '../../../skills/handoff/scripts/lib/ledger.mjs'
-import { validateHandoffPath } from '../../../skills/handoff/scripts/lib/paths.mjs'
+import { orderDocs, splitDocName, validateHandoffPath } from '../../../skills/handoff/scripts/lib/paths.mjs'
 import { HEAD_LINES, OUTLINE_HEADING_BYTES, OUTLINE_MAX_ENTRIES, WHOLE_FILE_MAX_LINES, isMarkdownPath } from '../../../skills/handoff/scripts/lib/reading.mjs'
 
 const SOURCES = ['in-progress', 'label', 'last-row', 'docs', 'step-one']
@@ -649,7 +669,125 @@ function ledgerCarry(docs) {
   return { data, lines }
 }
 
-export const WHAT = { 'next-legacy': nextLegacy, next: nextChange, state: stateComparison, 'extract-agree': extractAgree, reading, ledger: ledgerCarry }
+// ---- latest: same-day documents, the slug rule and the pointer-only Do NOT section ---------------------------------------------
+
+const baseName = (p) => String(p).replace(/\\/g, '/').split('/').pop()
+const isoDay = (v) => (/\d{4}-\d{2}-\d{2}/.exec(String(v ?? '')) || [null])[0]
+const NO_BRANCH = ['n/a', '(detached)']
+const SLUG_RULE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
+const SLUG_CAP = 40 // the rule's own number, restated: a change of the shipped cap shows as a difference
+
+// The statement that an earlier handoff's Do NOT still applies, beside or instead of the section's own items. A word
+// pattern for an indicative count — it is not the shipped test, and its precision is not known.
+const CARRY_STATEMENT = /(?:do not)[^\n]{0,40}(?:승계|유지|유효|still apply|carried|inherit)|(?:승계|유지|유효|carry|inherit)[^\n]{0,20}Do NOT|(?:previous|prior|earlier|이전|직전)[^\n]{0,30}Do NOT/i
+
+// A document's file name: the Reading Order entry the snapshot verified to be the document itself, else the Resume line.
+function recordedName(d) {
+  const self = d.readingOrder.find((e) => e.kind === 'path' && e.self)
+  if (self) return { name: baseName(stripHint(self.raw)), from: 'self' }
+  const m = /[^\s`/\\]+\.md/.exec((d.parsed.sections.Resume ?? ''))
+  return m ? { name: m[0], from: 'resume' } : { name: null, from: 'none' }
+}
+
+function latestComparison(docs) {
+  const parsed = docs.filter((d) => d.parsed)
+  const per = parsed.map((d) => {
+    const f = recordedName(d)
+    const nameDay = f.name ? splitDocName(f.name).date : ''
+    const day = nameDay || isoDay(d.parsed.header.date)
+    const b = d.parsed.header.branch === null ? null : stripEmphasis(d.parsed.header.branch) || null
+    return { d, id: d.id, root: d.rootIndex, name: f.name, from: f.from, day, dayFrom: nameDay ? 'name' : day ? 'header' : 'none', branch: b, orderName: f.name ?? `${day ?? ''}-${d.id}.md` }
+  })
+
+  // same-day groups: per source folder and day
+  const groups = new Map()
+  for (const x of per) {
+    if (!x.day) continue
+    const k = `${x.root}\0${x.day}`
+    if (!groups.has(k)) groups.set(k, [])
+    groups.get(k).push(x)
+  }
+  const newestOfRoot = new Map()
+  for (const x of per) if (x.day && (!newestOfRoot.has(x.root) || x.day > newestOfRoot.get(x.root))) newestOfRoot.set(x.root, x.day)
+  const multi = [...groups.values()].filter((g) => g.length >= 2).map((g) => {
+    const newest = orderDocs(g.map((x) => ({ name: x.orderName, mtimeMs: x.d.mtimeMs, x })))[0].x
+    const sameBranch = newest.branch === null ? 0 : g.filter((x) => x.branch === newest.branch).length
+    const comparable = newest.branch !== null && !NO_BRANCH.includes(newest.branch)
+    const family = g.every((x) => x.name) && new Set(g.map((x) => splitDocName(x.name).slug.replace(/-\d+$/, ''))).size === 1
+    return { g, size: g.length, day: g[0].day, root: g[0].root, newestDay: g[0].day === newestOfRoot.get(g[0].root), couldPick: comparable && sameBranch === 1, family }
+  })
+  const bySize = { 2: 0, 3: 0, '4+': 0 }
+  for (const m of multi) bySize[m.size >= 4 ? '4+' : m.size]++
+  const newestDay = multi.filter((m) => m.newestDay)
+  const roots = new Set(per.map((x) => x.root)).size
+  const sameDay = {
+    groups: multi.length,
+    documents: multi.reduce((a, m) => a + m.size, 0),
+    largest: multi.reduce((a, m) => Math.max(a, m.size), 0),
+    bySize,
+    newestDay: { roots, groups: newestDay.length, couldPickAutomatically: newestDay.filter((m) => m.couldPick).length },
+    noGitHelp: { needChoice: multi.length },
+    upperBound: { couldPickAutomatically: multi.filter((m) => m.couldPick).length, cannotPick: multi.filter((m) => !m.couldPick).length },
+    oneSlugFamilyOnly: multi.filter((m) => m.family).length,
+    // one entry per group (document ids and numbers only; `couldPick` is the upper bound described above)
+    groupList: multi.map((m) => ({ root: m.root, size: m.size, newestDay: m.newestDay, couldPick: m.couldPick, oneSlugFamily: m.family, ids: m.g.map((x) => x.id) })),
+    daysFromHeaderDate: per.filter((x) => x.dayFrom === 'header').length,
+    daysUnknown: per.filter((x) => x.dayFrom === 'none').length,
+  }
+
+  // the slug rule against the file names the documents carry
+  const named = per.filter((x) => x.name)
+  const slugOf = (x) => splitDocName(x.name).slug
+  const nonAscii = (v) => /[^\x00-\x7f]/.test(v)
+  const titled = named.filter((x) => nonAscii(x.d.parsed.header.title))
+  const slug = {
+    withFileName: named.length,
+    nameFrom: { self: named.filter((x) => x.from === 'self').length, resume: named.filter((x) => x.from === 'resume').length },
+    withoutFileName: per.length - named.length,
+    titleNonAscii: titled.length,
+    titleNonAsciiSlugAscii: titled.filter((x) => !nonAscii(slugOf(x))).length,
+    slugNonAscii: named.filter((x) => nonAscii(slugOf(x))).length,
+    slugOutsideRule: named.filter((x) => !SLUG_RULE.test(slugOf(x))).length,
+    slugOver40: named.filter((x) => slugOf(x).length > SLUG_CAP).length,
+  }
+
+  // the Do NOT sections
+  const refOnly = parsed.filter((d) => d.parsed.doNotRefOnly)
+  const withPath = refOnly.filter((d) => d.parsed.doNotRef !== null)
+  const listed = (d) => d.readingOrder.filter((e) => e.kind === 'path' && stripHint(e.raw).replace(/\\/g, '/') === d.parsed.doNotRef.replace(/\\/g, '/'))
+  const inOrder = withPath.filter((d) => listed(d).length > 0)
+  const doNot = {
+    missing: parsed.filter((d) => d.parsed.doNotMissing).length,
+    refOnly: refOnly.length,
+    refOnlyIds: refOnly.map((d) => d.id),
+    refOnlyWithPath: withPath.length,
+    pathInReadingOrder: inOrder.length,
+    pathInReadingOrderExisting: inOrder.filter((d) => listed(d).some((e) => e.exists)).length,
+    carryStatementBesideOwnItems: parsed.filter((d) => !d.parsed.doNotRefOnly && CARRY_STATEMENT.test(d.parsed.sections['Do NOT'] ?? '')).length,
+  }
+
+  const data = {
+    documents: docs.length,
+    method:
+      'a snapshot holds no file names and no live repository: the file name comes from the Reading Order entry the snapshot verified to be the document itself, else from the Resume line (composed before the path was resolved, so it can lack a collision suffix); the day is the file-name date, else the header Date; the folder is the rootIndex; whether `latest` could pick without asking depends on the session branch and on git, which are unknown, so only an upper bound is given (the session is on the newest same-day document\'s branch and the ancestry test passes) beside the certain figure (with no git help every same-day group is a choice)',
+    sameDay,
+    slug,
+    doNot,
+  }
+  const s = sameDay
+  const lines = [
+    `latest: ${docs.length} documents in ${roots} source folders`,
+    `method: ${data.method}`,
+    `same-day groups (documents of one folder on one day): ${s.groups} with ${s.documents} documents — of 2: ${bySize[2]}, of 3: ${bySize[3]}, of 4 or more: ${bySize['4+']}, the largest holds ${s.largest}; ${s.oneSlugFamilyOnly} hold one slug family only (a name and its -N re-runs; file names known for every document of the group); days taken from the header Date for ${s.daysFromHeaderDate} documents and unknown for ${s.daysUnknown}`,
+    `newest day of its folder (what latest meets today): ${s.newestDay.groups} of ${s.newestDay.roots} folders have several documents on their newest day`,
+    `latest with no git help: ${s.noGitHelp.needChoice} of ${s.groups} groups (${share(s.noGitHelp.needChoice, s.groups)}) need a choice; upper bound with git (one document on the newest document's branch, ancestry assumed to pass): ${s.upperBound.couldPickAutomatically} could be picked (${share(s.upperBound.couldPickAutomatically, s.groups)}), ${s.upperBound.cannotPick} cannot (the newest document records no branch, a detached HEAD, or its branch is recorded by another document of the day too); of the newest-day groups: ${s.newestDay.couldPickAutomatically} of ${s.newestDay.groups}`,
+    `slug rule against the recorded file names (${slug.withFileName} of ${per.length} documents have one: ${slug.nameFrom.self} from the document's own Reading Order entry, ${slug.nameFrom.resume} from the Resume line; ${slug.withoutFileName} have none): ${slug.titleNonAscii} have a non-ASCII title, ${slug.titleNonAsciiSlugAscii} of them an ASCII slug; ${slug.slugNonAscii} slugs hold a non-ASCII character; ${slug.slugOutsideRule} slugs are outside [a-z0-9-] (the rule normalises them), ${slug.slugOver40} are over ${SLUG_CAP} characters`,
+    `Do NOT: ${doNot.missing} documents have no section; ${doNot.refOnly} are pointer-only${doNot.refOnly ? ` (${doNot.refOnlyIds.join(' ')})` : ''}, ${doNot.refOnlyWithPath} of them name a .md path, ${doNot.pathInReadingOrder} of those paths are in the document's own Reading Order and ${doNot.pathInReadingOrderExisting} of those files existed when the snapshot was taken; indicative (a word pattern): ${doNot.carryStatementBesideOwnItems} documents carry a "the previous Do NOT still applies" sentence beside items of their own`,
+  ]
+  return { data, lines }
+}
+
+export const WHAT = { 'next-legacy': nextLegacy, next: nextChange, state: stateComparison, 'extract-agree': extractAgree, reading, ledger: ledgerCarry, latest: latestComparison }
 
 // ---- CLI -------------------------------------------------------------------------------------------------
 
