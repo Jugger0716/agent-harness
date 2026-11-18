@@ -64,7 +64,7 @@
 | D1 | 위치: 본문 분할은 `templates/handoff/generate.md`·`resume.md`, 스크립트는 `skills/handoff/scripts/`, 테스트는 `tests/handoff/` | 다른 스킬의 `templates/<skill>/` 관례. 스킬은 템플릿을 `{CLAUDE_PLUGIN_ROOT}/templates/…`로 읽는다 |
 | D2 | "generate 호출 시 실리는 본문" = `skills/handoff/SKILL.md` + `templates/handoff/generate.md` + generate가 읽는 템플릿(지금은 0개)의 `\r` 제외 UTF-8 바이트 합 ≤ 15,360 | 작은 파일로 나눠도 읽는 총량이 같으면 SPEC 3절의 실패 기준이다 |
 | D3 | resume 예산 B는 Task 5에서 잰다. 규칙: 범위 인식 정책으로 문서마다 읽기량을 구하고, B = 그 P90을 16KB 단위로 올림, 단 128KB를 넘으면 128KB로 하고 상한에 걸린 문서 비율을 보고한다 | SPEC 8.3 — 값은 실측 뒤에 정한다. 근거 없는 숫자를 미리 넣지 않는다 |
-| D4 | 범위 표기는 두 가지만: `경로:시작-끝`(행), `경로 §제목 일부`(절). 범위 없는 2,000줄 초과 파일은 건너뛰지 않고 앞 400행과 목차(제목·행 번호)를 읽는다 | H1. 계약 문서의 `§` 인용 관례와 같은 모양이다 |
+| D4 | 범위 표기는 두 가지만: `경로:시작-끝`(행), `경로 §제목 일부`(절). 범위 없는 2,000줄 초과 파일은 건너뛰지 않고 앞 400행과 목차(제목·행 번호)를 읽는다 | H1. 계약 문서의 `§` 인용 관례와 같은 모양이다. (정정 2026-11-18, Task 5 모의 실행: 예산 소진 처리를 "그 엔트리와 뒤의 모든 엔트리를 건너뜀"으로 두면 첫 엔트리가 B보다 큰 문서 43건(14.7%)이 아무것도 읽지 못한다. 그래서 예산에 안 맞는 엔트리는 `partial`(앞 400행 + 목차)이 맞으면 그 형태로 읽고, 그것도 안 맞으면 `skipped-budget`으로 표시한 뒤 뒤의 엔트리를 계속 처리한다. 순서는 문서 순서 그대로다. B는 D3 규칙대로 128KB 상한이 적용된 값이며, 대부분의 문서가 상한에 닿는 것은 상한의 목적이라 결함으로 보지 않는다. 완료 기준의 "중앙값"은 예산을 적용한 뒤의 실제 읽기량이다.) |
 | D5 | 이월하는 done 행은 최근 5개. 미완 행(`in-progress`·`blocked`·`planned`)은 전부 이월한다 | H7. 말뭉치 중앙값 13행, 5는 한 슬라이스 앞뒤 맥락을 남기는 최소값이다. 100행 넘던 표본이 20행 이하가 되는지는 Task 8이 잰다 |
 | D6 | `Next :` 우선순위: `Slice :` 라벨 > in-progress가 정확히 1행 > (하네스 상태가 관련 있을 때만) `Docs` 마지막 구간 > Next Steps 1번 원문. in-progress가 2행 이상이고 라벨이 없으면 모호하다고 밝히고 1번 원문으로 간다 | H2, H3 |
 | D7 | 헤더에 `Worktree:`(git 최상위, 없으면 `n/a`)와 `Dirty files:`(경로 최대 40개, 넘으면 `+N more`)를 더한다. 하네스 상태가 없거나 관련 없으면 In Progress에 `Harness : none (<이유>)` 한 줄을 쓴다 | H3, H5, H6, H9 |
@@ -264,7 +264,8 @@ Run: Step 1의 grep을 다시 → `skills/handoff/SKILL.md`로 가리키는 곳�
 - `reading-plan-line-range`: `src/a.js:120-180` → `status "range"`, `bytes`가 그 행들의 바이트
 - `reading-plan-section-range`: `docs/x.md §Foo` → 제목에 `Foo`가 든 절만, 없으면 `status "partial"`과 `outline`
 - `reading-plan-oversize-without-range`: 2,000줄 초과·범위 없음 → `status "partial"`, 앞 400행, `outline` 포함, 건너뛰지 않음
-- `reading-plan-budget-order`: 예산이 모자라면 문서 순서상 뒤의 엔트리부터 `"skipped-budget"`
+- `reading-plan-budget-degrades-to-partial`: 예산에 통째로는 안 맞지만 `partial`(앞 400행 + 목차)이 맞는 엔트리는 `"partial"`로 읽힌다(정정 2026-11-18, D4 참고)
+- `reading-plan-budget-skips-and-continues`: 어떤 형태로도 안 맞는 엔트리만 `"skipped-budget"`이고, 문서 순서상 뒤의 더 작은 엔트리는 계속 읽힌다. 엔트리 순서는 바뀌지 않는다
 - `reading-plan-docs-harness-allowed`: `docs/harness/x/y.md`가 읽힌다
 - `reading-plan-rejects`: `../x`, `.git/config`, 저장소 밖 절대 경로 → `"skipped-invalid"`
 - `reading-plan-non-file-entry`: `memory 항목`, `git log …` 같은 엔트리 → `isFile false`, 건너뜀 사유 `not a file`
