@@ -8,7 +8,7 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
 
 ## [Unreleased]
 
-## [9.0.1] — 2026-11-17
+## [9.0.1] — 2026-11-18
 
 v9 "subtraction", stage 2 (`design/v9-subtraction/SPEC.md` §5, plan
 `design/v9-subtraction/STAGE2.md`): correctness fixes in the five Workflow segment scripts and
