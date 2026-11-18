@@ -16,8 +16,10 @@
 //                  every change is put in one class — normalisation-only (a Slice cell or label value
 //                  lost its ** / __ / backtick wrapper), became-label, became-ambiguous, became-
 //                  docs-or-step-one (9.0.1 printed the ledger's last row, the slice that had just
-//                  finished) or other, which is the class that must stay empty. Also: whether the
+//                  finished) or other, which is the class that must stay empty (an ambiguity counts
+//                  only where 9.0.1 took the last of two or more in-progress rows). Also: whether the
 //                  label wins in the documents where it and an in-progress row differed under 9.0.1,
+//                  whether the documents with no label and one in-progress row kept their value,
 //                  how many documents are ambiguous, what became of the last-row documents, and the
 //                  same classes when the task state is NOT relevant (the Docs tier unused).
 //                  Prints document ids and counts only.
@@ -67,9 +69,12 @@ function nextLegacy(docs) {
 export const NEXT_CLASSES = ['unchanged', 'normalisation-only', 'became-label', 'became-ambiguous', 'became-docs-or-step-one', 'other']
 
 // One document's change. `legacy` is { slice, source } from legacy_next.mjs, `now` the result of
-// deriveNext (slice null = ambiguous). A change that is none of the named ones is `other`.
-export function classifyNextChange(legacy, now) {
-  if (now.slice === null) return 'became-ambiguous'
+// deriveNext (slice null = ambiguous), `legacyLiveRows` the number of in-progress rows in the
+// Epic of the last row as 9.0.1 read it. A change that is none of the named ones is `other` — in
+// particular an ambiguity counts as `became-ambiguous` only where 9.0.1 took the last of two or
+// more in-progress rows; any other document that turns ambiguous is something unexplained.
+export function classifyNextChange(legacy, now, { legacyLiveRows = 0 } = {}) {
+  if (now.slice === null) return legacy.source === 'in-progress' && legacyLiveRows >= 2 ? 'became-ambiguous' : 'other'
   if (now.slice === legacy.slice) return 'unchanged'
   if (now.source === 'label' && legacy.source !== 'label') return 'became-label'
   if (legacy.source === 'last-row' && (now.source === 'docs' || now.source === 'step-one')) return 'became-docs-or-step-one'
@@ -77,10 +82,22 @@ export function classifyNextChange(legacy, now) {
   return 'other'
 }
 
+// In-progress rows in the Epic of the last ledger row; `key` is the Epic cell as 9.0.1 read it
+// (`epicRaw`) or as the new rule reads it (`epic`).
+function liveRowCount(parsed, key) {
+  const rows = parsed.ledger ? parsed.ledger.rows : []
+  if (!rows.length) return 0
+  const epic = rows[rows.length - 1][key]
+  return rows.filter((r) => r[key] === epic && r.status === 'in-progress').length
+}
+
 function nextChange(docs) {
   const per = docs.map((d) => ({
     id: d.id,
     legacy: deriveLegacyNext(d.parsed),
+    legacyLiveRows: liveRowCount(d.parsed, 'epicRaw'),
+    liveRows: liveRowCount(d.parsed, 'epic'),
+    hasLabel: d.parsed.stepOne.sliceLabel !== null,
     tiers: legacyTiers(d.parsed),
     label: stripEmphasis(d.parsed.stepOne.sliceLabel),
     relevant: deriveNext(d.parsed, { stateRelevant: true }),
@@ -90,7 +107,7 @@ function nextChange(docs) {
     const classes = Object.fromEntries(NEXT_CLASSES.map((c) => [c, 0]))
     const ids = Object.fromEntries(NEXT_CLASSES.filter((c) => c !== 'unchanged').map((c) => [c, []]))
     for (const x of per) {
-      const c = classifyNextChange(x.legacy, x[pick])
+      const c = classifyNextChange(x.legacy, x[pick], { legacyLiveRows: x.legacyLiveRows })
       classes[c]++
       if (c !== 'unchanged') ids[c].push(x.id)
     }
@@ -106,6 +123,15 @@ function nextChange(docs) {
     withLabelAndInProgress: both.length,
     valuesDiffered: differed.length,
     newIsLabel: differed.filter((x) => x.relevant.source === 'label' && x.relevant.slice === x.label).length,
+  }
+
+  // (b) the documents with no label and exactly one in-progress row keep their value
+  const single = per.filter((x) => !x.hasLabel && x.liveRows === 1).map((x) => classifyNextChange(x.legacy, x.relevant, { legacyLiveRows: x.legacyLiveRows }))
+  const noLabelOneInProgress = {
+    documents: single.length,
+    unchanged: single.filter((c) => c === 'unchanged').length,
+    normalisationOnly: single.filter((c) => c === 'normalisation-only').length,
+    other: single.filter((c) => c !== 'unchanged' && c !== 'normalisation-only').length,
   }
 
   const ambiguous = per.filter((x) => x.relevant.slice === null).length
@@ -133,11 +159,12 @@ function nextChange(docs) {
   for (const c of NEXT_CLASSES) if (c !== 'unchanged' && main.ids[c].length) lines.push(`  ${c}: ${main.ids[c].join(' ')}`)
   lines.push(
     `label check: ${labelCheck.withLabelAndInProgress} ledger documents have a label and an in-progress row; the two named other slices in ${labelCheck.valuesDiffered}; the new Next : is the label value in ${labelCheck.newIsLabel} of those`,
+    `check (b): ${noLabelOneInProgress.documents} documents have no label and exactly one in-progress row; their value is unchanged in ${noLabelOneInProgress.unchanged}, changed only by normalisation in ${noLabelOneInProgress.normalisationOnly}, changed otherwise in ${noLabelOneInProgress.other}`,
     `ambiguous: ${ambiguous} documents (no label, two or more in-progress rows in the last row's Epic)`,
     `9.0.1 last-row documents: ${lastRow.documents}; the value changed in ${lastRow.valueChanged} (now Docs ${lastRow.nowDocs}, item 1 ${lastRow.nowStepOne}); the value is the same in ${lastRow.valueKept}`,
     `task state NOT relevant: ${stateNotRelevant.valueChanges} documents print another value than above (the Docs tier is unused); classes: ${NEXT_CLASSES.map((c) => `${c} ${apart.classes[c]}`).join(', ')}${apart.ids.other.length ? `; other: ${apart.ids.other.join(' ')}` : ''}`,
   )
-  const data = { documents: n, stateRelevant: true, classes: main.classes, ids: main.ids, labelCheck, ambiguous, lastRow, stateNotRelevant }
+  const data = { documents: n, stateRelevant: true, classes: main.classes, ids: main.ids, labelCheck, noLabelOneInProgress, ambiguous, lastRow, stateNotRelevant }
   return { data, lines }
 }
 

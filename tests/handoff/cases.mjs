@@ -1269,6 +1269,7 @@ const nextDiffCases = [
         same(out.ids.other, [])
         assert.equal(out.ids['became-label'].length, 1)
         same(out.labelCheck, { withLabelAndInProgress: 1, valuesDiffered: 1, newIsLabel: 1 })
+        same(out.noLabelOneInProgress, { documents: 2, unchanged: 2, normalisationOnly: 0, other: 0 })
         assert.equal(out.ambiguous, 1)
         assert.equal(out.lastRow.documents, 1)
         assert.equal(out.lastRow.valueChanged, 1)
@@ -1294,7 +1295,29 @@ const nextDiffCases = [
         same(out.classes, { unchanged: 1, 'normalisation-only': 1, 'became-label': 0, 'became-ambiguous': 0, 'became-docs-or-step-one': 0, other: 1 })
         same(out.ids['normalisation-only'], ['d001'])
         same(out.ids.other, ['d002'])
+        // check (b) counts the same documents: one in-progress row, no label
+        same(out.noLabelOneInProgress, { documents: 3, unchanged: 1, normalisationOnly: 1, other: 1 })
       })
+    },
+  },
+  {
+    id: 'corpus-diff-next-classifier-calls-an-unexplained-ambiguity-other',
+    run: async () => {
+      const { classifyNextChange } = await diffLib()
+      const now = (slice, source) => ({ slice, source, ambiguous: [], commandCandidates: [] })
+      const ambiguous = now(null, 'step-one')
+      // ambiguity is explained only where 9.0.1 took the last of two or more in-progress rows
+      assert.equal(classifyNextChange({ slice: 's2', source: 'in-progress' }, ambiguous, { legacyLiveRows: 2 }), 'became-ambiguous')
+      assert.equal(classifyNextChange({ slice: 's2', source: 'in-progress' }, ambiguous, { legacyLiveRows: 1 }), 'other')
+      assert.equal(classifyNextChange({ slice: 's2', source: 'last-row' }, ambiguous, { legacyLiveRows: 0 }), 'other')
+      assert.equal(classifyNextChange({ slice: 's2', source: 'docs' }, ambiguous), 'other')
+      // the other classes
+      assert.equal(classifyNextChange({ slice: 's2', source: 'in-progress' }, now('s2', 'label')), 'unchanged')
+      assert.equal(classifyNextChange({ slice: 's2', source: 'in-progress' }, now('s3', 'label')), 'became-label')
+      assert.equal(classifyNextChange({ slice: 's2', source: 'last-row' }, now('Do it.', 'step-one')), 'became-docs-or-step-one')
+      assert.equal(classifyNextChange({ slice: '**s2**', source: 'in-progress' }, now('s2', 'in-progress')), 'normalisation-only')
+      assert.equal(classifyNextChange({ slice: 's2', source: 'in-progress' }, now('s9', 'in-progress')), 'other')
+      assert.equal(classifyNextChange({ slice: 's2', source: 'in-progress' }, now('Do it.', 'step-one')), 'other')
     },
   },
   {
@@ -2064,8 +2087,11 @@ const contractCases = [
       const forms = text.slice(text.indexOf("**The first option's forms.**"), text.indexOf('**NEVER start executing work'))
       assert.ok(forms.length > 100, "the first option's forms section exists")
       assert.match(forms, /two or more candidates/i)
+      assert.ok(forms.includes('When `Next :` is ambiguous, that identifier is `Next Steps item 1`.'), 'the work form says what the identifier is when ambiguous')
       assert.match(forms, /numbered/)
       assert.match(forms, /Adjust plan/)
+      // rule 2's second conjunct cannot compare a picked candidate with a row that printed the literal
+      assert.ok(text.includes('a candidate the human picked from the numbered list, that list entry'), 'rule 2 conjunct (ii) covers the numbered list')
     },
   },
   {

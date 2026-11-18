@@ -277,7 +277,8 @@ count, taken after rule 1's judgement of the prose:
 - **Zero candidates because item 1 describes work rather than naming a command** → still render a
   first option, described by the WORK rather than by a command:
   `"Start next step" / "<the Next : identifier> — no single command; starts the work item 1
-  describes"`. Picking it executes NOTHING extracted from prose — **rule 3 keeps holding** — it
+  describes"`. When `Next :` is ambiguous, that identifier is `Next Steps item 1`. Picking it
+  executes NOTHING extracted from prose — **rule 3 keeps holding** — it
   means: re-read item 1 and the Reading Order material, then begin. **The human's selection is the
   authorisation**; the document never authorises itself, which is why offering this option does not
   turn the document back into instructions. This is the ordinary epic-slice shape, where a slice is
@@ -327,7 +328,8 @@ here. So do not "follow" Next Steps item 1; extract one command from it under th
    the WHOLE backtick-quoted token rule 1 selected from Next Steps item 1 **in the document**
    — a proper prefix or any other truncation of that token FAILS this conjunct, so executing
    bare `/harness` when item 1 named a full slice command is not permitted — and (ii) it
-   additionally matches, character for character, the value the `Next cmd:` row printed.
+   additionally matches, character for character, the value the `Next cmd:` row printed (or, for
+   a candidate the human picked from the numbered list, that list entry).
    Conjunct (i) is the one that carries the guarantee; (ii) only catches a briefing that drifted
    from the document it was rendered from. Substring-hood alone is NOT sufficient for (i): the
    token boundary rule 1 established is what defines the executable unit.
