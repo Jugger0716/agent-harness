@@ -1,4 +1,6 @@
-// The handoff's own path rule, and where a document's Reading Order paths are resolved from.
+// The handoff's own path rule, and where a document's Reading Order paths are resolved from — and, apart
+// from both, the order of the handoff documents in a folder (`orderDocs`, a pure function of file names and
+// mtimes that `latest-epic` and `ledger-carry --dir` use).
 // Nothing here reads a file's content; `deriveRepoRoot` and `validateHandoffPath` do not touch the
 // file system at all, and `gitTopLevel` runs one `git rev-parse`. (The real-path check of condition
 // 4 is the planner's, in reading.mjs.)
@@ -89,6 +91,43 @@ export function gitTopLevel(dir) {
   } catch {
     return null
   }
+}
+
+// The order of handoff documents, newest first. A document is `{ name, mtimeMs }`; `name` is its file name (a
+// folder part is ignored). The location convention (SKILL.md) names a file `YYYY-MM-DD-<slug>.md` and, when
+// that name is taken, appends `-2`, `-3`, … — the plain name is the OLDEST of its slug's files that day. So:
+//   1. the date in the file name, later first (a name with no date is the oldest);
+//   2. within one date and one slug, the larger numeric suffix first (a plain name counts as 1; the suffix is
+//      compared as a number, so `-10` is newer than `-3`);
+//   3. between two slugs, the one whose newest file has the later mtime first (a slug is placed by its newest
+//      file, so a `-2` file that was written before another slug's file does not outrank it);
+//   4. what is still equal (a clone gives every file the same mtime): the larger name first, so the result
+//      never depends on the order of the input.
+// The mtime only separates different slugs: it is the weakest signal, because a copy or a checkout resets it.
+// Pure — no file system access; a new array comes back and the input is left as it is.
+function docKey(name) {
+  const base = String(name).split(/[\\/]/).pop().replace(/\.md$/i, '')
+  const m = /^(\d{4}-\d{2}-\d{2})(?:-(.*))?$/.exec(base)
+  const date = m ? m[1] : ''
+  const rest = m ? (m[2] ?? '') : base
+  const s = /^(.*?)-(\d+)$/.exec(rest)
+  return s ? { date, slug: s[1], n: Number(s[2]) } : { date, slug: rest, n: 1 }
+}
+
+const cmp = (a, b) => (a < b ? -1 : a > b ? 1 : 0)
+
+export function orderDocs(docs) {
+  const items = docs.map((d) => ({ d, ...docKey(d.name), mtime: Number.isFinite(d.mtimeMs) ? d.mtimeMs : 0, name: String(d.name) }))
+  const slugs = new Map()
+  for (const it of items) {
+    const key = `${it.date}\0${it.slug}`
+    if (!slugs.has(key)) slugs.set(key, [])
+    slugs.get(key).push(it)
+  }
+  const groups = [...slugs.values()]
+  for (const g of groups) g.sort((a, b) => b.n - a.n || b.mtime - a.mtime || cmp(b.name, a.name))
+  groups.sort((a, b) => cmp(b[0].date, a[0].date) || b[0].mtime - a[0].mtime || b[0].n - a[0].n || cmp(b[0].slug, a[0].slug))
+  return groups.flat().map((it) => it.d)
 }
 
 // The folders a document's entries may be resolved against, in the order they are tried:

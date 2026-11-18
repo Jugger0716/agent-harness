@@ -15,10 +15,11 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { InputError } from './lib/errors.mjs'
-import { parseHandoff } from './lib/parse.mjs'
+import { parseHandoff, stripEmphasis } from './lib/parse.mjs'
 import { deriveNext } from './lib/next.mjs'
 import { allowedRoots } from './lib/paths.mjs'
 import { planReading } from './lib/reading.mjs'
+import { carryFromDir, carryFromText, latestEpic } from './lib/ledger.mjs'
 import { drift, gitState, harnessState, requireFolder } from './lib/git.mjs'
 
 class UsageError extends Error {}
@@ -81,6 +82,27 @@ function cmdDrift(opts) {
   return drift(parsed, path.resolve(opts.cwd))
 }
 
+// The rows of the Progress Ledger a new handoff starts from (lib/ledger.mjs): every unfinished row of one Epic
+// and the most recent five finished ones, from ONE document (--doc: one the caller already knows) or from the
+// newest document in a folder that holds rows of that Epic (--dir). Exactly one of the two is given; --epic is
+// read with one `**`/`__` pair and then one backtick pair removed, like the cells.
+function cmdLedgerCarry(opts) {
+  const hasDoc = opts.doc !== undefined
+  if (hasDoc === (opts.dir !== undefined)) throw new UsageError('ledger-carry: give exactly one of --doc and --dir')
+  const epic = stripEmphasis(opts.epic)
+  if (epic === '') throw new UsageError('ledger-carry: --epic must not be empty')
+  if (hasDoc) return carryFromText(readDoc(opts.doc), epic, opts.doc)
+  if (opts.dir === '') throw new UsageError('ledger-carry: --dir must not be empty')
+  return carryFromDir(opts.dir, epic)
+}
+
+// The Epic a new handoff proposes (lib/ledger.mjs): the Epic of the last ledger row of the newest handoff
+// document in a folder that has one, and that document's path; null and null when there is none.
+function cmdLatestEpic(opts) {
+  if (opts.dir === '') throw new UsageError('latest-epic: --dir must not be empty')
+  return latestEpic(opts.dir)
+}
+
 // name -> { options: every accepted --option, required: the ones that must be given, run }
 const COMMANDS = {
   parse: { options: ['doc'], required: ['doc'], run: cmdParse },
@@ -89,6 +111,8 @@ const COMMANDS = {
   'git-state': { options: ['cwd'], required: ['cwd'], run: cmdGitState },
   'harness-state': { options: ['branch', 'cwd'], required: ['branch'], run: cmdHarnessState },
   drift: { options: ['doc', 'cwd'], required: ['doc', 'cwd'], run: cmdDrift },
+  'ledger-carry': { options: ['doc', 'dir', 'epic'], required: ['epic'], run: cmdLedgerCarry },
+  'latest-epic': { options: ['dir'], required: ['dir'], run: cmdLatestEpic },
 }
 
 // ---- dispatch -----------------------------------------------------------------------------------------

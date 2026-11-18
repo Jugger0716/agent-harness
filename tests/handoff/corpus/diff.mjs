@@ -47,6 +47,21 @@
 //                  the path-rule checks (a `Docs` value under docs/harness/ passes, an entry with a
 //                  `..` or `.git` segment is rejected). Every number that rests on an estimate is
 //                  counted in the output: the manifest holds sizes, not content or source paths.
+//   ledger         the ledger carry rule (skills/handoff/scripts/lib/ledger.mjs, D5) applied to every
+//                  document that has a ledger with a row, as if a new handoff were written from it:
+//                  the Epic is the one of the document's LAST row, every unfinished row (anything but
+//                  `done` / `dropped`, values outside the enum included) is carried, plus the last 5
+//                  finished rows. Reports (a) the carried rows against the Epic's rows (median / P90 /
+//                  max over the ledger documents) and the documents over 100 rows — by table rows and by
+//                  the Epic's rows — whose carried rows are 20 or fewer, with the unfinished and finished
+//                  counts of each that are not (carried = unfinished + min(5, finished), so the criterion
+//                  holds exactly where a document has at most 15 unfinished rows), (b) that no unfinished
+//                  row of the chosen Epic is lost, (c) the documents that hold several Epics, whose
+//                  carried rows must all be the chosen Epic's, and the unfinished rows of the other Epics
+//                  that stay behind, (d) the Status values outside the enum. The only cell text it prints
+//                  is such a Status value, and only when it is a short token; never an Epic or a Slice.
+//                  Its count of finished rows uses its own list (`done`, `dropped`), not the shipped one,
+//                  so a change of the shipped rule shows as a difference.
 //
 // Exit codes: 0 the comparison ran (a difference is a finding, printed, not a failure); 1 input
 // problem — no or unreadable manifest.json, a copy that is missing or whose sha256 differs from
@@ -59,6 +74,7 @@ import { InputError, exitOnError, stripHint } from './snapshot.mjs'
 import { deriveLegacyNext, legacyTiers } from './legacy_next.mjs'
 import { FIXED_LABELS, parseRange, stripEmphasis } from '../../../skills/handoff/scripts/lib/parse.mjs'
 import { deriveNext } from '../../../skills/handoff/scripts/lib/next.mjs'
+import { KEEP_DONE, carryLedger } from '../../../skills/handoff/scripts/lib/ledger.mjs'
 import { validateHandoffPath } from '../../../skills/handoff/scripts/lib/paths.mjs'
 import { HEAD_LINES, OUTLINE_HEADING_BYTES, OUTLINE_MAX_ENTRIES, WHOLE_FILE_MAX_LINES, isMarkdownPath } from '../../../skills/handoff/scripts/lib/reading.mjs'
 
@@ -514,7 +530,114 @@ function reading(docs) {
   return { data, lines }
 }
 
-export const WHAT = { 'next-legacy': nextLegacy, next: nextChange, state: stateComparison, 'extract-agree': extractAgree, reading }
+// ---- ledger: the carry rule over the documents that have a ledger -------------------------------------------------
+
+// The measurement keeps its OWN statement of the rule's vocabulary: finished = these two, enum = these five.
+const MEASURE_FINISHED = ['done', 'dropped']
+const MEASURE_ENUM = ['done', 'in-progress', 'blocked', 'planned', 'dropped']
+const CRITERION_ROWS = 20 // SPEC 3.2: a document of more than OVER_ROWS rows carries at most this many
+const OVER_ROWS = 100
+
+const spread = (a) => ({ median: median(a), p90: percentile(a, 0.9), max: a.length ? Math.max(...a) : null })
+
+// A Status value as a label: a short token is printed as written, anything else by its kind.
+const statusLabel = (v) => (v === null ? '<missing>' : v === '' ? '<empty>' : /^[A-Za-z0-9()._가-힣-]{1,24}$/.test(v) ? v : '<other>')
+
+function ledgerCarry(docs) {
+  const per = []
+  for (const d of docs) {
+    const rows = d.parsed && d.parsed.ledger ? d.parsed.ledger.rows : []
+    if (!rows.length) continue
+    const epic = rows[rows.length - 1].epic ?? ''
+    const mine = rows.filter((r) => (r.epic ?? '') === epic)
+    const out = carryLedger(rows, epic, { keepDone: KEEP_DONE })
+    const isOpen = (r) => !MEASURE_FINISHED.includes(r.status)
+    const unfinished = mine.filter(isOpen).length
+    const carried = out.rows.length
+    per.push({
+      id: d.id,
+      table: rows.length,
+      before: mine.length,
+      carried,
+      unfinished,
+      finished: mine.length - unfinished,
+      unfinishedAfter: out.rows.filter(isOpen).length,
+      ruleHolds: carried === unfinished + Math.min(KEEP_DONE, mine.length - unfinished) && out.rows.every((r) => (r.epic ?? '') === epic),
+      epics: new Set(rows.map((r) => r.epic ?? '')).size,
+      otherUnfinished: rows.filter((r) => (r.epic ?? '') !== epic && isOpen(r)).length,
+      unknown: rows.map((r) => r.status).filter((v) => !MEASURE_ENUM.includes(v)),
+      unknownCarried: out.unknownStatusRows,
+    })
+  }
+  const over = (key) => {
+    const big = per.filter((p) => p[key] > OVER_ROWS)
+    const failing = big.filter((p) => p.carried > CRITERION_ROWS)
+    return {
+      documents: big.length,
+      atMost20: big.length - failing.length,
+      above20: failing.length,
+      maxCarried: big.length ? Math.max(...big.map((p) => p.carried)) : null,
+      failing: failing.map((p) => ({ id: p.id, carried: p.carried, unfinished: p.unfinished, finished: p.finished })),
+    }
+  }
+  const multi = per.filter((p) => p.epics > 1)
+  const values = {}
+  for (const p of per) {
+    for (const v of new Set(p.unknown)) (values[statusLabel(v)] ||= { documents: 0, rows: 0 }).documents++
+    for (const v of p.unknown) values[statusLabel(v)].rows++
+  }
+  const lost = per.filter((p) => p.unfinished !== p.unfinishedAfter)
+  const above20 = per.filter((p) => p.carried > CRITERION_ROWS)
+  const data = {
+    documents: docs.length,
+    ledgerDocuments: per.length,
+    keepDone: KEEP_DONE,
+    rows: { table: spread(per.map((p) => p.table)), before: spread(per.map((p) => p.before)), after: spread(per.map((p) => p.carried)) },
+    over100: { byTable: over('table'), byEpicRows: over('before') },
+    above20: { documents: above20.length, ids: above20.map((p) => p.id) },
+    unfinished: {
+      rows: per.reduce((a, p) => a + p.unfinished, 0),
+      lostRows: lost.reduce((a, p) => a + p.unfinished - p.unfinishedAfter, 0),
+      lostDocuments: lost.map((p) => p.id),
+      ruleHolds: per.filter((p) => p.ruleHolds).length,
+    },
+    multiEpic: {
+      documents: multi.length,
+      ids: multi.map((p) => p.id),
+      onlyChosenEpic: multi.filter((p) => p.ruleHolds).length,
+      otherEpicUnfinishedRows: multi.reduce((a, p) => a + p.otherUnfinished, 0),
+    },
+    unknownStatus: {
+      documents: per.filter((p) => p.unknown.length).length,
+      rows: per.reduce((a, p) => a + p.unknown.length, 0),
+      rowsCarried: per.reduce((a, p) => a + p.unknownCarried, 0),
+      values,
+    },
+  }
+  const t = (x) => `${num(x.median)} / ${num(x.p90)} / ${num(x.max)}`
+  const ids = (a) => (a.length ? ` (${a.join(' ')})` : '')
+  const overLine = (label, o) => `  ${label}: ${o.documents} documents; carried rows ${CRITERION_ROWS} or fewer in ${o.atMost20}, more in ${o.above20}${o.documents ? `; most carried ${o.maxCarried}` : ''}`
+  const u = data.unfinished
+  const m = data.multiEpic
+  const k = data.unknownStatus
+  const lines = [
+    `ledger: ${docs.length} documents, ${per.length} with a ledger (the rule: every unfinished row of the Epic of the last row, plus its last ${KEEP_DONE} finished rows)`,
+    `rows per ledger document, median / P90 / max: before (the Epic's rows) ${t(data.rows.before)}; after (carried) ${t(data.rows.after)}; whole table ${t(data.rows.table)}`,
+    `(a) documents of more than ${OVER_ROWS} rows:`,
+    overLine('by table rows', data.over100.byTable),
+    overLine("by the Epic's rows", data.over100.byEpicRows),
+    ...data.over100.byTable.failing.map((f) => `    ${f.id}: carried ${f.carried} = ${f.unfinished} unfinished + ${f.carried - f.unfinished} of ${f.finished} finished`),
+    `  every ledger document with more than ${CRITERION_ROWS} carried rows, whatever its size: ${data.above20.documents}${ids(data.above20.ids)}`,
+    `  carried = unfinished + min(${KEEP_DONE}, finished): the criterion holds exactly where a document has at most ${CRITERION_ROWS - KEEP_DONE} unfinished rows`,
+    `(b) unfinished rows of the chosen Epic: ${u.rows} before, ${u.rows - u.lostRows} after; lost in ${u.lostDocuments.length} documents${ids(u.lostDocuments)}; the rule's own count holds in ${u.ruleHolds} of ${per.length}`,
+    `(c) documents that hold several Epics: ${m.documents}${ids(m.ids)}; only the chosen Epic's rows come out in ${m.onlyChosenEpic}; ${m.otherEpicUnfinishedRows} unfinished rows of the other Epics stay behind`,
+    `(d) Status values outside the enum: ${k.documents} documents, ${k.rows} rows (${k.rowsCarried} of them in the carried Epic, carried as unfinished)`,
+    ...Object.entries(k.values).map(([v, c]) => `    ${v}: ${c.documents} documents, ${c.rows} rows`),
+  ]
+  return { data, lines }
+}
+
+export const WHAT = { 'next-legacy': nextLegacy, next: nextChange, state: stateComparison, 'extract-agree': extractAgree, reading, ledger: ledgerCarry }
 
 // ---- CLI -------------------------------------------------------------------------------------------------
 
