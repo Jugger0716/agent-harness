@@ -161,7 +161,7 @@ function nextChange(docs) {
     `label check: ${labelCheck.withLabelAndInProgress} ledger documents have a label and an in-progress row; the two named other slices in ${labelCheck.valuesDiffered}; the new Next : is the label value in ${labelCheck.newIsLabel} of those`,
     `check (b): ${noLabelOneInProgress.documents} documents have no label and exactly one in-progress row; their value is unchanged in ${noLabelOneInProgress.unchanged}, changed only by normalisation in ${noLabelOneInProgress.normalisationOnly}, changed otherwise in ${noLabelOneInProgress.other}`,
     `ambiguous: ${ambiguous} documents (no label, two or more in-progress rows in the last row's Epic)`,
-    `9.0.1 last-row documents: ${lastRow.documents}; the value changed in ${lastRow.valueChanged} (now Docs ${lastRow.nowDocs}, item 1 ${lastRow.nowStepOne}); the value is the same in ${lastRow.valueKept}`,
+    `9.0.1 last-row documents: ${lastRow.documents}; they now come from Docs in ${lastRow.nowDocs} and from item 1 in ${lastRow.nowStepOne}; the printed value changed in ${lastRow.valueChanged} and is the same in ${lastRow.valueKept} (the same value as the finished slice)`,
     `task state NOT relevant: ${stateNotRelevant.valueChanges} documents print another value than above (the Docs tier is unused); classes: ${NEXT_CLASSES.map((c) => `${c} ${apart.classes[c]}`).join(', ')}${apart.ids.other.length ? `; other: ${apart.ids.other.join(' ')}` : ''}`,
   )
   const data = { documents: n, stateRelevant: true, classes: main.classes, ids: main.ids, labelCheck, noLabelOneInProgress, ambiguous, lastRow, stateNotRelevant }
