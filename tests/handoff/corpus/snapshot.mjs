@@ -23,9 +23,15 @@
 //   document itself wrote, nothing more).
 //
 // Reading Order extraction (an approximation; exactness is not the goal, using the same rule on
-// the "before" and the "after" side is). Section = a level-2 heading outside code fences whose
-// text starts with `Reading Order` (case-insensitive, first match). Item = a list line with at
-// most 3 leading spaces (`1.` / `1)` / `-` / `*`).
+// the "before" and the "after" side is). Since the helper script was added the rule is ITS code —
+// skills/handoff/scripts/lib/parse.mjs — imported here, so the two cannot drift; on the 292
+// documents of the first snapshot it returned exactly what the earlier copy of the rule had
+// (items, raw, path), and `diff.mjs --what extract-agree` re-checks a manifest against it. The
+// shipped version also tracks fences by character and length and skips list lines inside a
+// fence; the description below is the rule's substance.
+// Section = a level-2 heading outside code fences whose text starts with `Reading Order`
+// (case-insensitive, first match). Item = a list line with at most 3 leading spaces (`1.` / `1)` /
+// `-` / `*`).
 //   - An item that starts with `이 문서` is the document itself (kind "self").
 //   - Otherwise the candidate is the FIRST backtick-quoted token of the item that looks like a file
 //     path; an earlier token that does not (a label, a command, a heading) is passed over. A
@@ -56,19 +62,22 @@ import path from 'node:path'
 import crypto from 'node:crypto'
 import { execFileSync } from 'node:child_process'
 import { fileURLToPath, pathToFileURL } from 'node:url'
+// The Reading Order rule is the shipped helper's, not a copy of it: what a snapshot records and
+// what `/handoff resume` reads cannot drift apart. (`diff.mjs --what extract-agree` checks a
+// frozen manifest against the helper.)
+import { InputError, HANDOFF_PREFIX, stripHint, looksLikePath, readingOrderOf } from '../../../skills/handoff/scripts/lib/parse.mjs'
 
-export const HANDOFF_PREFIX = '# HANDOFF —'
+export { HANDOFF_PREFIX, InputError, stripHint, looksLikePath }
 const MAX_COUNTED_BYTES = 256 * 1024 * 1024
-const LIST_ITEM = /^\s{0,3}(\d+[.)]|[-*])\s/
 
 // ---- parsing helpers (exported: measure.mjs and later tools reuse them) ----------------------
 
 export function isHandoffText(text) {
-  return text.replace(/^﻿/, '').split('\n', 1)[0].startsWith(HANDOFF_PREFIX)
+  return text.replace(/^\uFEFF/, '').split('\n', 1)[0].startsWith(HANDOFF_PREFIX)
 }
 
-// An input problem (a bad root or `--out`, an unreadable corpus): exit 1 with the message only.
-export class InputError extends Error {}
+// An input problem (a bad root or `--out`, an unreadable corpus) is an `InputError`, shared with
+// the helper: exit 1 with the message only.
 
 // Shared top-level handler. InputError and fs errors -> 1 (input/I-O problem; an fs error prints
 // its code only, never the path it failed on); anything else is an internal error -> 2.
@@ -103,44 +112,19 @@ export function splitSections(text) {
   return secs
 }
 
-export function stripHint(token) {
-  return token
-    .replace(/\s+§.*$/, '')
-    .replace(/\s*\([^)]*\)$/, '')
-    .replace(/[:#]L?\d+(-L?\d+)?$/, '')
-}
-
-// No whitespace, no glob character, and a path separator or a file-extension ending.
-export function looksLikePath(p) {
-  return p.length > 0 && !/\s/.test(p) && !/[*{]/.test(p) && (/[/\\]/.test(p) || /\.[A-Za-z0-9]+$/.test(p))
-}
-
 export function isAbsoluteRef(p) {
   return /^([A-Za-z]:[\\/]|[\\/]|~)/.test(p)
 }
 
 // -> { items, entries: [{ raw, kind, path }] }   (path = stripped candidate, "" for self)
+// `items` counts every list item of the section; `entries` keeps the document itself and the
+// items that have a path-like token — the shipped helper's entries, in this tool's older shape.
 export function extractReadingOrder(text) {
-  const sec = splitSections(text).find((s) => /^Reading Order\b/i.test(s.heading))
-  const out = { items: 0, entries: [] }
-  if (!sec) return out
-  for (const l of sec.body) {
-    if (!LIST_ITEM.test(l)) continue
-    out.items++
-    if (/^\s{0,3}(\d+[.)]|[-*])\s+이 문서/.test(l)) {
-      out.entries.push({ raw: '이 문서', kind: 'self', path: '' })
-      continue
-    }
-    for (const m of l.matchAll(/`([^`]+)`/g)) {
-      const raw = m[1].trim()
-      const p = stripHint(raw)
-      if (looksLikePath(p)) {
-        out.entries.push({ raw, kind: 'path', path: p })
-        break
-      }
-    }
-  }
-  return out
+  const all = readingOrderOf(text)
+  const entries = all
+    .filter((e) => e.self || e.isFile)
+    .map((e) => (e.self ? { raw: e.raw, kind: 'self', path: '' } : { raw: e.raw, kind: 'path', path: e.path }))
+  return { items: all.length, entries }
 }
 
 // ---- file measuring --------------------------------------------------------------------------

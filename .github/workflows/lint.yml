@@ -48,4 +48,6 @@ jobs:
       # Behavioural tests, not a lint: the Workflow segment scripts run against a stub engine.
       # Lives outside scripts/ on purpose, so check_lint_wiring.sh does not count it as a lint.
       - run: node tests/segment_stubs/run.mjs
+      # Behavioural tests for the /handoff helper script: synthetic fixtures, no model, no network.
+      - run: node tests/handoff/run.mjs
       - run: bash .github/scripts/check_lint_wiring.sh

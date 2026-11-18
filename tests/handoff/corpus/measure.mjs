@@ -12,9 +12,8 @@
 // path or a name. Nothing is CI-wired; it is run by hand. This is a test-side tool, so
 // human-readable output on stdout is allowed.
 //
-// What is measured (the `Next :` origin metrics — in-progress / label / last row, and the
-// label-vs-in-progress disagreement count — are NOT here; the `Next :` derivation lives in
-// legacy_next.mjs, which wires them in):
+// What is measured (the `next.*` rows come from the 9.0.1 `Next :` derivation in legacy_next.mjs,
+// applied to the document as the shipped parser, skills/handoff/scripts/lib/parse.mjs, reads it):
 //   - docs / docsByRoot      documents, and how many came from each 1-based root index.
 //   - ro.*                   Reading Order entries as snapshot.mjs recorded them.
 //   - readBytes / readLines  what one resume would read: per document the sum over Reading Order
@@ -39,6 +38,11 @@
 //   - fixed.*                documents whose `## In Progress` section carries all five fixed labels
 //                            (Skill, Task, Phase, Mode, Docs), and how many of those record a
 //                            `Docs` value under `docs/harness/`.
+//   - next.*                 where the 9.0.1 `Next :` row would come from, one document each:
+//                            in-progress / label / last-row / docs / step-one (the five add up to
+//                            the documents measured), plus how often the `Slice :` label exists,
+//                            is read at all, and disagrees with the in-progress row that outranks
+//                            it. A document that does not parse as a handoff is an input problem.
 // Percentiles are nearest-rank as in the audit: sorted[min(n-1, floor(p*n))]; the median of an
 // even count is the mean of the middle two. Sizes are raw bytes. Line counts are the snapshot's
 // (`split('\n').length`).
@@ -52,6 +56,8 @@ import path from 'node:path'
 import crypto from 'node:crypto'
 import { pathToFileURL } from 'node:url'
 import { splitSections, stripHint, isAbsoluteRef, InputError, exitOnError } from './snapshot.mjs'
+import { parseHandoff } from '../../../skills/handoff/scripts/lib/parse.mjs'
+import { deriveLegacyNext, legacyTiers } from './legacy_next.mjs'
 
 export const LINE_CAP = 2000
 
@@ -140,7 +146,8 @@ export function isContractReadable(raw) {
 // ---- corpus loading --------------------------------------------------------------------------
 
 // Iterates the manifest's docs list (never the folder), re-hashes every copy.
-// -> { manifest, docs: [{ ...manifestEntry, text, facts }], problems: string[] }
+// -> { manifest, docs: [{ ...manifestEntry, text, facts, parsed }], problems: string[] }
+//    (`parsed` is parseHandoff()'s result, or null for a copy that is not a handoff document)
 export function loadCorpus(dir) {
   let manifest
   try {
@@ -163,7 +170,14 @@ export function loadCorpus(dir) {
     }
     if (crypto.createHash('sha256').update(buf).digest('hex') !== e.sha256) problems.push(`${e.id}: sha256 differs from the manifest`)
     const text = buf.toString('utf8')
-    docs.push({ ...e, text, facts: parseFacts(text) })
+    let parsed = null
+    try {
+      parsed = parseHandoff(text)
+    } catch (err) {
+      if (!(err instanceof InputError)) throw err
+      problems.push(`${e.id}: not a handoff document`)
+    }
+    docs.push({ ...e, text, facts: parseFacts(text), parsed })
   }
   return { manifest, docs, problems }
 }
@@ -255,6 +269,23 @@ export function computeMetrics(docs) {
   const fx = docs.filter((d) => d.facts.fixedAll)
   add('fixed.docs', 'Documents recording all five fixed labels', fx.length)
   add('fixed.docsUnderHarness', 'of which Docs is under docs/harness/', fx.filter((d) => d.facts.docsUnderHarness).length)
+
+  // The 9.0.1 `Next :` derivation. The five source counts add up to the documents measured.
+  const nx = docs.filter((d) => d.parsed).map((d) => ({ n: deriveLegacyNext(d.parsed), t: legacyTiers(d.parsed) }))
+  const from = (source) => nx.filter((x) => x.n.source === source).length
+  add('next.inProgress', 'Next : from the ledger\'s last in-progress row (9.0.1)', from('in-progress'))
+  add('next.label', 'Next : from the Next Steps `Slice :` label (no in-progress row)', from('label'))
+  add('next.lastRow', 'Next : from the ledger\'s last row (no in-progress row, no label)', from('last-row'))
+  add('next.docs', 'Next : from the last segment of the recorded Docs path (no ledger)', from('docs'))
+  add('next.stepOne', 'Next : from Next Steps item 1 verbatim (no ledger, no Docs)', from('step-one'))
+  add('next.stepOneEmpty', 'of which item 1 is empty', nx.filter((x) => x.n.source === 'step-one' && x.n.slice === '').length)
+  add('next.ledgerNoInProgress', 'Ledger documents with no in-progress row in the last row\'s Epic', nx.filter((x) => x.t.ledger && x.t.inProgress === null).length)
+  const labelled = nx.filter((x) => x.t.label !== null)
+  add('next.labelDocs', 'Documents with a `Slice :` label in Next Steps item 1', labelled.length)
+  add('next.labelUnused', 'of which the label is not read (an in-progress row wins, or there is no ledger)', labelled.filter((x) => x.n.source !== 'label').length)
+  const both = labelled.filter((x) => x.t.ledger && x.t.inProgress !== null)
+  add('next.labelAndInProgress', 'Ledger documents with both a label and an in-progress row', both.length)
+  add('next.labelDiffers', 'of which the label names another slice than the in-progress row', both.filter((x) => x.t.label !== x.t.inProgress).length)
   return rows
 }
 

@@ -65,3 +65,8 @@
 # Stub-test modules: the same reason as the lines above -- what gets committed must not
 # depend on a machine's core.autocrlf. Added in v9 stage 1; `*.py` stays uncovered (U-1).
 tests/**/*.mjs text eol=lf
+
+# The shipped /handoff helper script and its libraries (v9 stage 3): a script a skill runs must
+# not depend on a machine's core.autocrlf any more than the Workflow scripts above do. The
+# `tests/**/*.mjs` line covers the helper's tests; this one covers the script itself.
+skills/handoff/scripts/**/*.mjs text eol=lf

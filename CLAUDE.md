@@ -34,6 +34,7 @@ application source, and the only behavioural tests are the segment stub tests un
 | Cited path existence | `python scripts/verify_cited_paths.py` |
 | Lint wiring equality | `bash .github/scripts/check_lint_wiring.sh` |
 | Segment stub tests | `node tests/segment_stubs/run.mjs` |
+| Handoff script tests | `node tests/handoff/run.mjs` |
 
 The same chain is declared once, below, as this repository's project default so a `/harness`
 session runs it as Layer 1 without a `--lint-cmd` flag (`templates/_shared/project_defaults.md`;
