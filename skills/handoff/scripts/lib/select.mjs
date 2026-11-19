@@ -5,7 +5,8 @@
 //     recursion, no cap), newest first by `orderDocs` (paths.mjs). `date`, `branch`, `head` and `title` are what the
 //     document's header records (parse.mjs; null when it records none — `head` is the sha without its subject, and a
 //     recorded branch is read with one backtick pair removed); `slug` comes from the FILE NAME, a collision suffix
-//     included. `path` is `dir` as the caller wrote it, with `/`, plus the file name. A folder that does not exist
+//     included. Each is printed through git.mjs's `shown()`: no control or invisible format character, at most 200
+//     characters. `path` is `dir` as the caller wrote it, with `/`, plus the file name (ledger.mjs `docPath`). A folder that does not exist
 //     holds no document; a path that is not a folder is an InputError. A file whose name is outside ledger.mjs's
 //     SAFE_DOC_NAME is never listed or picked, only counted in `skippedNames` (a contract puts `path` into a quoted
 //     shell argument); a handoff document over 4 MiB, or a file that cannot be read, likewise in `skippedFiles`
@@ -38,31 +39,35 @@
 import { parseHeader, stripEmphasis } from './parse.mjs'
 import { newSkips, scanHandoffDocs, skippedOf } from './ledger.mjs'
 import { gitTopLevel, splitDocName } from './paths.mjs'
-import { runGit } from './git.mjs'
-
-const shownDir = (dir) => String(dir).replace(/\\/g, '/').replace(/\/+$/, '')
+import { runGit, shown } from './git.mjs'
 
 // A recorded or given branch that names no branch.
 const NO_BRANCH = new Set(['n/a', '(detached)'])
 
-// The header only (parse.mjs `parseHeader`): `list` and `latest` read nothing below the first section.
-function describe(d, dir) {
+// The header only (parse.mjs `parseHeader`): `list` and `latest` read nothing below the first section. -> { doc,
+// recordedBranch }: `doc` is what the commands print — its document values through git.mjs's `shown()`, so no control or
+// invisible format character (a right-to-left override, a zero-width space) reaches the output and none is longer than
+// 200 characters; `recordedBranch` is the branch as recorded, for the comparison with the current branch only.
+const printed = (v) => (v === null ? null : shown(v) || null)
+
+function describe(d) {
   const h = parseHeader(d.text)
-  const branch = h.branch === null ? null : stripEmphasis(h.branch) || null
-  return {
-    path: `${shownDir(dir)}/${d.name}`,
-    date: h.date,
-    slug: splitDocName(d.name).slug,
-    branch,
+  const recordedBranch = h.branch === null ? null : stripEmphasis(h.branch) || null
+  const doc = {
+    path: d.path,
+    date: printed(h.date),
+    slug: printed(splitDocName(d.name).slug),
+    branch: printed(recordedBranch),
     head: h.head,
-    title: h.title === '' ? null : h.title,
+    title: h.title === '' ? null : printed(h.title),
     mtimeMs: d.mtimeMs,
   }
+  return { doc, recordedBranch }
 }
 
 export function listDocs(dir) {
   const skips = newSkips()
-  const docs = [...scanHandoffDocs(dir, Infinity, skips)].map((d) => describe(d, dir))
+  const docs = [...scanHandoffDocs(dir, Infinity, skips)].map((d) => describe(d).doc)
   return { docs, ...skippedOf(skips) }
 }
 
@@ -97,15 +102,16 @@ export function latestDoc(dir, branch, cwd) {
     const name = splitDocName(d.name).date
     if (date === null) date = name
     else if (name !== date) break
-    day.push(describe(d, dir))
+    const { doc, recordedBranch } = describe(d)
+    day.push({ ...doc, recordedBranch })
   }
   const skipped = skippedOf(skips)
-  const shown = (list) => list.map(({ path: p, branch: b, head, title }) => ({ path: p, branch: b, head, title }))
-  const answer = (doc, candidates, needsChoice) => ({ doc, candidates: shown(candidates), needsChoice, ...skipped })
+  const pick = (list) => list.map(({ path: p, branch: b, head, title }) => ({ path: p, branch: b, head, title }))
+  const answer = (doc, candidates, needsChoice) => ({ doc, candidates: pick(candidates), needsChoice, ...skipped })
   if (day.length === 0) return answer(null, [], false)
   if (day.length === 1) return answer(day[0].path, day, false)
   const top = NO_BRANCH.has(branch) ? null : gitTopLevel(cwd)
-  const onBranch = top === null ? [] : day.filter((x) => x.branch === branch && isAncestor(top, x.head, 'HEAD'))
+  const onBranch = top === null ? [] : day.filter((x) => x.recordedBranch === branch && isAncestor(top, x.head, 'HEAD'))
   if (onBranch.length === 0) return answer(null, day, true)
   const latest = latestByCommit(top, onBranch)
   if (latest !== null) return answer(latest.path, day, false)

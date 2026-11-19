@@ -73,9 +73,9 @@ FIGURE PROVENANCE -- each figure is tagged with where it came from
                                               move it)
   * no external specification limit is used here.
 
-At this commit: the generate load is 15,291 bytes (skills/handoff/SKILL.md 6,410 +
-templates/handoff/generate.md 8,881), 69 bytes under the cap; generate+ledger is 20,989;
-resume is 38,007 (6,410 + templates/handoff/resume.md 31,597).
+At this commit: the generate load is 15,261 bytes (skills/handoff/SKILL.md 6,410 +
+templates/handoff/generate.md 8,851), 99 bytes under the cap; generate+ledger is 21,059;
+resume is 38,161 (6,410 + templates/handoff/resume.md 31,751).
 
 RATCHET CONVENTION
 ------------------
@@ -91,8 +91,8 @@ WHAT THIS DOES NOT CHECK
     to skills/handoff/SKILL.md or templates/handoff/generate.md must be byte-neutral or raise
     the affected ceilings in the same commit: an edit to SKILL.md moves four ceilings at once
     (skill:handoff and all three loads), an edit to generate.md moves two (load:generate and
-    load:generate+ledger). The room under the SPEC cap is 69 bytes at this commit (15,360
-    minus 15,291), so a raise of the generate ceiling has at most that much to give.
+    load:generate+ledger). The room under the SPEC cap is 99 bytes at this commit (15,360
+    minus 15,261), so a raise of the generate ceiling has at most that much to give.
   * It does not read optional loads that happen at run time. The JSON printed by
     skills/handoff/scripts/handoff.mjs, a document's Reading Order entries, and any shared
     template a call reads on demand are outside every budget here; only the files named in
@@ -177,15 +177,15 @@ LOAD_FILES = {
 }
 
 LOAD_CEILING = {
-    "generate": 15291,
-    "generate+ledger": 20989,
-    "resume": 38007,
+    "generate": 15261,
+    "generate+ledger": 21059,
+    "resume": 38161,
 }
 
 # A template with a ceiling of its own, beyond the loads it belongs to. generate-ledger.md is
 # read only when a multi-slice epic ledger applies, so no other budget would catch it alone.
 FILE_CEILING = {
-    LEDGER_MD: 5698,
+    LEDGER_MD: 5798,
 }
 
 # --------------------------------------------------------------------------------

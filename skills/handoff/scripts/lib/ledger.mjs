@@ -121,6 +121,14 @@ export function skippedFilesOf(skips) {
 }
 export const skippedOf = (skips) => ({ skippedNames: skippedNamesOf(skips), skippedFiles: skippedFilesOf(skips) })
 
+// How a command names a document of `dir`: the folder as the caller wrote it, with `/` and no trailing `/`, then the file
+// name — the one form `list`, `latest`, `latest-epic` and `ledger-carry` print (a fixed folder and a SAFE_DOC_NAME name).
+export function docPath(dir, name) {
+  let folder = String(dir).replace(/\\/g, '/')
+  while (folder.endsWith('/')) folder = folder.slice(0, -1)
+  return `${folder}/${name}`
+}
+
 // The first bytes of a file, decoded (enough for a BOM and the `# HANDOFF —` line start).
 function head(file) {
   const fd = fs.openSync(file, 'r')
@@ -174,7 +182,7 @@ export function* scanHandoffDocs(dir, cap = SCAN_CAP, skips = newSkips()) {
     }
     if (!stripBom(text).startsWith(HANDOFF_PREFIX)) continue
     seen++
-    yield { name: d.name, file: path.resolve(d.file), text, mtimeMs: d.mtimeMs }
+    yield { name: d.name, file: path.resolve(d.file), path: docPath(dir, d.name), text, mtimeMs: d.mtimeMs }
   }
 }
 
@@ -220,7 +228,7 @@ export function latestEpic(dir) {
   for (const d of scanHandoffDocs(dir, SCAN_CAP, skips)) {
     const rows = rowsOf(d.text)
     if (epicOfRows(rows) !== null) {
-      found = { ...proposalOf(rows), doc: d.file }
+      found = { ...proposalOf(rows), doc: d.path }
       break
     }
   }
@@ -245,7 +253,7 @@ export function carryFromText(text, epic, file, opts) {
   if (want === null) ({ epic: want, reason } = proposalOf(rows))
   if (want === null) reason ||= 'no Epic was given and the document proposes none — nothing carried'
   const carried = want === null ? { rows: [], droppedDone: 0, unknownStatusRows: 0, unattributedRows: 0 } : carryLedger(rows, want, opts)
-  return { epic: want, doc: path.resolve(file), ...carried, pointer: path.basename(file), chained: hasEarlierRowsLine(text), reason, ...skippedOf(newSkips()) }
+  return { epic: want, doc: String(file).replace(/\\/g, '/'), ...carried, pointer: path.basename(file), chained: hasEarlierRowsLine(text), reason, ...skippedOf(newSkips()) }
 }
 
 // `ledger-carry --dir`: the newest document that has rows of this Epic, carried; no such document -> no rows and
@@ -262,7 +270,7 @@ export function carryFromDir(dir, epic, opts) {
   for (const d of scanHandoffDocs(dir, SCAN_CAP, skips)) {
     const rows = rowsOf(d.text)
     if (rows.some((r) => r.epic === want)) {
-      return { epic: want, doc: d.file, ...carryLedger(rows, want, opts), pointer: d.name, chained: hasEarlierRowsLine(d.text), reason: null, ...skippedOf(skips) }
+      return { epic: want, doc: d.path, ...carryLedger(rows, want, opts), pointer: d.name, chained: hasEarlierRowsLine(d.text), reason: null, ...skippedOf(skips) }
     }
   }
   return { epic: want, ...NO_SOURCE, reason: null, ...skippedOf(skips) }

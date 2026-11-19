@@ -31,12 +31,15 @@
 //     (2) it is one of the work trees `git worktree list` gives for `cwd`'s own repository, matched by
 //     real path, and (3) the folder still IS that work tree: `rev-parse` there (a command that runs no
 //     filter, hook or fsmonitor) names the folder itself as its top level and the same common git
-//     directory as `cwd`'s repository. Only then is the state read from it (`viaWorktree` is true when
-//     that is another work tree than the one `cwd` is in); otherwise from `cwd`. A recorded Worktree
-//     that fails any step, is gone, or cannot be checked because `cwd` is not a git work tree compares
-//     nothing: `skipped` carries the reason (and how many recorded dirty paths could not be checked),
-//     `same` is null and the relation "unknown". A document value named in a reason is stripped of
-//     control characters and cut to 200 characters.
+//     directory as `cwd`'s repository, and its git directory is where git puts one (the common
+//     directory itself, or `<common>/worktrees/<id>`: isOwnGitDir). Only then is the state read from
+//     it (`viaWorktree` is true when that is another work tree than the one `cwd` is in); otherwise
+//     from `cwd`. A recorded Worktree that fails any step, is gone, or cannot be checked because `cwd`
+//     is not a git work tree compares nothing: `skipped` carries the reason (and how many recorded
+//     dirty paths could not be checked), `same` is null and the relation "unknown". A document value
+//     named in a reason, and the recorded branch, go through `shown()`: control characters, invisible
+//     format characters (`\p{Cf}`: a right-to-left override, a zero-width space, a BOM) and line or
+//     paragraph separators are removed, and the value is cut to 200 characters.
 //     `deps.git` replaces the runner of drift's own `cat-file`/`rev-parse`/`log` calls (tests only).
 //     relation: "same" | "forward" (HEAD is ahead of the recorded commit; `ahead` lists the commits
 //     newest first, at most 20, `more` is how many were left out) | "backward" (HEAD is an ancestor
@@ -266,8 +269,9 @@ const leavesRepository = (p) => p.includes('\0') || p.startsWith('/') || /^[A-Za
 // A document value printed as it is by resume (a reason, the recorded branch): no control characters, none of
 // the invisible format kinds (a right-to-left override, a zero-width space, a byte order mark) and no line or
 // paragraph separator; at most 200 characters.
+// (Shared: select.mjs prints the header values of `list` and `latest` through it too.)
 const INVISIBLE = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/gu
-function shown(value) {
+export function shown(value) {
   const chars = Array.from(String(value).replace(INVISIBLE, ''))
   return chars.length > 200 ? `${chars.slice(0, 200).join('')}…` : chars.join('')
 }

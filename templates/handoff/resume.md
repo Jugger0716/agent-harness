@@ -28,7 +28,9 @@
     and stop.
   - `needsChoice` true → the newest day has several documents and the script cannot tell which
     one this session continues. Show `candidates` as a numbered list (the file name's date,
-    branch, title, path), ask which one and continue with it. This is a separate, earlier question, asked only when
+    branch, title, path) and ask which one through AskUserQuestion: the first 4 candidates as its
+    options, any later one by its number through the tool's free-text Other answer; continue with
+    the one picked. This is a separate, earlier question, asked only when
     `needsChoice` is true; it is not Step 5's gate: Step 5 still ends in exactly one
     AskUserQuestion call.
 
