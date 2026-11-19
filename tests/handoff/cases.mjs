@@ -5964,7 +5964,7 @@ const HOSTILE_DOCS = [
   ['a blank run in Next Steps item 1', (n) => `${HOSTILE_HEAD}## Next Steps\n1. x\n${spaces(n)}y\n`, 3000],
   ['spaces inside a bold Slice label value', (n) => `${HOSTILE_HEAD}## Next Steps\n1. **Slice : a${spaces(n)}b\n`, 3000],
   ['spaces inside a backtick Slice label value', (n) => `${HOSTILE_HEAD}## Next Steps\n1. \`Slice : a${spaces(n)}b\n`, 3000],
-  ['a run of backticks in the Worktree value', (n) => `# HANDOFF — t\n\n**Worktree:** a${'`'.repeat(n)}x\n`, 3000],
+  ['a run of backticks in the Worktree value', (n) => `# HANDOFF — t\n\n**Worktree:** a${'`'.repeat(n)}x\n`, 6000],
   ['spaces inside a legacy Dirty list', (n) => `# HANDOFF — t\n\n**Dirty:** 3 files (${spaces(n)}x)\n`, 3000],
   ['a fence of many backticks with a line separator', (n) => `${HOSTILE_HEAD}## Goal\n${'`'.repeat(n)}\u2028\n`, 3000],
 ]
