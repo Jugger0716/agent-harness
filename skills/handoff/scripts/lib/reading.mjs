@@ -43,7 +43,7 @@
 // line); the snapshot's `split('\n').length` is one more for a file that ends with a newline.
 import fs from 'node:fs'
 import path from 'node:path'
-import { fenceFlags } from './parse.mjs'
+import { cutParenRemark, fenceFlags } from './parse.mjs'
 import { validateHandoffPath } from './paths.mjs'
 
 export const WHOLE_FILE_MAX_LINES = 2000
@@ -53,7 +53,14 @@ export const OUTLINE_MAX_LEVEL = 3
 export const OUTLINE_MAX_ENTRIES = 200
 const OUTLINE_TEXT_MAX = 120
 const MAX_PLAN_BYTES = 64 * 1024 * 1024
-const HEADING = /^(#{1,6})[ \t]+(.*?)[ \t]*$/
+// `/^(#{1,6})[ \t]+(.*?)[ \t]*$/`, with the trailing blanks cut by hand: the lazy text and the blanks after it took
+// quadratic time on a heading with a long run of spaces inside it.
+const HEADING = /^(#{1,6})[ \t]+(.*)$/
+function trimBlanksEnd(s) {
+  let end = s.length
+  while (end > 0 && (s[end - 1] === ' ' || s[end - 1] === '\t')) end--
+  return s.slice(0, end)
+}
 
 // Headings are read in Markdown files only.
 export const isMarkdownPath = (p) => /\.(md|markdown)$/i.test(p)
@@ -88,7 +95,8 @@ function loadFile(file) {
       texts.forEach((l, k) => {
         if (flags[k]) return
         const m = HEADING.exec(l)
-        if (m && m[2]) heads.push({ line: k + 1, level: m[1].length, text: m[2] })
+        const text = m ? trimBlanksEnd(m[2]) : ''
+        if (text) heads.push({ line: k + 1, level: m[1].length, text })
       })
       return heads
     },
@@ -112,7 +120,7 @@ function findSection(f, hint) {
   }
   let idx = find(hint)
   if (idx < 0) {
-    const bare = hint.replace(/\s*\([^)]*\)\s*$/, '').trim()
+    const bare = cutParenRemark(hint, true).trim() // `hint.replace(/\s*\([^)]*\)\s*$/, '')`, in one pass
     if (bare && bare !== hint) idx = find(bare)
   }
   if (idx < 0) return null

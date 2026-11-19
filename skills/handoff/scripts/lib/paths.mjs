@@ -34,7 +34,13 @@ import { runGit } from './git.mjs'
 import { isParentSegment } from './segment.mjs'
 
 const SHORT_GIT = /^git~\d+$/i
-const isGitSegment = (seg) => seg.replace(/[. ]+$/, '').toLowerCase() === '.git' || SHORT_GIT.test(seg)
+// (The trailing dots and spaces are cut by hand: `/[. ]+$/`, tried at every dot, took quadratic time on a long run.)
+function trimDotsAndSpaces(seg) {
+  let end = seg.length
+  while (end > 0 && (seg[end - 1] === '.' || seg[end - 1] === ' ')) end--
+  return seg.slice(0, end)
+}
+const isGitSegment = (seg) => trimDotsAndSpaces(seg).toLowerCase() === '.git' || SHORT_GIT.test(seg)
 
 // Is `abs` (already resolved) inside `root`? -> the path relative to the root, or null.
 function relativeInside(root, abs) {

@@ -21,6 +21,10 @@
 //     doNotRefOnly: boolean   (the section is only a pointer to another document — see "The Do NOT section")
 //     doNotRef:     string | null   (the pointed-to document's path, when doNotRefOnly and the section names one)
 //   }
+//   parseHeader(text) -> the same `header`, read from the lines before the first section only.
+//
+// Every rule is applied in time linear in the document: a document is data from anywhere, and an expression that
+// backtracks quadratically lets one long line stall every command that reads the folder (see "linear text helpers").
 //
 // Rules in force here:
 //   - A document whose first line does not start with `# HANDOFF —` is refused (InputError). A
@@ -60,8 +64,9 @@ export function splitLines(text) {
   return text.replace(/^\uFEFF/, '').split(/\r?\n/)
 }
 
-// flags[i] is true for a fence's opening line, its closing line and every line between them.
-export function fenceFlags(lines) {
+// flags[i] is true for a fence's opening line, its closing line and every line between them. `stop(i, flag)`, when
+// given, ends the walk after line i (the flags after it stay false).
+export function fenceFlags(lines, stop = null) {
   const flags = new Array(lines.length).fill(false)
   let open = null
   for (let i = 0; i < lines.length; i++) {
@@ -71,18 +76,133 @@ export function fenceFlags(lines) {
       const m = /^\s*(`{3,}|~{3,})\s*$/.exec(l)
       if (m && m[1][0] === open.ch && m[1].length >= open.len) open = null
     } else {
-      const m = /^\s*(`{3,}|~{3,})(.*)$/.exec(l)
+      // `/^\s*(`{3,}|~{3,})(.*)$/`: the rest of the line is the info string, and holds no character `.` does not match
+      const m = /^\s*(`{3,}|~{3,})/.exec(l)
+      const info = m ? l.slice(m[0].length) : ''
       // An info string on a backtick fence cannot hold a backtick (that is an inline span).
-      if (m && !(m[1][0] === '`' && m[2].includes('`'))) {
+      if (m && !TERMINATOR.test(info) && !(m[1][0] === '`' && info.includes('`'))) {
         open = { ch: m[1][0], len: m[1].length }
         flags[i] = true
       }
     }
+    if (stop && stop(i, flags[i])) break
   }
   return flags
 }
 
 const isBlank = (l) => l.trim() === ''
+
+// ---- linear text helpers ------------------------------------------------------------------------
+//
+// A document is DATA from anywhere, so nothing here may take more than linear time on it. A regular expression with
+// two quantifiers that can match the same characters next to each other (`\s*[-*]?\s*`, `(.*?)\s*$`, `\s+§.*$`
+// tried at every start) backtracks quadratically — a 60 KB line of spaces cost seconds. The helpers below do what
+// such an expression did, with the same result on every input, in one pass.
+
+const isWs = (c) => /\s/.test(c)
+// The characters `.` does not match (without the `s` flag).
+const TERMINATOR = /[\n\r\u2028\u2029]/
+
+// `text.replace(/<!--[\s\S]*?-->/g, by)`. Each `<!--` is closed by the first `-->` after it; once no `-->` follows a
+// `<!--`, no later `<!--` can be closed either.
+function replaceComments(text, by) {
+  let out = ''
+  let pos = 0
+  for (;;) {
+    const open = text.indexOf('<!--', pos)
+    if (open < 0) break
+    const close = text.indexOf('-->', open + 4)
+    if (close < 0) break
+    out += text.slice(pos, open) + by
+    pos = close + 3
+  }
+  return out + text.slice(pos)
+}
+
+// `text.replace(/<!--.*?-->/g, '')`: the same, except that a comment never spans a character `.` does not match, so
+// each piece between two such characters is handled on its own.
+const stripLineComments = (text) =>
+  text
+    .split(/([\n\r\u2028\u2029])/)
+    .map((piece, i) => (i % 2 ? piece : replaceComments(piece, '')))
+    .join('')
+
+// `text.replace(/\[[^\]]*\]\([^)]*\)/g, fn)` (a markdown link). The text of a link ends at the first `]` after its `[`,
+// so every `[` before that `]` shares it; the target ends at the first `)`.
+function replaceLinks(text, fn) {
+  let out = ''
+  let pos = 0
+  for (;;) {
+    const open = text.indexOf('[', pos)
+    if (open < 0) break
+    const close = text.indexOf(']', open + 1)
+    if (close < 0) break
+    if (text[close + 1] !== '(') {
+      out += text.slice(pos, close + 1)
+      pos = close + 1
+      continue
+    }
+    const end = text.indexOf(')', close + 2)
+    if (end < 0) break
+    out += text.slice(pos, open) + fn()
+    pos = end + 1
+  }
+  return out + text.slice(pos)
+}
+
+// Where `/\s+§<tail>$/` matches `s` -> the index the match starts at, and the `§`, or null. `tail` is `.*` when
+// `spaceThenLine` is false (nothing after the `§` may be a character `.` does not match) and `\s*(.*)` when it is
+// true (only the white space right after the `§` may hold one). The leftmost start is the white-space run before the
+// first `§` that qualifies.
+function sectionHintAt(s, spaceThenLine) {
+  let last = -1
+  for (let i = s.length - 1; i >= 0; i--) {
+    if (TERMINATOR.test(s[i])) {
+      last = i
+      break
+    }
+  }
+  let from = last + 1
+  if (spaceThenLine && last >= 0) {
+    // the `§` may sit before the last terminator when only white space lies between them
+    let k = last
+    while (k >= 0 && isWs(s[k])) k--
+    from = Math.max(k, 0)
+  }
+  let q = s.indexOf('§', from)
+  while (q !== -1 && !(q >= 1 && isWs(s[q - 1]))) q = s.indexOf('§', q + 1)
+  if (q === -1) return null
+  let start = q - 1
+  while (start > 0 && isWs(s[start - 1])) start--
+  return { start, at: q }
+}
+
+// `s.replace(/\s*\([^)]*\)$/, '')` — or, with `trailingSpace`, `s.replace(/\s*\([^)]*\)\s*$/, '')`: a remark in
+// parentheses at the end is cut together with the white space before it. Only the `(` after the last `)` but one can
+// open it; the leftmost such `(` gives the leftmost match.
+export function cutParenRemark(s, trailingSpace = false) {
+  let end = s.length - 1
+  if (trailingSpace) while (end >= 0 && isWs(s[end])) end--
+  if (end < 0 || s[end] !== ')') return s
+  const before = s.lastIndexOf(')', end - 1)
+  const open = s.indexOf('(', before + 1)
+  if (open < 0 || open >= end) return s
+  let start = open
+  while (start > 0 && isWs(s[start - 1])) start--
+  return s.slice(0, start)
+}
+
+// `s.replace(/\s*<wrapper>\s*$/, '')` for a fixed wrapper (`**`, `__` or a backtick): the wrapper is the last thing
+// before the trailing white space, and is cut with the white space on both sides.
+function cutTrailingWrapper(s, wrappers) {
+  let end = s.length
+  while (end > 0 && isWs(s[end - 1])) end--
+  const w = wrappers.find((x) => s.slice(0, end).endsWith(x))
+  if (w === undefined) return s
+  let start = end - w.length
+  while (start > 0 && isWs(s[start - 1])) start--
+  return s.slice(0, start)
+}
 
 function trimBlankEdges(arr) {
   let a = 0
@@ -119,7 +239,7 @@ export function findSections(lines, flags) {
   const out = []
   for (let i = 0; i < lines.length; i++) {
     if (flags[i] || !/^## (?!#)/.test(lines[i])) continue
-    const heading = lines[i].replace(/^## /, '').replace(/<!--.*?-->/g, '').trim()
+    const heading = stripLineComments(lines[i].replace(/^## /, '')).trim()
     if (out.length) out[out.length - 1].end = i
     out.push({ heading, name: sectionName(heading), start: i, end: lines.length })
   }
@@ -170,7 +290,14 @@ function readHeader(lines, flags, firstSection) {
   }
 }
 
-const stripTicks = (v) => v.replace(/^`+|`+$/g, '').trim()
+// `v.replace(/^`+|`+$/g, '').trim()`
+function stripTicks(v) {
+  let a = 0
+  let b = v.length
+  while (a < b && v[a] === '`') a++
+  while (b > a && v[b - 1] === '`') b--
+  return v.slice(a, b).trim()
+}
 
 // `a; b c; `x; y.txt`; +2 more` -> the paths. An item is either a backtick pair (its content is the path,
 // whatever it holds — this is how a name that contains "; " is written; anything after the closing
@@ -207,8 +334,11 @@ function pathsOfDirtyFiles(value) {
 function pathsOfLegacyDirty(value) {
   const m = value === null ? null : /\(([^()]*)\)/.exec(value)
   if (!m) return []
-  const items = m[1]
-    .split(/\s*[,;]\s*/)
+  // `m[1].split(/\s*[,;]\s*/)`: the white space next to a separator goes with it
+  const parts = m[1].split(/[,;]/)
+  const items = parts
+    .map((p, i) => (i > 0 ? p.trimStart() : p))
+    .map((p, i) => (i < parts.length - 1 ? p.trimEnd() : p))
     .map(stripTicks)
     .filter((p) => p !== '' && !/^(\+\d+ more|…|\.\.\.)$/i.test(p))
   return items.length > 0 && items.every(looksLikePath) ? items : []
@@ -227,11 +357,14 @@ function readFixedLabels(body) {
   let any = false
   for (const k of FIXED_LABELS) {
     out[k] = null
-    const re = new RegExp('^\\s*[-*]?\\s*(`?)' + k + '\\s*:\\s*(.*?)\\s*$')
+    // `^\s*[-*]?\s*(`?)<k>\s*:\s*(.*?)\s*$`, without its quadratic parts: the value is the rest of the line, trimmed,
+    // and must hold no character `.` does not match
+    const re = new RegExp('^\\s*(?:[-*]\\s*)?(`?)' + k + '\\s*:')
     for (const l of body.lines) {
       const m = re.exec(l)
       if (!m) continue
-      let v = m[2]
+      let v = l.slice(m[0].length).trim()
+      if (TERMINATOR.test(v)) continue
       if (m[1] && v.endsWith('`')) v = v.slice(0, -1).trimEnd()
       out[k] = v
       any = true
@@ -245,11 +378,29 @@ function readFixedLabels(body) {
 
 // `Harness : none` or `Harness : none (<reason>)`, alone on its line (a list marker or one backtick
 // pair around it is allowed). A sentence that merely starts with those words is not the line.
-const HARNESS_NONE = /^\s*[-*]?\s*`?Harness\s*:\s*none\s*(\([^\n]*\))?\s*`?\s*$/i
+// It is `/^\s*[-*]?\s*`?Harness\s*:\s*none\s*(\([^\n]*\))?\s*`?\s*$/i`, read without its quadratic (and cubic) parts:
+// after `none` comes white space, then either nothing but one optional backtick and white space, or a `(` whose LAST
+// `)` closes it (no line feed between) with only that after it.
+const HARNESS_NONE_HEAD = /^\s*(?:[-*]\s*)?`?Harness\s*:\s*none/i
+const onlyTick = (s) => {
+  const t = s.trim()
+  return t === '' || t === '`'
+}
+
+function isHarnessNoneLine(l) {
+  const m = HARNESS_NONE_HEAD.exec(l)
+  if (!m) return false
+  const rest = l.slice(m[0].length)
+  if (onlyTick(rest)) return true
+  const r = rest.trimStart()
+  if (r[0] !== '(') return false
+  const close = r.lastIndexOf(')')
+  return close > 0 && !r.slice(1, close).includes('\n') && onlyTick(r.slice(close + 1))
+}
 
 function readHarness(body, fixedLabels) {
   if (fixedLabels) return 'record'
-  if (body && body.lines.some((l) => HARNESS_NONE.test(l))) return 'none'
+  if (body && body.lines.some(isHarnessNoneLine)) return 'none'
   return 'absent'
 }
 
@@ -265,7 +416,14 @@ export function stripEmphasis(cell) {
 }
 
 const tableCells = (l) => l.trim().replace(/^\|/, '').replace(/\|$/, '').split(/(?<!\\)\|/).map((c) => c.trim())
-const isSeparatorRow = (l) => /^\s*\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)*\|?\s*$/.test(l)
+// `/^\s*\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)*\|?\s*$/`, cell by cell: one leading and one trailing `|` dropped, then every
+// cell is `:?-+:?` in white space
+function isSeparatorRow(l) {
+  let s = l.trim()
+  if (s.startsWith('|')) s = s.slice(1)
+  if (s.endsWith('|')) s = s.slice(0, -1)
+  return s.split('|').every((c) => /^\s*:?-+:?\s*$/.test(c))
+}
 
 // The first run of consecutive `|` lines outside code fences.
 function firstTable(body) {
@@ -339,15 +497,38 @@ function stepOneLines(body) {
 // backtick (`**Slice : x**`, `**Slice :** x`, `` `Slice : x` ``). The word must be followed by
 // the colon: `**Slice A is confirmed**` is prose, not a label. The value is kept as written
 // (its own backticks stay); only the wrapper that belongs to the label is removed.
-const SLICE_LABEL = /^\s*(?:(?:\d+[.)]|[-*])\s+)?(\*\*|__)?(`)?\s*Slice\s*:\s*(.*)$/
+// It is `/^\s*(?:(?:\d+[.)]|[-*])\s+)?(\*\*|__)?(`)?\s*Slice\s*:\s*(.*)$/`, read in parts so that the white space
+// before `Slice` is never split between two quantifiers: all leading white space, then a list marker with all the
+// white space after it (or no marker), then the wrapper and `Slice :`; the value is the rest of the line, which holds
+// no character `.` does not match.
+const SLICE_MARKER = /(?:\d+[.)]|[-*])\s+/y
+const SLICE_HEAD = /(\*\*|__)?(`)?\s*Slice\s*:/y
+
+function sliceLabelOf(l) {
+  let p0 = 0
+  while (p0 < l.length && isWs(l[p0])) p0++
+  const starts = []
+  SLICE_MARKER.lastIndex = p0
+  if (SLICE_MARKER.exec(l)) starts.push(SLICE_MARKER.lastIndex)
+  starts.push(p0)
+  for (const p of starts) {
+    SLICE_HEAD.lastIndex = p
+    const m = SLICE_HEAD.exec(l)
+    if (!m) continue
+    const value = l.slice(SLICE_HEAD.lastIndex).trimStart()
+    // every way in reaches the same `Slice :`, so a value that cannot be read ends the line
+    return TERMINATOR.test(value) ? null : { bold: m[1], tick: m[2], value }
+  }
+  return null
+}
 
 function readSliceLabel(itemLines) {
   for (const l of itemLines) {
-    const m = SLICE_LABEL.exec(l)
+    const m = sliceLabelOf(l)
     if (!m) continue
-    let v = m[3].trim()
-    if (m[1]) v = v.replace(/^(\*\*|__)\s*/, '').replace(/\s*(\*\*|__)\s*$/, '')
-    if (m[2]) v = v.replace(/\s*`\s*$/, '')
+    let v = m.value.trim()
+    if (m.bold) v = cutTrailingWrapper(v.replace(/^(\*\*|__)\s*/, ''), ['**', '__'])
+    if (m.tick) v = cutTrailingWrapper(v, ['`'])
     v = v.trim()
     if (v) return v
   }
@@ -369,11 +550,11 @@ const LIST_ITEM = /^\s{0,3}(\d+[.)]|[-*])\s/
 
 // A trailing hint is stripped before the path test and before resolving: ` §heading`, a trailing
 // `(...)`, then `:12-34` / `#L12-L34`. (The corpus snapshot and this parser share this function.)
+// (It is `.replace(/\s+§.*$/, '').replace(/\s*\([^)]*\)$/, '').replace(/[:#]L?\d+(-L?\d+)?$/, '')`, the first two done
+// in one pass each.)
 export function stripHint(token) {
-  return token
-    .replace(/\s+§.*$/, '')
-    .replace(/\s*\([^)]*\)$/, '')
-    .replace(/[:#]L?\d+(-L?\d+)?$/, '')
+  const sec = sectionHintAt(token, false)
+  return cutParenRemark(sec ? token.slice(0, sec.start) : token).replace(/[:#]L?\d+(-L?\d+)?$/, '')
 }
 
 // No whitespace, no glob character, and either a path separator or a file-extension ending.
@@ -389,12 +570,13 @@ export function looksLikePath(p) {
 export function parseRange(token) {
   let rest = token
   let heading = null
-  const sec = /\s+§\s*(.*)$/.exec(rest)
+  // `/\s+§\s*(.*)$/` and `.replace(/\s*\([^)]*\)$/, '')`, each in one pass
+  const sec = sectionHintAt(rest, true)
   if (sec) {
-    heading = sec[1].trim()
-    rest = rest.slice(0, sec.index)
+    heading = rest.slice(sec.at + 1).trim()
+    rest = rest.slice(0, sec.start)
   }
-  rest = rest.replace(/\s*\([^)]*\)$/, '')
+  rest = cutParenRemark(rest)
   const m = /:(\d+)-(\d+)$/.exec(rest)
   if (m && +m[1] >= 1 && +m[1] <= +m[2]) return { type: 'lines', start: +m[1], end: +m[2] }
   if (heading) return { type: 'section', heading }
@@ -476,21 +658,19 @@ function anchorPath(token) {
 
 export function readDoNot(body) {
   if (body === undefined) return { missing: true, refOnly: false, ref: null }
-  const text = body.replace(/<!--[\s\S]*?-->/g, ' ')
+  const text = replaceComments(body, ' ')
   let ref = null
   let anchored = false
-  const rest = text
-    .replace(/`([^`\n]*)`/g, (_, tok) => {
-      const a = anchorPath(tok)
-      if (a !== null && ref === null) ref = a
-      anchored ||= a !== null
-      return a === null ? ` ${tok} ` : ' '
-    })
-    .replace(/\[[^\]]*\]\([^)]*\)/g, () => {
-      anchored = true
-      return ' '
-    })
-    .replace(/https?:\/\/\S+/g, ' ')
+  const spans = text.replace(/`([^`\n]*)`/g, (_, tok) => {
+    const a = anchorPath(tok)
+    if (a !== null && ref === null) ref = a
+    anchored ||= a !== null
+    return a === null ? ` ${tok} ` : ' '
+  })
+  const rest = replaceLinks(spans, () => {
+    anchored = true
+    return ' '
+  }).replace(/https?:\/\/\S+/g, ' ')
   const refers = new RegExp(CARRY, 'i').test(rest)
   const namesDocument = anchored || new RegExp(DOCUMENT, 'i').test(rest)
   const own = rest.replace(new RegExp(CARRY, 'gi'), ' ').replace(new RegExp(FILLER, 'gi'), ' ').replace(/[^\p{L}\p{N}]/gu, '')
@@ -499,6 +679,22 @@ export function readDoNot(body) {
 }
 
 // ---- the whole document -------------------------------------------------------------------------------------------------------
+
+// The header alone — what `parseHandoff(text).header` is — read from the lines before the first section only, so
+// `list` and `latest`, which need nothing else, never parse a body.
+export function parseHeader(text) {
+  const lines = splitLines(text)
+  if (!lines[0].startsWith(HANDOFF_PREFIX)) {
+    throw new InputError(`not a handoff document: the first line must start with "${HANDOFF_PREFIX}"`)
+  }
+  let first = lines.length
+  const flags = fenceFlags(lines, (i, fenced) => {
+    if (fenced || !/^## (?!#)/.test(lines[i])) return false
+    first = i
+    return true
+  })
+  return readHeader(lines, flags, first)
+}
 
 export function parseHandoff(text) {
   const lines = splitLines(text)

@@ -5911,6 +5911,132 @@ const commandLineSafetyCases = [
   },
 ]
 
+// ---- F2: the parser is linear on hostile documents, and list/latest read only the header ----------------------------------
+//
+// Linearity, not absolute time: each input is timed at size N and 2N (warmed up, repeated until 20 ms have passed, the
+// least of three runs) and doubling it must not triple the time. A call that stays under LINEAR_FLOOR_MS at 2N passes
+// whatever the ratio says — timer noise on a fast call is not a regression. Each N is one at which the quadratic code
+// took several times the floor at 2N.
+
+const LINEAR_FLOOR_MS = 2
+
+function perCall(fn) {
+  fn()
+  let best = Infinity
+  for (let run = 0; run < 3; run++) {
+    const t0 = process.hrtime.bigint()
+    let calls = 0
+    let ms = 0
+    do {
+      fn()
+      calls++
+      ms = Number(process.hrtime.bigint() - t0) / 1e6
+    } while (ms < 20)
+    best = Math.min(best, ms / calls)
+  }
+  return best
+}
+
+function assertLinear(name, make, n, call) {
+  const small = make(n)
+  const large = make(2 * n)
+  const a = perCall(() => call(small))
+  const b = perCall(() => call(large))
+  assert.ok(b < 3 * a || b < LINEAR_FLOOR_MS, `${name}: ${a.toFixed(3)} ms at ${n}, ${b.toFixed(3)} ms at ${2 * n} — grows faster than the input`)
+}
+
+const HOSTILE_HEAD = '# HANDOFF — t\n\n**Date:** 2026-01-01\n\n'
+const spaces = (n) => ' '.repeat(n)
+// [name, document of size ~n, n] — the five inputs of the review first, then the other shapes the same class had
+const HOSTILE_DOCS = [
+  ['a blank run in In Progress', (n) => `${HOSTILE_HEAD}## In Progress\n${spaces(n)}x\n`, 3000],
+  ['repeated "[a](" in Do NOT', (n) => `${HOSTILE_HEAD}## Do NOT\n${'[a]('.repeat(n / 4)}\n`, 12000],
+  ['repeated "<!--" in a heading line', (n) => `# HANDOFF — t\n\n## ${'<!--'.repeat(n / 4)}\n`, 12000],
+  ['spaces inside a Reading Order token', (n) => `${HOSTILE_HEAD}## Reading Order\n- \`a${spaces(n)}b.md\`\n`, 3000],
+  ['a ledger separator row', (n) => `${HOSTILE_HEAD}## Progress Ledger\n| Epic |\n| --- ${spaces(n)}|x\n`, 3000],
+  ['spaces inside a fixed-label value', (n) => `${HOSTILE_HEAD}## In Progress\nSkill : a${spaces(n)}b\n`, 4000],
+  ['a "Harness : none" line with trailing spaces', (n) => `${HOSTILE_HEAD}## In Progress\nHarness : none${spaces(n)}x\n`, 300],
+  ['repeated "<!--" in Do NOT', (n) => `${HOSTILE_HEAD}## Do NOT\n${'<!--'.repeat(n / 4)}\n`, 12000],
+  ['a run of "[" in Do NOT', (n) => `${HOSTILE_HEAD}## Do NOT\n${'['.repeat(n)}\n`, 4000],
+  ['spaces before a section hint with a line separator after it', (n) => `${HOSTILE_HEAD}## Reading Order\n- \`a.md${spaces(n)}§\u2028x\`\n`, 3000],
+  ['spaces before a closing parenthesis', (n) => `${HOSTILE_HEAD}## Reading Order\n- \`a.md${spaces(n)}x)\`\n`, 3000],
+  ['a blank run in Next Steps item 1', (n) => `${HOSTILE_HEAD}## Next Steps\n1. x\n${spaces(n)}y\n`, 3000],
+  ['spaces inside a bold Slice label value', (n) => `${HOSTILE_HEAD}## Next Steps\n1. **Slice : a${spaces(n)}b\n`, 3000],
+  ['spaces inside a backtick Slice label value', (n) => `${HOSTILE_HEAD}## Next Steps\n1. \`Slice : a${spaces(n)}b\n`, 3000],
+  ['a run of backticks in the Worktree value', (n) => `# HANDOFF — t\n\n**Worktree:** a${'`'.repeat(n)}x\n`, 3000],
+  ['spaces inside a legacy Dirty list', (n) => `# HANDOFF — t\n\n**Dirty:** 3 files (${spaces(n)}x)\n`, 3000],
+  ['a fence of many backticks with a line separator', (n) => `${HOSTILE_HEAD}## Goal\n${'`'.repeat(n)}\u2028\n`, 3000],
+]
+
+const hostileCases = [
+  {
+    id: 'parse-is-linear-on-hostile-input',
+    run: async () => {
+      const { parseHandoff } = await parseLib()
+      for (const [name, make, n] of HOSTILE_DOCS) assertLinear(name, make, n, (t) => parseHandoff(t))
+    },
+  },
+  {
+    id: 'ledger-reading-and-path-checks-are-linear-on-hostile-input',
+    run: async () => {
+      const { carryFromText } = await ledgerLib()
+      const { planReading } = await readingLib()
+      const { validateHandoffPath } = await pathsLib()
+      // a line of spaces under the ledger table (the `Earlier rows:` test)
+      assertLinear('a blank run in the Progress Ledger', (n) => ledgerOf([row('a1', 'in-progress')], `\n${spaces(n)}x`), 3000, (t) => carryFromText(t, 'ep-a', 'x.md'))
+      // a segment of dots (the `.git` test of each segment)
+      assertLinear('a run of dots in a path segment', (n) => `a${'.'.repeat(n)}x.md`, 3000, (p) => validateHandoffPath(p, os.tmpdir()))
+      await inTmp((dir) => {
+        // a heading with spaces in its text, and a section hint with spaces that matches no heading
+        const file = (n) => {
+          const f = path.join(dir, `h${n}.md`)
+          fs.writeFileSync(f, `# a${spaces(n)}b\n\ntext\n`)
+          return f
+        }
+        const plan = (heading) => (f) => planReading([{ raw: `${path.basename(f)} §x`, path: path.basename(f), range: { type: 'section', heading }, isFile: true, self: false }], [dir], 131072)
+        assertLinear('spaces inside a heading', file, 3000, plan('nothing'))
+        const small = file(10)
+        assertLinear('spaces inside a section hint', (n) => `zz${spaces(n)}q`, 3000, (h) => plan(h)(small))
+      })
+    },
+  },
+  {
+    id: 'list-latest-and-latest-epic-on-a-60-kb-hostile-document-finish-quickly',
+    run: async () => {
+      await withTemp(undefined, async (r) => {
+        const dir = path.join(r.root, 'handoffs')
+        fs.mkdirSync(dir)
+        // the review's document: one In Progress line of 60,000 spaces (16 s for `list` before)
+        put(dir, '2026-11-19-big.md', `${selDoc({ title: 'Big' })}\n## In Progress\n${spaces(60000)}x\n\n## Progress Ledger\n\n${table([row('a1', 'in-progress')])}\n`)
+        for (const args of [['list', '--dir', dir], ['latest', '--dir', dir, '--cwd', r.dir], ['latest-epic', '--dir', dir], ['ledger-carry', '--dir', dir]]) {
+          const t0 = Date.now()
+          const res = spawnSync(process.execPath, [HANDOFF_JS, ...args], { encoding: 'utf8', env: r.env, timeout: 20000 })
+          const ms = Date.now() - t0
+          assert.equal(res.status, 0, `${args[0]}: exit ${res.status} ${res.stderr}`)
+          assert.ok(ms < 1500, `${args[0]} took ${ms} ms on a 60 KB document`)
+        }
+      })
+    },
+  },
+  {
+    id: 'parse-header-is-the-header-of-a-full-parse',
+    run: async () => {
+      const { parseHandoff, parseHeader } = await parseLib()
+      const texts = FIXTURES.map(fixtureText)
+      texts.push(
+        // a `## ` line inside a fence before the first section is not a section; label lines after it still count
+        '# HANDOFF — F\n\n```\n## not a heading\n**Branch:** fenced\n```\n**Branch:** main  **HEAD:** abc1234 s\n\n## Goal\n**Date:** 2026-01-01\n',
+        // no section at all, a BOM, CRLF
+        String.fromCharCode(0xfeff) + toCrlf('# HANDOFF — B\n\n**Date:** 2026-02-02  **Worktree:** `C:/w`\n**Dirty files:** a; b\n'),
+        '# HANDOFF — only a title',
+        mk([['Goal', 'x'], ['In Progress', `${spaces(5000)}x`]]),
+      )
+      for (const t of texts) same(viaJson(parseHeader(t)), viaJson(parseHandoff(t).header))
+      assert.throws(() => parseHeader('# Notes\n'), /not a handoff document/)
+    },
+  },
+]
+
 // ---- the runner's own exit codes ----------------------------------------------------------------------------
 
 function runnerExit(casesSource) {
@@ -5996,5 +6122,6 @@ export const cases = [
   ...latestDiffCases,
   ...dietContractCases,
   ...commandLineSafetyCases,
+  ...hostileCases,
   ...runnerCases,
 ]

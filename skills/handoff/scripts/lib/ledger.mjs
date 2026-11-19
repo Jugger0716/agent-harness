@@ -156,7 +156,9 @@ const rowsOf = (text) => {
 // Does the document carry an `Earlier rows:` line (see the chain above)? Read with parse.mjs's own section and
 // code-fence reading, so the line is looked for only in the first `## Progress Ledger` section, outside fences.
 // A value that starts with `<` is the Step 2 template's own placeholder, copied and never filled in: no pointer.
-const EARLIER_ROWS = /^\s*(?:\*\*|__)?\s*Earlier rows\s*:(?:\*\*|__)?\s*[^\s<]/i
+// (`\s*(?:(?:\*\*|__)\s*)?` is `\s*(?:\*\*|__)?\s*` without the two adjacent quantifiers that took quadratic time on a
+// line of spaces.)
+const EARLIER_ROWS = /^\s*(?:(?:\*\*|__)\s*)?Earlier rows\s*:(?:\*\*|__)?\s*[^\s<]/i
 
 function hasEarlierRowsLine(text) {
   const lines = splitLines(text)

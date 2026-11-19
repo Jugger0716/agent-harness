@@ -33,7 +33,7 @@
 //     current branch of `n/a` or `(detached)`, which is what git-state reports outside a repository or on a detached
 //     HEAD, the very words a document records in those states. With a `cwd` that is not inside a git work tree there
 //     is no ancestry to ask about, so `onBranch` is empty and several documents on the newest day are a choice.
-import { parseHandoff, stripEmphasis } from './parse.mjs'
+import { parseHeader, stripEmphasis } from './parse.mjs'
 import { newSkips, scanHandoffDocs, skippedNamesOf } from './ledger.mjs'
 import { gitTopLevel, splitDocName } from './paths.mjs'
 import { runGit } from './git.mjs'
@@ -43,8 +43,9 @@ const shownDir = (dir) => String(dir).replace(/\\/g, '/').replace(/\/+$/, '')
 // A recorded or given branch that names no branch.
 const NO_BRANCH = new Set(['n/a', '(detached)'])
 
+// The header only (parse.mjs `parseHeader`): `list` and `latest` read nothing below the first section.
 function describe(d, dir) {
-  const h = parseHandoff(d.text).header
+  const h = parseHeader(d.text)
   const branch = h.branch === null ? null : stripEmphasis(h.branch) || null
   return {
     path: `${shownDir(dir)}/${d.name}`,
