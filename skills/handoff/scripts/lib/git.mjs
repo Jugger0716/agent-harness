@@ -42,7 +42,8 @@
 //     newest first, at most 20, `more` is how many were left out) | "backward" (HEAD is an ancestor
 //     of the recorded commit) | "diverged" (neither) | "unknown" (no recorded commit, or one this
 //     clone does not have; `skipped` says which).
-//     dirty: each path the document recorded as dirty is `stillDirty` (it is dirty now; a recorded
+//     dirty: each of the first 40 paths the document recorded as dirty (the most `generate` writes; any further one is
+//     not checked, and `skipped` says how many) is `stillDirty` (it is dirty now; a recorded
 //     folder counts when something below it is), else `committedSince` (a commit after the recorded
 //     one touched it), else `lost` (clean now and no commit on THIS branch since the recorded commit
 //     touched it — the work may sit in a stash or on another branch). A rename counts its original
@@ -56,6 +57,7 @@ import { InputError } from './errors.mjs'
 import { isParentSegment } from './segment.mjs'
 
 const AHEAD_CAP = 20
+const DIRTY_CHECK_CAP = 40
 
 // Variables that point git at a repository other than the one `cwd` is in; a helper run from a git hook
 // or a wrapper inherits them. GIT_CEILING_DIRECTORIES stays: it can only make discovery stop earlier
@@ -433,7 +435,11 @@ export function drift(parsed, cwd, { git = runGit } = {}) {
   let undecided = 0
   let outside = 0
   let unchecked = 0
-  for (const raw of h.dirtyPaths) {
+  // `generate` records at most 40 paths (`+N more` for the rest), and each one checked costs a `git log`: a longer list
+  // is the document's own claim, checked only as far as the 40 a document is meant to hold
+  const checked = h.dirtyPaths.slice(0, DIRTY_CHECK_CAP)
+  const beyond = h.dirtyPaths.length - checked.length
+  for (const raw of checked) {
     const p = slash(raw)
     if (leavesRepository(p)) {
       outside++
@@ -457,5 +463,6 @@ export function drift(parsed, cwd, { git = runGit } = {}) {
   if (unchecked > 0) {
     skipped.push(`git could not check ${unchecked} recorded dirty path(s) — not reported as lost`)
   }
+  if (beyond > 0) skipped.push(`${beyond} recorded dirty path(s) beyond the first ${DIRTY_CHECK_CAP} — not checked`)
   return result
 }

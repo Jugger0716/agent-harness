@@ -58,7 +58,7 @@ function cmdReadingPlan(opts) {
   const pointed =
     parsed.doNotRef === null
       ? { raw: '', path: null, range: null, isFile: false, self: false }
-      : { raw: `${parsed.doNotRef} §Do NOT`, path: parsed.doNotRef, range: { type: 'section', heading: 'Do NOT' }, isFile: true, self: false }
+      : { raw: `${parsed.doNotRef} §Do NOT`, path: parsed.doNotRef, range: { type: 'section', heading: 'Do NOT', doNot: true }, isFile: true, self: false }
   const plan = planReading([pointed, ...parsed.readingOrder], roots, Number(opts.budget), docPath)
   const [doNot, ...entries] = plan.entries
   if (parsed.doNotRef === null) doNot.reason = 'the Do NOT section points to another document without naming a file'

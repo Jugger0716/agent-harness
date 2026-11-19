@@ -15,9 +15,11 @@
   `n/a` outside a git work tree — so no value is copied onto the command line; `{HANDOFF_JS}`, the
   quoting and a non-zero exit are as in Step 4. The output is one JSON object: `doc`, `candidates`
   (the newest day's handoff documents, newest first — only those recording this branch when their
-  commits diverged — each `{path, branch, head, title}`), `needsChoice` and `skippedNames`.
-  - `skippedNames.count` above 0 → say that many files were not read, with its `reason`: a file
-    whose name holds a character outside `A-Z a-z 0-9 . _ -` is never a candidate, so the document
+  commits diverged — each `{path, branch, head, title}`), `needsChoice`, `skippedNames` and
+  `skippedFiles`.
+  - `skippedNames.count` or `skippedFiles.count` above 0 → say how many files were not read, with
+    each `reason`: a file whose name holds a character outside `A-Z a-z 0-9 . _ -`, a handoff
+    document larger than 4 MiB and a file that cannot be read are never candidates, so the document
     found may not be the newest one in the folder.
   - `doc` set → that is the document. When `candidates` holds other documents of the same day,
     say which were left and why (this one is the latest, by recorded commit, of those recording the
@@ -216,8 +218,8 @@ The script checks each path BEFORE any read, and the four conditions are this fi
 folder that holds the document's `docs/` directory, or that folder's git top-level — for a
 document with neither, the `--root` folder); (2) no segment is `..`; (3) no segment is `.git` and none holds a `:` (an NTFS stream name such as
 `.git::$INDEX_ALLOCATION` reaches `.git` under another spelling); (4) the file it names, with links
-and junctions followed, still lies inside that folder. `docs/harness/…` is allowed. A path that
-fails comes back `skipped-invalid`.
+and junctions followed, still lies inside that folder and outside its `.git/`. `docs/harness/…` is
+allowed. A path that fails comes back `skipped-invalid`.
 
 If the script exits non-zero, show its stderr verbatim and stop — never emulate it by hand. Read
 the files **inline** — never dispatch a reader sub-agent for this (SKILL.md §Non-Goals).

@@ -74,8 +74,8 @@ FIGURE PROVENANCE -- each figure is tagged with where it came from
   * no external specification limit is used here.
 
 At this commit: the generate load is 15,291 bytes (skills/handoff/SKILL.md 6,410 +
-templates/handoff/generate.md 8,881), 69 bytes under the cap; generate+ledger is 20,945;
-resume is 37,868 (6,410 + templates/handoff/resume.md 31,458).
+templates/handoff/generate.md 8,881), 69 bytes under the cap; generate+ledger is 20,989;
+resume is 38,007 (6,410 + templates/handoff/resume.md 31,597).
 
 RATCHET CONVENTION
 ------------------
@@ -178,14 +178,14 @@ LOAD_FILES = {
 
 LOAD_CEILING = {
     "generate": 15291,
-    "generate+ledger": 20945,
-    "resume": 37868,
+    "generate+ledger": 20989,
+    "resume": 38007,
 }
 
 # A template with a ceiling of its own, beyond the loads it belongs to. generate-ledger.md is
 # read only when a multi-slice epic ledger applies, so no other budget would catch it alone.
 FILE_CEILING = {
-    LEDGER_MD: 5654,
+    LEDGER_MD: 5698,
 }
 
 # --------------------------------------------------------------------------------

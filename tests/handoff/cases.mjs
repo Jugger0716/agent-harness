@@ -3736,13 +3736,13 @@ const carryDoc = (file, epic) => cliOk('ledger-carry', '--doc', file, '--epic', 
 const carryDir = (dir, epic) => cliOk('ledger-carry', '--dir', dir, '--epic', epic)
 const carryDocNoEpic = (file) => cliOk('ledger-carry', '--doc', file)
 const latestEpic = (dir) => cliOk('latest-epic', '--dir', dir)
-const NO_EPIC = { epic: null, doc: null, reason: null, skippedNames: { count: 0, reason: null } }
+const NO_EPIC = { epic: null, doc: null, reason: null, skippedNames: { count: 0, reason: null }, skippedFiles: { count: 0, reason: null } }
 
 // A handoff document whose Progress Ledger holds `rows` (the `row` helper above), plus any text after the table.
 const ledgerOf = (rows, after = '') => mk([['Next Steps', '1. Carry on.'], ['Progress Ledger', table(rows) + after]])
 const finished = (n, from = 1, epic) => Array.from({ length: n }, (_, i) => row(`d${from + i}`, 'done', epic))
 const sliceList = (out) => out.rows.map((r) => r.slice)
-const NOTHING = (epic) => ({ epic, doc: null, rows: [], pointer: null, droppedDone: 0, unknownStatusRows: 0, unattributedRows: 0, chained: false, reason: null, skippedNames: { count: 0, reason: null } })
+const NOTHING = (epic) => ({ epic, doc: null, rows: [], pointer: null, droppedDone: 0, unknownStatusRows: 0, unattributedRows: 0, chained: false, reason: null, skippedNames: { count: 0, reason: null }, skippedFiles: { count: 0, reason: null } })
 
 const ledgerCarryCases = [
   {
@@ -4192,7 +4192,7 @@ const ledgerCarryCases = [
         const out = latestEpic(dir)
         assert.equal(out.epic, 'ep-b')
         assert.equal(out.doc, path.resolve(dir, '2026-04-02-second.md'))
-        assert.equal(Object.keys(out).sort().join(), 'doc,epic,reason,skippedNames')
+        assert.equal(Object.keys(out).sort().join(), 'doc,epic,reason,skippedFiles,skippedNames')
         assert.equal(out.reason, null)
       })
     },
@@ -4833,7 +4833,7 @@ const selectCases = [
         put(dir, '2026-11-19-x-2.md', selDoc({ title: 'X again' }), at(19, 9))
         put(dir, '2026-11-19-y.md', selDoc({ title: 'Y' }), at(19, 12))
         const out = listOut(dir)
-        same(Object.keys(out), ['docs', 'skippedNames'])
+        same(Object.keys(out), ['docs', 'skippedNames', 'skippedFiles'])
         same(baseNames(out.docs), ['2026-11-19-x-2.md', '2026-11-19-x.md', '2026-11-19-y.md', '2026-11-18-older-day.md'])
         same(Object.keys(out.docs[0]).sort(), ['branch', 'date', 'head', 'mtimeMs', 'path', 'slug', 'title'])
         // the header values, the slug from the file name, the folder as given with `/`
@@ -4891,8 +4891,8 @@ const selectCases = [
     id: 'list-empty-and-missing-folder-and-errors',
     run: async () => {
       await inTmp((dir) => {
-        same(listOut(dir), { docs: [], skippedNames: { count: 0, reason: null } })
-        same(listOut(path.join(dir, 'no-such-folder')), { docs: [], skippedNames: { count: 0, reason: null } })
+        same(listOut(dir), { docs: [], skippedNames: { count: 0, reason: null }, skippedFiles: { count: 0, reason: null } })
+        same(listOut(path.join(dir, 'no-such-folder')), { docs: [], skippedNames: { count: 0, reason: null }, skippedFiles: { count: 0, reason: null } })
         const file = put(dir, 'readme.txt', 'x')
         const r = cli('list', '--dir', file)
         assert.equal(r.status, 1)
@@ -4915,7 +4915,7 @@ const selectCases = [
         put(dir, '2026-11-18-b.md', selDoc({ title: 'B', date: '2026-11-18' }), at(31))
         // nothing a git call could answer: the recorded commit is not in this clone, and the branch is not the current one
         const out = latestIn(r, dir, 'main', r.dir)
-        same(Object.keys(out).sort(), ['candidates', 'doc', 'needsChoice', 'skippedNames'])
+        same(Object.keys(out).sort(), ['candidates', 'doc', 'needsChoice', 'skippedFiles', 'skippedNames'])
         assert.equal(out.needsChoice, false)
         assert.equal(out.doc, `${slashed(dir)}/2026-11-19-new.md`)
         same(out.candidates, [{ path: out.doc, branch: 'feature/z', head: 'c'.repeat(40), title: 'New' }])
@@ -4928,10 +4928,10 @@ const selectCases = [
       await withTemp(undefined, async (r) => {
         const dir = path.join(r.root, 'handoffs')
         fs.mkdirSync(dir)
-        same(latestIn(r, dir, 'main', r.dir), { doc: null, candidates: [], needsChoice: false, skippedNames: { count: 0, reason: null } })
-        same(latestIn(r, path.join(r.root, 'no-such-folder'), 'main', r.dir), { doc: null, candidates: [], needsChoice: false, skippedNames: { count: 0, reason: null } })
+        same(latestIn(r, dir, 'main', r.dir), { doc: null, candidates: [], needsChoice: false, skippedNames: { count: 0, reason: null }, skippedFiles: { count: 0, reason: null } })
+        same(latestIn(r, path.join(r.root, 'no-such-folder'), 'main', r.dir), { doc: null, candidates: [], needsChoice: false, skippedNames: { count: 0, reason: null }, skippedFiles: { count: 0, reason: null } })
         put(dir, '2026-11-19-notes.md', '# Notes\n')
-        same(latestIn(r, dir, 'main', r.dir), { doc: null, candidates: [], needsChoice: false, skippedNames: { count: 0, reason: null } })
+        same(latestIn(r, dir, 'main', r.dir), { doc: null, candidates: [], needsChoice: false, skippedNames: { count: 0, reason: null }, skippedFiles: { count: 0, reason: null } })
       })
     },
   },
@@ -5690,7 +5690,7 @@ const commandLineSafetyCases = [
         }
         // a safe Epic has no reason
         put(dir, '2026-04-02-new.md', ledgerOf([row('b1', 'in-progress', 'ep-b')]))
-        same(latestEpic(dir), { epic: 'ep-b', doc: latestEpic(dir).doc, reason: null, skippedNames: skippedNone })
+        same(latestEpic(dir), { epic: 'ep-b', doc: latestEpic(dir).doc, reason: null, skippedNames: skippedNone, skippedFiles: skippedNone })
       })
     },
   },
@@ -6037,6 +6037,196 @@ const hostileCases = [
   },
 ]
 
+// ---- F3, F4, F6, M3, M8, M9: drift's bound, links into .git, absurd suffixes, the Do NOT heading, the plan's cache and cap,
+// documents the folder scan cannot or will not read ------------------------------------------------------------------------
+
+const correctnessCases = [
+  {
+    id: 'drift-checks-only-the-first-40-recorded-dirty-paths',
+    run: async () => {
+      await withTemp({ commits: [{ files: { 'a.txt': 'one\n' } }] }, (r) => {
+        // every recorded path is clean now and untouched since the recorded commit: each one checked is `lost`
+        for (const n of [45, 400]) {
+          const recorded = Array.from({ length: n }, (_, i) => `gone-${i}.txt`)
+          const t0 = Date.now()
+          const d = driftIn(r, driftDoc({ head: r.shas[0], dirtyFiles: recorded }))
+          const ms = Date.now() - t0
+          same(d.dirty.lost, recorded.slice(0, 40), `${n}: the first 40 are checked`)
+          assert.ok(d.skipped.some((s) => s === `${n - 40} recorded dirty path(s) beyond the first 40 — not checked`), `${n}: ${d.skipped}`)
+          assert.ok(ms < 15000, `${n} recorded paths took ${ms} ms`)
+        }
+        // 40 or fewer: no such note
+        const d = driftIn(r, driftDoc({ head: r.shas[0], dirtyFiles: ['gone.txt'] }))
+        assert.ok(!d.skipped.some((s) => /beyond the first 40/.test(s)))
+      })
+    },
+  },
+  {
+    id: 'reading-plan-a-link-into-dot-git-is-refused',
+    run: async () => {
+      await withTemp(undefined, (r) => {
+        r.write('docs/notes.md', 'notes\n')
+        const doc = path.join(r.dir, 'docs', 'harness', 'handoff', 'doc.md')
+        fs.mkdirSync(path.dirname(doc), { recursive: true })
+        fs.writeFileSync(doc, mk([['Goal', 'x'], ['Reading Order', '1. `docs/gl/config` — through a link\n2. `docs/gl/HEAD` — the same\n3. `docs/gref/heads/main` — a link into a folder below .git\n4. `docs/notes.md` — the control']]))
+        // a junction on Windows, a symbolic link elsewhere: the path names no `.git` segment, the file it reaches is inside .git/
+        fs.symlinkSync(path.join(r.dir, '.git'), path.join(r.dir, 'docs', 'gl'), 'junction')
+        fs.symlinkSync(path.join(r.dir, '.git', 'refs'), path.join(r.dir, 'docs', 'gref'), 'junction')
+        const p = runIn(r, 'reading-plan', '--doc', doc, '--budget', '131072')
+        same(p.entries.map((e) => e.status), ['skipped-invalid', 'skipped-invalid', 'skipped-invalid', 'read'])
+        for (const e of p.entries.slice(0, 3)) {
+          assert.equal(e.reason, 'link leads into .git/')
+          assert.equal(e.bytes, 0)
+        }
+      })
+    },
+  },
+  {
+    id: 'resolve-path-ignores-an-absurd-numeric-suffix',
+    run: async () => {
+      await inTmp((dir) => {
+        // a 16-digit suffix (past 2^53: n + 1 === n) and a 22-digit one are names, not collision numbers
+        const go = () => {
+          const res = spawnSync(process.execPath, [HANDOFF_JS, 'resolve-path', '--slug', 'x', '--date', '2026-11-19', '--dir', dir], { encoding: 'utf8', timeout: 10000 })
+          assert.equal(res.status, 0, `exit ${res.status} ${res.stderr}`)
+          return path.basename(JSON.parse(res.stdout).path)
+        }
+        put(dir, '2026-11-19-x-9007199254740992.md', '# HANDOFF — a\n')
+        assert.equal(go(), '2026-11-19-x.md')
+        put(dir, '2026-11-19-x-1000000000000000000000.md', '# HANDOFF — b\n')
+        assert.equal(go(), '2026-11-19-x.md')
+        put(dir, '2026-11-19-x.md', '# HANDOFF — c\n')
+        assert.equal(go(), '2026-11-19-x-2.md')
+        // a nine-digit suffix is still one
+        put(dir, '2026-11-19-x-999999998.md', '# HANDOFF — d\n')
+        assert.equal(go(), '2026-11-19-x-999999999.md')
+      })
+      // orderDocs reads the same bound: the 16-digit name is a slug of its own, not the newest of the `x` family
+      const { orderDocs } = await pathsLib()
+      const order = orderDocs([{ name: '2026-11-19-x.md', mtimeMs: 100 }, { name: '2026-11-19-x-9007199254740992.md', mtimeMs: 50 }]).map((d) => d.name)
+      same(order, ['2026-11-19-x.md', '2026-11-19-x-9007199254740992.md'])
+    },
+  },
+  {
+    id: 'reading-plan-the-do-not-pointer-reads-the-level-two-do-not-section',
+    run: async () => {
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'handoff-donot-'))
+      try {
+        const hand = path.join(dir, 'repo', 'docs', 'harness', 'handoff')
+        fs.mkdirSync(hand, { recursive: true })
+        // a title and a level-3 heading that contain "Do no…" come before the real section
+        const prev = ['# HANDOFF — Do nothing yet', '', '## Goal', 'g', '### Do not forget the notes', 'n', '## Do NOT <!-- carried -->', '- Do not push to main.', '', '## Resume', 'r', ''].join('\n')
+        fs.writeFileSync(path.join(hand, '2026-11-18-prev.md'), prev)
+        const doc = path.join(hand, '2026-11-19-cur.md')
+        fs.writeFileSync(doc, mk([['Goal', 'x'], ['Do NOT', "Same as the previous handoff's Do NOT: `docs/harness/handoff/2026-11-18-prev.md`"]]))
+        const p = plan(doc)
+        assert.equal(p.doNot.status, 'range')
+        const from = prev.split('\n').indexOf('## Do NOT <!-- carried -->') + 1
+        same([p.doNot.range.start, p.doNot.range.end], [from, from + 2])
+        // a document with no level-2 Do NOT section reads nothing, even with a title that says "Do nothing"
+        fs.writeFileSync(path.join(hand, '2026-11-18-prev.md'), ['# HANDOFF — Do nothing yet', '', '## Goal', 'g', ''].join('\n'))
+        const none = plan(doc)
+        assert.equal(none.doNot.status, 'partial')
+        assert.equal(none.doNot.range, null)
+      } finally {
+        fs.rmSync(dir, { recursive: true, force: true })
+      }
+    },
+  },
+  {
+    id: 'reading-plan-reads-a-repeated-file-once-and-caps-the-entries',
+    run: async () => {
+      const { planReading } = await readingLib()
+      await inTmp((dir) => {
+        fs.writeFileSync(path.join(dir, 'same.md'), '# S\nline\n')
+        const entry = { raw: 'same.md §S', path: 'same.md', range: { type: 'section', heading: 'S' }, isFile: true, self: false }
+        const reads = []
+        const original = fs.readFileSync
+        fs.readFileSync = function (f, ...rest) {
+          if (String(f).endsWith('same.md')) reads.push(f)
+          return original.call(this, f, ...rest)
+        }
+        let p
+        try {
+          p = planReading(Array.from({ length: 250 }, () => entry), [dir], 1e9)
+        } finally {
+          fs.readFileSync = original
+        }
+        assert.equal(reads.length, 1, `the file is read once, not ${reads.length} times`)
+        assert.equal(p.entries.length, 250, 'one entry per input entry')
+        same(p.entries.slice(0, 200).map((e) => e.status), Array(200).fill('range'))
+        for (const e of p.entries.slice(200)) {
+          assert.equal(e.status, 'skipped-invalid')
+          assert.match(e.reason, /beyond the first 200/)
+          assert.equal(e.bytes, 0)
+        }
+        assert.equal(p.totalBytes, 200 * p.entries[0].bytes)
+      })
+    },
+  },
+  {
+    id: 'list-latest-and-latest-epic-skip-an-oversized-or-unreadable-document-and-say-so',
+    run: async () => {
+      await withTemp(undefined, async (r) => {
+        const dir = path.join(r.root, 'handoffs')
+        fs.mkdirSync(dir)
+        put(dir, '2026-11-18-old.md', ledgerOf([row('a1', 'in-progress', 'ep-a')]), at(18))
+        // the newest day's only handoff document is over 4 MiB; a larger file that is not a handoff document is not counted
+        put(dir, '2026-11-19-huge.md', ledgerOf([row('h1', 'in-progress', 'ep-huge')]) + '\n' + 'x'.repeat(4 * 1024 * 1024 + 10) + '\n', at(19))
+        put(dir, '2026-11-20-notes.md', '# Notes\n' + 'y'.repeat(5 * 1024 * 1024), at(20))
+        const check = (out, what) => {
+          assert.equal(out.skippedFiles.count, 1, `${what}: ${JSON.stringify(out.skippedFiles)}`)
+          assert.match(out.skippedFiles.reason, /4 MiB/, what)
+          same(out.skippedNames, { count: 0, reason: null }, what)
+        }
+        const list = runIn(r, 'list', '--dir', dir)
+        same(baseNames(list.docs), ['2026-11-18-old.md'])
+        check(list, 'list')
+        const latest = runIn(r, 'latest', '--dir', dir, '--cwd', r.dir)
+        assert.equal(latest.doc, `${slashed(dir)}/2026-11-18-old.md`)
+        check(latest, 'latest')
+        const epic = runIn(r, 'latest-epic', '--dir', dir)
+        assert.equal(epic.epic, 'ep-a')
+        check(epic, 'latest-epic')
+        check(runIn(r, 'ledger-carry', '--dir', dir), 'ledger-carry --dir')
+        // nothing skipped: the field is there, with count 0
+        fs.rmSync(path.join(dir, '2026-11-19-huge.md'))
+        same(runIn(r, 'list', '--dir', dir).skippedFiles, { count: 0, reason: null })
+        // a document that cannot be read stops nothing: it is skipped and counted (where the platform can make one)
+        const locked = put(dir, '2026-11-21-locked.md', selDoc({ title: 'Locked' }), at(21))
+        fs.chmodSync(locked, 0o000)
+        let readable = true
+        try {
+          fs.readFileSync(locked)
+        } catch {
+          readable = false
+        }
+        try {
+          if (!readable) {
+            const out = runIn(r, 'list', '--dir', dir)
+            same(baseNames(out.docs), ['2026-11-18-old.md'])
+            assert.equal(out.skippedFiles.count, 1)
+            assert.match(out.skippedFiles.reason, /cannot be read/)
+          }
+        } finally {
+          fs.chmodSync(locked, 0o644)
+        }
+      })
+    },
+  },
+  {
+    id: 'list-and-resume-contracts-report-the-skipped-files',
+    run: async () => {
+      const list = flatten(between(readText('skills', 'handoff', 'SKILL.md'), '## Sub-command: list', '## Non-Goals'))
+      assert.match(list, /`skippedFiles`/)
+      const step1 = flatten(between(readText('templates', 'handoff', 'resume.md'), '### Step 1', '### Step 2'))
+      assert.match(step1, /`skippedFiles`/)
+      assert.match(step1, /4 MiB/)
+      assert.match(flatten(ledgerText()), /`skippedFiles`/)
+    },
+  },
+]
+
 // ---- the runner's own exit codes ----------------------------------------------------------------------------
 
 function runnerExit(casesSource) {
@@ -6123,5 +6313,6 @@ export const cases = [
   ...dietContractCases,
   ...commandLineSafetyCases,
   ...hostileCases,
+  ...correctnessCases,
   ...runnerCases,
 ]

@@ -1,6 +1,6 @@
 // Which handoff documents a folder holds and which one a resume starts from.
 //
-//   listDocs(dir) -> { docs: [{ path, date, slug, branch, head, title, mtimeMs }], skippedNames: { count, reason } }
+//   listDocs(dir) -> { docs: [{ path, date, slug, branch, head, title, mtimeMs }], skippedNames, skippedFiles }
 //     Every handoff document of the folder (the `*.md` files whose first line starts with `# HANDOFF —`, no
 //     recursion, no cap), newest first by `orderDocs` (paths.mjs). `date`, `branch`, `head` and `title` are what the
 //     document's header records (parse.mjs; null when it records none — `head` is the sha without its subject, and a
@@ -8,9 +8,11 @@
 //     included. `path` is `dir` as the caller wrote it, with `/`, plus the file name. A folder that does not exist
 //     holds no document; a path that is not a folder is an InputError. A file whose name is outside ledger.mjs's
 //     SAFE_DOC_NAME is never listed or picked, only counted in `skippedNames` (a contract puts `path` into a quoted
-//     shell argument).
+//     shell argument); a handoff document over 4 MiB, or a file that cannot be read, likewise in `skippedFiles`
+//     (each `{ count, reason }`, ledger.mjs).
 //
-//   latestDoc(dir, branch, cwd) -> { doc, candidates: [{ path, branch, head, title }], needsChoice, skippedNames }
+//   latestDoc(dir, branch, cwd) -> { doc, candidates: [{ path, branch, head, title }], needsChoice, skippedNames,
+//                                    skippedFiles }
 //     H13. Take the newest DATE (the date of the file name — the date `orderDocs` ranks first) among the handoff
 //     documents; `candidates` are that day's documents, newest first, unless said otherwise below, and
 //       - no document at all  -> `doc` null, `candidates` [], `needsChoice` false;
@@ -34,7 +36,7 @@
 //     HEAD, the very words a document records in those states. With a `cwd` that is not inside a git work tree there
 //     is no ancestry to ask about, so `onBranch` is empty and several documents on the newest day are a choice.
 import { parseHeader, stripEmphasis } from './parse.mjs'
-import { newSkips, scanHandoffDocs, skippedNamesOf } from './ledger.mjs'
+import { newSkips, scanHandoffDocs, skippedOf } from './ledger.mjs'
 import { gitTopLevel, splitDocName } from './paths.mjs'
 import { runGit } from './git.mjs'
 
@@ -61,7 +63,7 @@ function describe(d, dir) {
 export function listDocs(dir) {
   const skips = newSkips()
   const docs = [...scanHandoffDocs(dir, Infinity, skips)].map((d) => describe(d, dir))
-  return { docs, skippedNames: skippedNamesOf(skips) }
+  return { docs, ...skippedOf(skips) }
 }
 
 // The recorded commit of a document, usable as a git argument: 7 to 40 hex digits (parse.mjs read it so; checked again here
@@ -97,9 +99,9 @@ export function latestDoc(dir, branch, cwd) {
     else if (name !== date) break
     day.push(describe(d, dir))
   }
-  const skippedNames = skippedNamesOf(skips)
+  const skipped = skippedOf(skips)
   const shown = (list) => list.map(({ path: p, branch: b, head, title }) => ({ path: p, branch: b, head, title }))
-  const answer = (doc, candidates, needsChoice) => ({ doc, candidates: shown(candidates), needsChoice, skippedNames })
+  const answer = (doc, candidates, needsChoice) => ({ doc, candidates: shown(candidates), needsChoice, ...skipped })
   if (day.length === 0) return answer(null, [], false)
   if (day.length === 1) return answer(day[0].path, day, false)
   const top = NO_BRANCH.has(branch) ? null : gitTopLevel(cwd)

@@ -54,8 +54,8 @@ its stderr verbatim and stop — never emulate a command by hand.
 ## Sub-command: list
 
 Run `node "{HANDOFF_JS}" list --dir "docs/harness/handoff"` — never scan the folder by hand
-(non-zero exit: stop). `docs` lists every handoff document of the folder (first line
-`# HANDOFF —`), newest first, each `{path, date, slug, branch, head, title, mtimeMs}`. Print one
+(non-zero exit: stop). `docs` lists every handoff document (first line `# HANDOFF —`),
+newest first, each `{path, date, slug, branch, head, title, mtimeMs}`. Print one
 line each — date, slug, recorded branch, recorded HEAD (may be cut to 7+ characters), path —
 labels English raw, values as stored, null as `-`:
 
@@ -64,7 +64,7 @@ labels English raw, values as stored, null as `-`:
   2026-07-24  v87-tiering        feature/v8.7-tiering  97ce994  docs/harness/handoff/2026-07-24-v87-tiering.md
 ```
 
-`docs` empty → say so in `user_lang`. `skippedNames.count` above 0 → print it and its `reason`.
+`docs` empty → say so in `user_lang`. A `skippedNames`/`skippedFiles` count above 0 → print it with `reason`.
 
 ## Non-Goals
 

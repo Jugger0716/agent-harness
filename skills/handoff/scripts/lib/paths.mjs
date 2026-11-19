@@ -40,7 +40,9 @@ function trimDotsAndSpaces(seg) {
   while (end > 0 && (seg[end - 1] === '.' || seg[end - 1] === ' ')) end--
   return seg.slice(0, end)
 }
-const isGitSegment = (seg) => trimDotsAndSpaces(seg).toLowerCase() === '.git' || SHORT_GIT.test(seg)
+// (reading.mjs applies it again to the REAL path of a file, relative to its root: a link inside the repository can lead
+// into `.git/` under a path that names no `.git` segment.)
+export const isGitSegment = (seg) => trimDotsAndSpaces(seg).toLowerCase() === '.git' || SHORT_GIT.test(seg)
 
 // Is `abs` (already resolved) inside `root`? -> the path relative to the root, or null.
 function relativeInside(root, abs) {
@@ -132,7 +134,8 @@ function docKey(name) {
   const m = /^(\d{4}-\d{2}-\d{2})(?:-(.*))?$/.exec(base)
   const date = m ? m[1] : ''
   const rest = m ? (m[2] ?? '') : base
-  const s = /^(.*?)-(\d+)$/.exec(rest)
+  // at most nine digits, as in nextDocName: a longer number is a name, not a collision suffix (past 2^53, n + 1 is n)
+  const s = /^(.*?)-(\d{1,9})$/.exec(rest)
   return { date, rest, suffixed: s ? { slug: s[1], n: Number(s[2]) } : null }
 }
 
@@ -233,7 +236,9 @@ export function nextDocName(dir, date, slug) {
     if (base === stem) top = Math.max(top, 1)
     else if (base.startsWith(`${stem}-`)) {
       const tail = base.slice(stem.length + 1)
-      if (/^([2-9]|[1-9]\d+)$/.test(tail)) top = Math.max(top, Number(tail))
+      // a collision number has at most nine digits: a longer one is a name of its own (and one past 2^53 would make
+      // `n + 1` equal `n`, so the search below would never end)
+      if (/^([2-9]|[1-9]\d{1,8})$/.test(tail)) top = Math.max(top, Number(tail))
     }
   }
   const nameOf = (n) => (n === 1 ? `${stem}.md` : `${stem}-${n}.md`)

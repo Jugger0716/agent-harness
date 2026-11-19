@@ -27,7 +27,7 @@ b. **Carry.** Run `node "{HANDOFF_JS}" ledger-carry --dir "docs/harness/handoff"
    ledger has rows of this Epic and returns `epic` (the Epic carried, or `null`), `doc` (its path,
    or `null`), `rows` (in document order), `pointer` (its file name), `droppedDone`,
    `unknownStatusRows`, `unattributedRows`, `chained` (it carries an `Earlier rows:` line),
-   `reason` (why nothing was carried) and `skippedNames`.
+   `reason` (why nothing was carried), `skippedNames` and `skippedFiles`.
    Carried: **every unfinished row of this Epic** (`in-progress`, `blocked`, `planned`, and a
    `Status` outside the enum) **and only the most recent 5 finished ones** (`done`, `dropped`);
    `droppedDone` counts the finished rows left out. Rows of another Epic are never carried; a new
@@ -46,8 +46,9 @@ f. **`unknownStatusRows` above 0:** those rows were carried as unfinished; keep 
    written, guess none, and name their `Slice` in Step 4's report.
 g. **`unattributedRows` above 0:** rows with an empty `Epic` cell were taken as this Epic's,
    `epic` filled in; name their `Slice` in Step 4's report.
-h. **`skippedNames.count` above 0** (either command): that many files of the folder were not
-   read, and the newest document may be among them; say so, with its `reason`, in Step 4's report.
+h. **`skippedNames.count` or `skippedFiles.count` above 0** (either command): that many files of
+   the folder were not read, and the newest document may be among them; say so, with each
+   `reason`, in Step 4's report.
 
 **Progress Ledger — column contract**
 

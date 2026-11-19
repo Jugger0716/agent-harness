@@ -233,6 +233,10 @@ export function sectionName(heading) {
   return heading
 }
 
+// The name of a heading from its raw text (what follows `## `): HTML comments dropped, trimmed, read by prefix — the
+// rule findSections applies, for a reader of another file (reading.mjs, the pointed-to Do NOT section).
+export const headingName = (text) => sectionName(stripLineComments(text).trim())
+
 // -> [{ heading, name, start, end }]: `start` is the heading's line index, `end` the index of the
 // next level-2 heading (or the line count). The body is lines[start + 1 .. end).
 export function findSections(lines, flags) {
