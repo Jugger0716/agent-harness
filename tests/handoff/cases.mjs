@@ -6014,7 +6014,7 @@ const hostileCases = [
           const res = spawnSync(process.execPath, [HANDOFF_JS, ...args], { encoding: 'utf8', env: r.env, timeout: 20000 })
           const ms = Date.now() - t0
           assert.equal(res.status, 0, `${args[0]}: exit ${res.status} ${res.stderr}`)
-          assert.ok(ms < 1500, `${args[0]} took ${ms} ms on a 60 KB document`)
+          assert.ok(ms < 1000, `${args[0]} took ${ms} ms on a 60 KB document (the node start included)`)
         }
       })
     },

@@ -47,7 +47,7 @@ function cmdParse(opts) {
 // `doNot` is null unless the document's `Do NOT` section is only a pointer to another document (`doNotRefOnly`, parse.mjs).
 // Then it is the plan entry for the `Do NOT` section of the document that section names — planned by the very same rule
 // as a Reading Order entry (path rule, roots, real path, budget), apart from `entries`, and first, so the guardrails are
-// not what the budget runs out on. A pointer that names no path comes back `skipped-invalid` with that reason.
+// not what the budget runs out on. That section is found as parse.mjs finds it: the first level-2 heading read by prefix. A pointer that names no path comes back `skipped-invalid` with that reason.
 function cmdReadingPlan(opts) {
   if (!/^[1-9]\d{0,14}$/.test(opts.budget)) throw new UsageError('reading-plan: --budget must be a positive whole number of bytes')
   if (opts.root === '') throw new UsageError('reading-plan: --root must not be empty')
@@ -118,7 +118,7 @@ function cmdDrift(opts) {
 // also says which Epic was carried (`epic`), which document the rows came from (`doc`, null when none held the Epic),
 // its file name (`pointer`), how many finished rows were left out (`droppedDone`), how many carried rows had a Status
 // outside the enum (`unknownStatusRows`) or an empty Epic cell (`unattributedRows`), whether that document itself
-// carries an `Earlier rows:` line (`chained`), and how many file names the scan left out (`skippedNames`).
+// carries an `Earlier rows:` line (`chained`), and how many files the scan left out (`skippedNames`, `skippedFiles`).
 function cmdLedgerCarry(opts) {
   const hasDoc = opts.doc !== undefined
   if (hasDoc === (opts.dir !== undefined)) throw new UsageError('ledger-carry: give exactly one of --doc and --dir')
@@ -163,7 +163,7 @@ function cmdResolvePath(opts) {
 }
 
 // Every handoff document of a folder, newest first (lib/select.mjs): path, header values and file-name slug; and how
-// many file names were left out (`skippedNames`).
+// many files were left out (`skippedNames`, `skippedFiles`).
 function cmdList(opts) {
   if (opts.dir === '') throw new UsageError('list: --dir must not be empty')
   return listDocs(opts.dir)
