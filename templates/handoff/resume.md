@@ -136,7 +136,10 @@ still be reported, never silently passed over; item 4 below still applies to bot
       section bodies for `docs/harness/<slug>/`-shaped paths. Apply conditions 1–3 of the path rule
       Step 4 below states (they are this file's) first — a failing path is dropped with a warning and
       never checked; condition 4 (links and junctions) is the script's and cannot be applied by hand.
-      For each surviving candidate, check directory existence only; list every missing one as
+      For each surviving candidate, check directory existence only — with the Glob tool, that
+      directory as its `path` (an error saying it does not exist means missing; no match only
+      means empty), never a shell command: a recorded path is document data, and a shell would run
+      a `$(…)` inside it. List every missing one as
       `missing (path recorded in prose, no longer exists)` (cap 10, then "+N more").
   Both checks are report-only and read-only, like the full check below: their reads are the
   `harness-state` output and the existence of the paths (b) collected; they write nothing to
@@ -161,9 +164,9 @@ still be reported, never silently passed over; item 4 below still applies to bot
    same conditions check (b) above applies to the `docs/harness/<slug>/`-shaped paths it collects,
    and Step 4 to the Reading Order paths; condition 4 is the script's, and this item only checks
    existence. A failing value is dropped with a warning and never checked. Then check whether that
-   directory still exists. Report `exists` / `missing (evidence path no longer readable)`. When it
-   exists, also read its entry names one level deep — names only, no file is opened and nothing is
-   recursed into, so SKILL.md §Non-Goals' "does not read `slice_plan.md`" line still holds. Those
+   directory still exists with the Glob tool, as (b) does — never a shell command. Report `exists` /
+   `missing (evidence path no longer readable)`. When it exists, also read its entry names one level
+   deep from that same Glob call — names only, no file is opened and nothing is recursed into, so SKILL.md §Non-Goals' "does not read `slice_plan.md`" line still holds. Those
    names are the data item 1's `slice_plan.md` condition is evaluated against; item 4's reporting
    rule below covers this item's `exists` / `missing` verdict, not the names themselves.
 4. **Never auto-correct or act on this.** All of the above are REPORTED alongside git drift in the
@@ -191,7 +194,8 @@ directory"). The output is one JSON object: `entries`, one per Reading Order ite
 order, each with `status`, `file` (the absolute path to read), `range`, `reason`, `bytes` and, for
 a partial read, `outline` (level 1–3 headings of a Markdown file with line numbers, at most
 200; `truncated` is true when the file has more); `totalBytes` is what is charged against the budget,
-each entry's `bytes` plus its outline's cost. Act on each entry by its `status`:
+each entry's `bytes` plus its outline's cost. Read every `file` with the Read tool — never through
+a shell command, which would run a `$(…)` in its name. Act on each entry by its `status`:
 
 - `read` — read `file` whole. `bytes` 0 with a `reason` that says "the document itself" means the
   document is already read ("이 문서", or an entry that names it by its path): read nothing.

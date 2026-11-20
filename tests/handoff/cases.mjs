@@ -5910,6 +5910,47 @@ const commandLineSafetyCases = [
       assert.match(ledger, /`skippedNames`/)
     },
   },
+  // ---- the fix-wave re-review's residuals (I1, I3, I4 and two minors) ----
+  {
+    id: 'generate-contract-reports-what-list-skipped-when-it-picks-the-do-not-source',
+    run: async () => {
+      // I1: the `list` that picks the previous handoff can skip the newest file; that is said, never inherited silently
+      const item = flatten(between(readText('templates', 'handoff', 'generate.md'), '- Do NOT —', '5. **Progress Ledger'))
+      assert.match(item, /`skippedNames`[^.]*`skippedFiles`[^.]*above 0[^.]*Step 4's report[^.]*`reason`/)
+      // the pointed-to lines are read with the Read tool: `file` is a value a document chose
+      assert.match(item, /ONLY those lines of `file` with the Read tool/)
+    },
+  },
+  {
+    id: 'ledger-contract-discards-a-doc-carry-of-another-epic-and-reports-a-refused-epic',
+    run: async () => {
+      const a = flatten(between(ledgerText(), 'a. **', 'b. **'))
+      const b = flatten(between(ledgerText(), 'b. **', 'c. **'))
+      const e = flatten(between(ledgerText(), 'e. **', 'f. **'))
+      // I3: `--doc` without `--epic` carries that document's own Epic; one that is not (a)'s Epic never enters this ledger
+      assert.match(b, /`--doc "<path>"`[^.]*an `epic` that is not \(a\)'s Epic is discarded with its rows/)
+      assert.match(e, /discarded \(b\)/)
+      // the refused Epic's `reason` reaches Step 4's report on every path, not only when nothing was carried
+      assert.match(a, /not an identifier[^.]*say so, with that `reason`, in Step 4's report/)
+    },
+  },
+  {
+    id: 'resume-contract-checks-recorded-paths-and-reads-plan-files-with-tools-never-a-shell',
+    run: async () => {
+      // I4: a path a document recorded may hold `$(…)`; a shell would run it, the file tools do not
+      const text = readText('templates', 'handoff', 'resume.md')
+      const b = flatten(between(text, '(b) **Prose-recorded path check**', 'Both checks are report-only'))
+      assert.match(b, /existence only[^.]*with the Glob tool[^.]*never a shell command/)
+      // Glob tells a missing directory (an error) from an empty one (no match); the contract says which is which
+      assert.match(b, /`path`[^.]*error[^.]*missing/)
+      const item3 = flatten(between(text, '3. **`docs_path` existence**', '4. **Never auto-correct'))
+      assert.match(item3, /still exists with the Glob tool/)
+      assert.match(item3, /entry names one level deep[^.]*same Glob call/)
+      // every planned `file` is read with the Read tool, never through a shell
+      const step4 = flatten(between(text, '### Step 4', '### Step 5'))
+      assert.match(step4, /every `file` with the Read tool[^.]*never[^.]*shell/)
+    },
+  },
 ]
 
 // ---- F2: the parser is linear on hostile documents, and list/latest read only the header ----------------------------------
@@ -6014,7 +6055,9 @@ const hostileCases = [
           const res = spawnSync(process.execPath, [HANDOFF_JS, ...args], { encoding: 'utf8', env: r.env, timeout: 20000 })
           const ms = Date.now() - t0
           assert.equal(res.status, 0, `${args[0]}: exit ${res.status} ${res.stderr}`)
-          assert.ok(ms < 1000, `${args[0]} took ${ms} ms on a 60 KB document (the node start included)`)
+          // 5 s, not 1 s: the 1 s bound failed 3 of 6 runs under full CPU load (the node start and, for `latest`, git
+          // itself are included). The quadratic parser took about 16 s on this document, so 5 s still catches it.
+          assert.ok(ms < 5000, `${args[0]} took ${ms} ms on a 60 KB document (the node start included)`)
         }
       })
     },

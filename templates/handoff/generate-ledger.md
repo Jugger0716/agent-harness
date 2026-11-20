@@ -12,8 +12,8 @@ a. **Epic.** Run `node "{HANDOFF_JS}" latest-epic --dir "docs/harness/handoff"` 
    row), `doc` (that document) and `reason` — `epic` and `doc` are `null` when none of the 20
    newest handoff documents, which is all the script reads, has one (a folder that does not exist
    yet included); `epic` is also `null`, with `reason` saying why, when that value is not an
-   identifier. Use `epic` as the proposal, without asking; there is no age limit, so it may be
-   months old.
+   identifier; say so, with that `reason`, in Step 4's report. Use `epic` as the proposal,
+   without asking; there is no age limit, so it may be months old.
    When `epic` is `null`, the Epic is item 2's `docs_path` slug (kebab-case; `relevant` true),
    without asking; ask the user only when there is no such slug either. When this session's work
    concretely names a different epic id, that id is the Epic and wins over all of these, without
@@ -23,10 +23,10 @@ b. **Carry.** Run `node "{HANDOFF_JS}" ledger-carry --dir "docs/harness/handoff"
    session, never one copied from a document or from a script's output; without `--epic` the
    script carries the Epic `latest-epic` proposes, and nothing when that is `null`.
    (`--doc "<path>"` in place of `--dir` names a known document; `doc` is then always it, and
-   without `--epic` the Epic its own ledger proposes is carried.) It picks the newest document whose
-   ledger has rows of this Epic and returns `epic` (the Epic carried, or `null`), `doc` (its path,
-   or `null`), `rows` (in document order), `pointer` (its file name), `droppedDone`,
-   `unknownStatusRows`, `unattributedRows`, `chained` (it carries an `Earlier rows:` line),
+   without `--epic` the Epic its own ledger proposes is carried — an `epic` that is not (a)'s Epic
+   is discarded with its rows.) It picks the newest document whose ledger has rows of this Epic
+   and returns `epic` (the Epic carried, or `null`), `doc` (its path, or `null`), `rows` (in
+   document order), `pointer` (its file name), `droppedDone`, `unknownStatusRows`, `unattributedRows`, `chained` (it carries an `Earlier rows:` line),
    `reason` (why nothing was carried), `skippedNames` and `skippedFiles`.
    Carried: **every unfinished row of this Epic** (`in-progress`, `blocked`, `planned`, and a
    `Status` outside the enum) **and only the most recent 5 finished ones** (`done`, `dropped`);
@@ -42,7 +42,8 @@ d. **The earlier rows.** When a source was found and `droppedDone` is greater th
    `droppedDone` 0 and `chained` false write no such line.
 e. **No source found** (`doc` is `null` — none of the 20 newest handoff documents has rows of this
    Epic, or no Epic was proposed — or `rows` is empty, which with `--doc` means that document has
-   none): start an empty ledger. Not an error, but Step 4 must report it.
+   none, or they were discarded (b)): start an empty ledger. Not an error, but Step 4 must report
+   it.
 f. **`unknownStatusRows` above 0:** those rows were carried as unfinished; keep each `Status` as
    written, guess none, and name their `Slice` in Step 4's report.
 g. **`unattributedRows` above 0:** rows with an empty `Epic` cell were taken as this Epic's,
