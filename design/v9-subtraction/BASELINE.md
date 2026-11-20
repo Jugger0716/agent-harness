@@ -456,3 +456,190 @@ SPEC 1.3의 시뮬레이션 값과 다른 것은 `session-conflict`(2로 예상,
 ② **1단계 예외 ②에서 남은 둘.** 하나는 "Partial edits" 질문이다(시험 9 미관측). 스크립트 쪽 — 빈 반환이 `implementation returned null — partial edits possible`이 되는 것 — 은 스텁 케이스 `build-null-implementation`이 고정한다. 다른 하나는 끊긴 자동 수정의 처리다(시험 11 안 돌림). 1단계 예외 ②의 나머지는 이번에 닫혔다: md-optimize의 남은 백업 질문과 "Skip" 뒤 백업 유지(시험 1·7·8), `/harness` Setup의 남은 백업 확인(시험 1). md-optimize의 열린 세션 확인은 9.0.1에서 없어졌다. 닫는 방법: "Partial edits"는 다음 실사용 검증에서 구현 에이전트를 건너뛰어 본다. 자동 수정은 5단계 4번이 Auto-fix를 남기면 그 단계에서 돌리고, 없애면 예외도 함께 사라진다.
 
 ③ **W18.** `balanced` 프리셋에서는 advisor와 evaluator가 같아 구분되지 않는다. 닫는 방법: `frontier` 프리셋(advisor opus, evaluator fable)으로 INLINE 계획 검토를 1회 돌려 critic의 모델을 확인한다.
+
+## 3단계 후 (v9.1)
+
+- 커밋: `4437350` (`harness/v9-stage3`, 버전 커밋 직전). 계획은 `STAGE3.md`. 태그 `v9.0.1` 뒤로 커밋 40개가 쌓였다.
+- 측정일: 2026-11-20. 방법은 위와 같다(`git ls-tree -r -l 4437350`의 blob 바이트). 비교 기준은 태그 `v9.0.1`이다. 크기(blob 바이트)와 린트·테스트 수는 이 커밋에서 잰 값이고, 그 위에 얹히는 릴리스 문서 변경(CHANGELOG, README, 이 파일)은 반영하지 않았다. 말뭉치 수치는 Task 12가 낸 집계다.
+- 말뭉치: "실제 handoff 문서 말뭉치"(292건)의 집계 수치만 적는다. 문서와 스냅샷은 저장소에 없고, 저장소에는 합성 픽스처만 있다.
+- `R`로 시작하는 번호(R5, R20, R23 …)는 이 단계를 구현하며 내린 판정의 번호다. 그 내용은 이 절의 "Task 1", "편차", "리뷰 기록"에 적었다.
+- 이 단계의 실사용 검증(`STAGE3.md` Task 15)과 릴리스 뒤 관찰(Task 17)은 아직 하지 않았다. 이 절에는 관측이 없다. 아래 "남은 것"을 본다.
+
+### 스킬별 크기
+
+| 스킬 | 바이트 | KB | `v9.0.1` 대비 |
+|---|---|---|---|
+| harness-build | 131,965 | 128.9 | +18 |
+| harness | 82,921 | 81.0 | +4 |
+| handoff | 6,410 | 6.3 | −41,635 |
+| harness-gate | 47,179 | 46.1 | 0 |
+| deep-review | 39,997 | 39.1 | 0 |
+| md-optimize | 20,854 | 20.4 | 0 |
+| **합계 (6개)** | **329,326** | **321.6** | −41,613 (`v9.0.1`은 370,939) |
+
+감량은 handoff 한 곳에서 나왔고, 이는 SKILL.md 본문의 감량이지 호출 전체의 감량이 아니다. SKILL.md는 디스패처가 됐고 본문은 `templates/handoff/`로 갔다(아래 "그 밖의 크기"). 호출 하나가 싣는 양은 다음 표다. harness-build(+18)와 harness(+4)의 증가는 handoff 파일을 가리키던 인용을 새 위치로 고친 것뿐이다. 나머지 세 스킬은 그대로다.
+
+### handoff 적재량
+
+호출 하나가 싣는 바이트다. 린트 `verify_body_budget.py`가 `\r`를 뺀 UTF-8 바이트로 재며, 이 저장소에서는 blob 바이트와 같다. `v9.0.1`에서는 모든 호출이 48,045 바이트의 SKILL.md 하나를 실었다.
+
+| 호출 | 싣는 파일 | 바이트 | KB | 상한 / 비고 |
+|---|---|---|---|---|
+| `generate` (단일 작업) | `SKILL.md` 6,410 + `generate.md` 8,929 | 15,339 | 15.0 | SPEC 상한 15,360 아래 21바이트 |
+| `generate` (Progress Ledger 있음) | 위 + `generate-ledger.md` 5,954 | 21,293 | 20.8 | 상한을 5,933 바이트 넘는다 — 편차 R23 |
+| `resume` | `SKILL.md` 6,410 + `resume.md` 32,213 | 38,623 | 37.7 | SPEC에 상한 없음. 읽기량은 128 KiB 예산이 따로 묶는다 |
+
+`v9.0.1`의 48,045 바이트와 견주면 차이는 −32,706(`generate`), −26,752(`generate` + 원장), −9,422(`resume`)다(차이는 위 값에서 계산했다). 린트는 세 적재량을 여유 0으로 고정한다. `templates/handoff/*.md`는 모두 어느 적재량에 속하거나 자기 상한을 가진다.
+
+### 그 밖의 크기
+
+| 구분 | `v9.0.1` | 3단계 후 |
+|---|---|---|
+| `workflows/*.workflow.js` | 5개, 142,076 B (138.7KB) | 변화 없음 |
+| `templates/` | 58개 파일, 297,013 B (290.1KB) | 61개 파일, 344,534 B (336.5KB) |
+| `skills/handoff/scripts/` | 없음 | 10개 파일, 134,652 B (131.5KB) |
+| `tests/handoff/` | 없음 | 21개 파일, 453,924 B (443.3KB) |
+| `design/handoff-diet/RATIONALE.md` | 없음 | 66,204 B (64.7KB) |
+| `README.md` | 67,854 B (66.3KB), 766줄 | 67,862 B (66.3KB), 766줄 (이 커밋 값. 릴리스 문서 작업의 README 수정 전) |
+
+본문에서 덜어낸 것은 사라진 것이 아니라 세 곳으로 갔다: 호출된 쪽만 읽는 템플릿 세 개(`generate.md`, `generate-ledger.md`, `resume.md`), 결정적 절차를 대신하는 스크립트(`skills/handoff/scripts/`), 측정 이력과 기각된 대안(`design/handoff-diet/RATIONALE.md`). 이 중 호출에 실리는 것은 템플릿뿐이다.
+
+### Task 1: 스킬이 스크립트를 실행할 수 있는가 (판정 R5)
+
+`node <설치된 플러그인 경로>/…/*.mjs`는 그 세션에서 Bash 도구와 PowerShell 도구 양쪽에서 권한 질문 없이 실행됐고 exit 0이었다. 그래서 스킬이 스크립트를 부르는 설계로 갔다. 표기는 `{HANDOFF_JS}` = `${CLAUDE_PLUGIN_ROOT}/skills/handoff/scripts/handoff.mjs`다. 한계: 그 세션의 권한 모드에서만 본 결과다. 스킬 본문 안의 경로 확장과 node가 없을 때 실패가 어떤 모양으로 드러나는지는 Task 15에서 다시 확인한다.
+
+### 말뭉치 회귀 (Task 12)
+
+실제 handoff 문서 말뭉치 292건에 `tests/handoff/corpus/diff.mjs`를 돌린 집계다. 문서 이름과 내용은 적지 않는다.
+
+**읽기량** (문서당 읽은 바이트):
+
+| 정책 | 중앙값 | P90 | 최대 |
+|---|---|---|---|
+| `v9.0.1` 기준선 | 267,475 | 519,075 | 762,299 |
+| 범위 인식, 예산 없음 | 267,798 | 515,680 | 762,299 |
+| 범위 인식, 128 KiB 예산 | 117,344 | 128,986 | 131,029 |
+
+- 아무것도 읽지 못하는 문서는 읽을 수 있는 엔트리가 있는 282건 중 0건이다. 예산 때문에 건너뛴 엔트리는 읽을 수 있는 엔트리의 35.3%이고, 80.8%의 문서가 예산 상한에 닿는다(상한의 목적이 그것이라 결함으로 보지 않는다).
+- 기록된 `Docs` 가운데 `docs/harness/` 아래 경로 57건이 새 경로 검사를 57/57 통과한다(`v9.0.1`의 경로 검사는 이를 거부했다).
+- 범위만 인식하고 예산을 두지 않으면 중앙값이 줄지 않는다(267,475 → 267,798). 줄이는 것은 예산이다.
+
+**`Next :`** (수정 전후 비교):
+
+| 분류 | 문서 수 |
+|---|---|
+| 변화 없음 | 179 |
+| 정규화만 다름 | 7 |
+| 라벨로 바뀜 | 14 |
+| 모호(`ambiguous — …`)로 바뀜 | 57 (19.5%) |
+| `Docs` 마지막 구간 또는 Next Steps 1번 원문으로 바뀜 | 35 |
+| 끝난 슬라이스를 그대로 둠 | 0 |
+| 그 밖 | 0 |
+
+- 라벨 검사: 라벨이 있고 in-progress 행도 있는 문서 62건 중 13건이 `v9.0.1`과 달랐고, 새 `Next :`가 라벨 값인 것이 13/13이다.
+- 라벨이 없고 in-progress가 정확히 1행인 문서 71건: 64건은 그대로이고 7건은 정규화만 다르다.
+
+**상태 기록**:
+
+- 5라벨 기록이 있는 문서 61건(그중 23건은 `Phase`가 `completed`)과 없는 문서 231건. stale 표지 표본은 8건이고 모두 `completed`다.
+- 재진입 안내가 나오는 문서 수는 38건에서 9건으로 준다. 이 값은 모의 실행이고 가정에 묶여 있다 — 실제 판정은 실행할 때의 `.harness/state.json`이 정한다. Task 15가 확인한다.
+
+**Progress Ledger**:
+
+| 항목 | 수정 전 | 수정 후 |
+|---|---|---|
+| 이월 행 수 (중앙값 / P90 / 최대) | 13 / 91 / 237 | 6 / 17 / 74 |
+| 미완 행 합계 | 1,462 | 1,462 (잃은 행 0) |
+
+- 원장이 있는 문서 237건. 100행을 넘던 문서 20건 가운데 6건은 20행 이하가 됐고 14건은 여전히 넘는다(미완 행이 25~69개씩 남은 문서이고, 그중 한 에픽은 `blocked`를 백로그로 썼다). 편차 R20.
+- 에픽이 둘 이상인 문서 4건. enum 밖 `Status`를 가진 문서 17건(행 20개). `Epic` 칸이 빈 행 0개.
+
+**최신 문서 선택, slug, Do NOT**:
+
+- 같은 날 문서 군 88개(문서 227건, 하루 최대 6건). 그중 73개 군은 한 브랜치를 기록한 문서가 둘 이상이다 — 커밋 조상 관계가 가려내는 경우다.
+- 비ASCII 제목 286건이 모두 ASCII slug를 받는다.
+- Do NOT 절이 없는 문서 5건, 포인터만 있는 문서 0건, 포인터와 자기 항목이 섞인 문서 26건(알려진 한계).
+
+**입력 안전 집합 확인** (최종 리뷰 F1의 수정이 만든 안전 집합): `Epic` 식별자 237/237, `Epic` 칸 7,650/7,650, 파일 이름 287/287이 새 안전 집합 안에 든다.
+
+### 린트와 테스트
+
+- 린트 9종과 배선 검사 통과. `scripts/`는 8종에서 9종이 됐다 — 새 린트는 `verify_body_budget.py`다(스킬별 본문 상한, handoff 적재량 세 개와 `generate`의 SPEC 상한, 날짜 표지·계획 태그 금지). `check_lint_wiring.sh`는 "9 script(s) wired"를 출력한다. `CLAUDE.md`의 `lint-cmd` 체인은 명령 10개(린트 9 + 배선 검사 1)다.
+- SYNC 그룹 9개, 마커 자리 19곳. `min_sites`는 바뀌지 않았다. `handoff-state-record` 그룹의 대상이 `templates/handoff/generate.md`로 옮겨 갔다. BLOCK 그룹은 그대로다.
+- `verify_cited_paths.py`: 76개 파일의 경로 인용 892건이 모두 실재(이 커밋에서 측정).
+- `tests/handoff`: `node tests/handoff/run.mjs` 336 pass / 0 fail. 새 스위트이고 Windows에서 약 2분 걸린다. 스텁 테스트: `node tests/segment_stubs/run.mjs` 50 pass, 1 known-fail — 그대로다.
+- 두 러너는 `.github/workflows/lint.yml`에 배선돼 있고, 그 워크플로는 Node 20을 쓴다. 개발은 Node 24에서 했다. 그래서 Node.js 20 이상을 최소 요구로 선언한다. CI는 이 브랜치에서 한 번도 돈 적이 없다(푸시 전).
+
+### 부록 A 결함
+
+3단계에 배정된 15건(H1~H15)의 상태다. "고정하는 것"은 `tests/handoff/cases.mjs`의 케이스 이름이다(계약 문장을 보는 케이스 포함. H15는 린트도 든다). 스크립트 이름은 `skills/handoff/scripts/lib/` 아래 모듈과 `handoff.mjs`의 명령이다.
+
+| # | 고친 것 | 고정하는 것 | 말뭉치·실사용 |
+|---|---|---|---|
+| H1 | `reading-plan` 명령이 Reading Order를 읽기 계획으로 바꾼다. 범위 `path:START-END`·`path §heading`, 128 KiB 예산. 2,000줄을 넘거나 예산에 안 맞는 파일은 앞 400행과 목차를 읽고, 안 맞는 엔트리는 `skipped-budget`으로 적은 뒤 뒤의 엔트리를 계속 읽는다 | `reading-plan-line-range`, `reading-plan-section-range`, `reading-plan-oversize-without-range`, `reading-plan-budget-degrades-to-partial`, `reading-plan-budget-skips-and-continues`, `resume-contract-owns-its-path-rule-and-writes-the-budget-once` | 읽기량 중앙값 267,475 → 117,344 |
+| H2 | `next` 명령이 `Next :`를 네 단으로 정한다: `Slice :` 라벨, in-progress 정확히 1행, 상태가 관련 있을 때만 `Docs` 마지막 구간, Next Steps 1번 원문. 라벨 없이 in-progress가 2행 이상이면 `ambiguous — …`와 `(Next : ambiguous — <N> in-progress rows; Next Steps item 1 follows)` | `next-label-wins`, `next-single-in-progress`, `next-two-in-progress-no-label`, `next-docs-tier-needs-relevance`, `resume-contract-next-rule-is-label-first-and-self-contained` | 라벨과 in-progress가 다른 13건에서 새 `Next :` = 라벨 13/13 |
+| H3 | `harness-state` 명령이 `relevant`(파일이 있고, `branch`가 현재 브랜치이고, `phase`가 `completed`가 아님)를 판정한다. generate는 `relevant`일 때만 5라벨 기록을 쓰고 아니면 `Harness : none (<reason>)` 한 줄을 쓴다. resume의 재진입 안내와 `Docs` 단은 `relevant`가 정한다. `templates/_shared/session_boundary.md`에 같은 조건을 한 문장으로 적었다 | `harness-state-other-branch`, `harness-state-completed`, `harness-state-match`, `resume-contract-has-one-rule-for-the-re-entry-hint`, `session-boundary-says-when-generate-writes-the-record` | 재진입 안내 38 → 9 (모의). **실사용 확인은 Task 15** |
+| H4 | resume이 handoff 전용 경로 검사를 자기 것으로 정의한다. `docs/harness/`를 허용하고 `..`, `.git`, `:`, 저장소 밖으로 나가는 링크, UNC 경로를 거부한다(`lib/paths.mjs`) | `reading-plan-docs-harness-allowed`, `reading-plan-rejects`, `reading-plan-rejects-ntfs-stream-names`, `reading-plan-rejects-a-link-that-leaves-the-repository`, `reading-plan-a-link-into-dot-git-is-refused`, `paths-validate-handoff-path` | `docs/harness/` 경로 57/57 통과 |
+| H5 | 헤더에 `**Dirty files:**`(경로 처음 40개, 넘으면 `+N more`)를 쓰고, `drift`가 기록된 경로(앞 40개)를 현재 작업 트리와 이후 커밋에 대조해 `recorded dirty work not found`를 보고한다 | `drift-dirty-lost`, `drift-dirty-committed-since`, `drift-checks-only-the-first-40-recorded-dirty-paths`, `resume-contract-names-lost-work-the-same-way-in-the-bullet-and-the-state-row`, `parse-new-header-fields` | **실사용 확인은 Task 15** |
+| H6 | SKILL.md의 "Base directory"가 기준 디렉터리를 정하고 헤더에 `**Worktree:**`를 쓴다. `drift`는 기록된 워크트리가 이 저장소에 등록돼 있고 신원이 확인될 때만 그곳에서 읽는다. 아니면 이유와 함께 비교를 건너뛴다. git이 아닌 폴더 분기가 있다 | `drift-worktree-from-main`, `drift-worktree-gone`, `drift-registered-worktree-whose-gitfile-points-elsewhere-is-never-opened`, `drift-in-a-folder-that-is-not-a-repository`, `drift-document-written-outside-git`, `reading-plan-root-fallback` | **실사용 확인은 Task 15** |
+| H7 | `ledger-carry` 명령이 미완 행(`in-progress`, `blocked`, `planned`, enum 밖 값)을 전부, 끝난 행(`done`, `dropped`)은 최근 5개만 이월하고 `Earlier rows:` 포인터를 쓴다 | `ledger-carry-keeps-every-unfinished`, `ledger-carry-keeps-last-five-done`, `ledger-carry-never-drops-unfinished-when-large`, `ledger-carry-pointer` | 미완 행 1,462 → 1,462. 100행 넘던 20건 중 6건만 20행 이하 — 편차 R20 |
+| H8 | `Status`에 `planned`를 더하고, 아직 시작하지 않은 슬라이스는 `blocked`가 아니라 `planned`로 적는다(열 계약) | `ledger-carry-planned-is-unfinished`, `generate-contract-column-contract-has-planned-and-bare-cells` | — |
+| H9 | resume의 Task 행에서 "legacy" 표시를 없앴다. 기록이 없는 9.0.x 문서는 "no record — task state is not a verification target", `Harness : none` 문서는 "no harness task"로 보인다 | `resume-contract-judges-the-task-state-through-the-script`, `parse-harness-record-none-or-absent` | 5라벨 기록이 없는 문서 231건 |
+| H10 | Step 5의 첫 선택지를 후보 수별로 정의한다(후보 정확히 1개 / 0개이고 작업을 서술 / 0개이고 다음 행동 없음 / 2개 이상). 질문은 어느 경로에서든 정확히 한 번이다 | `resume-contract-names-every-next-field-and-one-term-per-candidate-kind`, `cmd-zero`, `cmd-two-candidates-both-listed`, `cmd-negation-stays-prose` | — |
+| H11 | `latest-epic` 명령이 직전 문서의 Epic을 질문 없이 제안하고 `ledger-carry`가 그 Epic으로 이월 원본을 고른다. 식별자가 아닌 Epic은 제안하지 않고 이유를 보고한다. `--epic`은 세션이 이름 붙인 id에만 쓴다 | `latest-epic-newest-ledger-doc`, `latest-epic-refuses-an-epic-that-is-not-an-identifier`, `ledger-carry-dir-without-epic-uses-the-latest-epic-proposal`, `generate-contract-proposes-the-epic-the-way-the-script-reads-it`, `ledger-contract-takes-the-carry-epic-from-the-session-only` | 에픽이 둘 이상인 문서 4건 |
+| H12 | `resolve-path` 명령이 slug를 `[a-z0-9-]` 40자 이하로 정하고(음역 없음, 영어 kebab-case 요약), 이름이 있으면 최대+1 번호를 붙인다. SKILL.md가 `slugify.md`와 다름을 밝힌다 | `resolve-path-collision-suffix`, `resolve-path-normalizes`, `resolve-path-caps-40`, `skill-contract-location-convention-has-no-transliteration-and-names-resolve-path`, `skill-contract-discloses-the-slug-rule-difference` | 비ASCII 제목 286건이 모두 ASCII slug |
+| H13 | `latest` 명령이 가장 새 날짜의 문서 중 현재 브랜치를 기록한 것을 기록된 커밋의 조상 관계로 고르고, 가릴 수 없으면 묻는다(Step 5 게이트와 별개의 질문). 정렬은 날짜, 충돌 접미사, 수정 시각 순이다 | `latest-prefers-current-branch-descendant`, `latest-asks-when-the-documents-on-the-branch-diverged`, `latest-same-day-different-branch`, `orderDocs-date-then-collision-suffix-then-mtime`, `resume-contract-locates-with-latest-and-asks-for-a-choice-only-when-needed` | 같은 날 군 88개, 그중 73개가 한 브랜치에 문서 둘 이상 |
+| H14 | Do NOT을 모든 문서에 전문으로 쓴다. 9.0.x의 포인터만 있는 절은 `reading-plan`의 `doNot` 항목으로 한 번만 따라간다. 제목은 접두로 읽는다 | `parse-do-not-reference-only`, `parse-reads-a-heading-variant-by-its-prefix`, `reading-plan-plans-the-do-not-section-a-pointer-only-section-names`, `generate-contract-writes-the-do-not-section-in-full`, `resume-contract-reads-headings-by-prefix-and-the-do-not-section-a-pointer-names` | 포인터만 있는 문서 0건, 혼합형 26건은 알려진 한계 |
+| H15 | SKILL.md를 디스패처로 줄이고 본문을 `generate.md`·`generate-ledger.md`·`resume.md`로 나눴다. 측정 이력은 `design/handoff-diet/RATIONALE.md`로 옮겼다. `verify_body_budget.py`가 적재량과 날짜 표지 금지를 고정한다 | `verify_body_budget.py`, `handoff-contract-carries-no-dated-observation-or-planning-tag`, `handoff-contract-keeps-the-clauses-the-compression-weakened` | `generate` 15,339(상한 아래 21바이트), 원장 포함 21,293 — 편차 R23 |
+
+H1~H15 가운데 말뭉치 수치가 SPEC 완료 기준을 문자 그대로 채우지 못한 것은 H7(20행 이하)과 H15(15KB 이하, 원장이 있을 때) 두 곳이고, 아래 "편차"에 적었다. H3·H5·H6은 테스트와 모의 실행으로만 고정돼 있어 실사용 확인이 남았다.
+
+### 리뷰 기록
+
+3단계 전체 브랜치 리뷰와 그 수정·재검토다. 리뷰어는 배치당 1명이다.
+
+| 회차 | 범위 | 판정 | 비고 |
+|---|---|---|---|
+| 최종 리뷰 | 브랜치 전체 | 릴리스 막음 | Critical 1(F1), Important 6(F2~F7), Minor 11(M1~M11). 첫 리뷰어가 사용량 한도로 중단돼(판정 R24) 같은 프롬프트로 opus에서 다시 돌렸다 |
+| 수정 웨이브 (판정 R25) | 커밋 `56ce5ef` … `4a52777` | 재검토에서 잔여 있음 | F1, F2, F3, F4, F6, F7, M1~M3, M5~M10을 고쳤다 |
+| 잔여 수정 (판정 R26) | 커밋 `ccf37cc` | 좁은 재검토에서 잔여 있음 | I1 건너뛴 파일 보고, I3 `--doc` Epic 섞임, I4 셸 대신 Glob·Read, 60 KB 문서 시간 한도 1초 → 5초 |
+| 잔여 수정 (판정 R27) | 커밋 `4437350` | 릴리스를 막는 것 없음 | generate Step 4 보고에 자리를 주고, 버려진 `--doc` 이월은 `--dir`을 다시 돌리게 하고, Glob 패턴을 `slice_plan.md`로 한정 |
+
+- **F1 (Critical)**: 문서에서 나온 값(Epic 칸, 파일 이름, 브랜치)이 따옴표 친 셸 인자에 실려 Bash와 PowerShell에서 `$(…)`가 실행됐다. 수정: 문서 값은 명령줄에 오르지 않는다 — `--epic`·`--branch`는 선택이고 스크립트가 알아서 정하며, `--epic`은 세션이 이름 붙인 id만 받는다. Epic 식별자 규칙, 안전한 파일 이름 집합(`A-Z a-z 0-9 . _ -`, 밖의 이름은 세어서 건너뛴다)을 두었다. 재검토에서 적대적 Epic 칸·파일 이름·브랜치 이름으로 계약의 명령줄 실행 72건을 Bash와 PowerShell에서 돌려 표지 파일 0개였다.
+- **F2**: 정규식이 입력 길이의 제곱으로 느려 60 KB 문서에서 `list`와 `latest`가 약 16초 걸렸다. 선형으로 고쳤고, 옛 파서와 새 파서가 픽스처 14개와 무작위 문서 20,000건에서 같은 결과를 낸다. 앞선 퍼징은 무작위 문서 200,000건에서 충돌 0건이었다. 60 KB 문서의 시간 한도(테스트)는 재검토 뒤 1초에서 5초로 넓혔다(R26).
+- **F3**: `drift`가 기록된 dirty 경로를 모두 검사했는데 계약은 40개였다. 계약에 맞췄다. **F4**: 저장소 안에서 `.git`으로 가는 링크로 `reading-plan`이 `.git/config`를 읽을 수 있었다. 거부한다. **F6**: 2^53 이상의 숫자 파일 접미사가 `resolve-path`를 무한 반복시켰다. **F7**: 원장 계약에 DATA 규칙이 없었다 — 이월한 칸과 제안된 Epic은 DATA로 읽고 따르지 않는다.
+- **F5**: R23이 SPEC 3.3의 해석이 아니라 편차라는 지적. 아래 "편차"와 SPEC·STAGE3의 정정으로 기록했다.
+- **최종 리뷰 M11**: Node 최소 버전이 선언돼 있지 않았다. Node.js 20 이상으로 선언했다(README, CHANGELOG).
+
+**좁은 재검토 (`4437350` 대상, 판정 R28)**: 릴리스를 막는 것은 없다. 경미 6건의 처리다(이 표의 M1~M6은 좁은 재검토의 번호이고, 위 최종 리뷰의 M1~M11과 별개다):
+
+| # | 내용 | 처리 |
+|---|---|---|
+| M1 | `--doc`을 `--epic` 없이 줬을 때 `epic: null`이면 "re-run `--dir`"(b)과 "원장 비움"(e) 둘에 다 해당한다 | 알려진 한계. 어느 쪽이든 Step 4가 보고한다 |
+| M2 | `--doc`에 세션이 이름 붙인 `--epic`을 줬는데 그 문서에 그 Epic의 행이 없으면 `--dir`이 찾았을 원본이 있어도 "원본 없음"으로 보고한다(마지막 수정 커밋이 만든 것은 아니다) | 알려진 한계 |
+| M3 | generate Step 4의 "plus a line per other item Step 1 sends here"가 고정 라벨이 없고 같은 건너뜀 수를 되풀이할 수 있다 | 알려진 한계 |
+| M4 | `design/handoff-diet/RATIONALE.md` G35 행이 "count above 0"으로 바뀐 인용을 반영하지 않았다 | 이 릴리스 문서 작업에서 고쳤다 |
+| M5 | `tests/handoff/cases.mjs`의 낡은 주석 두 곳(Step 4가 빈 `rows`를 가리킨다는 것, `--dir`의 Epic이 "(a)의 것이 구조상 맞다"는 것) | 이 릴리스 문서 작업에서 주석만 고쳤다. 단언은 그대로다 |
+| M6 | Glob의 결과 100건 제한 때문에 직접 놓인 `slice_plan.md`가 아래 폴더의 100건 넘는 사본 뒤에 가려질 수 있다 | 조치 없음(실제로는 닿지 않는다고 판정) |
+
+### 편차 (2026-11-20 기록)
+
+**R20 — SPEC 3.2 "100행 넘던 표본을 다시 만들면 20행 이하"가 채워지지 않았다.** 100행을 넘던 문서 20건 가운데 6건만 20행 이하가 되고 14건은 넘는다. 그 14건은 미완 행이 25~69개씩이고, 한 에픽은 `blocked`를 백로그로 썼다. 미완 행을 하나도 잃지 않는다는 규칙을 20행 기준보다 앞에 두었다: 미완 행은 수정 전 1,462개, 수정 후 1,462개다. 이월 행 수의 중앙값 / P90 / 최대는 13 / 91 / 237에서 6 / 17 / 74로 줄었다.
+
+**R23 — SPEC 3.3 "`generate` 호출 시 실리는 본문 15KB 이하"는 단일 작업 handoff에서만 채워진다.** 원장이 없는 handoff는 15,339 바이트(상한 15,360 아래 21바이트)이다. Progress Ledger가 있는 handoff는 `generate-ledger.md`도 읽어 21,293 바이트이고 상한을 5,933 바이트 넘는다. 원장 규칙은 멀티 슬라이스 에픽에만 필요해 `generate-ledger.md`에 따로 두고 원장이 있을 때만 읽게 했다. 말뭉치 292건 중 237건이 원장을 가진다. 린트는 두 적재량을 모두 여유 0으로 고정하므로 더 늘면 실패한다. SPEC 3.3 첫 행과 `STAGE3.md` D2 행에 정정을 덧붙였다.
+
+### 알려진 한계 (CHANGELOG `[9.1.0]`에도 있다)
+
+- 보이지 않는 서식 문자(예: 이모지의 폭 없는 결합자)가 든 브랜치 이름은 generate의 Do NOT 원본 선택에서 일치하지 않는다(`list`는 그 문자를 걸러 내고 git 상태는 걸러 내지 않는다). 그러면 이 세션의 항목만 쓴다.
+- 포인터와 자기 항목이 섞인 Do NOT 절(말뭉치 26건)은 따라가지 않는다 — 이전 가드레일이 로드되지 않는다. "Do not"으로 시작할 뿐인 짧은 규칙은 포인터로 잘못 읽힐 수 있다(말뭉치 0건). 최종 리뷰 M4.
+- `carried-over items could not be read: …` 줄은 다음 문서로 이어진다는 규칙이 없고 그 언어도 정해져 있지 않다.
+- 원장: 위 좁은 재검토의 M1·M2. generate Step 4의 추가 보고 줄: 같은 재검토의 M3.
+- 보강을 미룬 것(등록된 워크트리나 `.git`에 쓰기 권한이 있어야 하며, 위협 모델은 handoff 문서다): git 상태가 gitlink 경로의 중첩 저장소로 내려가는 것, 워크트리의 `.git`이 다른 워크트리의 관리 디렉터리를 가리키는 것.
+
+### 남은 것
+
+- **실사용 검증 (`STAGE3.md` Task 15)**: handoff 경로 8개 시나리오(H3·H5·H6의 실사용 확인 포함), 스킬 본문의 경로 확장과 node 부재 시 실패 모양, 그리고 명명된 예외 ②("Partial edits")와 ③(W18). 결과는 이 절 아래에 덧붙인다.
+- **푸시 뒤 CI 첫 실행**: 이 브랜치는 푸시된 적이 없어 CI가 돈 적이 없다. 첫 실행에서 `tests/handoff`가 Node 20에서 통과해야 한다.
+- **릴리스 뒤 관찰 (Task 17)**: 릴리스 14일 뒤 resume의 읽기 호출 수와 읽은 바이트를 SPEC 2.4의 기준선과 견준다(SPEC 3.4).
+- `develop`은 아직 `90fbad7`(9.0.1 병합)이다. "다음 9.0.x" Minor 묶음은 9.0.2로 따로 나가며 아직 들어 있지 않다. 먼저 들어가면 `develop`을 이 브랜치에 병합한다(`STAGE3.md` D10).
+- 좁은 재검토의 M1~M3(위 "알려진 한계")은 이 릴리스에서 고치지 않았다.

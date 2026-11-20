@@ -8,6 +8,199 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
 
 ## [Unreleased]
 
+## [9.1.0] — 2026-11-20
+
+v9 "subtraction", stage 3 (`design/v9-subtraction/SPEC.md` §5, plan
+`design/v9-subtraction/STAGE3.md`): `/handoff` is corrected and slimmed. Its fifteen defects
+(`H1`–`H15`) are fixed, two of them short of the SPEC's completion criterion (see Deviations), its
+contract is split so that a call loads only the part it needs, and its deterministic
+procedures moved out of prose into a Node.js helper script with a test suite. No skill is added
+or removed. **`/handoff` now needs Node.js 20 or later** (see Upgrade notes). Letters and numbers
+are the defect ids of SPEC appendix A (`H1`–`H15`); `R` numbers are rulings made while building
+this stage, recorded with the measurements in `design/v9-subtraction/BASELINE.md` ("3단계 후
+(v9.1)"). Every figure below was measured on the repository's real handoff corpus (292 documents,
+never committed) or from the blob bytes of the committed files.
+
+### Added
+
+- **A helper script for `/handoff`** (`skills/handoff/scripts/handoff.mjs` and its `lib/`
+  modules; Node.js, standard library only). Each command prints one JSON object: `parse`, `next`,
+  `reading-plan`, `git-state`, `harness-state`, `drift`, `ledger-carry`, `latest-epic`,
+  `resolve-path`, `list` and `latest`. The model used to carry these procedures out by hand from
+  prose — collecting git state, resolving the path and a name collision, judging drift, parsing the
+  ledger and `Next :`, listing documents. A failure is a non-zero exit with a message on stderr;
+  the skill shows it and stops, with no prose fallback.
+- **Header fields `**Worktree:**` and `**Dirty files:**`** (H5, H6). `Worktree` is the git
+  top-level (`n/a` outside git); `Dirty files` lists the first 40 dirty paths, then `+N more`.
+- **`Harness : none (<reason>)`** under In Progress (H3, H9), written when
+  `.harness/state.json` is not relevant to the session (see Fixed).
+- **`planned`**, a new Progress Ledger `Status` for a slice that has not started (H8).
+- **Reading Order ranges and a read budget** (H1): `path:START-END` reads those lines and
+  `path §heading` the first section whose heading contains that text; the whole step reads at most
+  128 KiB.
+- **An `ambiguous` form of `Next :`** (H2): `Next : ambiguous — <slice>, <slice>` and, under the
+  briefing block, `(Next : ambiguous — <N> in-progress rows; Next Steps item 1 follows)`.
+- **`scripts/verify_body_budget.py`**, the ninth lint: per-skill `SKILL.md` ceilings, three named
+  `/handoff` loads (`generate`, `generate+ledger`, `resume`) held at their measured size with a
+  hard SPEC cap on `generate`, and a ban on dated measurement markers and planning tags in the
+  `/handoff` contract files (H15).
+- **`tests/handoff/`**, a test suite for the helper and for the text of the `/handoff` contract
+  files (`node tests/handoff/run.mjs`), wired into `.github/workflows/lint.yml`. It runs on
+  invented fixtures; its corpus tools (`tests/handoff/corpus/`) take a folder of real documents
+  as an argument, and the repository holds none.
+- **`design/handoff-diet/RATIONALE.md`**: the measurement history, rejected alternatives and
+  unresolvable citations that used to sit in the `/handoff` contract, with a table that maps each
+  moved passage to where the contract states the rule now (H15).
+
+### Changed
+
+- **The `/handoff` contract is split** (H15). `skills/handoff/SKILL.md` is a dispatcher
+  (6,410 bytes, down from 48,045); `generate` reads `templates/handoff/generate.md` (8,929),
+  `resume` reads `templates/handoff/resume.md` (32,213), and a `generate` that writes a Progress
+  Ledger also reads `templates/handoff/generate-ledger.md` (5,954). A call now loads 15,339 bytes
+  (`generate`), 21,293 (`generate` with a ledger) or 38,623 (`resume`); in 9.0.1 every call loaded
+  all 48,045. The six skill bodies total 329,326 bytes, down from 370,939.
+- **`/handoff` needs Node.js 20 or later.** A helper failure is shown as it is (its stderr) and
+  the command stops.
+- **`Next :`** prints the `Slice :` label first, then the one in-progress row, then the recorded
+  `Docs` (only when the task state is relevant), then Next Steps item 1.
+- **`resume` reads the Reading Order through a plan.** `docs/harness/` paths are allowed; `..`, a
+  `.git` segment, a `:`, a link leaving the repository and a UNC path are refused. A file over
+  2,000 lines or over the budget is read as its first 400 lines plus an outline, and an entry that
+  does not fit is skipped and listed while the later entries are still read. Files are read with
+  the Read tool and recorded paths checked with the Glob tool — never through a shell.
+- **`drift` uses a recorded worktree only when it is registered in this repository and its
+  identity is confirmed**; otherwise the comparison is skipped and the reason printed. Uncommitted
+  work recorded as dirty and now gone is reported as `recorded dirty work not found` (the first 40
+  recorded paths are checked).
+- **A path-less `resume`** picks among the newest day's documents by recorded-commit ancestry on
+  the current branch, and otherwise asks which one (a separate question before the briefing; the
+  gate stays one question).
+- **`list`, `latest` and `latest-epic` skip — and count — file names outside
+  `A-Z a-z 0-9 . _ -`, handoff documents over 4 MiB and unreadable files**; the skill reports the
+  count with each reason.
+- **The slug** is an English kebab-case summary, `[a-z0-9-]`, at most 40 characters, with no
+  transliteration; a taken name is numbered max+1.
+- **The Progress Ledger carries less** (H7, H8, H11). It carries every unfinished row and the 5
+  most recent finished ones, with an `Earlier rows:` pointer to the document that holds the rest.
+  Out-of-enum statuses and empty `Epic` cells are reported. The Epic is proposed by
+  `latest-epic` without asking; an Epic that is not an identifier is not proposed and the reason
+  is reported; `--epic` is passed only for an id the session names.
+- **Do NOT is written in full in every document** (H14); a 9.0.x document whose section is only a
+  pointer is followed one hop.
+- **Document values are data, never command text.** A document's Epic cell, file name or branch
+  name no longer reaches a command line, so a `$(…)` in one runs nothing in Bash or PowerShell.
+  The parser is linear in the size of the document, and a link into `.git` is refused.
+- **Contract citations and one single source follow the split.** `skills/harness/SKILL.md`,
+  `skills/harness-build/SKILL.md`, `templates/_shared/mode_gate.md` and
+  `scripts/verify_git_safety.py`'s allow table name the new files, and `templates/_shared/session_boundary.md`
+  states when `/handoff generate` writes the five-label task record. In
+  `scripts/verify_sync_markers.py` the `handoff-state-record` group's target moved to
+  `templates/handoff/generate.md`; no `min_sites` changed.
+- **Lints and CI.** `scripts/` holds nine lints; `bash .github/scripts/check_lint_wiring.sh` checks
+  all nine are wired, and CI also runs `node tests/handoff/run.mjs` beside the segment stub runner
+  (Node 20).
+
+### Fixed
+
+- **Reading Order read whole, large files skipped (H1).** `resume` read every file in full and
+  skipped any over 2,000 lines — usually the files an epic most needs. The new plan reads ranges,
+  caps the volume and degrades a large file to its start plus an outline. Read volume per
+  document on the real corpus: median 267,475 to 117,344 bytes, P90 519,075 to 128,986; no
+  document that has a readable entry is left with nothing read.
+- **`Next :` ignored the author's label (H2).** It printed the last in-progress ledger row ahead of
+  the `Slice :` label the author wrote. The label now wins: of 62 documents with both, 13 printed a
+  different value before and all 13 print the label now. With no label and two or more in-progress
+  rows it no longer picks one — 57 of the 292 documents (19.5%) print the ambiguous form.
+- **A stale `.harness/state.json` was recorded as the task (H3).** `generate` wrote a task record
+  for any state file, even one of another branch or a finished task, and `resume` offered `/harness` re-entry from it. The helper now judges the
+  state relevant only when the file exists, its branch is the current branch and its `phase` is not
+  `completed`; the five-label record, the re-entry hint and the `Docs` tier of `Next :` all follow
+  that one verdict. A simulation over the corpus cuts the documents that would print a re-entry
+  hint from 38 to 9; the live verdict is made at run time.
+- **`docs/harness/` paths were refused (H4).** `/handoff` had borrowed `/harness`'s path validator,
+  which rejects the folder `/handoff` itself writes under. It has its own four-condition check now;
+  57 of 57 recorded `Docs` paths under `docs/harness/` pass.
+- **Uncommitted work could vanish unnoticed (H5).** The header now lists the dirty paths and
+  `drift` reports one that was dirty when recorded, is not in the working tree now and was touched
+  by no later commit on the branch.
+- **No base directory was defined (H6).** The base of `docs/harness/handoff/` and of a relative
+  Reading Order path is now stated, and the header records `Worktree`. A document written in a
+  linked worktree and resumed from the main tree no longer reads as a branch mismatch; a folder
+  that is not a git work tree compares nothing and says why.
+- **The Progress Ledger swelled (H7).** Every row, finished ones included, was carried forward
+  into every new document. Carried rows per document, median / P90 / max: 13 / 91 / 237 before,
+  6 / 17 / 74 after; no unfinished row is lost (1,462 before, 1,462 after). See Deviations for
+  the one SPEC criterion this does not meet.
+- **No status for a slice not yet started (H8).** `planned` is a new `Status`; `blocked` means
+  waiting on something outside the slice.
+- **A session without harness read as "legacy" (H9).** The Task row of the briefing says
+  `no harness task` or `no record — task state is not a verification target`.
+- **An undefined branch of the approval question (H10).** The gate's first option is defined for
+  one candidate command, for none because item 1 describes work, for none because item 1 names no
+  action, and for several; the question is asked exactly once on every path.
+- **Epic choice and carry-source choice presupposed each other (H11).** The Epic comes from the
+  newest ledger document by `latest-epic`, then the carry is selected by that Epic.
+- **The slug rule stated was not the one applied (H12).** The contract, `resolve-path` and
+  SKILL.md now agree, and SKILL.md says how the rule differs from `templates/_shared/slugify.md`.
+  All 286 non-ASCII titles in the corpus get an ASCII slug.
+- **"Latest" document by modification time alone (H13).** Several documents on one day are told
+  apart by what their recorded commits say about the current branch; modification time is the last
+  tie-breaker. In the corpus 88 same-day groups of documents exist, and 73 of those groups have two
+  or more documents recording one branch.
+- **Do NOT was inherited only by reference (H14).** A document could carry the section only as a
+  pointer to an earlier document's, and a heading variant was not read. The section is written in
+  full each time and a heading variant is read by its prefix.
+- **The contract carried its own history on every call (H15).** Measurement history, rejected
+  alternatives and unresolvable citations moved to `design/handoff-diet/RATIONALE.md`; the lint
+  keeps them out.
+
+### Known limits
+
+- A branch name that holds an invisible format character (an emoji's zero-width joiner, say) no
+  longer matches in `generate`'s choice of the previous Do NOT section: `list` strips such
+  characters and the git state does not. Only the current session's items are written then.
+- A mixed-form Do NOT section (a pointer plus the document's own items; 26 corpus documents) is
+  not followed, so the earlier guardrails are not loaded. A short rule that merely starts with
+  "Do not" can be read as a pointer (none in the corpus).
+- The `carried-over items could not be read: …` line is not required to carry over to the next
+  document, and its language is not specified.
+- Ledger carry: `--doc` without `--epic` that returns `epic: null` (no ledger, or a refused Epic)
+  matches both "re-run `--dir`" and "empty ledger"; either way Step 4 reports it and nothing breaks
+  silently. `--doc` with a session-named `--epic` that the document lacks reports "no source" even
+  though `--dir` might find one.
+- `generate` Step 4's extra report lines ("plus a line per other item Step 1 sends here") have no
+  fixed label and may repeat the same skipped count.
+- Hardening left for later, because it needs write access to a registered worktree or to `.git`
+  and the threat model is the handoff document: `git status` recursing into a nested repository at
+  a gitlink path, and a worktree's `.git` pointed at another worktree's admin directory.
+- The two-week real-use measurement of `resume`'s read calls and bytes (SPEC 3.4) happens after
+  the release.
+
+### Deviations
+
+- **R20 — SPEC 3.2 "a sample of more than 100 rows rebuilt gives 20 rows or fewer" is not met for
+  14 of the 20 documents** that had more than 100 rows: 6 now carry 20 or fewer; the other 14 carry
+  25 to 69 unfinished rows each (one epic used `blocked` as a backlog). The rule never to lose an
+  unfinished row was kept instead: 1,462 unfinished rows before, 1,462 after.
+- **R23 — SPEC 3.3 "at most 15 KB loaded by a `generate` call" holds for a single-task handoff
+  and not for one with a Progress Ledger.** `SKILL.md` plus `generate.md` is 15,339 bytes (cap
+  15,360, 21 bytes under). A handoff with a ledger also loads `generate-ledger.md`, 21,293 bytes,
+  5,933 over the cap; 237 of the 292 corpus documents have a ledger. The lint pins both loads at
+  zero slack. SPEC 3.3 and `STAGE3.md` D2 carry a dated correction.
+
+### Upgrade notes
+
+- **Older handoff documents are read as they are.** Nothing is rewritten or migrated. A 9.0.x
+  document without `Worktree`, `Dirty files` or a `Harness :` line reads as "no record — task state
+  is not a verification target"; a document whose `Do NOT` section is only a pointer is followed
+  one hop. A long ledger is shortened the next time `generate` carries it, not before.
+- **Node.js 20 or later is required for `/handoff`.** Without `node` on the path the helper cannot
+  run and the skill shows the failure and stops; it does not fall back to doing the work by hand.
+  `/harness`, `/deep-review` and `/md-optimize` are unaffected.
+- **The "next 9.0.x" batch of minor fixes ships separately, as 9.0.2.** It is not part of this
+  release.
+
 ## [9.0.1] — 2026-11-18
 
 v9 "subtraction", stage 2 (`design/v9-subtraction/SPEC.md` §5, plan

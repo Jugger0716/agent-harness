@@ -8,8 +8,9 @@ the one outside change that is not marked.
 
 ## Before the version commit
 
-1. **Lint chain and stub tests pass.** Run the `agent-harness-defaults: lint-cmd=` line in
-   `CLAUDE.md`, then `node tests/segment_stubs/run.mjs`. Both exit `0`.
+1. **Lint chain and tests pass.** Run the `agent-harness-defaults: lint-cmd=` line in
+   `CLAUDE.md`, then `node tests/segment_stubs/run.mjs` and `node tests/handoff/run.mjs`
+   (about two minutes on Windows). All three exit `0`.
 2. **Nothing names a removed path.** `python scripts/verify_cited_paths.py` exits `0` (it is part
    of the chain; this line is here because a release is when a removal lands).
 3. **CHANGELOG.** Move the `[Unreleased]` content under a `## [X.Y.Z] — YYYY-MM-DD` heading and

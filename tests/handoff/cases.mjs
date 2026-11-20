@@ -4003,7 +4003,7 @@ const ledgerCarryCases = [
         assert.equal(out.doc, slashed(f))
         same(out.rows, [])
         assert.equal(out.droppedDone, 0)
-        // so the contract's no-source condition (item 5e) and Step 4's broken-chain report both name the empty `rows`
+        // so the contract's no-source condition (item 5e) names the empty `rows`; Step 4 only cites item 5e
         const text = readText('templates', 'handoff', 'generate.md')
         const e = between(ledgerText(), 'e. **No source found**', 'f. **').replace(/\s+/g, ' ')
         assert.match(e, /`doc` is `null`[^)]*or `rows` is empty/)
@@ -5938,8 +5938,11 @@ const commandLineSafetyCases = [
       const e = flatten(between(ledgerText(), 'e. **', 'f. **'))
       // I3: `--doc` without `--epic` carries that document's own Epic; one that is not (a)'s Epic never enters this ledger
       assert.match(b, /`--doc "<path>"`[^.]*an `epic` that is not \(a\)'s Epic is discarded with its rows and counts/)
-      // what replaces a discarded result is the `--dir` form, whose Epic is (a)'s by construction — never an empty
-      // ledger reported as "no source" while the folder has one, and never f/g counts of rows that were not carried
+      // what replaces a discarded result is the `--dir` form. Its Epic is (a)'s only when (a) took it from `latest-epic`
+      // or from an id the session names; when (a)'s Epic is a `docs_path` slug and `latest-epic` proposes none, `--dir`
+      // carries nothing and item 5e's "no source" report applies. What the assertion pins, for a discarded `--doc` carry:
+      // never an empty ledger reported as "no source" while the `--dir` form can carry rows, and never f/g counts of
+      // rows that were not carried
       assert.match(b, /discarded[^.]*run the `--dir` form instead/)
       assert.ok(!/discarded/.test(e), 'item e is decided by the result actually used, not by the discarded one')
       // the refused Epic's `reason` reaches Step 4's report on every path, not only when nothing was carried

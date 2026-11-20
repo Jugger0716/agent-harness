@@ -70,12 +70,12 @@ which it also reads). Both run in the same CI workflow.
 
 | Path | Role |
 |---|---|
-| `skills/<name>/SKILL.md` | one skill = one directory = one contract file |
+| `skills/<name>/SKILL.md` | one skill = one directory = one contract file; `/handoff` is the exception — its `SKILL.md` is a dispatcher and the contract body is split by sub-command into `templates/handoff/` |
 | `skills/harness{,-gate,-build}/SKILL.md` | one contract split three ways (C5, 2026-09-07): `/harness` owns Steps 1–2.6 (the Step 2.6 converge loop included) plus §Approval Gate — HARD GATE #1 rendered in-session, the default for every new session since harness-converge S2, which chains into `/harness-build` (`--fast` is its three-option variant; §Fast Gate is now a pointer) — `/harness-gate` owns Step 3 with no `Bash`/`Write`/`Edit`/`Glob` and gates only a `--separate-gate` session, `/harness-build` owns Steps 3.5–8 and, since harness-converge S3, §Epic Slice Chain — an epic's slices chained in one turn, each still approved at its own §Approval Gate, a clean end committed without asking. Since the v8.14 prompt diet most of what they shared lives in `templates/_shared/` single sources they cite by name; only four `hx-*` BLOCK groups remain byte-identical (`verify_block_sync.py`), for text that must stay inline. §Architecture Principles #3·#5·#6 and §User Interaction Rules are duplicated WITHOUT a sync group — disclosed here, to be blocked the day they drift |
 | `skills/handoff/scripts/` | the `/handoff` helper — `handoff.mjs` (one JSON object per sub-command) and its `lib/` modules; a Node script the skill runs instead of describing the procedure in prose; on failure the skill reports the error and stops, with no prose fallback |
 | `templates/_shared/` | cross-skill single sources (`mode_gate.md`, `status_format.md`, `project_defaults.md`, `session_conflict.md`, `orchestrator_contract.md`, `output_language.md`, `session_recovery.md`, `session_boundary.md`, `run_style.md`, `scale_assessment.md`, `path_validator.md`, `architecture_principles.md`, `slugify.md`, `segment_launch.md`, ...) |
 | `templates/harness/` | `/harness`-only procedures and static payloads read on demand (`doctor.md`, `state_schema.md`, `setup_summary.md`, `setup_prompts.md`, `auto_revise.md`, `spec_render.md`, `plan_segment_call.md`, `plan_critic_dispatch.md`, `plan_critic_failures.md`, and — since harness-converge S1 — `converge.md`, the Step 2.6 converge loop's single source, with its two sub-agent templates `converge_review.md` and `converge_verify.md`) — the v8.14 prompt diet's destination for everything that is not an execution rule |
-| `templates/<skill>/` | skill-specific prompt templates |
+| `templates/<skill>/` | skill-specific prompt templates; `templates/handoff/` (`generate.md`, `generate-ledger.md`, `resume.md`) holds the `/handoff` contract bodies, each read only by the sub-command that needs it |
 | `templates/planner/` | `/harness` planner templates; four of them carry the BLOCK groups `verify_block_sync.py` compares against `templates/_shared/` |
 | `templates/{generator,verify,evaluator}/` | `/harness` only, despite the role-based naming |
 | `workflows/<skill>.<segment>.workflow.js` | native Workflow segment; the naming pattern is fixed |
@@ -152,9 +152,10 @@ frontmatter is the plugin's exposure contract, so treat it as part of the skill'
 ## Verification
 
 The nine lints under `scripts/`, plus `.github/scripts/check_lint_wiring.sh` and the CI wiring
-in `.github/workflows/lint.yml`, are the **static** verification layer; the one static check outside
-it is the set of assertions on the text of the `/handoff` contract files inside `tests/handoff/`
-(the dated-marker ban lives there and, as a twin, in `verify_body_budget.py`). The behavioural layer
+in `.github/workflows/lint.yml`, are the **static** verification layer; the static checks outside
+it are the assertions inside `tests/handoff/` on the text of the `/handoff` contract files (the
+dated-marker ban lives there and, as a twin, in `verify_body_budget.py`) and the U+FEFF scan of
+the helper and test sources (`sources-carry-no-literal-bom-character`). The behavioural layer
 is two separate suites, neither part of the `lint-cmd` chain: the segment stub tests under
 `tests/segment_stubs/` cover the Workflow segments only, and the rest of `tests/handoff/` covers the
 `/handoff` helper scripts:

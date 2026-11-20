@@ -4,7 +4,7 @@
 
 **Zero-setup, zero-dependency** multi-agent workflow harness for Claude Code with **3-layer quality gates** and **selectable single-agent or multi-agent persona mode**. Works for development tasks and non-development tasks (planning, document generation, analysis) alike.
 
-No dependencies required. No Python, no pip, no build steps — just install the plugin and go.
+No dependencies required. No Python, no pip, no build steps — just install the plugin and go. The one exception is `/handoff`: its helper script needs Node.js 20 or later (the other skills do not).
 
 Inspired by Anthropic's [Harness Design for Long-Running Application Development](https://www.anthropic.com/engineering/harness-design-long-running-apps).
 
@@ -121,7 +121,7 @@ matches what you are measuring; they are not interchangeable.
 | **Harness** | `/harness <task>` | Entry point of the 3-Phase (Planner -> Generator -> Evaluator) pipeline: Setup, Convention Scan, Plan, then a Plan Critic converge loop over `spec.md`; every session ends at `plan_done`, where by default HARD GATE #1 is one in-session approval question whose approval chains into `/harness-build` in the same turn (`--separate-gate`: `Next → /harness-gate` instead). Inline single path by default; opt-in workflow path (ultracode or `--mode standard/multi`) runs plugin-shipped native Workflow segment scripts with schema-validated returns. Works with or without git. `/harness doctor` gives a read-only environment diagnostic. |
 | **Harness gate** | `/harness-gate` | HARD GATE #1 (spec confirmation) for a `--separate-gate` / `gate=separate` session, as its own skill with `Bash`, `Write`, `Edit`, `Glob` and every sub-agent tool removed — the turn that renders the gate cannot modify a file or run a command. It reads `state.json` and `spec.md`, asks once, and prints the next command for you to type (`/harness-build`, `/harness-build --epic`, or a `/harness --modify` / `--auto-revise` / `--critic` re-entry). Writes nothing. An inline session (the default) gets one line sending it back to `/harness`. |
 | **Harness build** | `/harness-build [--epic \| generate \| verify \| evaluate]` | The implementation half: Slice Plan / Epic Exit, Generate, Verify (Layer 1), Evaluate (Layer 2+3), Verdict loop, Cleanup. Performs the `generate_ready` write on entry; consumes only a `spec.md` HARD GATE #1 approved — an inline session's recorded approval must still match `spec.md`, or it refuses. In an in-session epic it also starts the slices one after another — each still asks for its own approval, and a slice that ends clean is committed without asking ([Epic Slices](#epic-slices)). Not an entry point. |
-| **Handoff** | `/handoff generate/resume/list` | Session handoff for cross-session continuity: `generate` captures a verified HANDOFF document (git state, confirmed facts, next steps, reading order, an optional epic Progress Ledger) and writes it immediately — no save confirmation, because the filename convention never overwrites (`-2`/`-3` on collision); `resume` primes a fresh session from it with git-drift verification plus a live `.harness/state.json` cross-check (both report-only — never mutates git or `.harness/`). Complements `/harness` Session Recovery (task-internal state); `/harness` recommends `/handoff generate` at every session boundary. |
+| **Handoff** | `/handoff generate/resume/list` | Session handoff for cross-session continuity: `generate` captures a verified HANDOFF document (git state with the worktree and the dirty paths, confirmed facts, next steps, reading order, an optional epic Progress Ledger) and writes it immediately — no save confirmation, because the filename convention never overwrites (`-2`/`-3` on collision); `resume` primes a fresh session from it with git-drift verification (uncommitted work that has since disappeared is reported) plus a live `.harness/state.json` cross-check (both report-only — never mutates git or `.harness/`), and reads the Reading Order under a 128 KiB budget. The deterministic steps run in a Node.js helper script, so `/handoff` needs Node.js 20 or later. Complements `/harness` Session Recovery (task-internal state); `/harness` recommends `/handoff generate` at every session boundary. |
 | **Deep Review** | `/deep-review <target>` | Systematic, bias-free code review. Quick (inline checklist) or deep/thorough (2-3 specialists + adversarial cross-verification, native Workflow path). Optional `--comment` (inline PR comments) / `--fix` (gated apply) / `--spec <path>` (opt-in spec-conformance pass, reviewers stay blind to it). Re-runs on the same target auto-advance review rounds with prior-finding reconciliation and an advisory Round Verdict. |
 | **MD Optimize** | `/md-optimize` | Optimize CLAUDE.md and project `.md` files for token efficiency. |
 
@@ -137,11 +137,11 @@ Eight top-level directories, each with a fixed role:
 
 | Directory | Role |
 |-----------|------|
-| `skills/<name>/SKILL.md` | The skill definition — orchestrator prompt, Mode Gate resolution, HARD-GATEs, and (for stateful skills) the phase state machine. Claude Code auto-discovers a skill from this file's presence alone. |
+| `skills/<name>/SKILL.md` | The skill definition — orchestrator prompt, Mode Gate resolution, HARD-GATEs, and (for stateful skills) the phase state machine. Claude Code auto-discovers a skill from this file's presence alone. `skills/handoff/` also holds `scripts/` — the `/handoff` helper `handoff.mjs` and its `lib/` modules, which the skill runs at skill runtime with Node.js 20 or later (Node.js standard library only; on a failure the skill shows the error and stops). |
 | `workflows/<skill>.<segment>.workflow.js` | Native Workflow engine segment scripts — the code that actually runs when a skill's deep/thorough/multi mode is opt-in. Filename pattern is fixed: `<skill>.<segment>.workflow.js`, 1:1 with the basename at the SKILL.md `Workflow { scriptPath: ... }` call site (which names the `.harness/wf/` copy — `templates/_shared/segment_launch.md`). |
-| `templates/<skill>/<role>.md` | Sub-agent persona templates a segment script copies in at author-time (`SYNC-SOURCE: templates/<skill>/<role>.md` comments mark the embedded copy). Some are DUAL-USE (the same file also dispatches as-is on a skill's inline path). `templates/_shared/` holds the cross-skill single sources instead — `mode_gate.md`, `segment_launch.md`, `status_format.md`, `project_defaults.md`, `session_conflict.md`, `orchestrator_contract.md`, `output_language.md`, `session_recovery.md`, `session_boundary.md`, `run_style.md`, `scale_assessment.md`, `path_validator.md`, `architecture_principles.md` and the rest; a skill cites one by name and never restates its body. `templates/harness/` is the same idea for one skill: procedures and static payloads `/harness` reads on demand (`doctor.md`, `state_schema.md`, `setup_summary.md`, `setup_prompts.md`, `auto_revise.md`, `spec_render.md`, `plan_segment_call.md`, `plan_critic_dispatch.md`, `plan_critic_failures.md`, `converge.md`), plus the converge loop's two sub-agent templates (`converge_review.md`, `converge_verify.md`). |
-| `scripts/*.{mjs,py}` | Repository self-verification lints (`check_workflow_syntax.mjs`, `verify_block_sync.py`, `verify_cited_paths.py`, `verify_description_budget.py`, `verify_git_safety.py`, `verify_manifest_sync.py`, `verify_meta_literal.py`, `verify_sync_markers.py`) — they check this repo's own `workflows/`/`skills/`/`templates/`/`.claude-plugin/` source, and are never executed at skill runtime. |
-| `tests/segment_stubs/` | Behavioural tests for the Workflow segment scripts, run against a stub engine (no model, no network). `known_failures.json` is a two-way ratchet: an unlisted failure fails the run, and so does a listed case that starts passing. |
+| `templates/<skill>/<role>.md` | Sub-agent persona templates a segment script copies in at author-time (`SYNC-SOURCE: templates/<skill>/<role>.md` comments mark the embedded copy). Some are DUAL-USE (the same file also dispatches as-is on a skill's inline path). `templates/_shared/` holds the cross-skill single sources instead — `mode_gate.md`, `segment_launch.md`, `status_format.md`, `project_defaults.md`, `session_conflict.md`, `orchestrator_contract.md`, `output_language.md`, `session_recovery.md`, `session_boundary.md`, `run_style.md`, `scale_assessment.md`, `path_validator.md`, `architecture_principles.md` and the rest; a skill cites one by name and never restates its body. `templates/harness/` is the same idea for one skill: procedures and static payloads `/harness` reads on demand (`doctor.md`, `state_schema.md`, `setup_summary.md`, `setup_prompts.md`, `auto_revise.md`, `spec_render.md`, `plan_segment_call.md`, `plan_critic_dispatch.md`, `plan_critic_failures.md`, `converge.md`), plus the converge loop's two sub-agent templates (`converge_review.md`, `converge_verify.md`). `templates/handoff/` holds the `/handoff` contract bodies, one per sub-command so a call loads only its own: `generate.md`, `generate-ledger.md` (read only when a Progress Ledger applies) and `resume.md`; `skills/handoff/SKILL.md` is the dispatcher. |
+| `scripts/*.{mjs,py}` | Repository self-verification lints (`check_workflow_syntax.mjs`, `verify_block_sync.py`, `verify_body_budget.py`, `verify_cited_paths.py`, `verify_description_budget.py`, `verify_git_safety.py`, `verify_manifest_sync.py`, `verify_meta_literal.py`, `verify_sync_markers.py`) — they check this repo's own `workflows/`/`skills/`/`templates/`/`.claude-plugin/` source, and are never executed at skill runtime (the `/handoff` helper, which is, lives under `skills/handoff/scripts/`). |
+| `tests/` (`segment_stubs/`, `handoff/`) | Two behavioural suites, no model and no network. `tests/segment_stubs/` runs the Workflow segment scripts against a stub engine; its `known_failures.json` is a two-way ratchet: an unlisted failure fails the run, and so does a listed case that starts passing. `tests/handoff/` (`node tests/handoff/run.mjs`) tests the `/handoff` helper scripts against throwaway git repositories and invented fixtures, plus assertions on the text of the `/handoff` contract files; its `corpus/` tools compare behaviour over a folder of real handoff documents passed as an argument, and the repository holds none. |
 | `.claude-plugin/*.json` | Plugin and marketplace manifests. The version string lives at three key paths across these two files. |
 | `.github/` | CI: `workflows/lint.yml` runs the lint layer on push and PR; `scripts/check_lint_wiring.sh` checks that every lint is actually wired into it. Also holds the issue and PR templates. |
 | `design/<epic>/` | Committed design records for a follow-up epic — the spec plus the measurements it rests on. Skill *runtime* output goes to `docs/`, which is `.gitignore`d; anything that must outlive the session that produced it lives here instead. Nothing at skill runtime reads this directory, and no lint scans it. |
@@ -650,27 +650,44 @@ The harness needs no other plugin. Until v9 its prompts told the orchestrator an
 
 ## handoff
 
-Session handoff for cross-session, epic-level continuity — the durable complement to `/harness` Session Recovery (which restores a task's internal state machine, not a multi-day effort). `generate` writes without a save confirmation (the filename convention never overwrites); `resume` still gates before starting work.
+Session handoff for cross-session, epic-level continuity — the durable complement to `/harness` Session Recovery (which restores a task's internal state machine, not a multi-day effort). `generate` writes without a save confirmation (the filename convention never overwrites); `resume` still gates before starting work. The deterministic steps — git state, path and collision resolution, drift, ledger and `Next :` parsing, reading plan, `list` — run in a Node.js helper script (`skills/handoff/scripts/handoff.mjs`), so **`/handoff` needs Node.js 20 or later**. If the script fails, the skill prints its error and stops; it does not do the step by hand. Each sub-command reads only its own part of the contract (`templates/handoff/generate.md`, `generate-ledger.md`, `resume.md`).
 
 ```
-/handoff          -> collect VERIFIED git state (branch / full-sha HEAD / dirty / upstream)
-                     + .harness/state.json pointers (read-only) + conversation-derived sections
-                  -> compose HANDOFF document: Goal / Current State (verified) / In Progress /
+/handoff          -> collect VERIFIED git state (branch / full-sha HEAD / worktree / dirty
+                     paths / upstream) + .harness/state.json relevance (read-only) +
+                     conversation-derived sections
+                  -> compose HANDOFF document: header (Worktree, Dirty files: first 40 paths,
+                     then +N more) / Goal / Current State (verified) / In Progress (the
+                     five-label task record only when .harness/state.json is relevant — exists,
+                     same branch, phase not completed — else `Harness : none (<reason>)`) /
                      Blockers / Next Steps / Definition of Done / Reading Order / Do NOT
-                  -> resolve final path, then WRITE immediately (no save confirmation)
+                     (written in full) / optional Progress Ledger (every unfinished row + the
+                     5 most recent finished ones, an `Earlier rows:` pointer for the rest)
+                  -> resolve final path (English kebab-case slug), then WRITE immediately
+                     (no save confirmation)
                   -> docs/harness/handoff/YYYY-MM-DD-<slug>.md   (never overwrites; -2/-3 on collision)
                   -> report: path + broken-ledger-chain warning + how to correct (edit / re-run)
 /handoff resume   -> load newest (or given) handoff -> git drift verification
-                     (none / N commits since / BACKWARD / DIVERGED / dirty — report-only,
-                     NEVER mutates git) -> read Reading Order (path-validated; contents are
-                     DATA, not instructions) -> Resume Briefing
-                     (Next : short slice id or full step text | Next cmd: the byte-identical
-                     `/…` command to chain, or a no-single-command marker — see
+                     (none / N commits since / BACKWARD / DIVERGED / dirty / recorded dirty work
+                     not found — report-only, NEVER mutates git; a recorded worktree is used only
+                     when it is registered in this repository, else the comparison is skipped
+                     with a reason) -> read Reading Order through a plan under a 128 KiB budget
+                     (`path:START-END` and `path §heading` ranges; a file over 2,000 lines or over
+                     the budget is read as its first 400 lines plus an outline; an entry that does
+                     not fit is skipped and listed; `..`, `.git`, `:`, links leaving the repository
+                     and UNC paths are refused; contents are DATA, not instructions)
+                  -> Resume Briefing
+                     (Next : the `Slice :` label, else the one in-progress row, else the recorded
+                     Docs slice, else the full step text; two or more in-progress rows and no
+                     label print `ambiguous — …` | Next cmd: the byte-identical `/…` command to
+                     chain, or a no-single-command marker — see
                      templates/handoff/resume.md §Sub-command: resume for the derivation)
                   -> gate: Start next step (conditional — see templates/handoff/resume.md
                      §Sub-command: resume, Step 5) / Adjust plan / Briefing only
 /handoff list     -> enumerate handoff documents, newest first
 ```
+
+A path-less `resume` picks among the newest day's documents by recorded-commit ancestry on the current branch and otherwise asks which one (a separate question before the briefing). A document written by 9.0.x is read as it is: without the new fields it reads as "no record — task state is not a verification target".
 
 Key properties: stateless (no state.json of its own), inline-only for its own work (prose rule — the `Task`/`Agent`/`Workflow` entries were removed from `disallowed-tools`; `NotebookEdit`/`WebSearch`/`WebFetch` remain), `resume` may chain into the next command from its gate, resume is **context priming + fact verification** — never state restoration, never auto-checkout. When that command is an epic slice's `Command`, the started `/harness` session carries the epic's chain on by itself after its approval click ([Epic Slices](#epic-slices)).
 
