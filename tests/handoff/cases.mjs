@@ -3293,7 +3293,8 @@ const stateContractCases = [
       // generate.md reads the ledger file only when a ledger applies, never unconditionally
       const item5 = flatten(between(text, '5. **Progress Ledger', '### Step 2'))
       assert.match(item5, /only when[^.]*multi-slice epic[^.]*read `\{CLAUDE_PLUGIN_ROOT\}\/templates\/handoff\/generate-ledger\.md`/)
-      assert.equal(text.split('generate-ledger.md').length - 1, 2, 'generate.md names the ledger file at the trigger and in Step 4 only')
+      // (Step 4 cites "item 5e" by number since the re-review residual fix; the ledger file is named once, at the trigger)
+      assert.equal(text.split('generate-ledger.md').length - 1, 1, 'generate.md names the ledger file at the trigger only')
     },
   },
   {
@@ -4006,7 +4007,10 @@ const ledgerCarryCases = [
         const text = readText('templates', 'handoff', 'generate.md')
         const e = between(ledgerText(), 'e. **No source found**', 'f. **').replace(/\s+/g, ' ')
         assert.match(e, /`doc` is `null`[^)]*or `rows` is empty/)
-        assert.match(between(text, '### Step 4', null).replace(/\s+/g, ' '), /returned `doc` `null` or no `rows`/)
+        // Step 4 points at item 5e and does not restate it: a restatement drifted once (the re-review's Important 2)
+        const step4 = between(text, '### Step 4', null).replace(/\s+/g, ' ')
+        assert.match(step4, /no carry-forward source was found \(item 5e; a broken chain is never silent\)/)
+        assert.ok(!/returned `doc` `null`/.test(step4), 'Step 4 does not restate item 5e')
       })
     },
   },
@@ -4608,8 +4612,9 @@ const ledgerContractCases = [
       // Step 4 still reports the case where no carry-forward source was found, and names the script field behind it
       const step4 = between(text, '### Step 4', null).replace(/\s+/g, ' ')
       assert.match(step4, /no carry-forward source/i)
-      assert.ok(step4.includes('`doc`') && step4.includes('`null`'))
-      assert.match(step4, /returned `doc` `null` or no `rows`/)
+      // the condition behind it is item 5e's own (`doc` null or no `rows`), cited by name rather than restated
+      assert.match(step4, /\(item 5e;/)
+      assert.match(flatten(between(ledgerText(), 'e. **No source found**', 'f. **')), /`doc` is `null`[^)]*or `rows` is empty/)
       assert.match(step4, /outside the enum/i)
     },
   },
@@ -5915,10 +5920,14 @@ const commandLineSafetyCases = [
     id: 'generate-contract-reports-what-list-skipped-when-it-picks-the-do-not-source',
     run: async () => {
       // I1: the `list` that picks the previous handoff can skip the newest file; that is said, never inherited silently
-      const item = flatten(between(readText('templates', 'handoff', 'generate.md'), '- Do NOT —', '5. **Progress Ledger'))
-      assert.match(item, /`skippedNames`[^.]*`skippedFiles`[^.]*above 0[^.]*Step 4's report[^.]*`reason`/)
+      const text = readText('templates', 'handoff', 'generate.md')
+      const item = flatten(between(text, '- Do NOT —', '5. **Progress Ledger'))
+      assert.match(item, /`skippedNames`\/`skippedFiles` count above 0[^.]*Step 4's report[^.]*`reason`/)
       // the pointed-to lines are read with the Read tool: `file` is a value a document chose
       assert.match(item, /ONLY those lines of `file` with the Read tool/)
+      // Step 4's closed template has a place for what Step 1 sends there (item 4 here; item 5a and 5h of the ledger file)
+      const step4 = flatten(between(text, '### Step 4', '```'))
+      assert.match(step4, /all of it, plus a line per other item Step 1 sends here:/)
     },
   },
   {
@@ -5928,8 +5937,11 @@ const commandLineSafetyCases = [
       const b = flatten(between(ledgerText(), 'b. **', 'c. **'))
       const e = flatten(between(ledgerText(), 'e. **', 'f. **'))
       // I3: `--doc` without `--epic` carries that document's own Epic; one that is not (a)'s Epic never enters this ledger
-      assert.match(b, /`--doc "<path>"`[^.]*an `epic` that is not \(a\)'s Epic is discarded with its rows/)
-      assert.match(e, /discarded \(b\)/)
+      assert.match(b, /`--doc "<path>"`[^.]*an `epic` that is not \(a\)'s Epic is discarded with its rows and counts/)
+      // what replaces a discarded result is the `--dir` form, whose Epic is (a)'s by construction — never an empty
+      // ledger reported as "no source" while the folder has one, and never f/g counts of rows that were not carried
+      assert.match(b, /discarded[^.]*run the `--dir` form instead/)
+      assert.ok(!/discarded/.test(e), 'item e is decided by the result actually used, not by the discarded one')
       // the refused Epic's `reason` reaches Step 4's report on every path, not only when nothing was carried
       assert.match(a, /not an identifier[^.]*say so, with that `reason`, in Step 4's report/)
     },
@@ -5942,10 +5954,16 @@ const commandLineSafetyCases = [
       const b = flatten(between(text, '(b) **Prose-recorded path check**', 'Both checks are report-only'))
       assert.match(b, /existence only[^.]*with the Glob tool[^.]*never a shell command/)
       // Glob tells a missing directory (an error) from an empty one (no match); the contract says which is which
-      assert.match(b, /`path`[^.]*error[^.]*missing/)
+      assert.match(b, /`path`[^.]*error[^.]*not a directory[^.]*missing/)
       const item3 = flatten(between(text, '3. **`docs_path` existence**', '4. **Never auto-correct'))
-      assert.match(item3, /still exists with the Glob tool/)
-      assert.match(item3, /entry names one level deep[^.]*same Glob call/)
+      assert.match(item3, /still exists with the Glob tool[^.]*never a shell command/)
+      // Glob recurses and cuts its list at 100 files, oldest first: item 3 asks for `slice_plan.md` by name and counts
+      // only a match directly in that directory, so neither a nested copy nor a long folder decides item 1
+      assert.match(item3, /pattern `slice_plan\.md`/)
+      assert.match(item3, /only a match directly in that directory/)
+      assert.ok(!/one level deep/.test(item3), 'no claim that Glob stops one level deep')
+      const item1 = flatten(between(text, '1. **`.harness/state.json` existence**', '2. **Relevance and phase match**'))
+      assert.match(item1, /item 3 below finds `slice_plan\.md` directly in that directory/)
       // every planned `file` is read with the Read tool, never through a shell
       const step4 = flatten(between(text, '### Step 4', '### Step 5'))
       assert.match(step4, /every `file` with the Read tool[^.]*never[^.]*shell/)

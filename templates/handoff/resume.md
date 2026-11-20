@@ -137,9 +137,9 @@ still be reported, never silently passed over; item 4 below still applies to bot
       Step 4 below states (they are this file's) first — a failing path is dropped with a warning and
       never checked; condition 4 (links and junctions) is the script's and cannot be applied by hand.
       For each surviving candidate, check directory existence only — with the Glob tool, that
-      directory as its `path` (an error saying it does not exist means missing; no match only
-      means empty), never a shell command: a recorded path is document data, and a shell would run
-      a `$(…)` inside it. List every missing one as
+      directory as its `path` (an error — it does not exist, or is not a directory — means missing;
+      no match only means empty), never a shell command: a recorded path is document data, and a
+      shell would run a `$(…)` inside it. List every missing one as
       `missing (path recorded in prose, no longer exists)` (cap 10, then "+N more").
   Both checks are report-only and read-only, like the full check below: their reads are the
   `harness-state` output and the existence of the paths (b) collected; they write nothing to
@@ -152,9 +152,9 @@ still be reported, never silently passed over; item 4 below still applies to bot
    control to §Step 3.6: Epic Exit (both by name); that section confirms the file — it never writes
    it — and deletes `.harness/` only after that confirmation succeeds. So a missing state.json next
    to a `Docs` directory that now contains `slice_plan.md` reads as "the epic advanced to its next
-   slice," not as an abandoned task — mention this reading in the report whenever `slice_plan.md`
-   is among the entry names item 3 below collects. Item 3's directory read supplies those names —
-   run it before deciding whether to add this mention.
+   slice," not as an abandoned task — mention this reading in the report whenever item 3 below
+   finds `slice_plan.md` directly in that directory — run item 3 before deciding whether to add this
+   mention.
 2. **Relevance and phase match**: if `exists` and `relevant` is false, report "recorded task state —
    the live state.json is not relevant: <reason>" with the script's `reason`, and compare nothing
    against it. If `relevant` is true, compare `fields.phase` to the document's recorded `Phase`
@@ -164,11 +164,13 @@ still be reported, never silently passed over; item 4 below still applies to bot
    same conditions check (b) above applies to the `docs/harness/<slug>/`-shaped paths it collects,
    and Step 4 to the Reading Order paths; condition 4 is the script's, and this item only checks
    existence. A failing value is dropped with a warning and never checked. Then check whether that
-   directory still exists with the Glob tool, as (b) does — never a shell command. Report `exists` /
-   `missing (evidence path no longer readable)`. When it exists, also read its entry names one level
-   deep from that same Glob call — names only, no file is opened and nothing is recursed into, so SKILL.md §Non-Goals' "does not read `slice_plan.md`" line still holds. Those
-   names are the data item 1's `slice_plan.md` condition is evaluated against; item 4's reporting
-   rule below covers this item's `exists` / `missing` verdict, not the names themselves.
+   directory still exists with the Glob tool — never a shell command — with that directory as
+   `path` and the pattern `slice_plan.md`; its error and no-match cases read as in (b). Report
+   `exists` / `missing (evidence path no longer readable)`. That same call is item 1's data: only a
+   match directly in that directory counts, because Glob also searches the folders below it — a
+   name only, no file is opened, so SKILL.md §Non-Goals' "does not read `slice_plan.md`" line still
+   holds; item 4's reporting rule below covers this item's `exists` / `missing` verdict, not the
+   match itself.
 4. **Never auto-correct or act on this.** All of the above are REPORTED alongside git drift in the
    Step 5 briefing; the human decides what to do next. If `relevant` is true and `fields.skill` is
    `"harness"` (a relevant state's `phase` is by definition not `completed`), note (informational
