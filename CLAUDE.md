@@ -18,7 +18,7 @@ stub tests under `tests/segment_stubs/` and the `/handoff` helper-script tests u
 | Prompt templates | Markdown | `templates/` |
 | Workflow segments | JavaScript, engine-hosted | `workflows/*.workflow.js`; only `export const meta` is allowed as module syntax |
 | Lint | Python 3, stdlib only (`pathlib`, `re`, `hashlib`, `argparse`) | `scripts/*.py` |
-| Helper script | Node.js (ESM, stdlib only) | `skills/handoff/scripts/handoff.mjs` |
+| Helper script | Node.js 20+ (ESM, stdlib only) | `skills/handoff/scripts/handoff.mjs` |
 | Syntax check | Node.js | `scripts/check_workflow_syntax.mjs` |
 | Manifest | `.claude-plugin/plugin.json`, `.claude-plugin/marketplace.json` | version lives at **3 key paths** — see Important Notes |
 

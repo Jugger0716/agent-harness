@@ -29,7 +29,8 @@ never committed) or from the blob bytes of the committed files.
   `resolve-path`, `list` and `latest`. The model used to carry these procedures out by hand from
   prose — collecting git state, resolving the path and a name collision, judging drift, parsing the
   ledger and `Next :`, listing documents. A failure is a non-zero exit with a message on stderr;
-  the skill shows it and stops, with no prose fallback.
+  the skill shows it and stops, with no prose fallback — except `resolve-path`'s exit 1 asking
+  for an English slug, which is answered once and retried.
 - **Header fields `**Worktree:**` and `**Dirty files:**`** (H5, H6). `Worktree` is the git
   top-level (`n/a` outside git); `Dirty files` lists the first 40 dirty paths, then `+N more`.
 - **`Harness : none (<reason>)`** under In Progress (H3, H9), written when
@@ -61,14 +62,15 @@ never committed) or from the blob bytes of the committed files.
   (`generate`), 21,293 (`generate` with a ledger) or 38,623 (`resume`); in 9.0.1 every call loaded
   all 48,045. The six skill bodies total 329,326 bytes, down from 370,939.
 - **`/handoff` needs Node.js 20 or later.** A helper failure is shown as it is (its stderr) and
-  the command stops.
+  the command stops (the one retry is `resolve-path` asking for an English slug).
 - **`Next :`** prints the `Slice :` label first, then the one in-progress row, then the recorded
   `Docs` (only when the task state is relevant), then Next Steps item 1.
-- **`resume` reads the Reading Order through a plan.** `docs/harness/` paths are allowed; `..`, a
-  `.git` segment, a `:`, a link leaving the repository and a UNC path are refused. A file over
-  2,000 lines or over the budget is read as its first 400 lines plus an outline, and an entry that
-  does not fit is skipped and listed while the later entries are still read. Files are read with
-  the Read tool and recorded paths checked with the Glob tool — never through a shell.
+- **`resume` reads the Reading Order through a plan.** `docs/harness/` paths are allowed; an
+  absolute path outside the repository, `..`, a `.git` segment, a `:` inside a segment, a link
+  leaving the repository and a UNC path are refused. A file over 2,000 lines or over the budget is
+  read as its first 400 lines plus an outline, and an entry that does not fit is skipped and listed
+  while the later entries are still read. Files are read with the Read tool and recorded paths
+  checked with the Glob tool — never through a shell.
 - **`drift` uses a recorded worktree only when it is registered in this repository and its
   identity is confirmed**; otherwise the comparison is skipped and the reason printed. Uncommitted
   work recorded as dirty and now gone is reported as `recorded dirty work not found` (the first 40
@@ -76,7 +78,7 @@ never committed) or from the blob bytes of the committed files.
 - **A path-less `resume`** picks among the newest day's documents by recorded-commit ancestry on
   the current branch, and otherwise asks which one (a separate question before the briefing; the
   gate stays one question).
-- **`list`, `latest` and `latest-epic` skip — and count — file names outside
+- **`list`, `latest`, `latest-epic` and `ledger-carry --dir` skip — and count — file names outside
   `A-Z a-z 0-9 . _ -`, handoff documents over 4 MiB and unreadable files**; the skill reports the
   count with each reason.
 - **The slug** is an English kebab-case summary, `[a-z0-9-]`, at most 40 characters, with no
@@ -88,14 +90,16 @@ never committed) or from the blob bytes of the committed files.
   is reported; `--epic` is passed only for an id the session names.
 - **Do NOT is written in full in every document** (H14); a 9.0.x document whose section is only a
   pointer is followed one hop.
-- **Document values are data, never command text.** A document's Epic cell, file name or branch
-  name no longer reaches a command line, so a `$(…)` in one runs nothing in Bash or PowerShell.
+- **Document values are data, never command text.** A document's Epic cell and branch name no
+  longer reach a command line, and a file name does only when it is inside `A-Z a-z 0-9 . _ -`
+  (any other is skipped and counted), so a `$(…)` in a document value runs nothing in Bash or
+  PowerShell.
   The parser is linear in the size of the document, and a link into `.git` is refused.
 - **Contract citations and one single source follow the split.** `skills/harness/SKILL.md`,
   `skills/harness-build/SKILL.md`, `templates/_shared/mode_gate.md` and
-  `scripts/verify_git_safety.py`'s allow table name the new files, and `templates/_shared/session_boundary.md`
-  states when `/handoff generate` writes the five-label task record. In
-  `scripts/verify_sync_markers.py` the `handoff-state-record` group's target moved to
+  `scripts/verify_git_safety.py`'s allow table name the new files, and
+  `templates/_shared/session_boundary.md` states when `/handoff generate` writes the five-label task
+  record. In `scripts/verify_sync_markers.py` the `handoff-state-record` group's target moved to
   `templates/handoff/generate.md`; no `min_sites` changed.
 - **Lints and CI.** `scripts/` holds nine lints; `bash .github/scripts/check_lint_wiring.sh` checks
   all nine are wired, and CI also runs `node tests/handoff/run.mjs` beside the segment stub runner
@@ -113,16 +117,17 @@ never committed) or from the blob bytes of the committed files.
   different value before and all 13 print the label now. With no label and two or more in-progress
   rows it no longer picks one — 57 of the 292 documents (19.5%) print the ambiguous form.
 - **A stale `.harness/state.json` was recorded as the task (H3).** `generate` wrote a task record
-  for any state file, even one of another branch or a finished task, and `resume` offered `/harness` re-entry from it. The helper now judges the
-  state relevant only when the file exists, its branch is the current branch and its `phase` is not
-  `completed`; the five-label record, the re-entry hint and the `Docs` tier of `Next :` all follow
-  that one verdict. A simulation over the corpus cuts the documents that would print a re-entry
-  hint from 38 to 9; the live verdict is made at run time.
+  for any state file, even one of another branch or a finished task, and `resume` offered `/harness`
+  re-entry for an unfinished task of another branch. The helper now judges the state relevant only
+  when the file exists, its branch is the current branch and its `phase` is not `completed`; the
+  five-label record, the re-entry hint and the `Docs` tier of `Next :` all follow that one verdict.
+  A simulation over the corpus cuts the documents that would print a re-entry hint from 38 to 9; the
+  live verdict is made at run time.
 - **`docs/harness/` paths were refused (H4).** `/handoff` had borrowed `/harness`'s path validator,
   which rejects the folder `/handoff` itself writes under. It has its own four-condition check now;
   57 of 57 recorded `Docs` paths under `docs/harness/` pass.
 - **Uncommitted work could vanish unnoticed (H5).** The header now lists the dirty paths and
-  `drift` reports one that was dirty when recorded, is not in the working tree now and was touched
+  `drift` reports one that was dirty when recorded, is no longer dirty and was touched
   by no later commit on the branch.
 - **No base directory was defined (H6).** The base of `docs/harness/handoff/` and of a relative
   Reading Order path is now stated, and the header records `Worktree`. A document written in a
@@ -192,12 +197,14 @@ never committed) or from the blob bytes of the committed files.
 ### Upgrade notes
 
 - **Older handoff documents are read as they are.** Nothing is rewritten or migrated. A 9.0.x
-  document without `Worktree`, `Dirty files` or a `Harness :` line reads as "no record — task state
-  is not a verification target"; a document whose `Do NOT` section is only a pointer is followed
-  one hop. A long ledger is shortened the next time `generate` carries it, not before.
+  document without `Worktree` is compared in the session's folder; without `Dirty files`, the paths
+  its `Dirty:` line lists are checked; its five-label task record, if it has one, is cross-checked
+  in full, and one with neither that record nor a `Harness :` line reads as "no record — task state
+  is not a verification target"; a document whose `Do NOT` section is only a pointer is followed one
+  hop. A long ledger is shortened the next time `generate` carries it, not before.
 - **Node.js 20 or later is required for `/handoff`.** Without `node` on the path the helper cannot
   run and the skill shows the failure and stops; it does not fall back to doing the work by hand.
-  `/harness`, `/deep-review` and `/md-optimize` are unaffected.
+  The other five skills are unaffected.
 - **The "next 9.0.x" batch of minor fixes ships separately, as 9.0.2.** It is not part of this
   release.
 

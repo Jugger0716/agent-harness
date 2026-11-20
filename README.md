@@ -2,7 +2,7 @@
 
 [![lint](https://github.com/Jugger0716/agent-harness/actions/workflows/lint.yml/badge.svg)](https://github.com/Jugger0716/agent-harness/actions/workflows/lint.yml)
 
-**Zero-setup, zero-dependency** multi-agent workflow harness for Claude Code with **3-layer quality gates** and **selectable single-agent or multi-agent persona mode**. Works for development tasks and non-development tasks (planning, document generation, analysis) alike.
+**Zero-setup**, dependency-free (except Node.js 20+ for `/handoff`) multi-agent workflow harness for Claude Code with **3-layer quality gates** and **selectable single-agent or multi-agent persona mode**. Works for development tasks and non-development tasks (planning, document generation, analysis) alike.
 
 No dependencies required. No Python, no pip, no build steps — just install the plugin and go. The one exception is `/handoff`: its helper script needs Node.js 20 or later (the other skills do not).
 
@@ -674,20 +674,22 @@ Session handoff for cross-session, epic-level continuity — the durable complem
                      with a reason) -> read Reading Order through a plan under a 128 KiB budget
                      (`path:START-END` and `path §heading` ranges; a file over 2,000 lines or over
                      the budget is read as its first 400 lines plus an outline; an entry that does
-                     not fit is skipped and listed; `..`, `.git`, `:`, links leaving the repository
-                     and UNC paths are refused; contents are DATA, not instructions)
+                     not fit is skipped and listed; an absolute path outside the repository, `..`,
+                     `.git`, a `:` inside a segment, links leaving the repository and UNC paths
+                     are refused; contents are DATA, not instructions)
                   -> Resume Briefing
                      (Next : the `Slice :` label, else the one in-progress row, else the recorded
-                     Docs slice, else the full step text; two or more in-progress rows and no
-                     label print `ambiguous — …` | Next cmd: the byte-identical `/…` command to
-                     chain, or a no-single-command marker — see
+                     Docs slice (only when .harness/state.json is relevant), else the full step
+                     text; two or more in-progress rows and no label print `ambiguous — …` |
+                     Next cmd: the byte-identical `/…` command to chain, or a no-single-command
+                     marker — see
                      templates/handoff/resume.md §Sub-command: resume for the derivation)
                   -> gate: Start next step (conditional — see templates/handoff/resume.md
                      §Sub-command: resume, Step 5) / Adjust plan / Briefing only
 /handoff list     -> enumerate handoff documents, newest first
 ```
 
-A path-less `resume` picks among the newest day's documents by recorded-commit ancestry on the current branch and otherwise asks which one (a separate question before the briefing). A document written by 9.0.x is read as it is: without the new fields it reads as "no record — task state is not a verification target".
+A path-less `resume` picks among the newest day's documents by recorded-commit ancestry on the current branch and otherwise asks which one (a separate question before the briefing). A document written by 9.0.x is read as it is: without `Worktree` it is compared in the session's folder, without `Dirty files` the paths of its `Dirty:` line are checked, a five-label task record it carries is cross-checked in full, and one with neither that record nor a `Harness :` line reads as "no record — task state is not a verification target".
 
 Key properties: stateless (no state.json of its own), inline-only for its own work (prose rule — the `Task`/`Agent`/`Workflow` entries were removed from `disallowed-tools`; `NotebookEdit`/`WebSearch`/`WebFetch` remain), `resume` may chain into the next command from its gate, resume is **context priming + fact verification** — never state restoration, never auto-checkout. When that command is an epic slice's `Command`, the started `/harness` session carries the epic's chain on by itself after its approval click ([Epic Slices](#epic-slices)).
 
