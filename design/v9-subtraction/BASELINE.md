@@ -639,7 +639,7 @@ H1~H15 가운데 말뭉치 수치가 SPEC 완료 기준을 문자 그대로 채�
 ### 남은 것
 
 - **실사용 검증 (`STAGE3.md` Task 15)**: handoff 경로 8개 시나리오(H3·H5·H6의 실사용 확인 포함), 스킬 본문의 경로 확장과 node 부재 시 실패 모양, 그리고 명명된 예외 ②("Partial edits")와 ③(W18). 결과는 이 절 아래에 덧붙인다.
-- **푸시 뒤 CI 첫 실행**: 이 브랜치는 푸시된 적이 없어 CI가 돈 적이 없다. `STAGE3.md`는 첫 푸시를 Task 13에 두었지만 리뷰와 수정을 로컬에서 마칠 때까지 미뤘다. 첫 실행에서 `tests/handoff`가 Node 20에서 통과해야 한다.
+- **푸시 뒤 CI 첫 실행**: 이 브랜치는 푸시된 적이 없어 CI가 돈 적이 없다. `STAGE3.md`는 첫 푸시를 Task 13에 두었지만 리뷰와 수정을 로컬에서 마칠 때까지 미뤘다. 첫 실행에서 `tests/handoff`가 Node 20에서 통과해야 한다. (확인 2026-11-20: 첫 푸시 뒤 CI 첫 실행이 성공했다 — 커밋 `5afcfd8`, ubuntu 러너, `node --version` v20.20.2, 린트 9종과 배선 검사 통과, `tests/segment_stubs` 50 pass·1 known-fail, `tests/handoff` 336 pass·0 fail. 주석 하나: GitHub가 Node 20 런타임을 쓰는 액션(`actions/checkout@v4`, `actions/setup-node@v4`)을 Node 24로 강제 실행한다는 폐지 예고를 냈다. 테스트가 쓰는 `node`는 setup-node가 설치한 v20.20.2이며, 액션 버전 올리기는 이 릴리스 밖의 후속 작업이다.)
 - **릴리스 뒤 관찰 (Task 17)**: 릴리스 14일 뒤 resume의 읽기 호출 수와 읽은 바이트를 SPEC 2.4의 기준선과 견준다(SPEC 3.4).
 - `develop`은 아직 `90fbad7`(9.0.1 병합)이다. "다음 9.0.x" Minor 묶음은 9.0.2로 따로 나가며 아직 들어 있지 않다. 먼저 들어가면 `develop`을 이 브랜치에 병합한다(`STAGE3.md` D10).
 - 좁은 재검토의 M1~M3(위 "알려진 한계")은 이 릴리스에서 고치지 않았다.
