@@ -8,7 +8,7 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
 
 ## [Unreleased]
 
-## [9.1.0] — 2026-11-20
+## [9.1.0] — 2026-11-26
 
 v9 "subtraction", stage 3 (`design/v9-subtraction/SPEC.md` §5, plan
 `design/v9-subtraction/STAGE3.md`): `/handoff` is corrected and slimmed. Its fifteen defects
