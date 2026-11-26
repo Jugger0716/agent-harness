@@ -453,9 +453,9 @@ SPEC 1.3의 시뮬레이션 값과 다른 것은 `session-conflict`(2로 예상,
 
 ① **설치본 = 릴리스, `/harness doctor` ④ ✓ (`RELEASING.md` 8~9번).** 태그 전에는 관측할 수 없다. 닫는 방법: 릴리스 뒤 설치본을 9.0.1로 바꾸고 `/harness doctor` ④ ✓를 확인한다. (2026-11-18 종결: 릴리스 뒤 `claude plugin marketplace update` → `claude plugin update`로 설치본을 9.0.1(`90fbad7`)로 바꿨다. 새로 시작한 세션의 `/harness doctor`는 ①②④ ✓, ③·⑤ —였다. ④는 실행 중인 사본이 cache `9.0.1`이고 폴더 이름이 `plugin.json`과 같다는 축 (a)로 판정했다 — 저장소 밖에서 실행해 축 (b)(c)는 건너뛰었다. 그 둘은 업데이트 직후 따로 쟀다: 두 설치본 모두 추적 파일 117개 가운데 내용이 다른 것 0개, 줄 끝만 다른 것 16개, 빠진 것 0개, 워크플로 스크립트의 CR 0건. 이전 cache 폴더 `9.0.0`은 열린 세션이 쓰고 있어 남겨 두었다 — 폴더 이름과 내용이 같아 불일치는 아니다.)
 
-② **1단계 예외 ②에서 남은 둘.** 하나는 "Partial edits" 질문이다(시험 9 미관측). 스크립트 쪽 — 빈 반환이 `implementation returned null — partial edits possible`이 되는 것 — 은 스텁 케이스 `build-null-implementation`이 고정한다. 다른 하나는 끊긴 자동 수정의 처리다(시험 11 안 돌림). 1단계 예외 ②의 나머지는 이번에 닫혔다: md-optimize의 남은 백업 질문과 "Skip" 뒤 백업 유지(시험 1·7·8), `/harness` Setup의 남은 백업 확인(시험 1). md-optimize의 열린 세션 확인은 9.0.1에서 없어졌다. 닫는 방법: "Partial edits"는 다음 실사용 검증에서 구현 에이전트를 건너뛰어 본다. 자동 수정은 5단계 4번이 Auto-fix를 남기면 그 단계에서 돌리고, 없애면 예외도 함께 사라진다.
+② **1단계 예외 ②에서 남은 둘.** 하나는 "Partial edits" 질문이다(시험 9 미관측). 스크립트 쪽 — 빈 반환이 `implementation returned null — partial edits possible`이 되는 것 — 은 스텁 케이스 `build-null-implementation`이 고정한다. 다른 하나는 끊긴 자동 수정의 처리다(시험 11 안 돌림). 1단계 예외 ②의 나머지는 이번에 닫혔다: md-optimize의 남은 백업 질문과 "Skip" 뒤 백업 유지(시험 1·7·8), `/harness` Setup의 남은 백업 확인(시험 1). md-optimize의 열린 세션 확인은 9.0.1에서 없어졌다. 닫는 방법: "Partial edits"는 다음 실사용 검증에서 구현 에이전트를 건너뛰어 본다. 자동 수정은 5단계 4번이 Auto-fix를 남기면 그 단계에서 돌리고, 없애면 예외도 함께 사라진다. (2026-11-26 "Partial edits" 종결: 3단계 Task 15에서 build 세그먼트에 강제 실패를 넣은 사본으로 질문이 나오는 것을 관측했다 — "3단계 후 (v9.1)"의 "실사용 검증 (2026-11-23 ~ 26)". 끊긴 자동 수정은 그대로 남는다.)
 
-③ **W18.** `balanced` 프리셋에서는 advisor와 evaluator가 같아 구분되지 않는다. 닫는 방법: `frontier` 프리셋(advisor opus, evaluator fable)으로 INLINE 계획 검토를 1회 돌려 critic의 모델을 확인한다.
+③ **W18.** `balanced` 프리셋에서는 advisor와 evaluator가 같아 구분되지 않는다. 닫는 방법: `frontier` 프리셋(advisor opus, evaluator fable)으로 INLINE 계획 검토를 1회 돌려 critic의 모델을 확인한다. (2026-11-26 종결: 3단계 Task 15에서 그렇게 돌렸고 critic은 fable로 실행됐다 — "3단계 후 (v9.1)"의 "실사용 검증 (2026-11-23 ~ 26)".)
 
 ## 3단계 후 (v9.1)
 
@@ -463,7 +463,7 @@ SPEC 1.3의 시뮬레이션 값과 다른 것은 `session-conflict`(2로 예상,
 - 측정일: 2026-11-20. 방법은 위와 같다(`git ls-tree -r -l 4437350`의 blob 바이트). 비교 기준은 태그 `v9.0.1`이다. 크기(blob 바이트)와 린트·테스트 수는 이 커밋에서 잰 값이고, 그 위에 얹히는 릴리스 문서 변경(CHANGELOG, README, 이 파일)은 반영하지 않았다. 말뭉치 수치는 Task 12가 낸 집계다.
 - 말뭉치: "실제 handoff 문서 말뭉치"(292건)의 집계 수치만 적는다. 문서와 스냅샷은 저장소에 없고, 저장소에는 합성 픽스처만 있다.
 - `R`로 시작하는 번호(R5, R20, R23 …)는 이 단계를 구현하며 내린 판정의 번호다. 그 내용은 이 절의 "Task 1", "편차", "리뷰 기록"에 적었다.
-- 이 단계의 실사용 검증(`STAGE3.md` Task 15)과 릴리스 뒤 관찰(Task 17)은 아직 하지 않았다. 이 절에는 관측이 없다. 아래 "남은 것"을 본다.
+- 이 단계의 실사용 검증(`STAGE3.md` Task 15)과 릴리스 뒤 관찰(Task 17)은 아직 하지 않았다. 이 절에는 관측이 없다. 아래 "남은 것"을 본다. (확인 2026-11-26: Task 15를 2026-11-23 ~ 26에 마쳤다. 결과는 이 절 끝의 "실사용 검증 (2026-11-23 ~ 26)"에 있다. Task 17은 아직이다.)
 
 ### 스킬별 크기
 
@@ -542,7 +542,7 @@ SPEC 1.3의 시뮬레이션 값과 다른 것은 `session-conflict`(2로 예상,
 **상태 기록**:
 
 - 5라벨 기록이 있는 문서 61건(그중 23건은 `Phase`가 `completed`)과 없는 문서 231건. stale 표지 표본은 8건이고 모두 `completed`다.
-- 재진입 안내가 나오는 문서 수는 38건에서 9건으로 준다. 이 값은 모의 실행이고 가정에 묶여 있다 — 실제 판정은 실행할 때의 `.harness/state.json`이 정한다. Task 15가 확인한다.
+- 재진입 안내가 나오는 문서 수는 38건에서 9건으로 준다. 이 값은 모의 실행이고 가정에 묶여 있다 — 실제 판정은 실행할 때의 `.harness/state.json`이 정한다. Task 15가 확인한다. (확인 2026-11-26: Task 15 시나리오 K — `relevant` 상태에서 generate가 5라벨 기록을 쓰고 resume이 full cross-check를 탔다. 다른 시나리오는 상태 파일이 없어 `Harness : none` 쪽만 지났다. 재진입 안내 문서 수 자체는 실사용으로 세지 않았다.)
 
 **Progress Ledger**:
 
@@ -592,7 +592,7 @@ SPEC 1.3의 시뮬레이션 값과 다른 것은 `session-conflict`(2로 예상,
 | H14 | Do NOT을 모든 문서에 전문으로 쓴다. 9.0.x의 포인터만 있는 절은 `reading-plan`의 `doNot` 항목으로 한 번만 따라간다. 제목은 접두로 읽는다 | `parse-do-not-reference-only`, `parse-reads-a-heading-variant-by-its-prefix`, `reading-plan-plans-the-do-not-section-a-pointer-only-section-names`, `generate-contract-writes-the-do-not-section-in-full`, `resume-contract-reads-headings-by-prefix-and-the-do-not-section-a-pointer-names` | 포인터만 있는 문서 0건, 혼합형 26건은 알려진 한계 |
 | H15 | SKILL.md를 디스패처로 줄이고 본문을 `generate.md`·`generate-ledger.md`·`resume.md`로 나눴다. 측정 이력은 `design/handoff-diet/RATIONALE.md`로 옮겼다. `verify_body_budget.py`가 적재량과 날짜 표지 금지를 고정한다 | `verify_body_budget.py`, `handoff-contract-carries-no-dated-observation-or-planning-tag`, `handoff-contract-keeps-the-clauses-the-compression-weakened` | `generate` 15,339(상한 아래 21바이트), 원장 포함 21,293 — 편차 R23 |
 
-H1~H15 가운데 말뭉치 수치가 SPEC 완료 기준을 문자 그대로 채우지 못한 것은 H7(20행 이하)과 H15(15KB 이하, 원장이 있을 때) 두 곳이고, 아래 "편차"에 적었다. H3·H5·H6은 테스트와 모의 실행으로만 고정돼 있어 실사용 확인이 남았다.
+H1~H15 가운데 말뭉치 수치가 SPEC 완료 기준을 문자 그대로 채우지 못한 것은 H7(20행 이하)과 H15(15KB 이하, 원장이 있을 때) 두 곳이고, 아래 "편차"에 적었다. H3·H5·H6은 테스트와 모의 실행으로만 고정돼 있어 실사용 확인이 남았다. (확인 2026-11-26: 실사용으로 확인했다 — H3은 시나리오 1·K, H5는 시나리오 3, H6은 시나리오 1·4. 아래 "실사용 검증 (2026-11-23 ~ 26)".)
 
 ### 리뷰 기록
 
@@ -635,11 +635,66 @@ H1~H15 가운데 말뭉치 수치가 SPEC 완료 기준을 문자 그대로 채�
 - `carried-over items could not be read: …` 줄은 다음 문서로 이어진다는 규칙이 없고 그 언어도 정해져 있지 않다.
 - 원장: 위 좁은 재검토의 M1·M2. generate Step 4의 추가 보고 줄: 같은 재검토의 M3.
 - 보강을 미룬 것(등록된 워크트리나 `.git`에 쓰기 권한이 있어야 하며, 위협 모델은 handoff 문서다): git 상태가 gitlink 경로의 중첩 저장소로 내려가는 것, 워크트리의 `.git`이 다른 워크트리의 관리 디렉터리를 가리키는 것.
+- (2026-11-26 추가, Task 15) resume이 게이트 전에 브리핑 블록을 출력하지 않는 경우가 많다(실사용 7회 중 6회, 9.0.1도 같다). 명명된 예외 — 아래 "실사용 검증 (2026-11-23 ~ 26)".
+- (2026-11-26 추가, Task 15) 명령만 있는 메시지(새 세션의 `/handoff resume`)에는 언어가 없어 출력 언어가 사용자 언어와 다르게 정해질 수 있다.
+- (2026-11-26 추가, Task 15) 워크트리에서 generate한 보고의 `Next session →`는 상대 경로라 메인 트리에서는 절대 경로로 바꿔 써야 한다.
 
 ### 남은 것
 
-- **실사용 검증 (`STAGE3.md` Task 15)**: handoff 경로 8개 시나리오(H3·H5·H6의 실사용 확인 포함), 스킬 본문의 경로 확장과 node 부재 시 실패 모양, 그리고 명명된 예외 ②("Partial edits")와 ③(W18). 결과는 이 절 아래에 덧붙인다.
+- **실사용 검증 (`STAGE3.md` Task 15)**: handoff 경로 8개 시나리오(H3·H5·H6의 실사용 확인 포함), 스킬 본문의 경로 확장과 node 부재 시 실패 모양, 그리고 명명된 예외 ②("Partial edits")와 ③(W18). 결과는 이 절 아래에 덧붙인다. (확인 2026-11-26: 마쳤다. 시나리오 2만 브리핑 누락으로 실패했고 명명된 예외로 받았다. 나머지와 예외 ②·③은 통과했다.)
 - **푸시 뒤 CI 첫 실행**: 이 브랜치는 푸시된 적이 없어 CI가 돈 적이 없다. `STAGE3.md`는 첫 푸시를 Task 13에 두었지만 리뷰와 수정을 로컬에서 마칠 때까지 미뤘다. 첫 실행에서 `tests/handoff`가 Node 20에서 통과해야 한다. (확인 2026-11-20: 첫 푸시 뒤 CI 첫 실행이 성공했다 — 커밋 `5afcfd8`, ubuntu 러너, `node --version` v20.20.2, 린트 9종과 배선 검사 통과, `tests/segment_stubs` 50 pass·1 known-fail, `tests/handoff` 336 pass·0 fail. 주석 하나: GitHub가 Node 20 런타임을 쓰는 액션(`actions/checkout@v4`, `actions/setup-node@v4`)을 Node 24로 강제 실행한다는 폐지 예고를 냈다. 테스트가 쓰는 `node`는 setup-node가 설치한 v20.20.2이며, 액션 버전 올리기는 이 릴리스 밖의 후속 작업이다.)
 - **릴리스 뒤 관찰 (Task 17)**: 릴리스 14일 뒤 resume의 읽기 호출 수와 읽은 바이트를 SPEC 2.4의 기준선과 견준다(SPEC 3.4).
 - `develop`은 아직 `90fbad7`(9.0.1 병합)이다. "다음 9.0.x" Minor 묶음은 9.0.2로 따로 나가며 아직 들어 있지 않다. 먼저 들어가면 `develop`을 이 브랜치에 병합한다(`STAGE3.md` D10).
 - 좁은 재검토의 M1~M3(위 "알려진 한계")은 이 릴리스에서 고치지 않았다.
+
+### 실사용 검증 (2026-11-23 ~ 26)
+
+`STAGE3.md` Task 15의 결과다. 설치본은 9.0.1 그대로 두고, `claude --plugin-dir <저장소>`로 연 세션에서 릴리스 브랜치의 저장소 사본(`c7b585f`)을 로드해 관측했다. 각 세션이 어느 사본을 로드했는지는 스킬 본문의 "Base directory"로 확인했다. 시험마다 저장소 밖에 작은 로컬 git 저장소를 만들었고, 미리 있어야 하는 handoff 문서는 설정 스크립트가 썼다. 원자료인 관측 기록은 저장소 밖에 있고 커밋하지 않는다.
+
+조건: 시험 세션은 모두 같은 모델(Opus 5.5)과 출력 스타일(Concise)로 돌았다. Claude Code는 시나리오 1~5가 2.1.330, 시나리오 6부터가 2.1.332였다. 시나리오 6 도중 사용자가 Claude Code의 응답 언어 설정(`language`)을 한국어로 넣었고, 그 뒤의 세션은 이 설정 아래에서 돌았다(아래 "새로 드러난 것" ①).
+
+| # | 시나리오 | 결과 | 관측 |
+|---|---|---|---|
+| 1 | generate, 하네스 없음 | PASS | 문서에 `Worktree:`와 `Harness : none (…)`가 있고, 보고에 정정 방법 3가지가 있다. git 상태와 경로는 스크립트(`git-state`, `harness-state`, `list`, `resolve-path`)로 얻었다 |
+| 2 | resume 정상 | FAIL — 명명된 예외 ① | `drift: none`, 질문 정확히 1회. 브리핑 블록이 출력되지 않았다(아래 "브리핑 누락"). Read 3회 34,379바이트이고, 그중 32,213바이트는 계약 본문 `resume.md`다. Reading Order만 치면 2회 2,166바이트다. 픽스처 크기라 SPEC 2.4 기준선(중앙값 10회·270KB)과 견줄 수 없다 — Task 17 |
+| 3 | 미커밋 유실 | PASS | `drift`가 `dirty.lost`로 판정했다. 질문과 마지막 안내가 그 경로를 짚고 stash·다른 브랜치 커밋·폐기 중 어디로 갔는지 확인해 달라고 했으며, 복구하지 않았다. `recorded dirty work not found` 토큰은 브리핑이 없어 화면에 나오지 않았다 |
+| 4 | 워크트리 | PASS | 링크된 워크트리에서 generate하고 메인 트리에서 경로를 주어 resume했다. `branch.same` true, `viaWorktree` true — 거짓 "branch differs" 없음. Reading Order도 기록된 워크트리 기준으로 읽었다 |
+| 5 | 큰 파일 | PASS | 2,500줄 파일 3개. `:1201-1260`은 그 60줄만, 힌트가 없는 파일은 앞 400줄과 목차(제목 51개), `§Section 30`은 그 절 50줄만 Read 도구로 읽었다. 읽은 범위의 보고는 브리핑이 없어 화면에 나오지 않았다 |
+| 6 | 원장, generate 연속 2회 | PASS (재실행) | 1차: 원천의 끝난 행 가운데 최근 5개와 이번에 끝낸 1행, 미완 행 전부, `Earlier rows:`(`droppedDone` 3). 2차: `chained` true이고 `Earlier rows:`가 자기 원천을 가리킨다(원천의 그 줄은 복사하지 않았다). `planned`에 경고가 없다. 첫 실행은 `--plugin-dir` 없이 열려 설치본 9.0.1이 로드됐기 때문에 무효로 하고 새 픽스처에서 다시 돌렸다 |
+| 7 | 스크립트 실패 (PATH에 node 없음) | PASS | 첫 스크립트 호출의 stderr(`node: command not found`, exit 127)를 그대로 보이고 멈췄다. git 명령과 문서 읽기는 0회였다. 두 셸 모두 node가 없음을 확인했다 |
+| 8 | 같은 날 문서 2건, 브랜치 다름 | PASS | `needsChoice`로 게이트 전에 따로 고르는 질문이 나왔고, 고른 문서로 이어 갔다. 브랜치 불일치와 DIVERGED를 알렸고 git은 바꾸지 않았다. 질문은 선택 1회와 게이트 1회다 |
+| K | 하네스 상태 파일이 있을 때 (H3) | PASS | 사용자 결정으로 추가한 시나리오다. 상태가 `relevant`일 때 generate가 5라벨 기록을 썼다. resume은 full cross-check(`docs_path`를 Glob 도구로 확인)와 `Next :`의 `Docs` 단(`--state-relevant true`)을 탔고, 게이트의 첫 선택지는 명령 형태(`/harness-gate`)였다. `.harness/`는 읽기만 했다. Task 행과 재진입 안내는 브리핑이 없어 화면에 나오지 않았다 |
+
+| 명명된 예외 (2단계) | 결과 | 관측 |
+|---|---|---|
+| ③ W18 | PASS | `frontier` 프리셋, INLINE 경로. Plan Critic의 요청 모델은 `fable`, 기록에 남은 실제 모델은 `claude-fable-5-2`다. Planner와 converge review는 opus, converge verify는 fable이었다 |
+| ② "Partial edits" | PASS | 저장소 밖 사본의 `workflows/harness.build.workflow.js`에서 첫 `agent(` 앞에 `throw`를 넣고 그 사본을 로드했다. WORKFLOW 경로에서 세션 안 승인 뒤 build 세그먼트가 실패했고 "Partial edits" 질문(`Continue inline` / `Stop`)이 나왔다. `Stop`은 오류 원문을 보이고 추적 파일 변경이 없음을 확인했으며 `.harness/`를 남기고 `phase`를 `generate_ready`로 되돌렸다 |
+
+실제 저장소와 설치본은 바꾸지 않았다. 이 절의 기록과 커밋은 `--plugin-dir` 없이 연 세션에서 했다.
+
+#### 브리핑 누락 (시나리오 2의 실패)
+
+resume 7회(시나리오 2·3·4·5·6·8·K) 가운데 6회에서 `[handoff] Resume briefing` 블록이 출력되지 않았다. 게이트 직전의 어시스턴트 메시지에 텍스트 블록이 없었고, 질문 문장이 한두 문장짜리 요약을 대신 담았다. 화면의 "· summary" 줄은 짧은 thinking 형식의 블록인데, 그 블록을 누가 썼는지는 확인하지 못했다. 나머지 1회(시나리오 6 재실행)는 블록 전체를 AskUserQuestion의 질문 문자열 안에 넣었다. 그 결과 State 행의 토큰(`recorded dirty work not found`, `branch differs`), `viaWorktree` 언급, 읽은 범위 목록, Task 행이 화면에 나오지 않았다. 스크립트의 판정 자체는 질문 문장과 마지막 텍스트로 전달됐다.
+
+- 9.1의 회귀가 아니다. 설치본 9.0.1로 돈 resume 2회(이 기록을 한 세션의 재개, 무효가 된 시나리오 6 첫 실행)도 같았다.
+- 원인 후보(확인하지 않았다): 시험 세션의 AskUserQuestion 도구 설명에 "The user may see only the question dialog: tool results and text you wrote earlier in this turn may not be on their screen while it is open. Make each question stand on its own …"가 있다. 계약의 "출력하고, 그다음 묻는다"와 경쟁하는 지시다. 출력 스타일 Concise도 후보지만, 질문 안에 블록 전체가 나온 1회도 같은 스타일이었다.
+
+#### 새로 드러난 것
+
+| 내용 | 갈 곳 |
+|---|---|
+| ① 명령만 있는 메시지(새 세션의 `/handoff resume`)에는 언어가 없어 `user_lang` 판정이 갈린다. 같은 계약에서 한국어 4회, 영어 1회였고, 영어로 정해진 세션은 그 뒤의 한국어 요청에도 영어로 답했다. 응답 언어 설정을 넣은 뒤에도 게이트 선택지 라벨이 1회 영어로 남았다 — 템플릿의 영어 라벨을 고정 토큰처럼 썼다 | 알려진 한계, 9.1.1 |
+| ② 워크트리에서 generate한 보고의 `Next session →`는 그 워크트리 기준의 상대 경로라서, 메인 트리에서 그대로 쓰면 문서를 찾지 못한다(계약 템플릿대로의 출력이다) | 알려진 한계, 9.1.1 |
+| ③ 경로 확장: 모든 세션이 `${CLAUDE_PLUGIN_ROOT}`를 먼저 확인하지 않고 "Base directory"에서 플러그인 루트를 끌어내 리터럴 경로를 썼다. 경로는 맞았다 | 관찰만 |
+| ④ generate 6회 가운데 1회가 `git-state` 전에 `git status`·`log`·`branch`를 손으로 돌렸다(머리 값은 스크립트 출력에서 왔다). 다른 1회는 보고에서 "원치 않은 generate는 삭제로만 되돌린다"는 문장을 뺐다 | 관찰만 |
+| ⑤ `needsChoice`의 후보를 번호 목록으로 따로 출력하지 않고 질문과 선택지 안에 넣었다. 날짜·번호·브랜치·제목·경로는 모두 있었다 | 관찰만 (브리핑 누락과 같은 결) |
+
+#### 명명된 예외 (`RELEASING.md` §If a step fails)
+
+① **브리핑 누락 (시나리오 2).** 사용자가 2026-11-26에 명명된 예외로 받았다. 9.0.1부터 있던 동작이고, 판정 자체는 질문 문장으로 화면에 전달된다. 닫는 방법: 9.1.1에서 resume Step 5를 질문 창 기준으로 다시 설계하고(예: 브리핑을 질문 문자열 안에 둔다) 실사용에서 여러 번 확인한다. 문구를 강하게 하는 것만으로는 위 원인 후보를 넘지 못한다고 본다.
+
+#### 한계
+
+- 시험 세션은 모두 한 환경이다: 모델 하나, 출력 스타일 하나, Windows 하나.
+- 시나리오 2의 읽기량은 픽스처 크기라 SPEC 2.4의 기준선과 견줄 수 없다. 그 비교는 Task 17이 한다.
+- 시나리오 6 이후의 언어 관측은 응답 언어 설정의 영향을 받는다.

@@ -181,6 +181,19 @@ never committed) or from the blob bytes of the committed files.
   a gitlink path, and a worktree's `.git` pointed at another worktree's admin directory.
 - The two-week real-use measurement of `resume`'s read calls and bytes (SPEC 3.4) happens after
   the release.
+- **`resume` often skips the `[handoff] Resume briefing` block** and goes straight to its gate:
+  in 6 of 7 real-use resumes the block was not printed and a one- or two-line summary went into
+  the question instead; the seventh put the whole block inside the question. The script's
+  verdicts still reach the screen through the question, but the fixed State tokens
+  (`recorded dirty work not found`, `branch differs`), the list of ranges read and the Task row
+  do not. 9.0.1 behaves the same. Accepted as a named
+  exception; a redesign of the gate step is planned for 9.1.1 (`BASELINE.md`, "3단계 후
+  (v9.1)").
+- A message that is only the command (`/handoff resume` in a fresh session) carries no
+  language, so the output language can differ from the user's. Claude Code's `language` setting
+  fixes the prose; the gate's option labels were still left in English once.
+- After a `generate` in a linked worktree, the report's `Next session →` path is relative to
+  that worktree; resuming from the main tree needs the absolute path.
 
 ### Deviations
 
