@@ -1,0 +1,856 @@
+#!/usr/bin/env node
+// Before/after comparer over the frozen handoff corpus (see snapshot.mjs). Each `--what` names one
+// comparison; a later change that alters what the shipped helper reads adds one entry to WHAT and
+// is judged by running it against the same snapshot. Reads only the snapshot folder; never prints
+// a path, a name or a document's text — only document ids (d001, …) and counts. Not CI-wired; it
+// is run by hand, so human-readable stdout is allowed.
+//
+// Usage:
+//   node tests/handoff/corpus/diff.mjs --corpus <snapshot dir> --what <name> [--json] [--mtime-before <ISO-8601>]
+//
+// What:
+//   next-legacy    where the 9.0.1 `Next :` row comes from, per document (legacy_next.mjs): counts
+//                  by source, and the same counts as the share of documents.
+//   next           the label-first `Next :` rule (skills/handoff/scripts/lib/next.mjs, run as if the
+//                  live task state were found) against the 9.0.1 one (legacy_next.mjs), per document:
+//                  every change is put in one class — normalisation-only (a Slice cell or label value
+//                  lost its ** / __ / backtick wrapper), became-label, became-ambiguous, became-
+//                  docs-or-step-one (9.0.1 printed the ledger's last row, the slice that had just
+//                  finished) or other, which is the class that must stay empty (an ambiguity counts
+//                  only where 9.0.1 took the last of two or more in-progress rows). Also: whether the
+//                  label wins in the documents where it and an in-progress row differed under 9.0.1,
+//                  whether the documents with no label and one in-progress row kept their value,
+//                  how many documents are ambiguous, what became of the last-row documents, and the
+//                  same classes when the task state is NOT relevant (the Docs tier unused).
+//                  Prints document ids and counts only.
+//   state          what the task-state relevance rule (skills/handoff/scripts/lib/git.mjs `harnessState`:
+//                  `.harness/state.json` exists, is for the current branch and its phase is not
+//                  `completed`) means for the recorded task state: how many documents carry the
+//                  fixed-label record (all five labels, or only some), how many of those record Phase
+//                  `completed`, how many carry no record at all (the new "no record" briefing wording)
+//                  or a `Harness : none` line, and how many carry a stale/unrelated warning marker
+//                  (a documented word list, STALE_MARKERS) in `## In Progress` and anywhere. Relevance
+//                  is a fact about a LIVE `.harness/`, which a snapshot does not have, so it is NOT
+//                  evaluated per document: the one thing a document's own record decides is the phase
+//                  test (a recorded `completed` is never relevant); the report says so. Also the
+//                  `Docs` values under docs/harness/ that the handoff path check accepts.
+//   extract-agree  the Reading Order entries the shipped parser (skills/handoff/scripts/lib/
+//                  parse.mjs) reads from each copy, against what the manifest recorded when the
+//                  snapshot was taken: same item count, and the same kind and raw text entry by
+//                  entry. Lists the ids that differ and where.
+//   reading        what `/handoff resume` would read under the reading plan (skills/handoff/scripts/
+//                  lib/reading.mjs), simulated from the manifest's recorded bytes and lines: per-
+//                  document read volume (median, P90, max) before any budget and after each
+//                  candidate budget, the budget B the D3 rule gives (P90 rounded up to a multiple of
+//                  16 KiB, capped at 128 KiB), how many entries are read in the shorter `partial` form
+//                  or skipped for the budget, and the documents at the cap or reading nothing; plus
+//                  the path-rule checks (a `Docs` value under docs/harness/ passes, an entry with a
+//                  `..` or `.git` segment is rejected). Every number that rests on an estimate is
+//                  counted in the output: the manifest holds sizes, not content or source paths.
+//   ledger         the ledger carry rule (skills/handoff/scripts/lib/ledger.mjs, D5) applied to every
+//                  document that has a ledger with a row, as if a new handoff were written from it
+//                  (a ledger with no Epic column names no Epic and is only counted; a row whose Epic
+//                  cell is empty is taken as the chosen Epic's and counted): the Epic is the one of
+//                  the document's LAST row, every unfinished row (anything but
+//                  `done` / `dropped`, values outside the enum included) is carried, plus the last 5
+//                  finished rows. Reports (a) the carried rows against the Epic's rows (median / P90 /
+//                  max over the ledger documents) and the documents over 100 rows — by table rows and by
+//                  the Epic's rows — whose carried rows are 20 or fewer, with the unfinished and finished
+//                  counts of each that are not (carried = unfinished + min(5, finished), so the criterion
+//                  holds exactly where a document has at most 15 unfinished rows), (b) that no unfinished
+//                  row of the chosen Epic is lost, (c) the documents that hold several Epics, whose
+//                  carried rows must all be the chosen Epic's, and the unfinished rows of the other Epics
+//                  that stay behind, (d) the Status values outside the enum. The only cell text it prints
+//                  is such a Status value, and only when it is a short token; never an Epic or a Slice.
+//                  Its count of finished rows uses its own list (`done`, `dropped`), not the shipped one,
+//                  so a change of the shipped rule shows as a difference.
+//
+//   latest         what `resolve-path`, `latest` and the Do NOT carry-over form (skills/handoff/scripts/lib/
+//                  paths.mjs, select.mjs, parse.mjs `readDoNot`) meet in the corpus. Counts and document ids
+//                  only; no title, branch, file name or document text is printed. A snapshot holds no
+//                  file names and no live repository, so (a) a document's file name is recovered from its
+//                  own Reading Order entry that the snapshot verified to be the document itself (`self`),
+//                  else from its `## Resume` line, which `generate` composes BEFORE the path is resolved and
+//                  can therefore lack a collision suffix; documents with neither are counted, and their day is
+//                  the header's Date; (b) "the same day" is the file-name date, per source folder (the
+//                  manifest's rootIndex); (c) whether `latest` could pick a document without asking depends on
+//                  the branch the session is on and on git, neither of which a snapshot has: it is reported
+//                  as an upper bound (assume the session is on the newest same-day document's branch, that
+//                  the commits its documents record lie on one line of history and pass the ancestry test;
+//                  `latest` then picks the one furthest along, so a group needs a choice only when no
+//                  document records that branch or the commits diverge) next to the certain figure (with no
+//                  git help, every same-day group is a choice) and the number of groups in which two or
+//                  more documents record one branch (what the ancestry order can settle). Also reported: how many of those days are the newest day of their folder (what
+//                  `latest` meets today), how many hold one slug family only, the slug rule against the
+//                  recorded file names (non-ASCII title with an ASCII slug, slugs outside `[a-z0-9-]`, over
+//                  40 characters), and the Do NOT sections: missing, pointer-only (`doNotRefOnly`), and of those
+//                  the ones whose path the document's own Reading Order lists (and that existed when the
+//                  snapshot was taken) — plus an indicative count of documents that carry a "the previous
+//                  Do NOT still applies" sentence beside items of their own (a word pattern, precision unknown).
+//
+// Exit codes: 0 the comparison ran (a difference is a finding, printed, not a failure); 1 input
+// problem — no or unreadable manifest.json, a copy that is missing or whose sha256 differs from
+// the manifest, or a copy that is not a handoff document; 2 usage or internal error.
+import path from 'node:path'
+import fs from 'node:fs'
+import { pathToFileURL } from 'node:url'
+import { loadCorpus, computeMetrics, median, percentile } from './measure.mjs'
+import { InputError, exitOnError, stripHint } from './snapshot.mjs'
+import { deriveLegacyNext, legacyTiers } from './legacy_next.mjs'
+import { FIXED_LABELS, parseRange, stripEmphasis } from '../../../skills/handoff/scripts/lib/parse.mjs'
+import { deriveNext } from '../../../skills/handoff/scripts/lib/next.mjs'
+import { KEEP_DONE, carryLedger } from '../../../skills/handoff/scripts/lib/ledger.mjs'
+import { orderDocs, splitDocName, validateHandoffPath } from '../../../skills/handoff/scripts/lib/paths.mjs'
+import { HEAD_LINES, OUTLINE_HEADING_BYTES, OUTLINE_MAX_ENTRIES, WHOLE_FILE_MAX_LINES, isMarkdownPath } from '../../../skills/handoff/scripts/lib/reading.mjs'
+
+const SOURCES = ['in-progress', 'label', 'last-row', 'docs', 'step-one']
+
+// ---- comparisons: (docs) -> { data, lines } --------------------------------------------------------
+
+function nextLegacy(docs) {
+  const counts = Object.fromEntries(SOURCES.map((s) => [s, 0]))
+  for (const d of docs) counts[deriveLegacyNext(d.parsed).source]++
+  const n = docs.length
+  const lines = [`next-legacy: ${n} documents`]
+  for (const s of SOURCES) lines.push(`  ${s.padEnd(12)} ${String(counts[s]).padStart(4)}  ${n ? (Math.round((1000 * counts[s]) / n) / 10).toFixed(1) : '-'}%`)
+  return { data: { documents: n, counts }, lines }
+}
+
+// ---- next: the label-first rule against 9.0.1 -----------------------------------------------------------
+
+export const NEXT_CLASSES = ['unchanged', 'normalisation-only', 'became-label', 'became-ambiguous', 'became-docs-or-step-one', 'kept-finished-slice', 'other']
+
+// One document's change. `legacy` is { slice, source } from legacy_next.mjs, `now` the result of
+// deriveNext (slice null = ambiguous). The facts (all about the 9.0.1 reading of the document) are
+// `legacyLiveRows`, the number of in-progress rows in the Epic of the last row; `labelDiffers`, a
+// label and an in-progress row both existed and named other slices; `hasLedger`. A change that is
+// none of the named ones is `other` — in particular an ambiguity counts as `became-ambiguous` only
+// where 9.0.1 took the last of two or more in-progress rows, and a label takes over only where it
+// differed from the in-progress row or there was no ledger to read it in.
+// `kept-finished-slice` is a document whose 9.0.1 value was the ledger's last row and still is: it
+// must not hide among the unchanged ones, and it has to stay empty.
+export function classifyNextChange(legacy, now, { legacyLiveRows = 0, labelDiffers = false, hasLedger = true } = {}) {
+  if (now.slice === null) return legacy.source === 'in-progress' && legacyLiveRows >= 2 ? 'became-ambiguous' : 'other'
+  if (legacy.source === 'last-row' && sameSlice(now.slice, legacy.slice)) return 'kept-finished-slice'
+  if (now.slice === legacy.slice) return 'unchanged'
+  if (now.source === 'label' && legacy.source !== 'label' && (labelDiffers || !hasLedger)) return 'became-label'
+  if (legacy.source === 'last-row' && (now.source === 'docs' || now.source === 'step-one')) return 'became-docs-or-step-one'
+  if (now.source === legacy.source && now.slice === stripEmphasis(legacy.slice)) return 'normalisation-only'
+  return 'other'
+}
+
+// The same slice, read the same way: 9.0.1 printed a `**s2**` cell with its bold (it removed a backtick
+// pair only) and the new rule prints `s2`, so a value is compared with one `**…**` / `__…__` pair and
+// then one backtick pair removed on BOTH sides. null (an ambiguity) is never the same slice.
+const sameSlice = (a, b) => a !== null && b !== null && stripEmphasis(a) === stripEmphasis(b)
+
+// In-progress rows in the Epic of the last ledger row; `key` is the Epic cell as 9.0.1 read it
+// (`epicRaw`) or as the new rule reads it (`epic`).
+function liveRowCount(parsed, key) {
+  const rows = parsed.ledger ? parsed.ledger.rows : []
+  if (!rows.length) return 0
+  const epic = rows[rows.length - 1][key]
+  return rows.filter((r) => r[key] === epic && r.status === 'in-progress').length
+}
+
+// An independent read of a document's `Slice :` label, for check (a): the first such line of the Next
+// Steps section of the raw text, with every leading and trailing `*`, `_` or backtick removed. It
+// shares nothing with parse.mjs or its stripEmphasis, so the check cannot agree with the code by
+// construction. null when the section has no label line.
+function labelByRegex(text) {
+  let inSection = false
+  for (const line of text.replace(/^\uFEFF/, '').split(/\r?\n/)) {
+    if (/^## /.test(line)) {
+      inSection = /^## Next Steps\b/i.test(line)
+    } else if (inSection) {
+      const m = /^\s*(?:(?:\d+[.)]|[-*])\s+)?[*_`]*\s*Slice\s*:\s*(.*)$/.exec(line)
+      const v = m ? m[1].replace(/^[\s*_`]+|[\s*_`]+$/g, '') : ''
+      if (v) return v
+    }
+  }
+  return null
+}
+
+function nextChange(docs) {
+  const per = docs.map((d) => {
+    const tiers = legacyTiers(d.parsed)
+    return {
+      id: d.id,
+      legacy: deriveLegacyNext(d.parsed),
+      legacyLiveRows: liveRowCount(d.parsed, 'epicRaw'),
+      liveRows: liveRowCount(d.parsed, 'epic'),
+      hasLabel: d.parsed.stepOne.sliceLabel !== null,
+      hasLedger: tiers.ledger,
+      labelDiffers: tiers.label !== null && tiers.ledger && tiers.inProgress !== null && tiers.label !== tiers.inProgress,
+      tiers,
+      label: labelByRegex(d.text),
+      relevant: deriveNext(d.parsed, { stateRelevant: true }),
+      notRelevant: deriveNext(d.parsed, { stateRelevant: false }),
+    }
+  })
+  const factsOf = (x) => ({ legacyLiveRows: x.legacyLiveRows, labelDiffers: x.labelDiffers, hasLedger: x.hasLedger })
+  const tally = (pick) => {
+    const classes = Object.fromEntries(NEXT_CLASSES.map((c) => [c, 0]))
+    const ids = Object.fromEntries(NEXT_CLASSES.filter((c) => c !== 'unchanged').map((c) => [c, []]))
+    for (const x of per) {
+      const c = classifyNextChange(x.legacy, x[pick], factsOf(x))
+      classes[c]++
+      if (c !== 'unchanged') ids[c].push(x.id)
+    }
+    return { classes, ids }
+  }
+  const main = tally('relevant')
+  const apart = tally('notRelevant')
+
+  // (a) the documents where the label and an in-progress row both existed and named other slices
+  const both = per.filter((x) => x.tiers.label !== null && x.tiers.ledger && x.tiers.inProgress !== null)
+  const differed = both.filter((x) => x.tiers.label !== x.tiers.inProgress)
+  const labelCheck = {
+    withLabelAndInProgress: both.length,
+    valuesDiffered: differed.length,
+    newIsLabel: differed.filter((x) => x.relevant.source === 'label' && x.relevant.slice === x.label).length,
+  }
+
+  // (b) the documents with no label and exactly one in-progress row keep their value
+  const single = per.filter((x) => !x.hasLabel && x.liveRows === 1).map((x) => classifyNextChange(x.legacy, x.relevant, factsOf(x)))
+  const noLabelOneInProgress = {
+    documents: single.length,
+    unchanged: single.filter((c) => c === 'unchanged').length,
+    normalisationOnly: single.filter((c) => c === 'normalisation-only').length,
+    other: single.filter((c) => c !== 'unchanged' && c !== 'normalisation-only').length,
+  }
+
+  const ambiguous = per.filter((x) => x.relevant.slice === null).length
+
+  // (c) what became of the documents whose 9.0.1 value was the ledger's last row
+  const last = per.filter((x) => x.legacy.source === 'last-row')
+  const lastRow = {
+    documents: last.length,
+    valueChanged: last.filter((x) => !sameSlice(x.relevant.slice, x.legacy.slice)).length,
+    valueKept: last.filter((x) => sameSlice(x.relevant.slice, x.legacy.slice)).length,
+    nowDocs: last.filter((x) => x.relevant.source === 'docs').length,
+    nowStepOne: last.filter((x) => x.relevant.source === 'step-one').length,
+  }
+
+  const stateNotRelevant = {
+    valueChanges: per.filter((x) => x.notRelevant.slice !== x.relevant.slice).length,
+    classes: apart.classes,
+    otherIds: apart.ids.other,
+  }
+
+  const n = per.length
+  const pct = (c) => (n ? `${(Math.round((1000 * c) / n) / 10).toFixed(1)}%` : '-')
+  const lines = [`next: ${n} documents, the label-first rule against 9.0.1 (task state relevant)`]
+  for (const c of NEXT_CLASSES) lines.push(`  ${c.padEnd(24)} ${String(main.classes[c]).padStart(4)}  ${pct(main.classes[c])}`)
+  for (const c of NEXT_CLASSES) if (c !== 'unchanged' && main.ids[c].length) lines.push(`  ${c}: ${main.ids[c].join(' ')}`)
+  lines.push(
+    `label check: ${labelCheck.withLabelAndInProgress} ledger documents have a label and an in-progress row; the two named other slices in ${labelCheck.valuesDiffered}; the new Next : is the label value in ${labelCheck.newIsLabel} of those`,
+    `check (b): ${noLabelOneInProgress.documents} documents have no label and exactly one in-progress row; their value is unchanged in ${noLabelOneInProgress.unchanged}, changed only by normalisation in ${noLabelOneInProgress.normalisationOnly}, changed otherwise in ${noLabelOneInProgress.other}`,
+    `ambiguous: ${ambiguous} documents (no label, two or more in-progress rows in the last row's Epic)`,
+    `9.0.1 last-row documents: ${lastRow.documents}; they now come from Docs in ${lastRow.nowDocs} and from item 1 in ${lastRow.nowStepOne}; the printed value changed in ${lastRow.valueChanged} and is the same in ${lastRow.valueKept} (the same value as the finished slice)`,
+    `task state NOT relevant: ${stateNotRelevant.valueChanges} documents print another value than above (the Docs tier is unused); classes: ${NEXT_CLASSES.map((c) => `${c} ${apart.classes[c]}`).join(', ')}${apart.ids.other.length ? `; other: ${apart.ids.other.join(' ')}` : ''}`,
+  )
+  const data = { documents: n, stateRelevant: true, classes: main.classes, ids: main.ids, labelCheck, noLabelOneInProgress, ambiguous, lastRow, stateNotRelevant }
+  return { data, lines }
+}
+
+// ---- state: the relevance rule against the recorded task state ---------------------------------------------
+
+// Words that mark a recorded task state as stale or unrelated to the work that follows. A plain list on
+// purpose — a documented sample marker, not a classifier: it only finds documents whose prose says so.
+// It is read at three scopes, narrowest first: on one of the five fixed-label lines (`Task : (<other
+// task>, 무관)` — the shape of the audit's stale-label sample), anywhere in `## In Progress`, and anywhere
+// in the document. The wider two over-count: the words are common in prose that has nothing to do with the
+// record (a stale cache, a change that is unrelated to a test), so only the first scope names the sample.
+export const STALE_MARKERS = [/stale/i, /unrelated/i, /irrelevant/i, /not relevant/i, /no longer relevant/i, /outdated/i, /무관/, /관련\s*없/, /오래된/, /만료/]
+
+const hasMarker = (text) => STALE_MARKERS.some((re) => re.test(text))
+const LABEL_LINE = new RegExp(`^\\s*[-*]?\\s*\`?(${FIXED_LABELS.join('|')})\\s*:`)
+const onLabelLine = (text) => text.split('\n').some((l) => LABEL_LINE.test(l) && hasMarker(l))
+const recordsCompleted = (labels) => labels.Phase !== null && /^`?completed\b/i.test(labels.Phase.trim())
+const unticked = (v) => String(v ?? '').trim().replace(/^`+|`+$/g, '').trim()
+
+// A SIMULATION, not a measurement: what each rule would do if the live `.harness/state.json` at resume
+// time were the very state the document recorded, on the branch the harness gives such a task
+// (`harness/<last segment of Docs>`, §Step 1 item 8), with the session on the branch the document's
+// header names. The 9.0.1 rule printed the re-entry hint whenever the live skill was `harness` and the
+// phase was not `completed`; the new one also needs the state's branch to be the current branch.
+function simulateHint(d) {
+  const l = d.parsed.fixedLabels
+  const completed = recordsCompleted(l)
+  const slug = unticked(l.Docs).replace(/\/+$/, '').split('/').pop()
+  const open = /^harness$/i.test(unticked(l.Skill)) && !completed
+  return { old: open, now: open && slug !== '' && unticked(d.parsed.header.branch) === `harness/${slug}` }
+}
+
+export function stateComparison(docs) {
+  const parsed = docs.filter((d) => d.parsed)
+  const withRecord = parsed.filter((d) => d.parsed.fixedLabels)
+  const five = withRecord.filter((d) => FIXED_LABELS.every((k) => d.parsed.fixedLabels[k] !== null))
+  const completed = withRecord.filter((d) => recordsCompleted(d.parsed.fixedLabels))
+  const none = parsed.filter((d) => d.parsed.harness === 'none')
+  const absent = parsed.filter((d) => d.parsed.harness === 'absent')
+  const ipText = (d) => d.parsed.sections['In Progress'] ?? ''
+  const onLabels = withRecord.filter((d) => onLabelLine(ipText(d)))
+  const markedInProgress = parsed.filter((d) => hasMarker(ipText(d)))
+  const markedRecords = markedInProgress.filter((d) => d.parsed.fixedLabels)
+  const split = (set) => {
+    const done = set.filter((d) => recordsCompleted(d.parsed.fixedLabels)).length
+    return { recordedCompleted: done, recordedOpen: set.length - done }
+  }
+  const sim = five.map((d) => ({ d, ...simulateHint(d) }))
+  const sample = sim.filter((x) => onLabels.includes(x.d))
+  const rules = pathRuleChecks(docs)
+  const data = {
+    documents: docs.length,
+    method:
+      "there is no live .harness/ per document, so relevance is not evaluated per document: a record whose Phase is completed is counted as not relevant (the rule's phase test), every other record as relevant only if a live state.json for the current branch says so at resume time; the marker counts use the word list in staleMarker.markers; the `simulation` block is an estimate under its stated assumption, not a measurement",
+    record: { any: withRecord.length, five: five.length, partial: withRecord.length - five.length },
+    recordedCompleted: completed.length,
+    harnessNone: none.length,
+    noRecord: absent.length,
+    staleMarker: {
+      markers: STALE_MARKERS.map((re) => re.source),
+      onLabelLine: { documents: onLabels.length, ...split(onLabels) },
+      inProgress: { documents: markedInProgress.length, withRecord: markedRecords.length, ...split(markedRecords) },
+      anywhere: parsed.filter((d) => hasMarker(d.text)).length,
+    },
+    newRule: { notRelevantByRecordedPhase: completed.length, relevantIfLiveStateMatches: withRecord.length - completed.length },
+    simulation: {
+      assumption: "the live state.json is the state the document recorded, on branch harness/<last Docs segment>, and the session is on the document's Branch header",
+      records: five.length,
+      oldRuleHint: sim.filter((x) => x.old).length,
+      newRuleHint: sim.filter((x) => x.now).length,
+      staleSample: { documents: sample.length, oldRuleHint: sample.filter((x) => x.old).length, newRuleHint: sample.filter((x) => x.now).length },
+    },
+    pathRule: { docsUnderHarness: rules.docsUnderHarness, accepted: rules.docsUnderHarnessPass },
+  }
+  const m = data.staleMarker
+  const s = data.simulation
+  const lines = [
+    `state: ${docs.length} documents, the task-state relevance rule against the recorded task state`,
+    `method: ${data.method}`,
+    `records: ${data.record.any} documents carry fixed labels (${data.record.five} all five, ${data.record.partial} only some); ${data.recordedCompleted} of them record Phase completed`,
+    `no record (neither the fixed labels nor a Harness : line): ${data.noRecord} documents, which resume now briefs as "no record — task state is not a verification target"; Harness : none: ${data.harnessNone}, briefed as "no harness task"`,
+    `stale/unrelated marker, by scope — on a fixed-label line: ${m.onLabelLine.documents} documents (${m.onLabelLine.recordedCompleted} record Phase completed, ${m.onLabelLine.recordedOpen} another phase); anywhere in the In Progress section: ${m.inProgress.documents} (${m.inProgress.withRecord} with a record); anywhere in the document: ${m.anywhere}`,
+    `new rule: ${data.newRule.notRelevantByRecordedPhase} recorded states are not relevant by their phase alone; for the other ${data.newRule.relevantIfLiveStateMatches} relevance depends on a live state.json that no document carries — resume prints the /harness re-entry hint and uses the Docs tier only when harness-state says relevant, whatever a document's own record says`,
+    `simulation (an estimate; assumes ${s.assumption}): of ${s.records} five-label records the 9.0.1 rule would print the re-entry hint for ${s.oldRuleHint} and the new rule for ${s.newRuleHint}; in the ${s.staleSample.documents} documents with a marker on a label line, ${s.staleSample.oldRuleHint} and ${s.staleSample.newRuleHint}`,
+    `path check: ${data.pathRule.accepted} of ${data.pathRule.docsUnderHarness} recorded Docs values under docs/harness/ pass the handoff path rule`,
+  ]
+  return { data, lines }
+}
+
+// What the shipped parser reads as snapshot.mjs-style entries: [kind, raw] for the document
+// itself and for every item with a path-like token.
+const shippedEntries = (parsed) => parsed.readingOrder.filter((e) => e.self || e.isFile).map((e) => [e.self ? 'self' : 'path', e.raw])
+
+function extractAgree(docs) {
+  const differ = []
+  for (const d of docs) {
+    const want = d.readingOrder.map((e) => [e.kind, e.raw])
+    const got = shippedEntries(d.parsed)
+    let first = -1
+    for (let i = 0; i < Math.max(want.length, got.length) && first < 0; i++) {
+      if (!want[i] || !got[i] || want[i][0] !== got[i][0] || want[i][1] !== got[i][1]) first = i
+    }
+    const items = d.parsed.readingOrder.length
+    if (first >= 0 || items !== d.readingOrderItems) {
+      differ.push({ id: d.id, manifestEntries: want.length, shippedEntries: got.length, manifestItems: d.readingOrderItems, shippedItems: items, firstDifferentEntry: first < 0 ? null : first + 1 })
+    }
+  }
+  const lines = [`extract-agree: ${docs.length} documents, ${docs.length - differ.length} agree, ${differ.length} differ`]
+  for (const x of differ) {
+    lines.push(`  ${x.id}: entries ${x.manifestEntries} (manifest) vs ${x.shippedEntries} (shipped), items ${x.manifestItems} vs ${x.shippedItems}, first difference at entry ${x.firstDifferentEntry ?? '-'}`)
+  }
+  return { data: { documents: docs.length, agree: docs.length - differ.length, differ }, lines }
+}
+
+// ---- reading: the budget simulation ------------------------------------------------------------------
+
+const KIB = 1024
+const B_STEP = 16 * KIB // D3: B is the P90 rounded UP to a multiple of this ...
+const B_CEILING = 128 * KIB // ... and never more than this (the rule's ceiling; B itself is written once, in templates/handoff/resume.md)
+const LINES_PER_HEADING = 40 // a Markdown file's heading count when its headings cannot be counted (a snapshot holds sizes, not text)
+const PATH_ROOT = path.resolve(path.sep, 'corpus-root') // never touched: the path rule is pure
+
+const stats = (perDoc) => ({ perDoc, median: median(perDoc), p90: percentile(perDoc, 0.9), max: perDoc.length ? Math.max(...perDoc) : null })
+
+// One manifest entry under the reading plan: its class, whether a resume could read it, the form it
+// takes with the whole budget at its disposal (`primary`) and the shorter `partial` form tried when
+// that does not fit (`alt`). Costs are bytes; the outline is charged OUTLINE_HEADING_BYTES a heading.
+function formsOfEntry(e, includeAbsolute) {
+  if (e.kind === 'self' || e.self) return { cls: 'self', readable: false }
+  const p = stripHint(e.raw)
+  const abs = /^([A-Za-z]:[\\/]|[\\/])/.test(p)
+  // An absolute path is outside the allowed root unless the snapshot's roots were known; the
+  // sensitivity run reads it as if its own folder were the root.
+  if (!validateHandoffPath(p, includeAbsolute && abs ? path.dirname(p) : PATH_ROOT).ok) return { cls: 'invalid', readable: false }
+  if (!e.exists) return { cls: 'missing', readable: false }
+  if (e.isDir || e.lines == null) return { cls: 'unreadable', readable: false }
+  // Only a Markdown file has an outline, and it lists at most OUTLINE_MAX_ENTRIES headings.
+  const outline = isMarkdownPath(p) ? OUTLINE_HEADING_BYTES * Math.min(OUTLINE_MAX_ENTRIES, Math.round(e.lines / LINES_PER_HEADING)) : 0
+  const head = (e.bytes * Math.min(HEAD_LINES, e.lines)) / e.lines + outline
+  const r = parseRange(e.raw)
+  if (r && r.type === 'lines') {
+    if (r.start > e.lines) return { cls: 'partial', readable: true, estimate: 'partial', primary: { cost: outline } }
+    const n = Math.min(r.end, e.lines) - r.start + 1
+    return { cls: 'range-lines', readable: true, estimate: 'lineRange', primary: { cost: (e.bytes * n) / e.lines } }
+  }
+  if (r && r.type === 'section') return { cls: 'range-section', readable: true, estimate: 'sectionRange', primary: { cost: e.bytes * 0.25 } }
+  if (e.lines > WHOLE_FILE_MAX_LINES) return { cls: 'partial', readable: true, estimate: 'partial', primary: { cost: head } }
+  return { cls: 'whole', readable: true, primary: { cost: e.bytes }, alt: e.lines > HEAD_LINES ? { cost: head } : null }
+}
+
+// The same walk the planner makes, in document order, on costs: an entry that does not fit what is
+// left degrades to its `alt` form if that fits, else it is skipped and the walk goes on.
+function spendBudget(forms, budget) {
+  let total = 0
+  let skipped = 0
+  let degraded = 0
+  let readable = 0
+  const status = { read: 0, range: 0, partial: 0, 'skipped-budget': 0 }
+  for (const f of forms) {
+    if (!f.readable) continue
+    readable++
+    const left = budget - total
+    if (f.primary.cost <= left) {
+      total += f.primary.cost
+      status[f.cls === 'whole' ? 'read' : f.cls === 'partial' ? 'partial' : 'range']++
+    } else if (f.alt && f.alt.cost <= left) {
+      total += f.alt.cost
+      degraded++
+      status.partial++
+    } else {
+      skipped++
+      status['skipped-budget']++
+    }
+  }
+  return { total, skipped, degraded, readable, status }
+}
+
+// -> { documents, entries, readable, docsWithReadable, unbudgeted, byBudget[], classes, estimates }
+// `unbudgeted` and each `byBudget[i]` carry `perDoc` (bytes read per document) with its median, P90
+// and max. `estimates` counts the readable entries whose bytes come from a model, not a measurement:
+// a line range (by line share), a section (25% of the file — there is no live file to look in), a
+// `partial` (head bytes by line share, outline heading count = lines / 40).
+export function simulateReading(docs, { budgets = [], includeAbsolute = false } = {}) {
+  const perDocForms = docs.map((d) => d.readingOrder.map((e) => formsOfEntry(e, includeAbsolute)))
+  const unbudgeted = perDocForms.map((fs_) => fs_.reduce((a, f) => a + (f.readable ? f.primary.cost : 0), 0))
+  const classes = {}
+  const estimates = { lineRange: 0, sectionRange: 0, partial: 0 }
+  let entries = 0
+  let readable = 0
+  let docsWithReadable = 0
+  for (const forms of perDocForms) {
+    if (forms.some((f) => f.readable)) docsWithReadable++
+    for (const f of forms) {
+      entries++
+      const c = (classes[f.cls] ||= { entries: 0, bytes: 0 })
+      c.entries++
+      if (f.readable) {
+        readable++
+        c.bytes += f.primary.cost
+        if (f.estimate) estimates[f.estimate]++
+      }
+    }
+  }
+  const byBudget = budgets.map((budget) => {
+    const rs = perDocForms.map((forms) => spendBudget(forms, budget))
+    const after = stats(rs.map((r) => r.total))
+    return {
+      budget,
+      ...after,
+      docsAtCap: unbudgeted.filter((v) => v > budget).length,
+      skipped: rs.reduce((a, r) => a + r.skipped, 0),
+      degraded: rs.reduce((a, r) => a + r.degraded, 0),
+      docsWithSkipped: rs.filter((r) => r.skipped > 0).length,
+      zeroRead: rs.filter((r) => r.readable > 0 && r.total === 0).length,
+      status: Object.fromEntries(Object.keys(rs[0] ? rs[0].status : {}).map((k) => [k, rs.reduce((a, r) => a + r.status[k], 0)])),
+    }
+  })
+  return { documents: docs.length, entries, readable, docsWithReadable, unbudgeted: stats(unbudgeted), byBudget, classes, estimates }
+}
+
+// The path rule on the corpus: every `Docs` value recorded under docs/harness/ passes, and every
+// Reading Order entry with a `..` or `.git` segment is still rejected.
+export function pathRuleChecks(docs) {
+  const out = { docsUnderHarness: 0, docsUnderHarnessPass: 0, dotEntries: 0, dotEntriesRejected: 0 }
+  for (const d of docs) {
+    if (d.facts && d.facts.docsUnderHarness) {
+      out.docsUnderHarness++
+      const value = d.parsed && d.parsed.fixedLabels ? d.parsed.fixedLabels.Docs : null
+      const first = String(value ?? '').replace(/`/g, '').trim().split(/\s+/)[0]
+      if (validateHandoffPath(stripHint(first), PATH_ROOT).ok) out.docsUnderHarnessPass++
+    }
+    for (const e of d.readingOrder) {
+      if (e.kind !== 'path') continue
+      const p = stripHint(e.raw)
+      const segs = p.replace(/\\/g, '/').split('/')
+      if (!segs.includes('..') && !segs.includes('.git')) continue
+      out.dotEntries++
+      if (!validateHandoffPath(p, PATH_ROOT).ok) out.dotEntriesRejected++
+    }
+  }
+  return out
+}
+
+const kib = (b) => `${Math.round(b / KIB)} KiB`
+const num = (n) => (n === null || n === undefined ? 'n/a' : Math.round(n).toLocaleString('en-US'))
+const share = (n, d) => (d ? `${(Math.round((1000 * n) / d) / 10).toFixed(1)}%` : '-')
+const triple = (s) => `${num(s.median)} / ${num(s.p90)} / ${num(s.max)}`
+
+function reading(docs) {
+  const baseRows = Object.fromEntries(computeMetrics(docs).map((r) => [r.key, r.value]))
+  const baseline = { median: baseRows['readBytes.median'], p90: baseRows['readBytes.p90'], max: baseRows['readBytes.max'] }
+  const first = simulateReading(docs)
+  const p90 = first.unbudgeted.p90
+  const roundedUp = p90 === null ? 0 : Math.ceil(p90 / B_STEP) * B_STEP
+  const B = Math.min(roundedUp, B_CEILING)
+  const budgets = [...new Set([64 * KIB, 96 * KIB, 128 * KIB, 256 * KIB, roundedUp].filter((b) => b > 0))].sort((a, b) => a - b)
+  const sim = simulateReading(docs, { budgets })
+  const sens = simulateReading(docs, { includeAbsolute: true }).unbudgeted
+  const rules = pathRuleChecks(docs)
+  const N = sim.documents
+  const data = {
+    documents: N,
+    entries: sim.entries,
+    readable: sim.readable,
+    docsWithReadable: sim.docsWithReadable,
+    baseline9_0_1: baseline,
+    unbudgeted: { median: sim.unbudgeted.median, p90, max: sim.unbudgeted.max },
+    absoluteSensitivity: { median: sens.median, p90: sens.p90, max: sens.max },
+    budgetRule: { p90, roundedUpToStep: roundedUp, ceiling: B_CEILING, B, capped: roundedUp > B_CEILING, stepBytes: B_STEP },
+    byBudget: sim.byBudget.map(({ perDoc, ...rest }) => rest),
+    classes: sim.classes,
+    estimates: { ...sim.estimates, sectionResolvedAgainstALiveFile: 0, outlineCountedFromALiveFile: 0 },
+    pathRules: rules,
+  }
+  const lines = [
+    `reading: ${N} documents, ${sim.entries} Reading Order entries, ${sim.readable} readable (valid path, existing file, not the document itself); ${sim.docsWithReadable} documents have at least one`,
+    `read volume per document, bytes (median / P90 / max):`,
+    `  9.0.1 baseline (files over ${WHOLE_FILE_MAX_LINES} lines skipped)         ${triple(baseline)}`,
+    `  range-aware, no budget                                ${triple(sim.unbudgeted)}`,
+    `  range-aware, no budget, existing absolute entries read ${triple(sens)}   (sensitivity: the snapshot has no root, absolute entries are otherwise outside it)`,
+    `B (D3): P90 ${num(p90)} -> next multiple of ${kib(B_STEP)}: ${num(roundedUp)} (${kib(roundedUp)}) -> ${roundedUp > B_CEILING ? `over the ${kib(B_CEILING)} ceiling` : 'within the ceiling'} -> B = ${num(B)} (${kib(B)})`,
+    `by budget (budget; skipped-budget of readable; read as partial because the whole file did not fit; documents at the cap; volume after the budget median / P90 / max; documents that read nothing of those with a readable entry):`,
+  ]
+  for (const b of sim.byBudget) {
+    const mark = b.budget === B ? '  <- B' : b.budget === roundedUp && roundedUp > B_CEILING ? '  (uncapped P90 rule, for reference)' : ''
+    lines.push(
+      `  ${kib(b.budget).padStart(8)}  skipped ${b.skipped}/${sim.readable} (${share(b.skipped, sim.readable)})  partial ${b.degraded} (${share(b.degraded, sim.readable)})  at cap ${b.docsAtCap}/${N} (${share(b.docsAtCap, N)})  after ${triple(b)}  nothing read ${b.zeroRead}/${sim.docsWithReadable}${mark}`,
+    )
+  }
+  const atB = sim.byBudget.find((b) => b.budget === B)
+  if (atB) {
+    const s = atB.status
+    lines.push(`readable entries by final status at B: read ${s.read}, range ${s.range}, partial ${s.partial} (${atB.degraded} of them only because the whole file did not fit), skipped-budget ${s['skipped-budget']}`)
+  }
+  lines.push('volume by entry class, no budget (readable entries; bytes charged):')
+  for (const [k, c] of Object.entries(sim.classes)) lines.push(`  ${k.padEnd(14)} ${String(c.entries).padStart(5)} entries  ${num(c.bytes)} bytes`)
+  const e = sim.estimates
+  lines.push(
+    `estimates used: line range ${e.lineRange} (bytes by line share), section range ${e.sectionRange} (25% of the file; 0 resolved against a live file, the snapshot stores no source path), partial ${e.partial} (head bytes by line share, outline headings = lines / ${LINES_PER_HEADING} for a .md or .markdown file, at most ${OUTLINE_MAX_ENTRIES}, none for any other file; 0 counted from a live file); every budget row also uses the partial estimate for the entries it reads as partial`,
+    `path rules: ${rules.docsUnderHarnessPass} of ${rules.docsUnderHarness} recorded Docs values under docs/harness/ pass; ${rules.dotEntriesRejected} of ${rules.dotEntries} Reading Order entries with a .. or .git segment are rejected`,
+  )
+  return { data, lines }
+}
+
+// ---- ledger: the carry rule over the documents that have a ledger -------------------------------------------------
+
+// The measurement keeps its OWN statement of the rule's vocabulary: finished = these two, enum = these five.
+const MEASURE_FINISHED = ['done', 'dropped']
+const MEASURE_ENUM = ['done', 'in-progress', 'blocked', 'planned', 'dropped']
+const CRITERION_ROWS = 20 // SPEC 3.2: a document of more than OVER_ROWS rows carries at most this many
+const OVER_ROWS = 100
+
+const spread = (a) => ({ median: median(a), p90: percentile(a, 0.9), max: a.length ? Math.max(...a) : null })
+
+// A Status value as a label: a short token is printed as written, anything else by its kind.
+const statusLabel = (v) => (v === null ? '<missing>' : v === '' ? '<empty>' : /^[A-Za-z0-9()._가-힣-]{1,24}$/.test(v) ? v : '<other>')
+
+function ledgerCarry(docs) {
+  const per = []
+  let noEpicColumn = 0
+  for (const d of docs) {
+    const rows = d.parsed && d.parsed.ledger ? d.parsed.ledger.rows : []
+    if (!rows.length) continue
+    const epic = rows[rows.length - 1].epic
+    if (epic === null) {
+      noEpicColumn++ // a ledger with no Epic column names no Epic: nothing is carried from it, and none is proposed
+      continue
+    }
+    // the chosen Epic's rows: those that name it, and those whose Epic cell is empty (carried as its rows)
+    const mine = rows.filter((r) => r.epic === epic || r.epic === '')
+    const out = carryLedger(rows, epic, { keepDone: KEEP_DONE })
+    const isOpen = (r) => !MEASURE_FINISHED.includes(r.status)
+    const unfinished = mine.filter(isOpen).length
+    const carried = out.rows.length
+    per.push({
+      id: d.id,
+      table: rows.length,
+      before: mine.length,
+      carried,
+      unfinished,
+      finished: mine.length - unfinished,
+      unfinishedAfter: out.rows.filter(isOpen).length,
+      ruleHolds: carried === unfinished + Math.min(KEEP_DONE, mine.length - unfinished) && out.rows.every((r) => r.epic === epic),
+      epics: new Set(rows.map((r) => r.epic).filter((e) => e)).size,
+      otherUnfinished: rows.filter((r) => r.epic !== epic && r.epic !== '' && isOpen(r)).length,
+      emptyEpic: rows.filter((r) => r.epic === '').length,
+      unknown: rows.map((r) => r.status).filter((v) => !MEASURE_ENUM.includes(v)),
+      unknownCarried: out.unknownStatusRows,
+    })
+  }
+  const over = (key) => {
+    const big = per.filter((p) => p[key] > OVER_ROWS)
+    const failing = big.filter((p) => p.carried > CRITERION_ROWS)
+    return {
+      documents: big.length,
+      atMost20: big.length - failing.length,
+      above20: failing.length,
+      maxCarried: big.length ? Math.max(...big.map((p) => p.carried)) : null,
+      failing: failing.map((p) => ({ id: p.id, carried: p.carried, unfinished: p.unfinished, finished: p.finished })),
+    }
+  }
+  const multi = per.filter((p) => p.epics > 1)
+  const values = {}
+  for (const p of per) {
+    for (const v of new Set(p.unknown)) (values[statusLabel(v)] ||= { documents: 0, rows: 0 }).documents++
+    for (const v of p.unknown) values[statusLabel(v)].rows++
+  }
+  const lost = per.filter((p) => p.unfinished !== p.unfinishedAfter)
+  const above20 = per.filter((p) => p.carried > CRITERION_ROWS)
+  const data = {
+    documents: docs.length,
+    ledgerDocuments: per.length,
+    keepDone: KEEP_DONE,
+    rows: { table: spread(per.map((p) => p.table)), before: spread(per.map((p) => p.before)), after: spread(per.map((p) => p.carried)) },
+    over100: { byTable: over('table'), byEpicRows: over('before') },
+    above20: { documents: above20.length, ids: above20.map((p) => p.id) },
+    unfinished: {
+      rows: per.reduce((a, p) => a + p.unfinished, 0),
+      lostRows: lost.reduce((a, p) => a + p.unfinished - p.unfinishedAfter, 0),
+      lostDocuments: lost.map((p) => p.id),
+      ruleHolds: per.filter((p) => p.ruleHolds).length,
+    },
+    multiEpic: {
+      documents: multi.length,
+      ids: multi.map((p) => p.id),
+      onlyChosenEpic: multi.filter((p) => p.ruleHolds).length,
+      otherEpicUnfinishedRows: multi.reduce((a, p) => a + p.otherUnfinished, 0),
+    },
+    emptyEpic: { documents: per.filter((p) => p.emptyEpic).length, rows: per.reduce((a, p) => a + p.emptyEpic, 0) },
+    noEpicColumn,
+    unknownStatus: {
+      documents: per.filter((p) => p.unknown.length).length,
+      rows: per.reduce((a, p) => a + p.unknown.length, 0),
+      rowsCarried: per.reduce((a, p) => a + p.unknownCarried, 0),
+      values,
+    },
+  }
+  const t = (x) => `${num(x.median)} / ${num(x.p90)} / ${num(x.max)}`
+  const ids = (a) => (a.length ? ` (${a.join(' ')})` : '')
+  const overLine = (label, o) => `  ${label}: ${o.documents} documents; carried rows ${CRITERION_ROWS} or fewer in ${o.atMost20}, more in ${o.above20}${o.documents ? `; most carried ${o.maxCarried}` : ''}`
+  const u = data.unfinished
+  const m = data.multiEpic
+  const k = data.unknownStatus
+  const lines = [
+    `ledger: ${docs.length} documents, ${per.length} with a ledger (the rule: every unfinished row of the Epic of the last row, plus its last ${KEEP_DONE} finished rows)`,
+    `rows per ledger document, median / P90 / max: before (the Epic's rows) ${t(data.rows.before)}; after (carried) ${t(data.rows.after)}; whole table ${t(data.rows.table)}`,
+    `(a) documents of more than ${OVER_ROWS} rows:`,
+    overLine('by table rows', data.over100.byTable),
+    overLine("by the Epic's rows", data.over100.byEpicRows),
+    ...data.over100.byTable.failing.map((f) => `    ${f.id}: carried ${f.carried} = ${f.unfinished} unfinished + ${f.carried - f.unfinished} of ${f.finished} finished`),
+    `  every ledger document with more than ${CRITERION_ROWS} carried rows, whatever its size: ${data.above20.documents}${ids(data.above20.ids)}`,
+    `  carried = unfinished + min(${KEEP_DONE}, finished): the criterion holds exactly where a document has at most ${CRITERION_ROWS - KEEP_DONE} unfinished rows`,
+    `(b) unfinished rows of the chosen Epic: ${u.rows} before, ${u.rows - u.lostRows} after; lost in ${u.lostDocuments.length} documents${ids(u.lostDocuments)}; the rule's own count holds in ${u.ruleHolds} of ${per.length}`,
+    `(c) documents that hold several Epics: ${m.documents}${ids(m.ids)}; only the chosen Epic's rows come out in ${m.onlyChosenEpic}; ${m.otherEpicUnfinishedRows} unfinished rows of the other Epics stay behind`,
+    `(d) Status values outside the enum: ${k.documents} documents, ${k.rows} rows (${k.rowsCarried} of them in the carried Epic, carried as unfinished)`,
+    ...Object.entries(k.values).map(([v, c]) => `    ${v}: ${c.documents} documents, ${c.rows} rows`),
+    `(e) rows with an empty Epic cell: ${data.emptyEpic.documents} documents, ${data.emptyEpic.rows} rows (carried as the chosen Epic's); ledgers with no Epic column, set aside: ${noEpicColumn}`,
+  ]
+  return { data, lines }
+}
+
+// ---- latest: same-day documents, the slug rule and the pointer-only Do NOT section ---------------------------------------------
+
+const baseName = (p) => String(p).replace(/\\/g, '/').split('/').pop()
+const isoDay = (v) => (/\d{4}-\d{2}-\d{2}/.exec(String(v ?? '')) || [null])[0]
+const NO_BRANCH = ['n/a', '(detached)']
+const SLUG_RULE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
+const SLUG_CAP = 40 // the rule's own number, restated: a change of the shipped cap shows as a difference
+
+// The statement that an earlier handoff's Do NOT still applies, beside or instead of the section's own items. A word
+// pattern for an indicative count — it is not the shipped test, and its precision is not known.
+const CARRY_STATEMENT = /(?:do not)[^\n]{0,40}(?:승계|유지|유효|still apply|carried|inherit)|(?:승계|유지|유효|carry|inherit)[^\n]{0,20}Do NOT|(?:previous|prior|earlier|이전|직전)[^\n]{0,30}Do NOT/i
+
+// A document's file name: the Reading Order entry the snapshot verified to be the document itself, else the Resume line.
+function recordedName(d) {
+  const self = d.readingOrder.find((e) => e.kind === 'path' && e.self)
+  if (self) return { name: baseName(stripHint(self.raw)), from: 'self' }
+  const m = /[^\s`/\\]+\.md/.exec((d.parsed.sections.Resume ?? ''))
+  return m ? { name: m[0], from: 'resume' } : { name: null, from: 'none' }
+}
+
+function latestComparison(docs) {
+  const parsed = docs.filter((d) => d.parsed)
+  const per = parsed.map((d) => {
+    const f = recordedName(d)
+    const nameDay = f.name ? splitDocName(f.name).date : ''
+    const day = nameDay || isoDay(d.parsed.header.date)
+    const b = d.parsed.header.branch === null ? null : stripEmphasis(d.parsed.header.branch) || null
+    return { d, id: d.id, root: d.rootIndex, name: f.name, from: f.from, day, dayFrom: nameDay ? 'name' : day ? 'header' : 'none', branch: b, orderName: f.name ?? `${day ?? ''}-${d.id}.md` }
+  })
+
+  // same-day groups: per source folder and day
+  const groups = new Map()
+  for (const x of per) {
+    if (!x.day) continue
+    const k = `${x.root}\0${x.day}`
+    if (!groups.has(k)) groups.set(k, [])
+    groups.get(k).push(x)
+  }
+  const newestOfRoot = new Map()
+  for (const x of per) if (x.day && (!newestOfRoot.has(x.root) || x.day > newestOfRoot.get(x.root))) newestOfRoot.set(x.root, x.day)
+  const multi = [...groups.values()].filter((g) => g.length >= 2).map((g) => {
+    const newest = orderDocs(g.map((x) => ({ name: x.orderName, mtimeMs: x.d.mtimeMs, x })))[0].x
+    const real = (x) => x.branch !== null && !NO_BRANCH.includes(x.branch)
+    const onNewestBranch = real(newest) ? g.filter((x) => x.branch === newest.branch).length : 0
+    // a branch that two or more documents of the day record (any branch, not only the newest document's)
+    const sharedBranch = g.some((x) => real(x) && g.filter((y) => y.branch === x.branch).length >= 2)
+    const family = g.every((x) => x.name) && new Set(g.map((x) => splitDocName(x.name).slug.replace(/-\d+$/, ''))).size === 1
+    return { g, size: g.length, day: g[0].day, root: g[0].root, newestDay: g[0].day === newestOfRoot.get(g[0].root), couldPick: onNewestBranch >= 1, couldPickPreviousRule: onNewestBranch === 1, onNewestBranch, sharedBranch, family }
+  })
+  const bySize = { 2: 0, 3: 0, '4+': 0 }
+  for (const m of multi) bySize[m.size >= 4 ? '4+' : m.size]++
+  const newestDay = multi.filter((m) => m.newestDay)
+  const roots = new Set(per.map((x) => x.root)).size
+  const sameDay = {
+    groups: multi.length,
+    documents: multi.reduce((a, m) => a + m.size, 0),
+    largest: multi.reduce((a, m) => Math.max(a, m.size), 0),
+    bySize,
+    newestDay: { roots, groups: newestDay.length, couldPickAutomatically: newestDay.filter((m) => m.couldPick).length },
+    noGitHelp: { needChoice: multi.length },
+    // the group is a choice only when its documents' commits diverge or no document records the session's branch; the upper bound
+    // assumes neither happens when the newest document records a real branch. `couldPickUnderPreviousRule` is the older rule (exactly
+    // one document on that branch); `gainFromAncestryOrder` are the groups the ancestry order adds (two or more on that branch)
+    sharedBranchGroups: multi.filter((m) => m.sharedBranch).length,
+    upperBound: {
+      couldPickAutomatically: multi.filter((m) => m.couldPick).length,
+      couldPickUnderPreviousRule: multi.filter((m) => m.couldPickPreviousRule).length,
+      gainFromAncestryOrder: multi.filter((m) => m.onNewestBranch >= 2).length,
+      cannotPick: multi.filter((m) => !m.couldPick).length,
+    },
+    oneSlugFamilyOnly: multi.filter((m) => m.family).length,
+    // one entry per group (document ids and numbers only; `couldPick` is the upper bound described above)
+    groupList: multi.map((m) => ({ root: m.root, size: m.size, newestDay: m.newestDay, couldPick: m.couldPick, couldPickPreviousRule: m.couldPickPreviousRule, onNewestBranch: m.onNewestBranch, sharedBranch: m.sharedBranch, oneSlugFamily: m.family, ids: m.g.map((x) => x.id) })),
+    daysFromHeaderDate: per.filter((x) => x.dayFrom === 'header').length,
+    daysUnknown: per.filter((x) => x.dayFrom === 'none').length,
+  }
+
+  // the slug rule against the file names the documents carry
+  const named = per.filter((x) => x.name)
+  const slugOf = (x) => splitDocName(x.name).slug
+  const nonAscii = (v) => /[^\x00-\x7f]/.test(v)
+  const titled = named.filter((x) => nonAscii(x.d.parsed.header.title))
+  const slug = {
+    withFileName: named.length,
+    nameFrom: { self: named.filter((x) => x.from === 'self').length, resume: named.filter((x) => x.from === 'resume').length },
+    withoutFileName: per.length - named.length,
+    titleNonAscii: titled.length,
+    titleNonAsciiSlugAscii: titled.filter((x) => !nonAscii(slugOf(x))).length,
+    slugNonAscii: named.filter((x) => nonAscii(slugOf(x))).length,
+    slugOutsideRule: named.filter((x) => !SLUG_RULE.test(slugOf(x))).length,
+    slugOver40: named.filter((x) => slugOf(x).length > SLUG_CAP).length,
+  }
+
+  // the Do NOT sections
+  const refOnly = parsed.filter((d) => d.parsed.doNotRefOnly)
+  const withPath = refOnly.filter((d) => d.parsed.doNotRef !== null)
+  const listed = (d) => d.readingOrder.filter((e) => e.kind === 'path' && stripHint(e.raw).replace(/\\/g, '/') === d.parsed.doNotRef.replace(/\\/g, '/'))
+  const inOrder = withPath.filter((d) => listed(d).length > 0)
+  const doNot = {
+    missing: parsed.filter((d) => d.parsed.doNotMissing).length,
+    refOnly: refOnly.length,
+    refOnlyIds: refOnly.map((d) => d.id),
+    refOnlyWithPath: withPath.length,
+    pathInReadingOrder: inOrder.length,
+    pathInReadingOrderExisting: inOrder.filter((d) => listed(d).some((e) => e.exists)).length,
+    carryStatementBesideOwnItems: parsed.filter((d) => !d.parsed.doNotRefOnly && CARRY_STATEMENT.test(d.parsed.sections['Do NOT'] ?? '')).length,
+  }
+
+  const data = {
+    documents: docs.length,
+    method:
+      'a snapshot holds no file names and no live repository: the file name comes from the Reading Order entry the snapshot verified to be the document itself, else from the Resume line (composed before the path was resolved, so it can lack a collision suffix); the day is the file-name date, else the header Date; the folder is the rootIndex; whether `latest` could pick without asking depends on the session branch and on git, which are unknown, so only an upper bound is given (the session is on the newest same-day document\'s branch and the commits of its documents lie on one line of history and pass the ancestry test) beside the certain figure (with no git help every same-day group is a choice)',
+    sameDay,
+    slug,
+    doNot,
+  }
+  const s = sameDay
+  const lines = [
+    `latest: ${docs.length} documents in ${roots} source folders`,
+    `method: ${data.method}`,
+    `same-day groups (documents of one folder on one day): ${s.groups} with ${s.documents} documents — of 2: ${bySize[2]}, of 3: ${bySize[3]}, of 4 or more: ${bySize['4+']}, the largest holds ${s.largest}; ${s.oneSlugFamilyOnly} hold one slug family only (a name and its -N re-runs; file names known for every document of the group); days taken from the header Date for ${s.daysFromHeaderDate} documents and unknown for ${s.daysUnknown}`,
+    `newest day of its folder (what latest meets today): ${s.newestDay.groups} of ${s.newestDay.roots} folders have several documents on their newest day`,
+    `latest with no git help: ${s.noGitHelp.needChoice} of ${s.groups} groups (${share(s.noGitHelp.needChoice, s.groups)}) need a choice; ${s.sharedBranchGroups} groups have two or more documents recording one branch (the groups the ancestry order can settle); upper bound with git (the session is on the newest document's branch, the commits of its documents lie on one line of history and pass the ancestry test): ${s.upperBound.couldPickAutomatically} could be picked (${share(s.upperBound.couldPickAutomatically, s.groups)}) — ${s.upperBound.couldPickUnderPreviousRule} of them under the previous rule (exactly one document on the branch), ${s.upperBound.gainFromAncestryOrder} only through the ancestry order — and ${s.upperBound.cannotPick} cannot (the newest document records no branch or a detached HEAD); of the newest-day groups: ${s.newestDay.couldPickAutomatically} of ${s.newestDay.groups}`,
+    `slug rule against the recorded file names (${slug.withFileName} of ${per.length} documents have one: ${slug.nameFrom.self} from the document's own Reading Order entry, ${slug.nameFrom.resume} from the Resume line; ${slug.withoutFileName} have none): ${slug.titleNonAscii} have a non-ASCII title, ${slug.titleNonAsciiSlugAscii} of them an ASCII slug; ${slug.slugNonAscii} slugs hold a non-ASCII character; ${slug.slugOutsideRule} slugs are outside [a-z0-9-] (the rule normalises them), ${slug.slugOver40} are over ${SLUG_CAP} characters`,
+    `Do NOT: ${doNot.missing} documents have no section; ${doNot.refOnly} are pointer-only${doNot.refOnly ? ` (${doNot.refOnlyIds.join(' ')})` : ''}, ${doNot.refOnlyWithPath} of them name a .md path, ${doNot.pathInReadingOrder} of those paths are in the document's own Reading Order and ${doNot.pathInReadingOrderExisting} of those files existed when the snapshot was taken; indicative (a word pattern): ${doNot.carryStatementBesideOwnItems} documents carry a "the previous Do NOT still applies" sentence beside items of their own`,
+  ]
+  return { data, lines }
+}
+
+export const WHAT = { 'next-legacy': nextLegacy, next: nextChange, state: stateComparison, 'extract-agree': extractAgree, reading, ledger: ledgerCarry, latest: latestComparison }
+
+// ---- CLI -------------------------------------------------------------------------------------------------
+
+function usage(msg) {
+  if (msg) console.error(`diff: ${msg}`)
+  console.error(`usage: node tests/handoff/corpus/diff.mjs --corpus <snapshot dir> --what <${Object.keys(WHAT).join('|')}> [--json] [--mtime-before <ISO-8601>]`)
+  process.exit(2)
+}
+
+function parseArgs(argv) {
+  const a = { corpus: null, what: null, json: false, mtimeBefore: null }
+  for (let i = 0; i < argv.length; i++) {
+    const t = argv[i]
+    if (t === '--corpus') a.corpus = argv[++i] ?? null
+    else if (t === '--what') a.what = argv[++i] ?? null
+    else if (t === '--json') a.json = true
+    else if (t === '--mtime-before') a.mtimeBefore = argv[++i] ?? null
+    else if (t === '-h' || t === '--help') usage()
+    else usage(`unexpected argument ${t}`)
+  }
+  if (!a.corpus) usage('--corpus is required')
+  if (!a.what) usage('--what is required')
+  if (!Object.hasOwn(WHAT, a.what)) usage(`unknown --what ${a.what}`)
+  if (a.mtimeBefore !== null && Number.isNaN(Date.parse(a.mtimeBefore))) usage('--mtime-before is not an ISO-8601 date-time')
+  return a
+}
+
+function main(argv) {
+  const args = parseArgs(argv)
+  const dir = path.resolve(args.corpus)
+  if (!fs.existsSync(path.join(dir, 'manifest.json'))) throw new InputError('no manifest.json in --corpus')
+  const { docs, problems } = loadCorpus(dir)
+  if (problems.length) throw new InputError(problems.join('; '))
+  const cutoff = args.mtimeBefore === null ? null : Date.parse(args.mtimeBefore)
+  const picked = cutoff === null ? docs : docs.filter((d) => d.mtimeMs < cutoff)
+  const r = WHAT[args.what](picked)
+  if (args.json) console.log(JSON.stringify({ what: args.what, ...r.data }, null, 1))
+  else console.log(r.lines.join('\n'))
+}
+
+function isMain() {
+  if (!process.argv[1]) return false
+  try { return pathToFileURL(fs.realpathSync(process.argv[1])).href === import.meta.url } catch { return false }
+}
+
+if (isMain()) {
+  try {
+    main(process.argv.slice(2))
+  } catch (e) {
+    exitOnError('diff', e)
+  }
+}

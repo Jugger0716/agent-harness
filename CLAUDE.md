@@ -5,9 +5,10 @@
 
 agent-harness is a **Claude Code plugin repository**, not an application. It ships 6 skills whose
 primary artifact is a contract document (`skills/<name>/SKILL.md`), plus the prompt templates,
-native Workflow segment scripts, and self-consistency lints those contracts depend on. There is no
-application source, and the only behavioural tests are the segment stub tests under
-`tests/segment_stubs/` — the contracts *are* the code, and a wrong sentence is a defect.
+native Workflow segment scripts, the `/handoff` helper script, and self-consistency lints those
+contracts depend on. There is no application source, and the only behavioural tests are the segment
+stub tests under `tests/segment_stubs/` and the `/handoff` helper-script tests under
+`tests/handoff/` — the contracts *are* the code, and a wrong sentence is a defect.
 
 ## Tech Stack
 
@@ -17,6 +18,7 @@ application source, and the only behavioural tests are the segment stub tests un
 | Prompt templates | Markdown | `templates/` |
 | Workflow segments | JavaScript, engine-hosted | `workflows/*.workflow.js`; only `export const meta` is allowed as module syntax |
 | Lint | Python 3, stdlib only (`pathlib`, `re`, `hashlib`, `argparse`) | `scripts/*.py` |
+| Helper script | Node.js 20+ (ESM, stdlib only) | `skills/handoff/scripts/handoff.mjs` |
 | Syntax check | Node.js | `scripts/check_workflow_syntax.mjs` |
 | Manifest | `.claude-plugin/plugin.json`, `.claude-plugin/marketplace.json` | version lives at **3 key paths** — see Important Notes |
 
@@ -32,8 +34,10 @@ application source, and the only behavioural tests are the segment stub tests un
 | Description budget ratchet | `python scripts/verify_description_budget.py` |
 | Destructive git command ban | `python scripts/verify_git_safety.py` |
 | Cited path existence | `python scripts/verify_cited_paths.py` |
+| Skill body budget ratchet | `python scripts/verify_body_budget.py` |
 | Lint wiring equality | `bash .github/scripts/check_lint_wiring.sh` |
 | Segment stub tests | `node tests/segment_stubs/run.mjs` |
+| Handoff script tests | `node tests/handoff/run.mjs` |
 
 The same chain is declared once, below, as this repository's project default so a `/harness`
 session runs it as Layer 1 without a `--lint-cmd` flag (`templates/_shared/project_defaults.md`;
@@ -41,7 +45,7 @@ the line must start at column 0 and not sit inside a code fence, which is why it
 here). The `export` covers the cp949 console: `verify_sync_markers.py` prints `§` and dies with
 `UnicodeEncodeError` without it.
 
-agent-harness-defaults: lint-cmd=`export PYTHONIOENCODING=utf-8 && python scripts/verify_sync_markers.py && python scripts/verify_manifest_sync.py && python scripts/verify_meta_literal.py && python scripts/verify_block_sync.py && node scripts/check_workflow_syntax.mjs && python scripts/verify_description_budget.py && python scripts/verify_git_safety.py && python scripts/verify_cited_paths.py && bash .github/scripts/check_lint_wiring.sh`
+agent-harness-defaults: lint-cmd=`export PYTHONIOENCODING=utf-8 && python scripts/verify_sync_markers.py && python scripts/verify_manifest_sync.py && python scripts/verify_meta_literal.py && python scripts/verify_block_sync.py && node scripts/check_workflow_syntax.mjs && python scripts/verify_description_budget.py && python scripts/verify_git_safety.py && python scripts/verify_cited_paths.py && python scripts/verify_body_budget.py && bash .github/scripts/check_lint_wiring.sh`
 
 Run the whole chain after changing anything under `skills/`, `templates/`, `workflows/`, `scripts/`, or
 `.claude-plugin/`. Re-run `check_lint_wiring.sh` as well whenever `.github/workflows/lint.yml`
@@ -56,25 +60,29 @@ Exit codes: `0` pass, `1` violation found, `2` structural problem. One exception
 in `verify_sync_markers.py` a **missing target file is `1`**, and `2` means a declared SYNC group's
 marker was found **nowhere** (the single source lost all its sync sites).
 
-There is no build, dev, or deploy command. The one test command is the segment stub runner in the
-table above. It is not part of the `lint-cmd` chain; run it as well after changing anything under
-`workflows/`, and it runs in the same CI workflow.
+There is no build, dev, or deploy command. The test commands are the two runners in the table
+above: the segment stub runner and `node tests/handoff/run.mjs`. Neither is part of the `lint-cmd`
+chain; run the first as well after changing anything under `workflows/` and the second after
+changing anything under `skills/handoff/` or `templates/handoff/` (or `templates/_shared/session_boundary.md`,
+which it also reads). Both run in the same CI workflow.
 
 ## Architecture
 
 | Path | Role |
 |---|---|
-| `skills/<name>/SKILL.md` | one skill = one directory = one contract file |
+| `skills/<name>/SKILL.md` | one skill = one directory = one contract file; `/handoff` is the exception — its `SKILL.md` is a dispatcher and the contract body is split by sub-command into `templates/handoff/` |
 | `skills/harness{,-gate,-build}/SKILL.md` | one contract split three ways (C5, 2026-09-07): `/harness` owns Steps 1–2.6 (the Step 2.6 converge loop included) plus §Approval Gate — HARD GATE #1 rendered in-session, the default for every new session since harness-converge S2, which chains into `/harness-build` (`--fast` is its three-option variant; §Fast Gate is now a pointer) — `/harness-gate` owns Step 3 with no `Bash`/`Write`/`Edit`/`Glob` and gates only a `--separate-gate` session, `/harness-build` owns Steps 3.5–8 and, since harness-converge S3, §Epic Slice Chain — an epic's slices chained in one turn, each still approved at its own §Approval Gate, a clean end committed without asking. Since the v8.14 prompt diet most of what they shared lives in `templates/_shared/` single sources they cite by name; only four `hx-*` BLOCK groups remain byte-identical (`verify_block_sync.py`), for text that must stay inline. §Architecture Principles #3·#5·#6 and §User Interaction Rules are duplicated WITHOUT a sync group — disclosed here, to be blocked the day they drift |
+| `skills/handoff/scripts/` | the `/handoff` helper — `handoff.mjs` (one JSON object per sub-command) and its `lib/` modules; a Node script the skill runs instead of describing the procedure in prose; on failure the skill reports the error and stops, with no prose fallback |
 | `templates/_shared/` | cross-skill single sources (`mode_gate.md`, `status_format.md`, `project_defaults.md`, `session_conflict.md`, `orchestrator_contract.md`, `output_language.md`, `session_recovery.md`, `session_boundary.md`, `run_style.md`, `scale_assessment.md`, `path_validator.md`, `architecture_principles.md`, `slugify.md`, `segment_launch.md`, ...) |
 | `templates/harness/` | `/harness`-only procedures and static payloads read on demand (`doctor.md`, `state_schema.md`, `setup_summary.md`, `setup_prompts.md`, `auto_revise.md`, `spec_render.md`, `plan_segment_call.md`, `plan_critic_dispatch.md`, `plan_critic_failures.md`, and — since harness-converge S1 — `converge.md`, the Step 2.6 converge loop's single source, with its two sub-agent templates `converge_review.md` and `converge_verify.md`) — the v8.14 prompt diet's destination for everything that is not an execution rule |
-| `templates/<skill>/` | skill-specific prompt templates |
+| `templates/<skill>/` | skill-specific prompt templates; `templates/handoff/` (`generate.md`, `generate-ledger.md`, `resume.md`) holds the `/handoff` contract bodies, each read only by the sub-command that needs it |
 | `templates/planner/` | `/harness` planner templates; four of them carry the BLOCK groups `verify_block_sync.py` compares against `templates/_shared/` |
 | `templates/{generator,verify,evaluator}/` | `/harness` only, despite the role-based naming |
 | `workflows/<skill>.<segment>.workflow.js` | native Workflow segment; the naming pattern is fixed |
 | `workflows/_reference/` | reference documents (`schemas.md`, `state_fields.md`), not scripts |
-| `scripts/` | the 8 self-consistency lints |
+| `scripts/` | the 9 self-consistency lints |
 | `tests/segment_stubs/` | behavioural tests for the Workflow segments — `engine.mjs` (stand-ins for the engine globals, with the assumptions it encodes in its header), `cases.mjs`, `run.mjs`, and `known_failures.json`, a two-way ratchet: an unlisted failure fails the run, and so does a listed case that starts passing |
+| `tests/handoff/` | behavioural tests for the `/handoff` helper scripts — `cases.mjs`, `run.mjs`, `mkrepo.mjs` (throwaway git repositories), invented `fixtures/` and the test-side `corpus/` tools; `cases.mjs` also asserts on the text of the `/handoff` contract files |
 | `docs/` | gitignored runtime output of the skills |
 | `design/<epic>/` | committed design records for follow-up epics — spec plus the measurement evidence it rests on. Outside `SCAN_DIRS`, so no lint reads them; that is why a forward-looking `§Step` citation here does not turn a lint red |
 | `README.md` | about 780 lines including `### Repository Layout`; keep it in sync when a skill's surface changes |
@@ -143,9 +151,14 @@ frontmatter is the plugin's exposure contract, so treat it as part of the skill'
 
 ## Verification
 
-The eight lints under `scripts/`, plus `.github/scripts/check_lint_wiring.sh` and the CI wiring
-in `.github/workflows/lint.yml`, are the entire **static** verification layer (the segment stub tests under `tests/segment_stubs/`
-are the only behavioural one, and they cover the Workflow segments only):
+The nine lints under `scripts/`, plus `.github/scripts/check_lint_wiring.sh` and the CI wiring
+in `.github/workflows/lint.yml`, are the **static** verification layer; the static checks outside
+it are the assertions inside `tests/handoff/` on the text of the `/handoff` contract files (the
+dated-marker ban lives there and, as a twin, in `verify_body_budget.py`) and the U+FEFF scan of
+the helper and test sources (`sources-carry-no-literal-bom-character`). The behavioural layer
+is two separate suites, neither part of the `lint-cmd` chain: the segment stub tests under
+`tests/segment_stubs/` cover the Workflow segments only, and the rest of `tests/handoff/` covers the
+`/handoff` helper scripts:
 
 - `verify_sync_markers.py` — SYNC group referential integrity, `min_sites` occurrence floor, and
   token consistency; **plus** a section-reference check over `SECTION_REF_TARGETS`, which now
@@ -221,6 +234,12 @@ are the only behavioural one, and they cover the Workflow segments only):
   added with the v9 removal of thirteen skills. Placeholder paths (`templates/<skill>/…`), directory
   citations and paths under `docs/`, `design/` or `tests/` are outside it — its docstring lists the
   limits.
+- `verify_body_budget.py` — per-skill `SKILL.md` body ceilings, three named `/handoff` loads
+  (`generate`, `generate+ledger`, `resume`) with a hard SPEC cap on `generate` that a ceiling raise
+  cannot buy (every `templates/handoff/*.md` must belong to a load or carry a ceiling), and a ban on
+  dated measurement markers and planning tags in the `/handoff` contract files. Ceilings are measured
+  sizes with zero slack (lowering is free, raising needs an explicit raise in the same commit); the
+  measurement basis and figures are in its docstring, not copied here.
 - `check_workflow_syntax.mjs` — compiles each script through `AsyncFunction` because `node --check`
   false-greens on ESM `export`, then guards CR in both the working tree and the index blob.
 - `.github/scripts/check_lint_wiring.sh` — compares the lint scripts that exist against the ones
@@ -255,7 +274,8 @@ are the only behavioural one, and they cover the Workflow segments only):
   no such guarantee: it rests on a model-written approval record bound to `spec_stamp` and on
   `/harness-build` §Entry refusing a mismatch (the Fast Gate grade —
   `design/harness-ordering-enforcement/SPEC.md` §3.3a and its decision ① row's correction).
-- `.gitattributes` covers `*.workflow.js`, `*.sh`, `*.yml`, `*.md`, and `tests/**/*.mjs`. Other file types —
+- `.gitattributes` covers `*.workflow.js`, `*.sh`, `*.yml`, `*.md`, `tests/**/*.mjs`, and
+  `skills/handoff/scripts/**/*.mjs`. Other file types —
   `*.py` included — are not EOL-normalized by the repository, so what they commit still
   depends on the machine's `core.autocrlf`. The `*.md` line renormalized nothing when it
   landed (all 94 tracked `.md` blobs were already LF); it fixes what a checkout with

@@ -8,8 +8,9 @@ the one outside change that is not marked.
 
 ## Before the version commit
 
-1. **Lint chain and stub tests pass.** Run the `agent-harness-defaults: lint-cmd=` line in
-   `CLAUDE.md`, then `node tests/segment_stubs/run.mjs`. Both exit `0`.
+1. **Lint chain and tests pass.** Run the `agent-harness-defaults: lint-cmd=` line in
+   `CLAUDE.md`, then `node tests/segment_stubs/run.mjs` and `node tests/handoff/run.mjs`
+   (two to three minutes on Windows). All three exit `0`.
 2. **Nothing names a removed path.** `python scripts/verify_cited_paths.py` exits `0` (it is part
    of the chain; this line is here because a release is when a removal lands).
 3. **CHANGELOG.** Move the `[Unreleased]` content under a `## [X.Y.Z] — YYYY-MM-DD` heading and
@@ -50,8 +51,8 @@ the one outside change that is not marked.
 
 ## If a step fails
 
-Stop at that step. Do not skip ahead, and do not tag a commit whose lint chain or stub tests are
-red. A failed real-session check (steps 8–10) sends the work back to the branch, not forward to
+Stop at that step. Do not skip ahead, and do not tag a commit whose lint chain or either test suite
+is red. A failed real-session check (steps 8–10) sends the work back to the branch, not forward to
 the tag.
 
 The one way past a failed step is a named exception: the maintainer accepts it explicitly, and

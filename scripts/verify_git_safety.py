@@ -91,7 +91,7 @@ FORBIDDEN = [
 
 # (repo-relative path, literal the line must contain) -> why the line is not an instruction.
 ALLOW = {
-    ("skills/handoff/SKILL.md", "git clean -fdx"): (
+    ("templates/handoff/generate.md", "git clean -fdx"): (
         "warns the user what destroys a gitignored handoff document; nothing here runs it"
     ),
     ("templates/harness/doctor.md", "git -C <location> checkout -- workflows/"): (

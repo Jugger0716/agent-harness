@@ -274,7 +274,7 @@ SYNC_GROUPS = [
     },
     {
         "id": "handoff-state-record",
-        "target_file": "skills/handoff/SKILL.md",
+        "target_file": "templates/handoff/generate.md",
         "section": "Fixed Label Record Format",  # NO leading § — MARKER_RE captures the text AFTER §
         "target_anchor": "Fixed Label Record Format",
         # the 5-field fixed-label record /handoff generate writes and /handoff resume Step 3.5
@@ -286,7 +286,9 @@ SYNC_GROUPS = [
         # same change: the /harness and /harness-build copies of this block were PROMOTED to the
         # single source templates/_shared/session_boundary.md, so two marker sites became one.
         # A promotion to a single source is the one reason this floor may fall -- it removes
-        # duplication rather than dropping a check. Sites now: session_boundary.md + skills/handoff.
+        # duplication rather than dropping a check. Sites now: session_boundary.md +
+        # templates/handoff/generate.md (the /handoff generate body moved out of
+        # skills/handoff/SKILL.md in the H15 split; the floor did not change).
     },
     {
         # harness-handoff-coldreview-epic-slice slice-f, group (b): the workflows/harness.critic.workflow.js
@@ -312,7 +314,8 @@ SYNC_GROUPS = [
     },
     {
         # harness-handoff-coldreview-epic-slice slice-f, group (a): /handoff's slice-command
-        # convention (generate Step 1 item 4) and its Next :/Next cmd: derivation (resume Step 5)
+        # convention (generate Step 1 item 4 then; templates/handoff/generate-ledger.md §Slice
+        # command convention since the H15 diet) and its Next :/Next cmd: derivation (resume Step 5)
         # both point at skills/harness/SKILL.md §Step 3.5: Slice Plan as their format SSOT --
         # this group fails when a marker is removed outright; it does NOT catch a pointer whose
         # prose rots while its marker stays (see the HONEST COVERAGE NOTE below -- effective
@@ -333,6 +336,16 @@ SYNC_GROUPS = [
         # (`slice_plan.md`, `Next cmd`), not 3. Recorded rather than silently counted as 3;
         # replacing the token needs an epic AC-6 literal revision, which is out of slice-f scope.
         "tokens": ["§Step 3.5", "slice_plan.md", "Next cmd"],
+        # H15 split: the handoff-side marker moved from generate Step 1 item 4 (now in
+        # templates/handoff/generate.md, which carries no `Next cmd`, so the token check failed
+        # there) to the skills/handoff/SKILL.md §Non-Goals bullet that names both pointers; that
+        # file carries all three tokens. The floor did not change. COVERAGE LOSS, recorded: the
+        # prose pointer itself (the slice command convention naming this format -- generate.md
+        # Step 1 item 4 until H15's diet moved it to templates/handoff/generate-ledger.md
+        # §Slice command convention) carries no marker, so deleting or rotting that pointer is
+        # NOT caught here -- only the SKILL.md bullet is. The resume Step 5 derivation pointer
+        # (templates/handoff/resume.md) never carried a marker of its own either, so its rot is
+        # not caught.
         "min_sites": 2,                        # skills/harness-build/SKILL.md (self) + skills/handoff/SKILL.md
     },
     {

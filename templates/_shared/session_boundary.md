@@ -29,5 +29,6 @@ Phase : <phase>
 Mode : <mode>
 Docs : <docs_path>
 ```
-<!-- SYNC-WITH: skills/handoff/SKILL.md §Fixed Label Record Format -->
-Full contract: `skills/handoff/SKILL.md` §Fixed Label Record Format / §Live task-state cross-check — this pipeline has no obligation beyond being read.
+<!-- SYNC-WITH: templates/handoff/generate.md §Fixed Label Record Format -->
+`/handoff generate` writes this five-label record only for a `.harness/state.json` whose `branch` equals the current branch and whose `phase` is not `completed`; for any other state, or none, it writes the one line `Harness : none (<reason>)` instead.
+Full contract: `templates/handoff/generate.md` §Fixed Label Record Format / `templates/handoff/resume.md` §Live task-state cross-check — this pipeline has no obligation beyond being read.

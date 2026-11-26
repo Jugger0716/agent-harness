@@ -21,12 +21,14 @@ jobs:
           # A deliberate floor with no documented basis: this repository declares no Node
           # lower bound anywhere (measured: 0 declarations at v8.11.0). Pinned so a Node is
           # guaranteed present rather than relying on the runner image. Revisit when a lower
-          # bound is declared.
+          # bound is declared. (Correction, 9.1.0: Node.js 20 is now the declared floor for the
+          # /handoff helper script — README, CHANGELOG [9.1.0] — and CI tests at that floor.)
           node-version: 20
       - run: node --version
       # Every lint MUST be invoked from a ONE-LINE `- run:` step: that form is the contract
       # .github/scripts/check_lint_wiring.sh greps. A block-form step would not be counted.
       - run: python3 scripts/verify_block_sync.py
+      - run: python3 scripts/verify_body_budget.py
       - run: python3 scripts/verify_cited_paths.py
       - run: python3 scripts/verify_description_budget.py
       - run: python3 scripts/verify_git_safety.py
@@ -48,4 +50,6 @@ jobs:
       # Behavioural tests, not a lint: the Workflow segment scripts run against a stub engine.
       # Lives outside scripts/ on purpose, so check_lint_wiring.sh does not count it as a lint.
       - run: node tests/segment_stubs/run.mjs
+      # Behavioural tests for the /handoff helper script: synthetic fixtures, no model, no network.
+      - run: node tests/handoff/run.mjs
       - run: bash .github/scripts/check_lint_wiring.sh
